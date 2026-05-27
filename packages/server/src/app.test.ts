@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import { createApp } from './app.ts'
-import { startDaemon } from './server.ts'
+import { startServer } from './server.ts'
 import { type TestStore, freshStore } from './store/test-db.ts'
 
 const postJson = (app: ReturnType<typeof createApp>, path: string, body: unknown) =>
@@ -11,7 +11,7 @@ const postJson = (app: ReturnType<typeof createApp>, path: string, body: unknown
     headers: { 'content-type': 'application/json' },
   })
 
-describe('daemon HTTP', () => {
+describe('server HTTP', () => {
   let ctx: TestStore
   beforeEach(async () => {
     ctx = await freshStore()
@@ -58,12 +58,12 @@ describe('daemon HTTP', () => {
   })
 
   test('real node server start/stop + /health', async () => {
-    const daemon = await startDaemon({ store: ctx.store, port: 0 })
+    const server = await startServer({ store: ctx.store, port: 0 })
     try {
-      const res = await fetch(`http://localhost:${daemon.port}/health`)
+      const res = await fetch(`http://localhost:${server.port}/health`)
       assert.deepEqual(await res.json(), { ok: true })
     } finally {
-      await daemon.stop()
+      await server.stop()
     }
   })
 })

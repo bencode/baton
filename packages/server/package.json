@@ -1,5 +1,5 @@
 {
-  "name": "@baton/daemon",
+  "name": "@baton/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
