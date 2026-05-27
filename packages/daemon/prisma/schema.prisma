@@ -1,0 +1,66 @@
+// baton persistence (M1, SQLite via Prisma). Collaboration dimension only: Workspace / Project / Requirement / Task.
+// Array/object fields are stored as JSON text, (de)serialized by the Store mapping layer; domain types stay structured arrays.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Workspace {
+  id        String   @id
+  name      String
+  createdAt DateTime @default(now())
+
+  projects Project[]
+}
+
+model Project {
+  id          String   @id
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requirements Requirement[]
+
+  @@index([workspaceId])
+}
+
+model Requirement {
+  id          String   @id
+  projectId   String
+  title       String
+  description String?
+  resources   String   @default("[]") // JSON ResourceRef[]
+  tags        String   @default("[]") // JSON string[]
+  status      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Task {
+  id            String   @id
+  requirementId String
+  title         String
+  spec          String?
+  requires      String   @default("[]") // JSON string[]
+  dependsOn     String   @default("[]") // JSON string[]
+  status        String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@index([requirementId])
+  @@index([status])
+}

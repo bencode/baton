@@ -1,0 +1,19 @@
+{
+  "name": "baton",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check --write . && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "@prisma/client", "@prisma/engines", "prisma"]
+  }
+}

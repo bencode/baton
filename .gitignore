@@ -1,0 +1,18 @@
+node_modules
+dist
+*.tsbuildinfo
+.DS_Store
+*.log
+
+# Local env (secrets, model overrides) — never commit
+.env
+.env.local
+.env.*.local
+
+# Prisma local dev database (SQLite)
+*.db
+*.db-journal
+*.sqlite
+
+# Bun lockfile (this repo is pnpm-managed)
+bun.lockb
