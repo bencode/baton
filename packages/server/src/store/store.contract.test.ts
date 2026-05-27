@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, test } from 'node:test'
-import { type Task, isReady, summarizeTaskProgress } from '@baton/shared'
-import { type TestStore, freshStore } from './test-db.ts'
+import { isReady, summarizeTaskProgress, type Task } from '@baton/shared'
+import { freshStore, type TestStore } from './test-db.ts'
 
 describe('Store contract', () => {
   let ctx: TestStore

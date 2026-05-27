@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import { createApp } from './app.ts'
 import { startServer } from './server.ts'
-import { type TestStore, freshStore } from './store/test-db.ts'
+import { freshStore, type TestStore } from './store/test-db.ts'
 
 const postJson = (app: ReturnType<typeof createApp>, path: string, body: unknown) =>
   app.request(path, {
