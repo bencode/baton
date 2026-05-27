@@ -13,5 +13,5 @@ export default defineConfig({
       '/api': { target: BACKEND, changeOrigin: true, rewrite: p => p.replace(/^\/api/, '') },
     },
   },
-  test: { environment: 'jsdom' },
+  test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'] },
 })

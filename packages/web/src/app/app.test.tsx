@@ -1,8 +1,9 @@
 import { cleanup, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { Api } from '../api.ts'
 import { ApiContext } from './api-context.ts'
-import { HealthBadge } from './app.tsx'
+import { HealthBadge, Shell } from './app.tsx'
 
 afterEach(cleanup)
 
@@ -27,4 +28,19 @@ test('HealthBadge shows "unreachable" when /health rejects', async () => {
   } as unknown as Api
   renderBadge(api)
   expect(await screen.findByText('server: unreachable')).toBeTruthy()
+})
+
+test('Shell renders the top bar, a resize separator and the empty tab area', () => {
+  const api = { health: vi.fn(async () => ({ ok: true })) } as unknown as Api
+  const { container } = render(
+    <ApiContext.Provider value={api}>
+      <MemoryRouter initialEntries={['/']}>
+        <Shell />
+      </MemoryRouter>
+    </ApiContext.Provider>,
+  )
+  expect(screen.getByText('baton')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'workspace ▾' })).toBeTruthy()
+  expect(screen.getByText('Select a resource to open a tab.')).toBeTruthy()
+  expect(container.querySelector('[data-separator]')).toBeTruthy()
 })
