@@ -66,4 +66,28 @@ describe('server HTTP', () => {
       await server.stop()
     }
   })
+
+  test('PATCH advances status; DELETE then GET → 404', async () => {
+    const app = createApp(ctx.store)
+    type WithIdStatus = { id: string; status: string }
+    const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as { id: string }
+    const p = (await (
+      await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
+    ).json()) as { id: string }
+    const r = (await (
+      await postJson(app, '/requirements', { projectId: p.id, title: 'r' })
+    ).json()) as WithIdStatus
+
+    const patched = (await (
+      await app.request(`/requirements/${r.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'done' }),
+        headers: { 'content-type': 'application/json' },
+      })
+    ).json()) as WithIdStatus
+    assert.equal(patched.status, 'done')
+
+    assert.equal((await app.request(`/workspaces/${w.id}`, { method: 'DELETE' })).status, 204)
+    assert.equal((await app.request(`/workspaces/${w.id}`)).status, 404)
+  })
 })

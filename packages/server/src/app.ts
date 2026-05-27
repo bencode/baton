@@ -1,6 +1,6 @@
 import type { RequirementStatus, ResourceRef, TaskStatus } from '@baton/shared'
 import { Hono } from 'hono'
-import type { Store } from './store/types.ts'
+import type { RequirementPatch, Store, TaskPatch } from './store/types.ts'
 
 // Minimal core HTTP surface: a thin layer over Store (connection/claim land in M2).
 export const createApp = (store: Store): Hono => {
@@ -21,6 +21,12 @@ export const createApp = (store: Store): Hono => {
   app.get('/workspaces/:id/projects', async c =>
     c.json(await store.projects.listByWorkspace(c.req.param('id'))),
   )
+  app.delete('/workspaces/:id', async c => {
+    const id = c.req.param('id')
+    if (!(await store.workspaces.get(id))) return c.json({ error: 'not found' }, 404)
+    await store.workspaces.delete(id)
+    return c.body(null, 204)
+  })
 
   app.post('/projects', async c => {
     const body = (await c.req.json()) as {
@@ -40,6 +46,12 @@ export const createApp = (store: Store): Hono => {
   app.get('/projects/:id/requirements', async c =>
     c.json(await store.requirements.listByProject(c.req.param('id'))),
   )
+  app.delete('/projects/:id', async c => {
+    const id = c.req.param('id')
+    if (!(await store.projects.get(id))) return c.json({ error: 'not found' }, 404)
+    await store.projects.delete(id)
+    return c.body(null, 204)
+  })
 
   app.post('/requirements', async c => {
     const body = (await c.req.json()) as {
@@ -69,6 +81,17 @@ export const createApp = (store: Store): Hono => {
   app.get('/requirements/:id/tasks', async c =>
     c.json(await store.tasks.listByRequirement(c.req.param('id'))),
   )
+  app.patch('/requirements/:id', async c => {
+    const id = c.req.param('id')
+    if (!(await store.requirements.get(id))) return c.json({ error: 'not found' }, 404)
+    return c.json(await store.requirements.update(id, (await c.req.json()) as RequirementPatch))
+  })
+  app.delete('/requirements/:id', async c => {
+    const id = c.req.param('id')
+    if (!(await store.requirements.get(id))) return c.json({ error: 'not found' }, 404)
+    await store.requirements.delete(id)
+    return c.body(null, 204)
+  })
 
   app.post('/tasks', async c => {
     const body = (await c.req.json()) as {
@@ -90,6 +113,17 @@ export const createApp = (store: Store): Hono => {
   app.get('/tasks/:id', async c => {
     const t = await store.tasks.get(c.req.param('id'))
     return t ? c.json(t) : c.json({ error: 'not found' }, 404)
+  })
+  app.patch('/tasks/:id', async c => {
+    const id = c.req.param('id')
+    if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
+    return c.json(await store.tasks.update(id, (await c.req.json()) as TaskPatch))
+  })
+  app.delete('/tasks/:id', async c => {
+    const id = c.req.param('id')
+    if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
+    await store.tasks.delete(id)
+    return c.body(null, 204)
   })
 
   return app
