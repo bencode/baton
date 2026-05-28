@@ -1,5 +1,5 @@
 import type { Code, Id } from '@baton/shared'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { StatusBadge } from '../../components/status-badge'
 import { type RenderItem, reduceEvents, type TurnEndSummary } from './event-render'
@@ -20,6 +20,16 @@ export const SessionDetail = ({ projectId, code }: SessionDetailProps) => {
   const items = useMemo(() => reduceEvents(events), [events])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+
+  // Auto-scroll the event list to the bottom whenever new items arrive.
+  // Crude v0 — always scrolls (doesn't respect user-scrolled-up). Good enough
+  // until the chat panel gets the bigger overhaul.
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [items.length])
 
   if (!session) return <div className="p-6 text-sm text-gray-400">loading…</div>
 
@@ -62,7 +72,7 @@ export const SessionDetail = ({ projectId, code }: SessionDetailProps) => {
           </p>
         )}
       </div>
-      <div className="flex-1 overflow-auto bg-gray-50 px-4 py-4">
+      <div ref={scrollRef} className="flex-1 overflow-auto bg-gray-50 px-4 py-4">
         {items.length === 0 ? (
           <p className="text-sm text-gray-400">no events yet — say something below.</p>
         ) : (
