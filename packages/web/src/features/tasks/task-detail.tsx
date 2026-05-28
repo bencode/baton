@@ -1,5 +1,5 @@
-import { StatusBadge } from '../../components/status-badge.tsx'
-import { useTask } from './use-tasks.ts'
+import { StatusBadge } from '../../components/status-badge'
+import { useTask } from './use-tasks'
 
 type TaskDetailProps = { taskId: string }
 

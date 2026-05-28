@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { isItemRoute } from '../route.ts'
-import { closeTab, neighborTab, openTab, type Tab } from './tabs-model.ts'
+import { isItemRoute } from '../route'
+import { closeTab, neighborTab, openTab, type Tab } from './tabs-model'
 
 const STORAGE_KEY = 'baton.tabs'
 

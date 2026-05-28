@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { closeTab, MAX_TABS, neighborTab, openTab, type Tab } from './tabs-model.ts'
+import { closeTab, MAX_TABS, neighborTab, openTab, type Tab } from './tabs-model'
 
 const ids = (tabs: Tab[]) => tabs.map(t => t.id)
 

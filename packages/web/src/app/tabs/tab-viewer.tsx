@@ -1,5 +1,5 @@
 import { Activity, type ReactNode } from 'react'
-import type { Tab } from './tabs-model.ts'
+import type { Tab } from './tabs-model'
 
 type TabViewerProps = {
   tabs: Tab[]

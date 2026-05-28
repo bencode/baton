@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { createApi } from './api.ts'
+import { createApi } from './api'
 
 const res = (body: unknown, status = 200): Response =>
   ({

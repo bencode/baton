@@ -1,6 +1,6 @@
 import type { Requirement } from '@baton/shared'
-import { useApi } from '../../app/api-context.ts'
-import { useAsync } from '../../hooks/use-async.ts'
+import { useApi } from '../../app/api-context'
+import { useAsync } from '../../hooks/use-async'
 
 export const useRequirements = (projectId: string | null) => {
   const api = useApi()

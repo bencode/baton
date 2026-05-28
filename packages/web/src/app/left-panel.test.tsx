@@ -2,9 +2,9 @@ import type { Project, Requirement, Task } from '@baton/shared'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
-import type { Api } from '../api.ts'
-import { ApiContext } from './api-context.ts'
-import { LeftPanel } from './left-panel.tsx'
+import type { Api } from '../api'
+import { ApiContext } from './api-context'
+import { LeftPanel } from './left-panel'
 
 afterEach(cleanup)
 

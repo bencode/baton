@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-import { projectPath } from '../../app/route.ts'
-import { useProjects } from './use-projects.ts'
+import { projectPath } from '../../app/route'
+import { useProjects } from './use-projects'
 
 type ProjectSwitcherProps = { workspaceId: string | null; activeProjectId: string | null }
 

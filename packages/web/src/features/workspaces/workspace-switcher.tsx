@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-import { workspacePath } from '../../app/route.ts'
-import { useWorkspaces } from './use-workspaces.ts'
+import { workspacePath } from '../../app/route'
+import { useWorkspaces } from './use-workspaces'
 
 type WorkspaceSwitcherProps = { activeWorkspaceId: string | null }
 

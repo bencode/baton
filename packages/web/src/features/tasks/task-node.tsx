@@ -1,5 +1,5 @@
 import type { Task } from '@baton/shared'
-import { StatusBadge } from '../../components/status-badge.tsx'
+import { StatusBadge } from '../../components/status-badge'
 
 type TaskNodeProps = {
   task: Task

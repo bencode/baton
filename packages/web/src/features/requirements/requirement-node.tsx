@@ -1,5 +1,5 @@
 import type { Requirement } from '@baton/shared'
-import { StatusBadge } from '../../components/status-badge.tsx'
+import { StatusBadge } from '../../components/status-badge'
 
 type RequirementNodeProps = { requirement: Requirement; active: boolean; onOpen: () => void }
 

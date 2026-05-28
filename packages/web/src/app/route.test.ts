@@ -7,7 +7,7 @@ import {
   requirementPath,
   taskPath,
   workspacePath,
-} from './route.ts'
+} from './route'
 
 test('parseRoute classifies each path shape', () => {
   expect(parseRoute('/')).toEqual({ kind: 'home' })

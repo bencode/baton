@@ -1,5 +1,5 @@
-import { StatusBadge } from '../../components/status-badge.tsx'
-import { useRequirement } from './use-requirements.ts'
+import { StatusBadge } from '../../components/status-badge'
+import { useRequirement } from './use-requirements'
 
 type RequirementDetailProps = { requirementId: string }
 

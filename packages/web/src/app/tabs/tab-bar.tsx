@@ -1,4 +1,4 @@
-import type { Tab } from './tabs-model.ts'
+import type { Tab } from './tabs-model'
 
 type TabBarProps = {
   tabs: Tab[]

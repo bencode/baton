@@ -1,6 +1,6 @@
-import { ProjectSwitcher } from '../features/projects/project-switcher.tsx'
-import { useRequirements } from '../features/requirements/use-requirements.ts'
-import { RequirementTree } from './requirement-tree.tsx'
+import { ProjectSwitcher } from '../features/projects/project-switcher'
+import { useRequirements } from '../features/requirements/use-requirements'
+import { RequirementTree } from './requirement-tree'
 
 type LeftPanelProps = {
   workspaceId: string | null

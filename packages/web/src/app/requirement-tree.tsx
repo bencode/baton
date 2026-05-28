@@ -1,9 +1,9 @@
 import { arrangeTasks, isReady, type Requirement } from '@baton/shared'
 import { useMemo } from 'react'
-import { RequirementNode } from '../features/requirements/requirement-node.tsx'
-import { TaskNode } from '../features/tasks/task-node.tsx'
-import { useTasks } from '../features/tasks/use-tasks.ts'
-import { requirementPath, taskPath } from './route.ts'
+import { RequirementNode } from '../features/requirements/requirement-node'
+import { TaskNode } from '../features/tasks/task-node'
+import { useTasks } from '../features/tasks/use-tasks'
+import { requirementPath, taskPath } from './route'
 
 type RequirementTreeProps = {
   requirement: Requirement
