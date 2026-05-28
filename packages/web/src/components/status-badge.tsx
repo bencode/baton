@@ -1,19 +1,25 @@
-import type { RequirementStatus, TaskStatus } from '@baton/shared'
+import type { AssignmentStatus, RequirementStatus, SessionStatus, TaskStatus } from '@baton/shared'
 
 // Detail-view status label: ring-style pill with uppercase tracking — reads as
 // "tag/label", not "highlighted text". For dense rows use <StatusDot> instead.
 const STYLES: Record<string, string> = {
   active: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200/60',
+  running: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200/70',
   done: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/60',
   in_progress: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200/70',
   failed: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200/60',
   todo: 'bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-200',
   cancelled: 'bg-gray-50 text-gray-400 ring-1 ring-inset ring-gray-200',
+  idle: 'bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-200',
+  closed: 'bg-gray-100 text-gray-500 ring-1 ring-inset ring-gray-200',
+  abandoned: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-200/60',
 }
 
 const LABELS: Record<string, string> = { in_progress: 'in progress' }
 
-type StatusBadgeProps = { status: RequirementStatus | TaskStatus }
+type StatusBadgeProps = {
+  status: RequirementStatus | TaskStatus | SessionStatus | AssignmentStatus
+}
 
 export const StatusBadge = ({ status }: StatusBadgeProps) => (
   <span

@@ -1,10 +1,14 @@
 import type {
+  Assignment,
+  AssignmentEvent,
+  AssignmentStatus,
   Code,
   Id,
   Project,
   Requirement,
   RequirementStatus,
   ResourceRef,
+  Session,
   Task,
   TaskStatus,
   Workspace,
@@ -75,11 +79,36 @@ export type Api = {
     setStatus(id: Id, status: TaskStatus): Promise<Task>
     remove(id: Id): Promise<void>
   }
+  sessions: {
+    listByProject(projectId: Id): Promise<Session[]>
+    get(id: Id): Promise<Session>
+  }
+  assignments: {
+    listByProject(
+      projectId: Id,
+      filter?: { status?: AssignmentStatus[]; sessionId?: Id },
+    ): Promise<Assignment[]>
+    get(id: Id): Promise<Assignment>
+    getByCode(projectId: Id, code: Code): Promise<Assignment>
+    events(id: Id): Promise<AssignmentEvent[]>
+  }
+}
+
+const buildAssignmentQuery = (filter?: { status?: AssignmentStatus[]; sessionId?: Id }): string => {
+  if (!filter) return ''
+  const params: string[] = []
+  if (filter.status?.length) params.push(`status=${filter.status.join(',')}`)
+  if (filter.sessionId) params.push(`sessionId=${filter.sessionId}`)
+  return params.length ? `?${params.join('&')}` : ''
 }
 
 export const createApi = (base: string = API_BASE): Api => {
   const u = (p: string): string => `${base}${p}`
-  const fetchItemByCode = async (projectId: Id, code: Code, expectKind: 'requirement' | 'task') => {
+  const fetchItemByCode = async (
+    projectId: Id,
+    code: Code,
+    expectKind: 'requirement' | 'task' | 'session' | 'assignment',
+  ) => {
     const r = await request<{ kind: string; item: unknown }>(
       u(`/projects/${projectId}/items/${encodeURIComponent(code)}`),
       { method: 'GET' },
@@ -123,6 +152,20 @@ export const createApi = (base: string = API_BASE): Api => {
         (await fetchItemByCode(projectId, code, 'task')) as Task,
       setStatus: (id, status) => request(u(`/tasks/${id}`), { method: 'PATCH', body: { status } }),
       remove: id => request(u(`/tasks/${id}`), { method: 'DELETE' }),
+    },
+    sessions: {
+      listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
+      get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
+    },
+    assignments: {
+      listByProject: (projectId, filter) =>
+        request(u(`/projects/${projectId}/assignments${buildAssignmentQuery(filter)}`), {
+          method: 'GET',
+        }),
+      get: id => request(u(`/assignments/${id}`), { method: 'GET' }),
+      getByCode: async (projectId, code) =>
+        (await fetchItemByCode(projectId, code, 'assignment')) as Assignment,
+      events: id => request(u(`/assignments/${id}/events`), { method: 'GET' }),
     },
   }
 }

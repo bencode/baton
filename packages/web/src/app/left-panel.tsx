@@ -1,6 +1,7 @@
 import type { Id } from '@baton/shared'
 import { ProjectSwitcher } from '../features/projects/project-switcher'
 import { useRequirements } from '../features/requirements/use-requirements'
+import { WorkersPanel } from '../features/sessions/workers-panel'
 import { usePersistedSet } from '../hooks/use-persisted-set'
 import { RequirementTree } from './requirement-tree'
 
@@ -41,12 +42,14 @@ export const LeftPanel = ({ workspaceId, projectId, activeId, open }: LeftPanelP
           ))}
         </section>
       )}
-      <section className="flex flex-col gap-1">
-        <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-          Workers
-        </h2>
-        <p className="px-2 text-sm text-gray-400">Sessions and workers: M2.</p>
-      </section>
+      {projectId !== null && (
+        <section className="flex flex-col gap-1">
+          <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
+            Workers
+          </h2>
+          <WorkersPanel projectId={projectId} activeId={activeId} open={open} />
+        </section>
+      )}
     </div>
   )
 }

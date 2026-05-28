@@ -71,3 +71,28 @@ test('non-2xx throws with status', async () => {
   vi.stubGlobal('fetch', fetchMock)
   await expect(createApi().workspaces.get(99)).rejects.toThrow(/404/)
 })
+
+test('sessions.listByProject hits /projects/:id/sessions', async () => {
+  const fetchMock = vi.fn<typeof fetch>(async () => res([]))
+  vi.stubGlobal('fetch', fetchMock)
+  await createApi().sessions.listByProject(7)
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/projects/7/sessions')
+})
+
+test('assignments.listByProject serialises status+session filters into query', async () => {
+  const fetchMock = vi.fn<typeof fetch>(async () => res([]))
+  vi.stubGlobal('fetch', fetchMock)
+  await createApi().assignments.listByProject(1, { status: ['running', 'done'], sessionId: 5 })
+  expect(fetchMock.mock.calls[0]?.[0]).toBe(
+    '/api/projects/1/assignments?status=running,done&sessionId=5',
+  )
+})
+
+test('assignments.getByCode unwraps assignment items', async () => {
+  const item = { id: 3, code: 'A-3', status: 'running' }
+  const fetchMock = vi.fn<typeof fetch>(async () => res({ kind: 'assignment', item }))
+  vi.stubGlobal('fetch', fetchMock)
+  const got = await createApi().assignments.getByCode(1, 'A-3')
+  expect(got).toEqual(item)
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/projects/1/items/A-3')
+})

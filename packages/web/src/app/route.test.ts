@@ -32,6 +32,21 @@ test('parseRoute treats invalid ids / unknown code prefix as home/project', () =
   expect(parseRoute('/proj/1/X-9')).toEqual({ kind: 'project', projectId: 1 })
 })
 
+test('parseRoute recognises S- (session) and A- (assignment) item codes', () => {
+  expect(parseRoute('/proj/1/S-2')).toEqual({
+    kind: 'item',
+    projectId: 1,
+    code: 'S-2',
+    itemKind: 'session',
+  })
+  expect(parseRoute('/proj/1/A-3')).toEqual({
+    kind: 'item',
+    projectId: 1,
+    code: 'A-3',
+    itemKind: 'assignment',
+  })
+})
+
 test('path builders round-trip through parseRoute', () => {
   expect(parseRoute(workspacePath(7))).toEqual({ kind: 'workspace', workspaceId: 7 })
   expect(parseRoute(projectPath(3))).toEqual({ kind: 'project', projectId: 3 })
