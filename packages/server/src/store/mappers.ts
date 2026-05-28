@@ -1,4 +1,5 @@
 import type {
+  Id,
   Project,
   Requirement,
   RequirementStatus,
@@ -33,6 +34,7 @@ export const toProject = (r: DbProject): Project => ({
 export const toRequirement = (r: DbRequirement): Requirement => ({
   id: r.id,
   projectId: r.projectId,
+  code: r.code,
   title: r.title,
   description: r.description ?? undefined,
   resources: parseJson<ResourceRef[]>(r.resources),
@@ -45,10 +47,12 @@ export const toRequirement = (r: DbRequirement): Requirement => ({
 export const toTask = (r: DbTask): Task => ({
   id: r.id,
   requirementId: r.requirementId,
+  projectId: r.projectId,
+  code: r.code,
   title: r.title,
   spec: r.spec ?? undefined,
   requires: parseJson<string[]>(r.requires),
-  dependsOn: parseJson<string[]>(r.dependsOn),
+  dependsOn: parseJson<Id[]>(r.dependsOn),
   status: r.status as TaskStatus,
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),

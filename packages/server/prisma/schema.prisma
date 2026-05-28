@@ -1,5 +1,7 @@
 // baton persistence (M1, SQLite via Prisma). Collaboration dimension only: Workspace / Project / Requirement / Task.
-// Array/object fields are stored as JSON text, (de)serialized by the Store mapping layer; domain types stay structured arrays.
+// PKs are INT autoincrement; Requirement/Task carry a project-scoped human code (R-N / T-N). The
+// next number per kind lives in CodeCounter rows so Project's domain stays free of counter state.
+// Array/object fields are stored as JSON text, (de)serialized by the Store mapping layer.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,29 +12,43 @@ datasource db {
 }
 
 model Workspace {
-  id        String   @id
-  name      String
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
   createdAt DateTime @default(now())
 
   projects Project[]
 }
 
 model Project {
-  id          String   @id
-  workspaceId String
+  id          Int      @id @default(autoincrement())
+  workspaceId Int
   name        String
   description String?
   createdAt   DateTime @default(now())
 
   workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   requirements Requirement[]
+  tasks        Task[]
+  counters     CodeCounter[]
 
+  @@unique([workspaceId, name])
   @@index([workspaceId])
 }
 
+model CodeCounter {
+  projectId Int
+  kind      String // 'requirement' | 'task' (extend with 'worker' / 'session' later)
+  next      Int    @default(1)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, kind])
+}
+
 model Requirement {
-  id          String   @id
-  projectId   String
+  id          Int      @id @default(autoincrement())
+  projectId   Int
+  code        String   // 'R-1', 'R-2', ...
   title       String
   description String?
   resources   String   @default("[]") // JSON ResourceRef[]
@@ -44,23 +60,29 @@ model Requirement {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tasks   Task[]
 
+  @@unique([projectId, code])
   @@index([projectId])
   @@index([status])
 }
 
 model Task {
-  id            String   @id
-  requirementId String
+  id            Int      @id @default(autoincrement())
+  requirementId Int
+  projectId     Int      // denorm to enable DB-level (projectId, code) UNIQUE
+  code          String   // 'T-1', 'T-2', ...
   title         String
   spec          String?
   requires      String   @default("[]") // JSON string[]
-  dependsOn     String   @default("[]") // JSON string[]
+  dependsOn     String   @default("[]") // JSON Id[] (int FK references)
   status        String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@unique([projectId, code])
   @@index([requirementId])
+  @@index([projectId])
   @@index([status])
 }

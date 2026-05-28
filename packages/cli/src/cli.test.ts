@@ -18,34 +18,35 @@ describe('command handlers (fake client)', () => {
   test('createWorkspace renders the created workspace', async () => {
     const c = {
       workspaces: {
-        create: async (i: { name: string }) => ({ id: 'w1', name: i.name, createdAt: 0 }),
+        create: async (i: { name: string }) => ({ id: 1, name: i.name, createdAt: 0 }),
       },
     } as unknown as ApiClient
-    assert.equal(await createWorkspace(c, 'eng', false), 'w1  eng')
+    assert.equal(await createWorkspace(c, 'eng', false), '1  eng')
   })
 
   test('removeWorkspace calls remove and reports', async () => {
-    let removedId = ''
+    let removedId: number | null = null
     const c = {
       workspaces: {
-        remove: async (id: string) => {
+        remove: async (id: number) => {
           removedId = id
         },
       },
     } as unknown as ApiClient
-    assert.equal(await removeWorkspace(c, 'w9', false), 'deleted workspace w9')
-    assert.equal(removedId, 'w9')
+    assert.equal(await removeWorkspace(c, 9, false), 'deleted workspace 9')
+    assert.equal(removedId, 9)
   })
 
   test('setRequirementStatus passes id + status through', async () => {
-    let got: [string, string] | null = null
+    let got: [number, string] | null = null
     const c = {
       requirements: {
-        setStatus: async (id: string, status: string) => {
+        setStatus: async (id: number, status: string) => {
           got = [id, status]
           return {
             id,
-            projectId: 'p',
+            projectId: 1,
+            code: 'R-1',
             title: 't',
             resources: [],
             tags: [],
@@ -56,9 +57,9 @@ describe('command handlers (fake client)', () => {
         },
       },
     } as unknown as ApiClient
-    const out = await setRequirementStatus(c, 'r1', 'done', false)
-    assert.deepEqual(got, ['r1', 'done'])
-    assert.match(out, /\[done\]/)
+    const out = await setRequirementStatus(c, 1, 'done', false)
+    assert.deepEqual(got, [1, 'done'])
+    assert.match(out, /R-1.*\[done\]/)
   })
 
   test('createTask forwards the parsed input', async () => {
@@ -68,11 +69,13 @@ describe('command handlers (fake client)', () => {
         create: async (i: unknown) => {
           input = i
           return {
-            id: 't1',
-            requirementId: 'r1',
+            id: 1,
+            requirementId: 1,
+            projectId: 1,
+            code: 'T-1',
             title: 'impl',
             requires: ['x'],
-            dependsOn: ['a'],
+            dependsOn: [2],
             status: 'todo',
             createdAt: 0,
             updatedAt: 0,
@@ -82,15 +85,10 @@ describe('command handlers (fake client)', () => {
     } as unknown as ApiClient
     const out = await createTask(
       c,
-      { requirementId: 'r1', title: 'impl', requires: ['x'], dependsOn: ['a'] },
+      { requirementId: 1, title: 'impl', requires: ['x'], dependsOn: [2] },
       false,
     )
-    assert.deepEqual(input, {
-      requirementId: 'r1',
-      title: 'impl',
-      requires: ['x'],
-      dependsOn: ['a'],
-    })
-    assert.match(out, /t1.*\[todo\].*impl/)
+    assert.deepEqual(input, { requirementId: 1, title: 'impl', requires: ['x'], dependsOn: [2] })
+    assert.match(out, /T-1.*\[todo\].*impl/)
   })
 })

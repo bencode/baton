@@ -1,4 +1,4 @@
-import type { Id } from './ids.ts'
+import type { Code, Id } from './ids.ts'
 
 export type ResourceKind = 'doc' | 'link' | 'file'
 
@@ -17,6 +17,7 @@ export type RequirementStatus = 'active' | 'done' | 'cancelled'
 export type Requirement = {
   id: Id
   projectId: Id
+  code: Code // 'R-1', 'R-2', ... — project-scoped human reference
   title: string
   description?: string
   resources: ResourceRef[]

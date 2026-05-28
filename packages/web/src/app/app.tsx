@@ -44,12 +44,14 @@ export const HealthBadge = () => {
   )
 }
 
-// Dispatch a tab's path to its detail view (read-only for now).
+// Dispatch a tab's path to its detail view (read-only for now). Item kind
+// is derived from the code prefix in the URL by parseRoute.
 const renderTab = (tab: Tab) => {
   const route = parseRoute(tab.id)
-  if (route.kind === 'requirement') return <RequirementDetail requirementId={route.requirementId} />
-  if (route.kind === 'task') return <TaskDetail taskId={route.taskId} />
-  return null
+  if (route.kind !== 'item') return null
+  if (route.itemKind === 'requirement')
+    return <RequirementDetail projectId={route.projectId} code={route.code} />
+  return <TaskDetail projectId={route.projectId} code={route.code} />
 }
 
 const EmptyMain = () => (

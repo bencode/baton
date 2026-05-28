@@ -3,9 +3,10 @@ import { StatusDot } from '../../components/status-dot'
 
 type TaskNodeProps = { task: Task; depth: number; active: boolean; onOpen: () => void }
 
-// Leaf-row weight: regular weight, dot trails on the right. `depth` indents
-// along the dependency chain; `↳` (or `↳N`) marks multi-dep tasks. "Ready" is
-// surfaced in the task detail view, not at the row level.
+// Leaf-row weight: regular weight, dot trails on the right; code (T-N) sits
+// before the title in mono. `depth` indents along the dependency chain; `↳`
+// (or `↳N`) marks multi-dep tasks. "Ready" is surfaced in the task detail
+// view, not at the row level.
 export const TaskNode = ({ task, depth, active, onOpen }: TaskNodeProps) => {
   const deps = task.dependsOn.length
   return (
@@ -22,6 +23,7 @@ export const TaskNode = ({ task, depth, active, onOpen }: TaskNodeProps) => {
           {deps > 1 ? `↳${deps}` : '↳'}
         </span>
       )}
+      <span className="shrink-0 font-mono text-xs text-gray-400">{task.code}</span>
       <span className="truncate">{task.title}</span>
       <StatusDot status={task.status} className="ml-auto" />
     </button>

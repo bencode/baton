@@ -9,10 +9,11 @@ import { LeftPanel } from './left-panel'
 beforeEach(() => localStorage.clear())
 afterEach(cleanup)
 
-const project: Project = { id: 'p1', workspaceId: 'w1', name: 'web', createdAt: 0 }
+const project: Project = { id: 1, workspaceId: 1, name: 'web', createdAt: 0 }
 const login: Requirement = {
-  id: 'r1',
-  projectId: 'p1',
+  id: 1,
+  projectId: 1,
+  code: 'R-1',
   title: 'User login',
   resources: [],
   tags: [],
@@ -20,20 +21,25 @@ const login: Requirement = {
   createdAt: 0,
   updatedAt: 0,
 }
+// `Implement` (T-2) depends on `Design` (T-1, id 1); arrangeTasks orders Design first.
 const tasks: Task[] = [
   {
-    id: 't-impl',
-    requirementId: 'r1',
+    id: 2,
+    requirementId: 1,
+    projectId: 1,
+    code: 'T-2',
     title: 'Implement',
     requires: [],
-    dependsOn: ['t-design'],
+    dependsOn: [1],
     status: 'todo',
     createdAt: 2,
     updatedAt: 0,
   },
   {
-    id: 't-design',
-    requirementId: 'r1',
+    id: 1,
+    requirementId: 1,
+    projectId: 1,
+    code: 'T-1',
     title: 'Design',
     requires: [],
     dependsOn: [],
@@ -55,31 +61,33 @@ test('LeftPanel renders the requirement tree (deps + ready) and opens a task on 
   render(
     <ApiContext.Provider value={fakeApi()}>
       <MemoryRouter>
-        <LeftPanel workspaceId="w1" projectId="p1" activeId="/proj/p1" open={open} />
+        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={open} />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
   expect(await screen.findByText('User login')).toBeTruthy()
   expect(await screen.findByText('Design')).toBeTruthy()
   const impl = await screen.findByText('Implement')
-  // Implement depends on the done Design task; row shows status dot + ↳ marker.
+  // Implement depends on the done Design task; row shows status dot + ↳ marker + code.
   expect(screen.getByLabelText('todo')).toBeTruthy()
   expect(screen.getByText('↳')).toBeTruthy()
+  expect(screen.getByText('T-2')).toBeTruthy()
+  expect(screen.getByText('R-1')).toBeTruthy()
   fireEvent.click(impl)
-  expect(open).toHaveBeenCalledWith('/proj/p1/tasks/t-impl', 'Implement')
+  expect(open).toHaveBeenCalledWith('/proj/1/T-2', 'Implement')
 })
 
 test('chevron toggles aria-expanded and the tasks region aria-hidden', async () => {
   const { container } = render(
     <ApiContext.Provider value={fakeApi()}>
       <MemoryRouter>
-        <LeftPanel workspaceId="w1" projectId="p1" activeId="/proj/p1" open={vi.fn()} />
+        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={vi.fn()} />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
   await screen.findByText('User login')
-  const chevron = container.querySelector('[aria-controls="r1-tasks"]')
-  const region = container.querySelector('#r1-tasks')
+  const chevron = container.querySelector('[aria-controls="1-tasks"]')
+  const region = container.querySelector('#\\31 -tasks')
   expect(chevron?.getAttribute('aria-expanded')).toBe('true')
   expect(region?.getAttribute('aria-hidden')).toBe('false')
   if (chevron) fireEvent.click(chevron)

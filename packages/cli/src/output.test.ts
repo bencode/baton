@@ -4,22 +4,22 @@ import type { Requirement, Task, Workspace } from '@baton/shared'
 import { fmtRequirement, fmtTask, removed, renderList, renderOne, toJson } from './output.ts'
 
 describe('output', () => {
-  const w: Workspace = { id: 'w1', name: 'eng', createdAt: 0 }
+  const w: Workspace = { id: 1, name: 'eng', createdAt: 0 }
 
   test('renderOne: human vs json', () => {
     assert.equal(
       renderOne(w, x => `${x.id} ${x.name}`, false),
-      'w1 eng',
+      '1 eng',
     )
     assert.equal(
-      renderOne(w, x => x.id, true),
+      renderOne(w, x => String(x.id), true),
       toJson(w),
     )
   })
 
   test('renderList: empty / items / json', () => {
     assert.equal(
-      renderList<Workspace>([], x => x.id, false),
+      renderList<Workspace>([], x => String(x.id), false),
       '(none)',
     )
     assert.equal(
@@ -32,10 +32,11 @@ describe('output', () => {
     )
   })
 
-  test('fmt includes status for requirement/task', () => {
+  test('fmt shows code + status for requirement/task', () => {
     const r: Requirement = {
-      id: 'r1',
-      projectId: 'p',
+      id: 1,
+      projectId: 1,
+      code: 'R-1',
       title: 'login',
       resources: [],
       tags: [],
@@ -43,10 +44,12 @@ describe('output', () => {
       createdAt: 0,
       updatedAt: 0,
     }
-    assert.match(fmtRequirement(r), /r1.*\[active\].*login/)
+    assert.match(fmtRequirement(r), /R-1.*\[active\].*login/)
     const t: Task = {
-      id: 't1',
-      requirementId: 'r',
+      id: 1,
+      requirementId: 1,
+      projectId: 1,
+      code: 'T-1',
       title: 'impl',
       requires: [],
       dependsOn: [],
@@ -54,11 +57,11 @@ describe('output', () => {
       createdAt: 0,
       updatedAt: 0,
     }
-    assert.match(fmtTask(t), /t1.*\[todo\].*impl/)
+    assert.match(fmtTask(t), /T-1.*\[todo\].*impl/)
   })
 
   test('removed: human vs json', () => {
-    assert.equal(removed('workspace', 'w1', false), 'deleted workspace w1')
-    assert.deepEqual(JSON.parse(removed('workspace', 'w1', true)), { ok: true, deleted: 'w1' })
+    assert.equal(removed('workspace', 9, false), 'deleted workspace 9')
+    assert.deepEqual(JSON.parse(removed('workspace', 9, true)), { ok: true, deleted: 9 })
   })
 })

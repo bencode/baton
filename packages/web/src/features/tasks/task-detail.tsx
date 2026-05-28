@@ -1,12 +1,12 @@
-import { isReady } from '@baton/shared'
+import { type Code, type Id, isReady } from '@baton/shared'
 import { useMemo } from 'react'
 import { StatusBadge } from '../../components/status-badge'
-import { useTask, useTasks } from './use-tasks'
+import { useTaskByCode, useTasks } from './use-tasks'
 
-type TaskDetailProps = { taskId: string }
+type TaskDetailProps = { projectId: Id; code: Code }
 
-export const TaskDetail = ({ taskId }: TaskDetailProps) => {
-  const { data: task, loading } = useTask(taskId)
+export const TaskDetail = ({ projectId, code }: TaskDetailProps) => {
+  const { data: task, loading } = useTaskByCode(projectId, code)
   const { data: siblings } = useTasks(task?.requirementId ?? null)
   const ready = useMemo(() => {
     if (!task || !siblings) return false
@@ -22,9 +22,7 @@ export const TaskDetail = ({ taskId }: TaskDetailProps) => {
         <span aria-hidden="true" className="text-gray-300">
           ·
         </span>
-        <span className="font-mono normal-case tracking-normal text-gray-400">
-          {task.id.slice(0, 8)}
-        </span>
+        <span className="font-mono normal-case tracking-normal text-gray-400">{task.code}</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold tracking-tight text-gray-900">{task.title}</h2>

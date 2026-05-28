@@ -1,6 +1,9 @@
-import type { RequirementStatus, ResourceRef, TaskStatus } from '@baton/shared'
+import type { Id, RequirementStatus, ResourceRef, TaskStatus } from '@baton/shared'
 import { Hono } from 'hono'
 import type { RequirementPatch, Store, TaskPatch } from './store/types.ts'
+
+// Parse an `:id` URL param to int; NaN is fine — downstream finds return null → 404.
+const intParam = (s: string): Id => Number(s)
 
 // Minimal core HTTP surface: a thin layer over Store (connection/claim land in M2).
 export const createApp = (store: Store): Hono => {
@@ -15,14 +18,14 @@ export const createApp = (store: Store): Hono => {
   })
   app.get('/workspaces', async c => c.json(await store.workspaces.list()))
   app.get('/workspaces/:id', async c => {
-    const w = await store.workspaces.get(c.req.param('id'))
+    const w = await store.workspaces.get(intParam(c.req.param('id')))
     return w ? c.json(w) : c.json({ error: 'not found' }, 404)
   })
   app.get('/workspaces/:id/projects', async c =>
-    c.json(await store.projects.listByWorkspace(c.req.param('id'))),
+    c.json(await store.projects.listByWorkspace(intParam(c.req.param('id')))),
   )
   app.delete('/workspaces/:id', async c => {
-    const id = c.req.param('id')
+    const id = intParam(c.req.param('id'))
     if (!(await store.workspaces.get(id))) return c.json({ error: 'not found' }, 404)
     await store.workspaces.delete(id)
     return c.body(null, 204)
@@ -30,7 +33,7 @@ export const createApp = (store: Store): Hono => {
 
   app.post('/projects', async c => {
     const body = (await c.req.json()) as {
-      workspaceId?: string
+      workspaceId?: Id
       name?: string
       description?: string
     }
@@ -40,14 +43,28 @@ export const createApp = (store: Store): Hono => {
     return c.json(await store.projects.create({ workspaceId, name, description }), 201)
   })
   app.get('/projects/:id', async c => {
-    const p = await store.projects.get(c.req.param('id'))
+    const p = await store.projects.get(intParam(c.req.param('id')))
     return p ? c.json(p) : c.json({ error: 'not found' }, 404)
   })
   app.get('/projects/:id/requirements', async c =>
-    c.json(await store.requirements.listByProject(c.req.param('id'))),
+    c.json(await store.requirements.listByProject(intParam(c.req.param('id')))),
   )
+  // Resolve an item by its project-scoped code (R-N / T-N); kind is derived from prefix.
+  app.get('/projects/:projectId/items/:code', async c => {
+    const projectId = intParam(c.req.param('projectId'))
+    const code = c.req.param('code')
+    if (code.startsWith('R-')) {
+      const r = await store.requirements.getByCode(projectId, code)
+      return r ? c.json({ kind: 'requirement', item: r }) : c.json({ error: 'not found' }, 404)
+    }
+    if (code.startsWith('T-')) {
+      const t = await store.tasks.getByCode(projectId, code)
+      return t ? c.json({ kind: 'task', item: t }) : c.json({ error: 'not found' }, 404)
+    }
+    return c.json({ error: 'unknown code prefix' }, 400)
+  })
   app.delete('/projects/:id', async c => {
-    const id = c.req.param('id')
+    const id = intParam(c.req.param('id'))
     if (!(await store.projects.get(id))) return c.json({ error: 'not found' }, 404)
     await store.projects.delete(id)
     return c.body(null, 204)
@@ -55,7 +72,7 @@ export const createApp = (store: Store): Hono => {
 
   app.post('/requirements', async c => {
     const body = (await c.req.json()) as {
-      projectId?: string
+      projectId?: Id
       title?: string
       description?: string
       resources?: ResourceRef[]
@@ -71,23 +88,23 @@ export const createApp = (store: Store): Hono => {
     )
   })
   app.get('/requirements/:id', async c => {
-    const r = await store.requirements.get(c.req.param('id'))
+    const r = await store.requirements.get(intParam(c.req.param('id')))
     return r ? c.json(r) : c.json({ error: 'not found' }, 404)
   })
   app.get('/requirements/:id/full', async c => {
-    const full = await store.getRequirementWithTasks(c.req.param('id'))
+    const full = await store.getRequirementWithTasks(intParam(c.req.param('id')))
     return full ? c.json(full) : c.json({ error: 'not found' }, 404)
   })
   app.get('/requirements/:id/tasks', async c =>
-    c.json(await store.tasks.listByRequirement(c.req.param('id'))),
+    c.json(await store.tasks.listByRequirement(intParam(c.req.param('id')))),
   )
   app.patch('/requirements/:id', async c => {
-    const id = c.req.param('id')
+    const id = intParam(c.req.param('id'))
     if (!(await store.requirements.get(id))) return c.json({ error: 'not found' }, 404)
     return c.json(await store.requirements.update(id, (await c.req.json()) as RequirementPatch))
   })
   app.delete('/requirements/:id', async c => {
-    const id = c.req.param('id')
+    const id = intParam(c.req.param('id'))
     if (!(await store.requirements.get(id))) return c.json({ error: 'not found' }, 404)
     await store.requirements.delete(id)
     return c.body(null, 204)
@@ -95,11 +112,11 @@ export const createApp = (store: Store): Hono => {
 
   app.post('/tasks', async c => {
     const body = (await c.req.json()) as {
-      requirementId?: string
+      requirementId?: Id
       title?: string
       spec?: string
       requires?: string[]
-      dependsOn?: string[]
+      dependsOn?: Id[]
       status?: TaskStatus
     }
     if (!body.requirementId || !body.title)
@@ -111,16 +128,16 @@ export const createApp = (store: Store): Hono => {
     )
   })
   app.get('/tasks/:id', async c => {
-    const t = await store.tasks.get(c.req.param('id'))
+    const t = await store.tasks.get(intParam(c.req.param('id')))
     return t ? c.json(t) : c.json({ error: 'not found' }, 404)
   })
   app.patch('/tasks/:id', async c => {
-    const id = c.req.param('id')
+    const id = intParam(c.req.param('id'))
     if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
     return c.json(await store.tasks.update(id, (await c.req.json()) as TaskPatch))
   })
   app.delete('/tasks/:id', async c => {
-    const id = c.req.param('id')
+    const id = intParam(c.req.param('id'))
     if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
     await store.tasks.delete(id)
     return c.body(null, 204)

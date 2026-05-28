@@ -28,17 +28,20 @@ describe('server HTTP', () => {
 
   test('workspace → project → requirement → task end-to-end over HTTP', async () => {
     const app = createApp(ctx.store)
-    type WithId = { id: string }
+    type WithId = { id: number }
+    type WithCode = WithId & { code: string }
     const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as WithId
     const p = (await (
       await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
     ).json()) as WithId
     const r = (await (
       await postJson(app, '/requirements', { projectId: p.id, title: 'login' })
-    ).json()) as WithId
+    ).json()) as WithCode
+    assert.equal(r.code, 'R-1')
     const t = (await (
       await postJson(app, '/tasks', { requirementId: r.id, title: 'impl' })
-    ).json()) as WithId
+    ).json()) as WithCode
+    assert.equal(t.code, 'T-1')
 
     const tasks = (await (await app.request(`/requirements/${r.id}/tasks`)).json()) as WithId[]
     assert.equal(tasks.length, 1)
@@ -51,10 +54,28 @@ describe('server HTTP', () => {
     assert.equal(full.tasks.length, 1)
   })
 
+  test('GET /projects/:projectId/items/:code resolves R-N and T-N', async () => {
+    const app = createApp(ctx.store)
+    type WithId = { id: number }
+    const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as WithId
+    const p = (await (
+      await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
+    ).json()) as WithId
+    await postJson(app, '/requirements', { projectId: p.id, title: 'r' })
+    const r = (await (await app.request(`/projects/${p.id}/items/R-1`)).json()) as {
+      kind: string
+      item: { title: string }
+    }
+    assert.equal(r.kind, 'requirement')
+    assert.equal(r.item.title, 'r')
+    assert.equal((await app.request(`/projects/${p.id}/items/T-99`)).status, 404)
+    assert.equal((await app.request(`/projects/${p.id}/items/X-1`)).status, 400)
+  })
+
   test('missing field → 400; missing entity → 404', async () => {
     const app = createApp(ctx.store)
     assert.equal((await postJson(app, '/workspaces', {})).status, 400)
-    assert.equal((await app.request('/workspaces/nope')).status, 404)
+    assert.equal((await app.request('/workspaces/999')).status, 404)
   })
 
   test('real node server start/stop + /health', async () => {
@@ -69,11 +90,11 @@ describe('server HTTP', () => {
 
   test('PATCH advances status; DELETE then GET → 404', async () => {
     const app = createApp(ctx.store)
-    type WithIdStatus = { id: string; status: string }
-    const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as { id: string }
+    type WithIdStatus = { id: number; status: string }
+    const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as { id: number }
     const p = (await (
       await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
-    ).json()) as { id: string }
+    ).json()) as { id: number }
     const r = (await (
       await postJson(app, '/requirements', { projectId: p.id, title: 'r' })
     ).json()) as WithIdStatus

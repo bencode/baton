@@ -1,11 +1,12 @@
+import type { Id } from '@baton/shared'
 import { ProjectSwitcher } from '../features/projects/project-switcher'
 import { useRequirements } from '../features/requirements/use-requirements'
 import { usePersistedSet } from '../hooks/use-persisted-set'
 import { RequirementTree } from './requirement-tree'
 
 type LeftPanelProps = {
-  workspaceId: string | null
-  projectId: string | null
+  workspaceId: Id | null
+  projectId: Id | null
   activeId: string
   open: (id: string, title: string) => void
 }
@@ -33,8 +34,8 @@ export const LeftPanel = ({ workspaceId, projectId, activeId, open }: LeftPanelP
               requirement={req}
               projectId={projectId}
               activeId={activeId}
-              expanded={!collapsed.has(req.id)}
-              onToggle={() => collapsed.toggle(req.id)}
+              expanded={!collapsed.has(String(req.id))}
+              onToggle={() => collapsed.toggle(String(req.id))}
               open={open}
             />
           ))}

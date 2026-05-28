@@ -2,42 +2,58 @@ import { expect, test } from 'vitest'
 import {
   activeProjectId,
   isItemRoute,
+  itemPath,
   parseRoute,
   projectPath,
-  requirementPath,
-  taskPath,
   workspacePath,
 } from './route'
 
 test('parseRoute classifies each path shape', () => {
   expect(parseRoute('/')).toEqual({ kind: 'home' })
-  expect(parseRoute('/ws/w1')).toEqual({ kind: 'workspace', workspaceId: 'w1' })
-  expect(parseRoute('/proj/p1')).toEqual({ kind: 'project', projectId: 'p1' })
-  expect(parseRoute('/proj/p1/reqs/r1')).toEqual({
-    kind: 'requirement',
-    projectId: 'p1',
-    requirementId: 'r1',
+  expect(parseRoute('/ws/1')).toEqual({ kind: 'workspace', workspaceId: 1 })
+  expect(parseRoute('/proj/1')).toEqual({ kind: 'project', projectId: 1 })
+  expect(parseRoute('/proj/1/R-1')).toEqual({
+    kind: 'item',
+    projectId: 1,
+    code: 'R-1',
+    itemKind: 'requirement',
   })
-  expect(parseRoute('/proj/p1/tasks/t1')).toEqual({ kind: 'task', projectId: 'p1', taskId: 't1' })
+  expect(parseRoute('/proj/1/T-5')).toEqual({
+    kind: 'item',
+    projectId: 1,
+    code: 'T-5',
+    itemKind: 'task',
+  })
+})
+
+test('parseRoute treats invalid ids / unknown code prefix as home/project', () => {
+  expect(parseRoute('/proj/abc')).toEqual({ kind: 'home' })
+  // unknown code prefix falls back to the project route
+  expect(parseRoute('/proj/1/X-9')).toEqual({ kind: 'project', projectId: 1 })
 })
 
 test('path builders round-trip through parseRoute', () => {
-  expect(parseRoute(workspacePath('w1'))).toEqual({ kind: 'workspace', workspaceId: 'w1' })
-  expect(parseRoute(projectPath('p1'))).toEqual({ kind: 'project', projectId: 'p1' })
-  expect(parseRoute(requirementPath('p1', 'r1'))).toMatchObject({ requirementId: 'r1' })
-  expect(parseRoute(taskPath('p1', 't1'))).toMatchObject({ taskId: 't1' })
+  expect(parseRoute(workspacePath(7))).toEqual({ kind: 'workspace', workspaceId: 7 })
+  expect(parseRoute(projectPath(3))).toEqual({ kind: 'project', projectId: 3 })
+  expect(parseRoute(itemPath(3, 'T-12'))).toMatchObject({
+    kind: 'item',
+    projectId: 3,
+    code: 'T-12',
+    itemKind: 'task',
+  })
+  expect(itemPath(1, 'T-5')).toBe('/proj/1/T-5')
 })
 
-test('isItemRoute is true only for requirement/task paths', () => {
-  expect(isItemRoute('/proj/p1/tasks/t1')).toBe(true)
-  expect(isItemRoute('/proj/p1/reqs/r1')).toBe(true)
-  expect(isItemRoute('/proj/p1')).toBe(false)
+test('isItemRoute is true only for R-/T- coded paths', () => {
+  expect(isItemRoute('/proj/1/T-1')).toBe(true)
+  expect(isItemRoute('/proj/1/R-1')).toBe(true)
+  expect(isItemRoute('/proj/1')).toBe(false)
   expect(isItemRoute('/')).toBe(false)
 })
 
 test('activeProjectId extracts the project for project-scoped paths', () => {
-  expect(activeProjectId('/proj/p1/reqs/r1')).toBe('p1')
-  expect(activeProjectId('/proj/p1')).toBe('p1')
-  expect(activeProjectId('/ws/w1')).toBeNull()
+  expect(activeProjectId('/proj/2/R-1')).toBe(2)
+  expect(activeProjectId('/proj/2')).toBe(2)
+  expect(activeProjectId('/ws/1')).toBeNull()
   expect(activeProjectId('/')).toBeNull()
 })

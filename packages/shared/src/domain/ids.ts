@@ -1,3 +1,4 @@
-// Domain entity identifier. ID generation (crypto.randomUUID etc.) lives server-side;
-// shared only describes the type, staying free of runtime dependencies.
-export type Id = string
+// Domain entity identifier. INT autoincrement primary keys (assigned by the DB).
+// Code = human-facing project-scoped identifier like 'R-1' / 'T-1'.
+export type Id = number
+export type Code = string

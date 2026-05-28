@@ -1,4 +1,6 @@
 import type {
+  Code,
+  Id,
   Project,
   Requirement,
   RequirementStatus,
@@ -23,20 +25,20 @@ const request = async <T>(url: string, init: ReqInit): Promise<T> => {
 }
 
 export type WorkspaceInput = { name: string }
-export type ProjectInput = { workspaceId: string; name: string; description?: string }
+export type ProjectInput = { workspaceId: Id; name: string; description?: string }
 export type RequirementInput = {
-  projectId: string
+  projectId: Id
   title: string
   description?: string
   resources?: ResourceRef[]
   tags?: string[]
 }
 export type TaskInput = {
-  requirementId: string
+  requirementId: Id
   title: string
   spec?: string
   requires?: string[]
-  dependsOn?: string[]
+  dependsOn?: Id[]
 }
 
 // Thin HTTP client mirroring the server routes; each method returns the parsed domain object.
@@ -44,33 +46,44 @@ export type ApiClient = {
   workspaces: {
     create(input: WorkspaceInput): Promise<Workspace>
     list(): Promise<Workspace[]>
-    get(id: string): Promise<Workspace>
-    remove(id: string): Promise<void>
+    get(id: Id): Promise<Workspace>
+    remove(id: Id): Promise<void>
   }
   projects: {
     create(input: ProjectInput): Promise<Project>
-    listByWorkspace(workspaceId: string): Promise<Project[]>
-    get(id: string): Promise<Project>
-    remove(id: string): Promise<void>
+    listByWorkspace(workspaceId: Id): Promise<Project[]>
+    get(id: Id): Promise<Project>
+    remove(id: Id): Promise<void>
   }
   requirements: {
     create(input: RequirementInput): Promise<Requirement>
-    listByProject(projectId: string): Promise<Requirement[]>
-    get(id: string): Promise<Requirement>
-    setStatus(id: string, status: RequirementStatus): Promise<Requirement>
-    remove(id: string): Promise<void>
+    listByProject(projectId: Id): Promise<Requirement[]>
+    get(id: Id): Promise<Requirement>
+    getByCode(projectId: Id, code: Code): Promise<Requirement>
+    setStatus(id: Id, status: RequirementStatus): Promise<Requirement>
+    remove(id: Id): Promise<void>
   }
   tasks: {
     create(input: TaskInput): Promise<Task>
-    listByRequirement(requirementId: string): Promise<Task[]>
-    get(id: string): Promise<Task>
-    setStatus(id: string, status: TaskStatus): Promise<Task>
-    remove(id: string): Promise<void>
+    listByRequirement(requirementId: Id): Promise<Task[]>
+    get(id: Id): Promise<Task>
+    getByCode(projectId: Id, code: Code): Promise<Task>
+    setStatus(id: Id, status: TaskStatus): Promise<Task>
+    remove(id: Id): Promise<void>
   }
 }
 
 export const createClient = (baseUrl: string): ApiClient => {
   const u = (p: string): string => `${baseUrl}${p}`
+  const fetchItemByCode = async (projectId: Id, code: Code, expectKind: 'requirement' | 'task') => {
+    const r = await request<{ kind: string; item: unknown }>(
+      u(`/projects/${projectId}/items/${encodeURIComponent(code)}`),
+      { method: 'GET' },
+    )
+    if (r.kind !== expectKind)
+      throw new Error(`expected ${expectKind} but got ${r.kind} for ${code}`)
+    return r.item
+  }
   return {
     workspaces: {
       create: input => request(u('/workspaces'), { method: 'POST', body: input }),
@@ -90,6 +103,8 @@ export const createClient = (baseUrl: string): ApiClient => {
       listByProject: projectId =>
         request(u(`/projects/${projectId}/requirements`), { method: 'GET' }),
       get: id => request(u(`/requirements/${id}`), { method: 'GET' }),
+      getByCode: async (projectId, code) =>
+        (await fetchItemByCode(projectId, code, 'requirement')) as Requirement,
       setStatus: (id, status) =>
         request(u(`/requirements/${id}`), { method: 'PATCH', body: { status } }),
       remove: id => request(u(`/requirements/${id}`), { method: 'DELETE' }),
@@ -99,6 +114,8 @@ export const createClient = (baseUrl: string): ApiClient => {
       listByRequirement: requirementId =>
         request(u(`/requirements/${requirementId}/tasks`), { method: 'GET' }),
       get: id => request(u(`/tasks/${id}`), { method: 'GET' }),
+      getByCode: async (projectId, code) =>
+        (await fetchItemByCode(projectId, code, 'task')) as Task,
       setStatus: (id, status) => request(u(`/tasks/${id}`), { method: 'PATCH', body: { status } }),
       remove: id => request(u(`/tasks/${id}`), { method: 'DELETE' }),
     },

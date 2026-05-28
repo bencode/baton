@@ -1,10 +1,11 @@
+import type { Code, Id } from '@baton/shared'
 import { StatusBadge } from '../../components/status-badge'
-import { useRequirement } from './use-requirements'
+import { useRequirementByCode } from './use-requirements'
 
-type RequirementDetailProps = { requirementId: string }
+type RequirementDetailProps = { projectId: Id; code: Code }
 
-export const RequirementDetail = ({ requirementId }: RequirementDetailProps) => {
-  const { data: req, loading } = useRequirement(requirementId)
+export const RequirementDetail = ({ projectId, code }: RequirementDetailProps) => {
+  const { data: req, loading } = useRequirementByCode(projectId, code)
   if (loading) return <div className="p-6 text-sm text-gray-400">loading…</div>
   if (!req) return <div className="p-6 text-sm text-gray-400">requirement not found</div>
   return (
@@ -14,9 +15,7 @@ export const RequirementDetail = ({ requirementId }: RequirementDetailProps) => 
         <span aria-hidden="true" className="text-gray-300">
           ·
         </span>
-        <span className="font-mono normal-case tracking-normal text-gray-400">
-          {req.id.slice(0, 8)}
-        </span>
+        <span className="font-mono normal-case tracking-normal text-gray-400">{req.code}</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold tracking-tight text-gray-900">{req.title}</h2>

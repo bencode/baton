@@ -10,7 +10,8 @@ type RequirementNodeProps = {
 }
 
 // Section-header weight: bold semibold title, status dot on the LEFT to signal
-// identity. Two sibling buttons preserve a11y; chevron carries aria-expanded.
+// identity, code (R-N) sits before the title in mono. Two sibling buttons
+// preserve a11y; chevron carries aria-expanded.
 export const RequirementNode = ({
   requirement,
   active,
@@ -51,11 +52,14 @@ export const RequirementNode = ({
     <button
       type="button"
       onClick={onOpen}
-      className={`flex-1 truncate text-left text-sm font-semibold tracking-tight ${
+      className={`flex min-w-0 flex-1 items-baseline gap-2 truncate text-left text-sm font-semibold tracking-tight ${
         active ? 'text-blue-900' : 'text-gray-900'
       }`}
     >
-      {requirement.title}
+      <span className="shrink-0 font-mono text-xs font-normal text-gray-400">
+        {requirement.code}
+      </span>
+      <span className="truncate">{requirement.title}</span>
     </button>
   </div>
 )

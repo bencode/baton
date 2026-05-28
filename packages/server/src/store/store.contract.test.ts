@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, test } from 'node:test'
-import { isReady, summarizeTaskProgress, type Task } from '@baton/shared'
+import { type Id, isReady, summarizeTaskProgress, type Task } from '@baton/shared'
 import { freshStore, type TestStore } from './test-db.ts'
 
 describe('Store contract', () => {
@@ -12,17 +12,18 @@ describe('Store contract', () => {
     await ctx.cleanup()
   })
 
-  const seedReq = async (): Promise<{ req: string }> => {
+  const seedReq = async () => {
     const w = await ctx.store.workspaces.create({ name: 'w' })
     const p = await ctx.store.projects.create({ workspaceId: w.id, name: 'p' })
     const r = await ctx.store.requirements.create({ projectId: p.id, title: 'r' })
-    return { req: r.id }
+    return { req: r.id, project: p.id }
   }
 
   test('workspace CRUD round-trip', async () => {
     const { workspaces } = ctx.store
     const w = await workspaces.create({ name: 'eng' })
     assert.equal(w.name, 'eng')
+    assert.equal(typeof w.id, 'number')
     assert.equal(typeof w.createdAt, 'number')
     assert.deepEqual(await workspaces.get(w.id), w)
     assert.equal((await workspaces.list()).length, 1)
@@ -30,17 +31,20 @@ describe('Store contract', () => {
     assert.equal(await workspaces.get(w.id), null)
   })
 
-  test('requirement: JSON fields round-trip + default status active', async () => {
+  test('requirement: code auto-generated R-N + JSON fields round-trip + default status active', async () => {
     const w = await ctx.store.workspaces.create({ name: 'w' })
     const p = await ctx.store.projects.create({ workspaceId: w.id, name: 'p' })
-    const r = await ctx.store.requirements.create({
+    const r1 = await ctx.store.requirements.create({
       projectId: p.id,
       title: 'login',
       resources: [{ kind: 'doc', uri: 'docs/login.md', label: 'spec' }],
       tags: ['auth', 'p0'],
     })
-    assert.equal(r.status, 'active')
-    const got = await ctx.store.requirements.get(r.id)
+    assert.equal(r1.code, 'R-1')
+    assert.equal(r1.status, 'active')
+    const r2 = await ctx.store.requirements.create({ projectId: p.id, title: 'next' })
+    assert.equal(r2.code, 'R-2')
+    const got = await ctx.store.requirements.get(r1.id)
     assert.deepEqual(got?.resources, [{ kind: 'doc', uri: 'docs/login.md', label: 'spec' }])
     assert.deepEqual(got?.tags, ['auth', 'p0'])
   })
@@ -53,8 +57,8 @@ describe('Store contract', () => {
     assert.equal(updated.status, 'done')
   })
 
-  test('task: requires/dependsOn round-trip + default status todo', async () => {
-    const { req } = await seedReq()
+  test('task: code auto-generated T-N + projectId denorm + dependsOn round-trip', async () => {
+    const { req, project } = await seedReq()
     const a = await ctx.store.tasks.create({ requirementId: req, title: 'a' })
     const b = await ctx.store.tasks.create({
       requirementId: req,
@@ -62,10 +66,38 @@ describe('Store contract', () => {
       requires: ['planning'],
       dependsOn: [a.id],
     })
+    assert.equal(a.code, 'T-1')
+    assert.equal(a.projectId, project)
     assert.equal(a.status, 'todo')
+    assert.equal(b.code, 'T-2')
+    assert.equal(b.projectId, project)
     const gotB = await ctx.store.tasks.get(b.id)
     assert.deepEqual(gotB?.requires, ['planning'])
     assert.deepEqual(gotB?.dependsOn, [a.id])
+  })
+
+  test('counter never recycles: after deleting T-5, next task gets T-6', async () => {
+    const { req } = await seedReq()
+    const ids: number[] = []
+    for (let i = 0; i < 5; i++) {
+      const t = await ctx.store.tasks.create({ requirementId: req, title: `t${i + 1}` })
+      ids.push(t.id)
+      assert.equal(t.code, `T-${i + 1}`)
+    }
+    const last = ids[4] as number
+    await ctx.store.tasks.delete(last)
+    const next = await ctx.store.tasks.create({ requirementId: req, title: 'after-delete' })
+    assert.equal(next.code, 'T-6')
+  })
+
+  test('getByCode resolves a requirement / task within a project', async () => {
+    const { req, project } = await seedReq()
+    const t = await ctx.store.tasks.create({ requirementId: req, title: 'a' })
+    const byCode = await ctx.store.tasks.getByCode(project, 'T-1')
+    assert.equal(byCode?.id, t.id)
+    const r = await ctx.store.requirements.getByCode(project, 'R-1')
+    assert.equal(r?.id, req)
+    assert.equal(await ctx.store.tasks.getByCode(project, 'T-99'), null)
   })
 
   test('getRequirementWithTasks + summarizeTaskProgress over persisted data', async () => {
@@ -87,7 +119,7 @@ describe('Store contract', () => {
     const a = await ctx.store.tasks.create({ requirementId: req, title: 'a', status: 'done' })
     const b = await ctx.store.tasks.create({ requirementId: req, title: 'b', dependsOn: [a.id] })
     const { tasks } = (await ctx.store.getRequirementWithTasks(req)) ?? { tasks: [] }
-    const byId = new Map<string, Task>(tasks.map(t => [t.id, t] as const))
+    const byId = new Map<Id, Task>(tasks.map(t => [t.id, t] as const))
     const storedB = byId.get(b.id)
     assert.ok(storedB)
     assert.equal(isReady(storedB, byId), true)

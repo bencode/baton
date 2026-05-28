@@ -1,13 +1,13 @@
-import { arrangeTasks, type Requirement } from '@baton/shared'
+import { arrangeTasks, type Id, type Requirement } from '@baton/shared'
 import { useMemo } from 'react'
 import { RequirementNode } from '../features/requirements/requirement-node'
 import { TaskNode } from '../features/tasks/task-node'
 import { useTasks } from '../features/tasks/use-tasks'
-import { requirementPath, taskPath } from './route'
+import { itemPath } from './route'
 
 type RequirementTreeProps = {
   requirement: Requirement
-  projectId: string
+  projectId: Id
   activeId: string
   expanded: boolean
   onToggle: () => void
@@ -28,7 +28,7 @@ export const RequirementTree = ({
 }: RequirementTreeProps) => {
   const { data: tasks } = useTasks(requirement.id)
   const arranged = useMemo(() => arrangeTasks(tasks ?? []), [tasks])
-  const reqPath = requirementPath(projectId, requirement.id)
+  const reqPath = itemPath(projectId, requirement.code)
   return (
     <div className="flex flex-col">
       <RequirementNode
@@ -47,7 +47,7 @@ export const RequirementTree = ({
       >
         <div className="overflow-hidden">
           {arranged.map(({ task, depth }) => {
-            const path = taskPath(projectId, task.id)
+            const path = itemPath(projectId, task.code)
             return (
               <TaskNode
                 key={task.id}

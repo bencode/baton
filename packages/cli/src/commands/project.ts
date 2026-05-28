@@ -1,3 +1,4 @@
+import type { Id } from '@baton/shared'
 import { defineCommand } from 'citty'
 import type { ApiClient } from '../client.ts'
 import { fmtProject, removed, renderList, renderOne } from '../output.ts'
@@ -5,14 +6,14 @@ import { clientFor, common } from '../util.ts'
 
 export const createProject = (
   c: ApiClient,
-  input: { workspaceId: string; name: string; description?: string },
+  input: { workspaceId: Id; name: string; description?: string },
   json: boolean,
 ): Promise<string> => c.projects.create(input).then(p => renderOne(p, fmtProject, json))
-export const listProjects = (c: ApiClient, workspaceId: string, json: boolean): Promise<string> =>
+export const listProjects = (c: ApiClient, workspaceId: Id, json: boolean): Promise<string> =>
   c.projects.listByWorkspace(workspaceId).then(ps => renderList(ps, fmtProject, json))
-export const getProject = (c: ApiClient, id: string, json: boolean): Promise<string> =>
+export const getProject = (c: ApiClient, id: Id, json: boolean): Promise<string> =>
   c.projects.get(id).then(p => renderOne(p, fmtProject, json))
-export const removeProject = (c: ApiClient, id: string, json: boolean): Promise<string> =>
+export const removeProject = (c: ApiClient, id: Id, json: boolean): Promise<string> =>
   c.projects.remove(id).then(() => removed('project', id, json))
 
 export const project = defineCommand({
@@ -29,7 +30,7 @@ export const project = defineCommand({
       run: async ({ args }) => {
         const out = await createProject(
           clientFor(args),
-          { workspaceId: args.workspace, name: args.name, description: args.desc },
+          { workspaceId: Number(args.workspace), name: args.name, description: args.desc },
           Boolean(args.json),
         )
         console.log(out)
@@ -42,21 +43,21 @@ export const project = defineCommand({
         ...common,
       },
       run: async ({ args }) => {
-        console.log(await listProjects(clientFor(args), args.workspace, Boolean(args.json)))
+        console.log(await listProjects(clientFor(args), Number(args.workspace), Boolean(args.json)))
       },
     }),
     get: defineCommand({
       meta: { name: 'get', description: 'get a project' },
       args: { id: { type: 'positional', required: true }, ...common },
       run: async ({ args }) => {
-        console.log(await getProject(clientFor(args), args.id, Boolean(args.json)))
+        console.log(await getProject(clientFor(args), Number(args.id), Boolean(args.json)))
       },
     }),
     rm: defineCommand({
       meta: { name: 'rm', description: 'delete a project' },
       args: { id: { type: 'positional', required: true }, ...common },
       run: async ({ args }) => {
-        console.log(await removeProject(clientFor(args), args.id, Boolean(args.json)))
+        console.log(await removeProject(clientFor(args), Number(args.id), Boolean(args.json)))
       },
     }),
   },
