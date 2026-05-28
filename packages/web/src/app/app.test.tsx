@@ -30,8 +30,11 @@ test('HealthBadge shows "unreachable" when /health rejects', async () => {
   expect(await screen.findByText('server: unreachable')).toBeTruthy()
 })
 
-test('Shell renders the top bar, a resize separator and the empty tab area', () => {
-  const api = { health: vi.fn(async () => ({ ok: true })) } as unknown as Api
+test('Shell renders the top bar, a resize separator and empty states with no data', async () => {
+  const api = {
+    health: vi.fn(async () => ({ ok: true })),
+    workspaces: { list: vi.fn(async () => []) },
+  } as unknown as Api
   const { container } = render(
     <ApiContext.Provider value={api}>
       <MemoryRouter initialEntries={['/']}>
@@ -40,7 +43,8 @@ test('Shell renders the top bar, a resize separator and the empty tab area', () 
     </ApiContext.Provider>,
   )
   expect(screen.getByText('baton')).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'workspace ▾' })).toBeTruthy()
-  expect(screen.getByText('Select a resource to open a tab.')).toBeTruthy()
+  expect(await screen.findByText('no workspace')).toBeTruthy()
+  expect(screen.getByText('Select a project.')).toBeTruthy()
+  expect(screen.getByText('Select a requirement or task to open it.')).toBeTruthy()
   expect(container.querySelector('[data-separator]')).toBeTruthy()
 })

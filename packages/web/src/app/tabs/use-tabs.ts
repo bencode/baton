@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { isItemRoute } from '../route.ts'
 import { closeTab, neighborTab, openTab, type Tab } from './tabs-model.ts'
 
 const STORAGE_KEY = 'baton.tabs'
@@ -14,33 +15,47 @@ const loadTabs = (): Tab[] => {
   }
 }
 
+// Fallback title when an item route is reached without going through `open`
+// (e.g. a pasted URL): a short slice of the id segment until detail data loads.
+const fallbackTitle = (id: string): string => (id.split('/').pop() ?? id).slice(0, 8)
+
 export type TabsController = {
   tabs: Tab[]
   activeId: string
-  open: (id: string) => void
+  open: (id: string, title: string) => void
   close: (id: string) => void
 }
 
 // Open tabs live in App-shell state (persisted to localStorage); the active tab
-// is the URL. `titleFor` maps a path to a tab title, or null for non-tab routes.
-export const useTabs = (titleFor: (path: string) => string | null): TabsController => {
+// is the URL. Tree clicks call open(itemPath, title); switching workspace/project
+// navigates directly (those paths aren't item routes, so no tab is opened).
+export const useTabs = (): TabsController => {
   const location = useLocation()
   const navigate = useNavigate()
   const [tabs, setTabs] = useState<Tab[]>(loadTabs)
+  const pendingTitle = useRef<Record<string, string>>({})
   const activeId = location.pathname
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs))
   }, [tabs])
 
-  // The URL is the source of truth for the active tab; mirror it into the list.
+  // The URL is the source of truth: when it points at an item route, ensure a
+  // tab exists. openTab keeps an existing tab's title, so this also handles
+  // touch-on-revisit; the title is only used when adding a new tab.
   useEffect(() => {
-    const title = titleFor(activeId)
-    if (title === null) return
+    if (!isItemRoute(activeId)) return
+    const title = pendingTitle.current[activeId] ?? fallbackTitle(activeId)
     setTabs(prev => openTab(prev, { id: activeId, title }, Date.now()))
-  }, [activeId, titleFor])
+  }, [activeId])
 
-  const open = useCallback((id: string) => navigate(id), [navigate])
+  const open = useCallback(
+    (id: string, title: string) => {
+      pendingTitle.current[id] = title
+      navigate(id)
+    },
+    [navigate],
+  )
 
   const close = useCallback(
     (id: string) => {
