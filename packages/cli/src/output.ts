@@ -1,4 +1,4 @@
-import type { Assignment, Project, Requirement, Session, Task, Workspace } from '@baton/shared'
+import type { Project, Requirement, Session, Task, Workspace } from '@baton/shared'
 
 export const toJson = (data: unknown): string => JSON.stringify(data, null, 2)
 
@@ -7,9 +7,7 @@ export const fmtProject = (p: Project): string => `${p.id}  ${p.name}`
 export const fmtRequirement = (r: Requirement): string => `${r.code}  [${r.status}]  ${r.title}`
 export const fmtTask = (t: Task): string => `${t.code}  [${t.status}]  ${t.title}`
 export const fmtSession = (s: Session): string =>
-  `${s.code}  [${s.status}]  ${s.name}  (${s.capabilities.join(',') || '-'})`
-export const fmtAssignment = (a: Assignment): string =>
-  `${a.code}  [${a.status}]  task=${a.taskId}  session=${a.sessionId}`
+  `${s.code}  [${s.state}]  ${s.name}${s.worktreePath ? `  ${s.worktreePath}` : ''}`
 
 export const renderOne = <T>(item: T, fmt: (x: T) => string, json: boolean): string =>
   json ? toJson(item) : fmt(item)

@@ -3,14 +3,12 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import type { ApiClient, WorkerClient } from './client.ts'
+import type { ApiClient } from './client.ts'
 import { setRequirementStatus } from './commands/requirement.ts'
+import { newSession } from './commands/session.ts'
 import { createTask } from './commands/task.ts'
-import { registerWorker } from './commands/worker.ts'
 import { createWorkspace, removeWorkspace } from './commands/workspace.ts'
 import { splitCsv } from './util.ts'
-import { echoBackend } from './worker/backends.ts'
-import { runLoop } from './worker/runner.ts'
 
 describe('splitCsv', () => {
   test('parses / trims / drops empties; undefined when absent', () => {
@@ -68,92 +66,111 @@ describe('command handlers (fake client)', () => {
     assert.match(out, /R-1.*\[done\]/)
   })
 
-  test('registerWorker saves config json with token + identity', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'baton-worker-'))
+  test('newSession provisions worktree + registers + saves config', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'baton-session-'))
     try {
+      let registeredWith: unknown = null
       const c = {
         sessions: {
           register: async (input: {
             projectId: number
             mode: string
             name: string
-            capabilities?: string[]
-          }) => ({
-            id: 7,
-            code: 'S-1',
-            projectId: input.projectId,
-            mode: input.mode,
-            name: input.name,
-            capabilities: input.capabilities ?? [],
-            status: 'active',
-            startedAt: 0,
-            heartbeatAt: 0,
-            apiToken: 'tok-deadbeef',
-          }),
+            claudeSessionId?: string
+            worktreePath?: string
+          }) => {
+            registeredWith = input
+            return {
+              id: 7,
+              projectId: input.projectId,
+              code: 'S-1',
+              mode: input.mode,
+              name: input.name,
+              state: 'idle',
+              claudeSessionId: input.claudeSessionId,
+              worktreePath: input.worktreePath,
+              startedAt: 0,
+              heartbeatAt: 0,
+              apiToken: 'tok-deadbeef',
+            }
+          },
         },
       } as unknown as ApiClient
-      const { config, path } = await registerWorker(
+      let createdAt: { repo: string; worktreePath: string; base: string } | null = null
+      const fakeFs = {
+        createWorktree: (inp: {
+          repo: string
+          worktreePath: string
+          sessionCode: string
+          base: string
+        }) => {
+          createdAt = { repo: inp.repo, worktreePath: inp.worktreePath, base: inp.base }
+        },
+        removeWorktree: () => {},
+      }
+      const { config, path } = await newSession(
         c,
-        'http://localhost:3280',
-        { projectId: 1, name: 'ben-laptop', mode: 'worker', capabilities: ['node', 'claude'] },
-        code => join(dir, `worker-${code}.json`),
+        {
+          projectId: 1,
+          name: 'dogfood',
+          repo: '/tmp/source',
+          base: 'main',
+          worktreeDir: dir,
+          mode: 'worker',
+          server: 'http://localhost:3280',
+        },
+        fakeFs,
+        code => join(dir, `cfg-${code}.json`),
       )
       assert.equal(config.sessionCode, 'S-1')
       assert.equal(config.apiToken, 'tok-deadbeef')
+      assert.ok(createdAt)
+      assert.equal((createdAt as { repo: string }).repo, '/tmp/source')
+      assert.match((createdAt as { worktreePath: string }).worktreePath, /baton-session-/)
       const saved = JSON.parse(readFileSync(path, 'utf8'))
       assert.equal(saved.apiToken, 'tok-deadbeef')
-      assert.deepEqual(saved.capabilities, ['node', 'claude'])
+      assert.equal(
+        saved.claudeSessionId,
+        (registeredWith as { claudeSessionId: string }).claudeSessionId,
+      )
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
   })
 
-  test('runLoop iterates one echo backend cycle: 3 events + complete done', async () => {
-    const events: Array<{ sequence: number; payload: unknown }> = []
-    let completed: { status: string; result?: string } | null = null
-    let claims = 0
-    const heartbeats: number[] = []
-    const wc = {
-      heartbeat: async () => {
-        heartbeats.push(Date.now())
-        return {} as never
+  test('newSession rolls back worktree when register fails', async () => {
+    let removed = false
+    const c = {
+      sessions: {
+        register: async () => {
+          throw new Error('boom')
+        },
       },
-      claim: async () => {
-        claims += 1
-        if (claims > 1) return null
-        return {
-          assignment: { id: 42, code: 'A-1' } as never,
-          task: { id: 1, code: 'T-1', title: 'hello', spec: 'do it' } as never,
-        }
+    } as unknown as ApiClient
+    const fakeFs = {
+      createWorktree: () => {},
+      removeWorktree: () => {
+        removed = true
       },
-      close: async () => {},
-      appendEvent: async (_id: number, sequence: number, payload: unknown) => {
-        events.push({ sequence, payload })
-        return {} as never
-      },
-      complete: async (_id: number, status: 'done' | 'failed', result?: string) => {
-        completed = { status, result }
-        return {} as never
-      },
-      abandon: async () => ({}) as never,
-    } as unknown as WorkerClient
-
-    let ticks = 0
-    await runLoop(wc, echoBackend, {
-      pollIntervalMs: 1,
-      heartbeatMs: 999_999, // never fires within the test
-      shouldContinue: () => {
-        ticks += 1
-        return ticks <= 2
-      },
-    })
-
-    assert.equal(events.length, 3)
-    assert.deepEqual(
-      events.map(e => e.sequence),
-      [0, 1, 2],
+    }
+    await assert.rejects(
+      newSession(
+        c,
+        {
+          projectId: 1,
+          name: 'rolling-back',
+          repo: '/tmp/source',
+          base: 'main',
+          worktreeDir: '/tmp/wd',
+          mode: 'worker',
+          server: 'http://localhost:3280',
+        },
+        fakeFs,
+        () => '/tmp/never-written.json',
+      ),
+      /boom/,
     )
-    assert.deepEqual(completed, { status: 'done', result: 'echo-done' })
+    assert.equal(removed, true)
   })
 
   test('createTask forwards the parsed input', async () => {
@@ -168,7 +185,6 @@ describe('command handlers (fake client)', () => {
             projectId: 1,
             code: 'T-1',
             title: 'impl',
-            requires: ['x'],
             dependsOn: [2],
             status: 'todo',
             createdAt: 0,
@@ -177,12 +193,8 @@ describe('command handlers (fake client)', () => {
         },
       },
     } as unknown as ApiClient
-    const out = await createTask(
-      c,
-      { requirementId: 1, title: 'impl', requires: ['x'], dependsOn: [2] },
-      false,
-    )
-    assert.deepEqual(input, { requirementId: 1, title: 'impl', requires: ['x'], dependsOn: [2] })
+    const out = await createTask(c, { requirementId: 1, title: 'impl', dependsOn: [2] }, false)
+    assert.deepEqual(input, { requirementId: 1, title: 'impl', dependsOn: [2] })
     assert.match(out, /T-1.*\[todo\].*impl/)
   })
 })

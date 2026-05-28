@@ -1,34 +1,32 @@
-import type { AssignmentEvent, Id } from '@baton/shared'
+import type { Id, SessionEvent } from '@baton/shared'
 import { useEffect, useState } from 'react'
 import { API_BASE } from '../../api'
 
-// EventSource subscription to /api/assignments/:id/stream. Server replays
-// history first then pushes new events. Sequence is monotonic per assignment;
-// we dedupe by sequence so reconnects (server-initiated) don't double-add.
+// EventSource subscription to /api/sessions/:id/stream. Server replays history
+// first then pushes new events. Sequence is monotonic per session; we dedupe by
+// sequence so reconnects (server keepalives, transient drops) don't double-add.
 export type StreamState = {
-  events: AssignmentEvent[]
+  events: SessionEvent[]
   status: 'connecting' | 'open' | 'closed' | 'error'
 }
 
-export const useAssignmentStream = (assignmentId: Id | null): StreamState => {
-  const [events, setEvents] = useState<AssignmentEvent[]>([])
+export const useSessionStream = (sessionId: Id | null): StreamState => {
+  const [events, setEvents] = useState<SessionEvent[]>([])
   const [status, setStatus] = useState<StreamState['status']>('connecting')
 
   useEffect(() => {
-    if (assignmentId === null) {
+    if (sessionId === null) {
       setEvents([])
       setStatus('closed')
       return
     }
-    // Reset on assignment change.
     setEvents([])
     setStatus('connecting')
-    const url = `${API_BASE}/assignments/${assignmentId}/stream`
-    const es = new EventSource(url)
+    const es = new EventSource(`${API_BASE}/sessions/${sessionId}/stream`)
     es.onopen = () => setStatus('open')
     es.onmessage = e => {
       try {
-        const parsed = JSON.parse(e.data) as AssignmentEvent
+        const parsed = JSON.parse(e.data) as SessionEvent
         setEvents(prev => {
           if (prev.some(p => p.sequence === parsed.sequence)) return prev
           return [...prev, parsed]
@@ -42,6 +40,6 @@ export const useAssignmentStream = (assignmentId: Id | null): StreamState => {
       es.close()
       setStatus('closed')
     }
-  }, [assignmentId])
+  }, [sessionId])
   return { events, status }
 }

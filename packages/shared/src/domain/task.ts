@@ -13,7 +13,6 @@ export type Task = {
   code: Code // 'T-1', 'T-2', ...
   title: string
   spec?: string // short instruction; full spec lives in the repo, referenced via Requirement.resources
-  requires: string[] // capability tags (including 'planning' ⇒ a Plan task)
   dependsOn: Id[] // prerequisite task ids (int FKs); presentation layers translate to codes
   status: TaskStatus
   createdAt: number

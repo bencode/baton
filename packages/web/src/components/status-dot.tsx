@@ -1,4 +1,4 @@
-import type { AssignmentStatus, RequirementStatus, SessionStatus, TaskStatus } from '@baton/shared'
+import type { RequirementStatus, SessionState, TaskStatus } from '@baton/shared'
 
 // Compact row indicator: a 6px colored dot. Companion to StatusBadge (which
 // stays for detail views where labels deserve room). The dot's title + aria
@@ -6,18 +6,17 @@ import type { AssignmentStatus, RequirementStatus, SessionStatus, TaskStatus } f
 const COLORS: Record<string, string> = {
   active: 'bg-blue-500',
   in_progress: 'bg-amber-500',
-  running: 'bg-amber-500',
+  busy: 'bg-amber-500',
   done: 'bg-emerald-500',
   failed: 'bg-red-500',
   todo: 'bg-gray-300',
   cancelled: 'bg-gray-200',
   idle: 'bg-gray-400',
   closed: 'bg-gray-300',
-  abandoned: 'bg-orange-400',
 }
 
 type StatusDotProps = {
-  status: RequirementStatus | TaskStatus | SessionStatus | AssignmentStatus
+  status: RequirementStatus | TaskStatus | SessionState
   className?: string
 }
 

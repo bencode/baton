@@ -4,7 +4,7 @@
 
 import type { Code } from '@baton/shared'
 
-export type ItemKind = 'requirement' | 'task' | 'session' | 'assignment'
+export type ItemKind = 'requirement' | 'task' | 'session'
 
 export type Route =
   | { kind: 'home' }
@@ -16,7 +16,6 @@ const kindFromCode = (code: string): ItemKind | null => {
   if (code.startsWith('R-')) return 'requirement'
   if (code.startsWith('T-')) return 'task'
   if (code.startsWith('S-')) return 'session'
-  if (code.startsWith('A-')) return 'assignment'
   return null
 }
 

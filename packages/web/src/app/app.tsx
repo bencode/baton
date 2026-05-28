@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import { useNavigate } from 'react-router-dom'
 import { createApi } from '../api'
-import { AssignmentDetail } from '../features/assignments/assignment-detail'
 import { useProject, useProjects } from '../features/projects/use-projects'
 import { RequirementDetail } from '../features/requirements/requirement-detail'
+import { SessionDetail } from '../features/sessions/session-detail'
 import { TaskDetail } from '../features/tasks/task-detail'
 import { useWorkspaces } from '../features/workspaces/use-workspaces'
 import { WorkspaceSwitcher } from '../features/workspaces/workspace-switcher'
@@ -53,8 +53,8 @@ const renderTab = (tab: Tab) => {
   if (route.itemKind === 'requirement')
     return <RequirementDetail projectId={route.projectId} code={route.code} />
   if (route.itemKind === 'task') return <TaskDetail projectId={route.projectId} code={route.code} />
-  if (route.itemKind === 'assignment')
-    return <AssignmentDetail projectId={route.projectId} code={route.code} />
+  if (route.itemKind === 'session')
+    return <SessionDetail projectId={route.projectId} code={route.code} />
   return null
 }
 

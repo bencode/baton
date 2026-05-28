@@ -49,7 +49,7 @@ describe('Store contract', () => {
     assert.deepEqual(got?.tags, ['auth', 'p0'])
   })
 
-  test('requirement.update advances product-dimension status (independent of tasks)', async () => {
+  test('requirement.update advances product-dimension status', async () => {
     const w = await ctx.store.workspaces.create({ name: 'w' })
     const p = await ctx.store.projects.create({ workspaceId: w.id, name: 'p' })
     const r = await ctx.store.requirements.create({ projectId: p.id, title: 'x' })
@@ -57,26 +57,23 @@ describe('Store contract', () => {
     assert.equal(updated.status, 'done')
   })
 
-  test('task: code auto-generated T-N + projectId denorm + dependsOn round-trip', async () => {
+  test('task: code T-N + projectId denorm + dependsOn round-trip', async () => {
     const { req, project } = await seedReq()
     const a = await ctx.store.tasks.create({ requirementId: req, title: 'a' })
     const b = await ctx.store.tasks.create({
       requirementId: req,
       title: 'b',
-      requires: ['planning'],
       dependsOn: [a.id],
     })
     assert.equal(a.code, 'T-1')
     assert.equal(a.projectId, project)
-    assert.equal(a.status, 'todo')
     assert.equal(b.code, 'T-2')
     assert.equal(b.projectId, project)
     const gotB = await ctx.store.tasks.get(b.id)
-    assert.deepEqual(gotB?.requires, ['planning'])
     assert.deepEqual(gotB?.dependsOn, [a.id])
   })
 
-  test('counter never recycles: after deleting T-5, next task gets T-6', async () => {
+  test('counter never recycles after delete', async () => {
     const { req } = await seedReq()
     const ids: number[] = []
     for (let i = 0; i < 5; i++) {
@@ -84,48 +81,45 @@ describe('Store contract', () => {
       ids.push(t.id)
       assert.equal(t.code, `T-${i + 1}`)
     }
-    const last = ids[4] as number
-    await ctx.store.tasks.delete(last)
+    await ctx.store.tasks.delete(ids[4] as number)
     const next = await ctx.store.tasks.create({ requirementId: req, title: 'after-delete' })
     assert.equal(next.code, 'T-6')
   })
 
-  test('getByCode resolves a requirement / task within a project', async () => {
+  test('getByCode resolves R/T/S within a project', async () => {
     const { req, project } = await seedReq()
     const t = await ctx.store.tasks.create({ requirementId: req, title: 'a' })
-    const byCode = await ctx.store.tasks.getByCode(project, 'T-1')
-    assert.equal(byCode?.id, t.id)
-    const r = await ctx.store.requirements.getByCode(project, 'R-1')
-    assert.equal(r?.id, req)
+    assert.equal((await ctx.store.tasks.getByCode(project, 'T-1'))?.id, t.id)
+    assert.equal((await ctx.store.requirements.getByCode(project, 'R-1'))?.id, req)
+    const s = await ctx.store.sessions.register({
+      projectId: project,
+      mode: 'worker',
+      name: 'w1',
+    })
+    assert.equal((await ctx.store.sessions.getByCode(project, 'S-1'))?.id, s.id)
     assert.equal(await ctx.store.tasks.getByCode(project, 'T-99'), null)
   })
 
-  test('getRequirementWithTasks + summarizeTaskProgress over persisted data', async () => {
+  test('summarize + isReady over persisted data', async () => {
     const { req } = await seedReq()
-    await ctx.store.tasks.create({ requirementId: req, title: 'a', status: 'done' })
-    await ctx.store.tasks.create({ requirementId: req, title: 'b', status: 'in_progress' })
+    const a = await ctx.store.tasks.create({ requirementId: req, title: 'a', status: 'done' })
+    const b = await ctx.store.tasks.create({ requirementId: req, title: 'b', dependsOn: [a.id] })
+    await ctx.store.tasks.create({ requirementId: req, title: 'c', status: 'in_progress' })
     const agg = await ctx.store.getRequirementWithTasks(req)
-    assert.equal(agg?.tasks.length, 2)
+    assert.equal(agg?.tasks.length, 3)
     assert.deepEqual(summarizeTaskProgress(agg?.tasks ?? []), {
-      total: 2,
+      total: 3,
       done: 1,
       inProgress: 1,
       failed: 0,
     })
-  })
-
-  test('isReady: DAG dependencies derived over persisted data', async () => {
-    const { req } = await seedReq()
-    const a = await ctx.store.tasks.create({ requirementId: req, title: 'a', status: 'done' })
-    const b = await ctx.store.tasks.create({ requirementId: req, title: 'b', dependsOn: [a.id] })
-    const { tasks } = (await ctx.store.getRequirementWithTasks(req)) ?? { tasks: [] }
-    const byId = new Map<Id, Task>(tasks.map(t => [t.id, t] as const))
+    const byId = new Map<Id, Task>(agg?.tasks.map(t => [t.id, t] as const) ?? [])
     const storedB = byId.get(b.id)
     assert.ok(storedB)
     assert.equal(isReady(storedB, byId), true)
   })
 
-  test('cascade delete: deleting a Workspace clears the whole chain', async () => {
+  test('cascade delete clears the whole chain', async () => {
     const w = await ctx.store.workspaces.create({ name: 'w' })
     const p = await ctx.store.projects.create({ workspaceId: w.id, name: 'p' })
     const r = await ctx.store.requirements.create({ projectId: p.id, title: 'r' })
@@ -136,158 +130,91 @@ describe('Store contract', () => {
     assert.equal(await ctx.store.tasks.get(t.id), null)
   })
 
-  test('session: register issues code S-N + apiToken, getByToken resolves back', async () => {
+  // === M2.5: session as chat channel ===
+
+  test('session register: issues S-N + apiToken; getByToken resolves back; token not in domain shape', async () => {
     const { project } = await seedReq()
     const s = await ctx.store.sessions.register({
       projectId: project,
       mode: 'worker',
       name: 'ben-laptop',
-      capabilities: ['node', 'claude'],
+      claudeSessionId: '11111111-1111-1111-1111-111111111111',
+      worktreePath: '/tmp/wt',
     })
     assert.equal(s.code, 'S-1')
-    assert.equal(s.status, 'active')
-    assert.equal(typeof s.apiToken, 'string')
+    assert.equal(s.state, 'idle')
+    assert.equal(s.claudeSessionId, '11111111-1111-1111-1111-111111111111')
+    assert.equal(s.worktreePath, '/tmp/wt')
     assert.ok(s.apiToken.length >= 20)
     const back = await ctx.store.sessions.getByToken(s.apiToken)
     assert.equal(back?.id, s.id)
-    // Domain shape (without token) is what getByToken returns.
     assert.equal((back as unknown as { apiToken?: string }).apiToken, undefined)
   })
 
-  test('claim: caps ⊇ requires + deps met; second claim of same task returns null', async () => {
-    const { req, project } = await seedReq()
-    const t = await ctx.store.tasks.create({
-      requirementId: req,
-      title: 'work',
-      requires: ['node'],
-    })
-    const s1 = await ctx.store.sessions.register({
-      projectId: project,
-      mode: 'worker',
-      name: 's1',
-      capabilities: ['node'],
-    })
-    const claimed = await ctx.store.sessions.claim(s1.id)
-    assert.ok(claimed)
-    assert.equal(claimed.task.id, t.id)
-    assert.equal(claimed.assignment.code, 'A-1')
-    assert.equal(claimed.assignment.status, 'running')
-    // Task now in_progress, second claim returns null (no eligible work).
-    const again = await ctx.store.sessions.claim(s1.id)
-    assert.equal(again, null)
-  })
-
-  test('claim: skips tasks whose deps are not done', async () => {
-    const { req, project } = await seedReq()
-    const a = await ctx.store.tasks.create({ requirementId: req, title: 'a' })
-    await ctx.store.tasks.create({ requirementId: req, title: 'b', dependsOn: [a.id] })
+  test('appendEvent: monotonic sequence per session, listEvents in order', async () => {
+    const { project } = await seedReq()
     const s = await ctx.store.sessions.register({
       projectId: project,
       mode: 'worker',
       name: 's',
-      capabilities: [],
     })
-    const first = await ctx.store.sessions.claim(s.id)
-    assert.equal(first?.task.id, a.id) // a (no deps) picked first
-    // a is in_progress now; b still blocked → no more eligible
-    const second = await ctx.store.sessions.claim(s.id)
-    assert.equal(second, null)
+    await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'hello' })
+    await ctx.store.sessions.appendEvent(s.id, 'sdk_event', { type: 'assistant' })
+    await ctx.store.sessions.appendEvent(s.id, 'turn_complete', { exitCode: 0 })
+    const events = await ctx.store.sessions.listEvents(s.id)
+    assert.equal(events.length, 3)
+    assert.deepEqual(
+      events.map(e => e.sequence),
+      [0, 1, 2],
+    )
+    assert.equal(events[0]?.type, 'user_message')
+    assert.deepEqual(events[0]?.payload, { text: 'hello' })
   })
 
-  test('claim: skips tasks whose requires ⊄ session capabilities', async () => {
-    const { req, project } = await seedReq()
-    await ctx.store.tasks.create({
-      requirementId: req,
-      title: 'needs-planning',
-      requires: ['planning'],
-    })
-    const s = await ctx.store.sessions.register({
-      projectId: project,
-      mode: 'worker',
-      name: 'no-planning',
-      capabilities: ['node'],
-    })
-    assert.equal(await ctx.store.sessions.claim(s.id), null)
-  })
-
-  test('assignment.complete: done → Task.status=done; failed → Task.status=failed', async () => {
-    const { req, project } = await seedReq()
-    await ctx.store.tasks.create({ requirementId: req, title: 't1' })
-    await ctx.store.tasks.create({ requirementId: req, title: 't2' })
+  test('pending message lifecycle: findNextPendingMessage + markMessageProcessed + count', async () => {
+    const { project } = await seedReq()
     const s = await ctx.store.sessions.register({
       projectId: project,
       mode: 'worker',
       name: 's',
-      capabilities: [],
     })
-    const c1 = await ctx.store.sessions.claim(s.id)
-    assert.ok(c1)
-    const done = await ctx.store.assignments.complete(c1.assignment.id, 'done', 'ok')
-    assert.equal(done.status, 'done')
-    assert.equal(done.result, 'ok')
-    assert.equal((await ctx.store.tasks.get(c1.task.id))?.status, 'done')
-
-    const c2 = await ctx.store.sessions.claim(s.id)
-    assert.ok(c2)
-    await ctx.store.assignments.complete(c2.assignment.id, 'failed', 'boom')
-    assert.equal((await ctx.store.tasks.get(c2.task.id))?.status, 'failed')
+    const m1 = await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'a' })
+    const m2 = await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'b' })
+    // sdk_event in between is not a 'pending message'
+    await ctx.store.sessions.appendEvent(s.id, 'sdk_event', { foo: 1 })
+    assert.equal(await ctx.store.sessions.pendingMessageCount(s.id), 2)
+    const next = await ctx.store.sessions.findNextPendingMessage(s.id)
+    assert.equal(next?.id, m1.id) // FIFO by sequence
+    await ctx.store.sessions.markMessageProcessed(m1.id)
+    assert.equal(await ctx.store.sessions.pendingMessageCount(s.id), 1)
+    assert.equal((await ctx.store.sessions.findNextPendingMessage(s.id))?.id, m2.id)
   })
 
-  test('assignment.abandon: releases task back to todo', async () => {
-    const { req, project } = await seedReq()
-    const t = await ctx.store.tasks.create({ requirementId: req, title: 't' })
+  test('setState transitions + resetBusySessions recovers crashed boots', async () => {
+    const { project } = await seedReq()
     const s = await ctx.store.sessions.register({
       projectId: project,
       mode: 'worker',
       name: 's',
-      capabilities: [],
     })
-    const c = await ctx.store.sessions.claim(s.id)
-    assert.ok(c)
-    await ctx.store.assignments.abandon(c.assignment.id, 'changed mind')
-    assert.equal((await ctx.store.tasks.get(t.id))?.status, 'todo')
-    // Same session can re-claim.
-    const again = await ctx.store.sessions.claim(s.id)
-    assert.equal(again?.task.id, t.id)
+    assert.equal((await ctx.store.sessions.get(s.id))?.state, 'idle')
+    await ctx.store.sessions.setState(s.id, 'busy')
+    assert.equal((await ctx.store.sessions.get(s.id))?.state, 'busy')
+    const recovered = await ctx.store.sessions.resetBusySessions()
+    assert.equal(recovered, 1)
+    assert.equal((await ctx.store.sessions.get(s.id))?.state, 'idle')
   })
 
-  test('sweepStale: stale active session → running assignments abandoned, task → todo', async () => {
-    const { req, project } = await seedReq()
-    const t = await ctx.store.tasks.create({ requirementId: req, title: 't' })
+  test('close → state=closed + closedAt set', async () => {
+    const { project } = await seedReq()
     const s = await ctx.store.sessions.register({
       projectId: project,
       mode: 'worker',
       name: 's',
-      capabilities: [],
     })
-    const c = await ctx.store.sessions.claim(s.id)
-    assert.ok(c)
-    // Sweep with idleThreshold = 0 → every active session is considered stale.
-    const released = await ctx.store.sessions.sweepStale(Date.now() + 60_000, 0)
-    assert.equal(released, 1)
-    const a = await ctx.store.assignments.get(c.assignment.id)
-    assert.equal(a?.status, 'abandoned')
-    assert.equal((await ctx.store.tasks.get(t.id))?.status, 'todo')
-    assert.equal((await ctx.store.sessions.get(s.id))?.status, 'idle')
-  })
-
-  test('appendEvent: monotonic sequence, listEvents in order, duplicate sequence rejected', async () => {
-    const { req, project } = await seedReq()
-    await ctx.store.tasks.create({ requirementId: req, title: 't' })
-    const s = await ctx.store.sessions.register({
-      projectId: project,
-      mode: 'worker',
-      name: 's',
-      capabilities: [],
-    })
-    const c = await ctx.store.sessions.claim(s.id)
-    assert.ok(c)
-    await ctx.store.assignments.appendEvent(c.assignment.id, 0, { type: 'status', s: 'starting' })
-    await ctx.store.assignments.appendEvent(c.assignment.id, 1, { type: 'text', t: 'hi' })
-    const events = await ctx.store.assignments.listEvents(c.assignment.id)
-    assert.equal(events.length, 2)
-    assert.equal(events[0]?.sequence, 0)
-    assert.deepEqual(events[1]?.payload, { type: 'text', t: 'hi' })
-    await assert.rejects(ctx.store.assignments.appendEvent(c.assignment.id, 0, { dup: true }))
+    await ctx.store.sessions.close(s.id)
+    const closed = await ctx.store.sessions.get(s.id)
+    assert.equal(closed?.state, 'closed')
+    assert.equal(typeof closed?.closedAt, 'number')
   })
 })

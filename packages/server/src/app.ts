@@ -1,17 +1,16 @@
 import type {
-  AssignmentEvent,
-  AssignmentStatus,
   Id,
   RequirementStatus,
   ResourceRef,
+  SessionEvent,
+  SessionEventType,
   SessionMode,
-  SessionStatus,
   TaskStatus,
 } from '@baton/shared'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { createEventBus, type EventBus } from './event-bus.ts'
-import { type AuthVars, bearerAuth, requireOwnership } from './middleware/auth.ts'
+import { type AuthVars, bearerAuth } from './middleware/auth.ts'
 import type { RequirementPatch, Store, TaskPatch } from './store/types.ts'
 
 // Parse an `:id` URL param to int; NaN is fine — downstream finds return null → 404.
@@ -19,8 +18,14 @@ const intParam = (s: string): Id => Number(s)
 
 export type AppEnv = { Variables: AuthVars }
 
-// HTTP surface: thin layer over Store + auth middleware + SSE assignment stream.
-// Bus is internal so the same app fans events from POST → SSE subscribers.
+// HTTP surface. Layout:
+//   - Workspace / Project / Requirement / Task: thin CRUD over Store (M1).
+//   - Session: register + heartbeat + close (worker bearer-auth).
+//   - Chat protocol (M2.5):
+//       upward  ← POST /sessions/:id/messages   (UI / CLI, no auth)
+//               ← POST /sessions/me/events       (worker, bearer)
+//       downward → GET  /sessions/:id/stream     (SSE: replay + tail)
+//   Bus is internal so messages POST → SSE subscribers fan out instantly.
 export const createApp = (store: Store, bus: EventBus = createEventBus()): Hono<AppEnv> => {
   const app = new Hono<AppEnv>()
   const auth = bearerAuth(store)
@@ -68,15 +73,7 @@ export const createApp = (store: Store, bus: EventBus = createEventBus()): Hono<
   app.get('/projects/:id/sessions', async c =>
     c.json(await store.sessions.listByProject(intParam(c.req.param('id')))),
   )
-  app.get('/projects/:id/assignments', async c => {
-    const projectId = intParam(c.req.param('id'))
-    const statusQ = c.req.query('status')
-    const sessionIdQ = c.req.query('sessionId')
-    const status = statusQ ? (statusQ.split(',') as AssignmentStatus[]) : undefined
-    const sessionId = sessionIdQ ? Number(sessionIdQ) : undefined
-    return c.json(await store.assignments.listByProject(projectId, { status, sessionId }))
-  })
-  // Resolve an item by its project-scoped code (R-N / T-N / S-N / A-N).
+  // Resolve an item by its project-scoped code (R-N / T-N / S-N).
   app.get('/projects/:projectId/items/:code', async c => {
     const projectId = intParam(c.req.param('projectId'))
     const code = c.req.param('code')
@@ -91,10 +88,6 @@ export const createApp = (store: Store, bus: EventBus = createEventBus()): Hono<
     if (code.startsWith('S-')) {
       const s = await store.sessions.getByCode(projectId, code)
       return s ? c.json({ kind: 'session', item: s }) : c.json({ error: 'not found' }, 404)
-    }
-    if (code.startsWith('A-')) {
-      const a = await store.assignments.getByCode(projectId, code)
-      return a ? c.json({ kind: 'assignment', item: a }) : c.json({ error: 'not found' }, 404)
     }
     return c.json({ error: 'unknown code prefix' }, 400)
   })
@@ -150,17 +143,13 @@ export const createApp = (store: Store, bus: EventBus = createEventBus()): Hono<
       requirementId?: Id
       title?: string
       spec?: string
-      requires?: string[]
       dependsOn?: Id[]
       status?: TaskStatus
     }
     if (!body.requirementId || !body.title)
       return c.json({ error: 'requirementId and title required' }, 400)
-    const { requirementId, title, spec, requires, dependsOn, status } = body
-    return c.json(
-      await store.tasks.create({ requirementId, title, spec, requires, dependsOn, status }),
-      201,
-    )
+    const { requirementId, title, spec, dependsOn, status } = body
+    return c.json(await store.tasks.create({ requirementId, title, spec, dependsOn, status }), 201)
   })
   app.get('/tasks/:id', async c => {
     const t = await store.tasks.get(intParam(c.req.param('id')))
@@ -178,66 +167,93 @@ export const createApp = (store: Store, bus: EventBus = createEventBus()): Hono<
     return c.body(null, 204)
   })
 
-  // === M2: sessions + assignments ===
+  // === M2.5: sessions + chat ===
 
-  // Session register: public, returns apiToken once.
   app.post('/sessions', async c => {
     const body = (await c.req.json()) as {
       projectId?: Id
       mode?: SessionMode
       name?: string
-      capabilities?: string[]
+      claudeSessionId?: string
+      worktreePath?: string
     }
     if (!body.projectId || !body.name || !body.mode)
       return c.json({ error: 'projectId, name, mode required' }, 400)
-    const { projectId, mode, name, capabilities } = body
-    return c.json(await store.sessions.register({ projectId, mode, name, capabilities }), 201)
+    const { projectId, mode, name, claudeSessionId, worktreePath } = body
+    return c.json(
+      await store.sessions.register({ projectId, mode, name, claudeSessionId, worktreePath }),
+      201,
+    )
   })
   app.get('/sessions/:id', async c => {
     const s = await store.sessions.get(intParam(c.req.param('id')))
     return s ? c.json(s) : c.json({ error: 'not found' }, 404)
   })
+  app.get('/sessions/:id/events', async c =>
+    c.json(await store.sessions.listEvents(intParam(c.req.param('id')))),
+  )
 
-  // Session-private (bearer): heartbeat, claim, close.
+  // Worker-private (bearer).
   app.post('/sessions/me/heartbeat', auth, async c => {
-    const body = (await c.req.json().catch(() => ({}))) as { status?: SessionStatus }
     const session = c.get('session')
-    return c.json(await store.sessions.heartbeat(session.id, body.status))
-  })
-  app.post('/sessions/me/claim', auth, async c => {
-    const session = c.get('session')
-    const result = await store.sessions.claim(session.id)
-    if (!result) return c.body(null, 204)
-    return c.json(result)
+    return c.json(await store.sessions.heartbeat(session.id))
   })
   app.post('/sessions/me/close', auth, async c => {
     const session = c.get('session')
     await store.sessions.close(session.id)
     return c.body(null, 204)
   })
-
-  app.get('/assignments/:id', async c => {
-    const a = await store.assignments.get(intParam(c.req.param('id')))
-    return a ? c.json(a) : c.json({ error: 'not found' }, 404)
+  // Worker upstream: emit a session event. Type-dispatched side effects:
+  //   - turn_start { messageId }: mark message processed, state=busy
+  //   - turn_complete | turn_error: state=idle
+  //   - sdk_event: pass through
+  app.post('/sessions/me/events', auth, async c => {
+    const session = c.get('session')
+    const body = (await c.req.json()) as { type?: SessionEventType; payload?: unknown }
+    if (!body.type) return c.json({ error: 'type required' }, 400)
+    if (body.type === 'turn_start') {
+      const messageId = (body.payload as { messageId?: number } | undefined)?.messageId
+      if (typeof messageId === 'number') await store.sessions.markMessageProcessed(messageId)
+      await store.sessions.setState(session.id, 'busy')
+    } else if (body.type === 'turn_complete' || body.type === 'turn_error') {
+      await store.sessions.setState(session.id, 'idle')
+    }
+    const ev = await store.sessions.appendEvent(session.id, body.type, body.payload ?? null)
+    bus.publish(session.id, ev)
+    return c.json(ev, 201)
   })
-  app.get('/assignments/:id/events', async c =>
-    c.json(await store.assignments.listEvents(intParam(c.req.param('id')))),
-  )
 
-  // Live tail (SSE): replay history then subscribe to bus.
-  app.get('/assignments/:id/stream', async c => {
+  // Chat ingress (UI / CLI, no auth in v0). Records the user_message and
+  // publishes it; the subscribed worker (via SSE) picks it up and runs a turn.
+  app.post('/sessions/:id/messages', async c => {
+    const sessionId = intParam(c.req.param('id'))
+    const session = await store.sessions.get(sessionId)
+    if (!session) return c.json({ error: 'not found' }, 404)
+    if (session.state === 'closed') return c.json({ error: 'session closed' }, 409)
+    const body = (await c.req.json()) as { text?: string }
+    if (typeof body.text !== 'string' || body.text.length === 0)
+      return c.json({ error: 'text required' }, 400)
+    const ev = await store.sessions.appendEvent(sessionId, 'user_message', { text: body.text })
+    bus.publish(sessionId, ev)
+    return c.json(ev, 201)
+  })
+
+  // Live tail. Replays history (so late joiners / refreshes get the full
+  // thread) then subscribes to the bus. A 30s `:keepalive` ping keeps proxies
+  // happy.
+  app.get('/sessions/:id/stream', async c => {
     const id = intParam(c.req.param('id'))
-    const exists = await store.assignments.get(id)
+    const exists = await store.sessions.get(id)
     if (!exists) return c.json({ error: 'not found' }, 404)
     const signal = c.req.raw.signal
     return streamSSE(c, async stream => {
-      const history = await store.assignments.listEvents(id)
+      const history = await store.sessions.listEvents(id)
       for (const e of history) {
         if (signal.aborted) return
         await stream.writeSSE({ data: JSON.stringify(e) })
       }
       let resolve = (): void => {}
-      const pending: AssignmentEvent[] = []
+      const pending: SessionEvent[] = []
       const wake = () => {
         const r = resolve
         resolve = () => {}
@@ -248,6 +264,11 @@ export const createApp = (store: Store, bus: EventBus = createEventBus()): Hono<
         wake()
       })
       signal.addEventListener('abort', wake)
+      const keepalive = setInterval(() => {
+        if (signal.aborted) return
+        // SSE comment line; clients ignore but proxies keep the connection open.
+        stream.write(': keepalive\n\n').catch(() => {})
+      }, 30_000)
       try {
         while (!signal.aborted) {
           while (pending.length > 0 && !signal.aborted) {
@@ -260,39 +281,11 @@ export const createApp = (store: Store, bus: EventBus = createEventBus()): Hono<
           })
         }
       } finally {
+        clearInterval(keepalive)
         unsub()
         signal.removeEventListener('abort', wake)
       }
     })
-  })
-
-  // Assignment progress (bearer + ownership).
-  app.post('/assignments/:id/events', auth, async c => {
-    const id = intParam(c.req.param('id'))
-    const owned = await requireOwnership(c, store, id)
-    if (owned instanceof Response) return owned
-    const body = (await c.req.json()) as { sequence?: number; payload?: unknown }
-    if (typeof body.sequence !== 'number' || body.payload === undefined)
-      return c.json({ error: 'sequence (number) and payload required' }, 400)
-    const event = await store.assignments.appendEvent(id, body.sequence, body.payload)
-    bus.publish(id, event)
-    return c.json(event, 201)
-  })
-  app.post('/assignments/:id/complete', auth, async c => {
-    const id = intParam(c.req.param('id'))
-    const owned = await requireOwnership(c, store, id)
-    if (owned instanceof Response) return owned
-    const body = (await c.req.json()) as { status?: 'done' | 'failed'; result?: string }
-    if (body.status !== 'done' && body.status !== 'failed')
-      return c.json({ error: 'status must be done|failed' }, 400)
-    return c.json(await store.assignments.complete(id, body.status, body.result))
-  })
-  app.post('/assignments/:id/abandon', auth, async c => {
-    const id = intParam(c.req.param('id'))
-    const owned = await requireOwnership(c, store, id)
-    if (owned instanceof Response) return owned
-    const body = (await c.req.json().catch(() => ({}))) as { reason?: string }
-    return c.json(await store.assignments.abandon(id, body.reason))
   })
 
   return app

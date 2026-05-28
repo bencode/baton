@@ -3,10 +3,9 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Code, Id, SessionMode } from '@baton/shared'
 
-// Persisted worker identity: enough to reconnect to the server as the same Session.
-// One file per registered session; default location ~/.config/baton/worker-<S-N>.json
-// (override XDG_CONFIG_HOME for the standard XDG lookup, or pass --config <path>).
-export type WorkerConfig = {
+// Persisted session identity: enough to reconnect / dogfood. One file per
+// registered session at ${XDG_CONFIG_HOME ?? ~/.config}/baton/session-<S-N>.json.
+export type SessionConfig = {
   server: string
   apiToken: string
   sessionId: Id
@@ -14,19 +13,20 @@ export type WorkerConfig = {
   projectId: Id
   name: string
   mode: SessionMode
-  capabilities: string[]
+  claudeSessionId: string
+  worktreePath: string
 }
 
 const configDir = (env: NodeJS.ProcessEnv = process.env): string =>
   join(env.XDG_CONFIG_HOME ?? join(env.HOME ?? homedir(), '.config'), 'baton')
 
 export const defaultConfigPath = (sessionCode: Code): string =>
-  join(configDir(), `worker-${sessionCode}.json`)
+  join(configDir(), `session-${sessionCode}.json`)
 
-export const saveConfig = (path: string, config: WorkerConfig): void => {
+export const saveConfig = (path: string, config: SessionConfig): void => {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, JSON.stringify(config, null, 2), 'utf8')
 }
 
-export const loadConfig = (path: string): WorkerConfig =>
-  JSON.parse(readFileSync(path, 'utf8')) as WorkerConfig
+export const loadConfig = (path: string): SessionConfig =>
+  JSON.parse(readFileSync(path, 'utf8')) as SessionConfig

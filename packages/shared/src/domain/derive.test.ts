@@ -15,7 +15,6 @@ const mkTask = (id: number, status: TaskStatus, dependsOn: number[] = [], create
   projectId: 1,
   code: `T-${id}`,
   title: `t${id}`,
-  requires: [],
   dependsOn,
   status,
   createdAt,

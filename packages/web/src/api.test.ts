@@ -79,20 +79,23 @@ test('sessions.listByProject hits /projects/:id/sessions', async () => {
   expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/projects/7/sessions')
 })
 
-test('assignments.listByProject serialises status+session filters into query', async () => {
-  const fetchMock = vi.fn<typeof fetch>(async () => res([]))
+test('sessions.sendMessage POSTs text to /sessions/:id/messages', async () => {
+  const ev = { id: 1, sessionId: 7, sequence: 0, type: 'user_message', payload: { text: 'hi' } }
+  const fetchMock = vi.fn<typeof fetch>(async () => res(ev, 201))
   vi.stubGlobal('fetch', fetchMock)
-  await createApi().assignments.listByProject(1, { status: ['running', 'done'], sessionId: 5 })
-  expect(fetchMock.mock.calls[0]?.[0]).toBe(
-    '/api/projects/1/assignments?status=running,done&sessionId=5',
-  )
+  const out = await createApi().sessions.sendMessage(7, 'hi')
+  expect(out).toEqual(ev)
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/sessions/7/messages')
+  const init = fetchMock.mock.calls[0]?.[1]
+  expect(init?.method).toBe('POST')
+  expect(JSON.parse(init?.body as string)).toEqual({ text: 'hi' })
 })
 
-test('assignments.getByCode unwraps assignment items', async () => {
-  const item = { id: 3, code: 'A-3', status: 'running' }
-  const fetchMock = vi.fn<typeof fetch>(async () => res({ kind: 'assignment', item }))
+test('sessions.getByCode unwraps session items', async () => {
+  const item = { id: 1, code: 'S-1', name: 's', state: 'idle' }
+  const fetchMock = vi.fn<typeof fetch>(async () => res({ kind: 'session', item }))
   vi.stubGlobal('fetch', fetchMock)
-  const got = await createApi().assignments.getByCode(1, 'A-3')
+  const got = await createApi().sessions.getByCode(1, 'S-1')
   expect(got).toEqual(item)
-  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/projects/1/items/A-3')
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/projects/1/items/S-1')
 })

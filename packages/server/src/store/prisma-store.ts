@@ -2,24 +2,22 @@ import { randomBytes } from 'node:crypto'
 import type { Id } from '@baton/shared'
 import type { PrismaClient } from '@prisma/client'
 import {
-  toAssignment,
-  toAssignmentEvent,
   toProject,
   toRequirement,
   toSession,
+  toSessionEvent,
   toTask,
   toWorkspace,
 } from './mappers.ts'
 import type { Store } from './types.ts'
 
-const PREFIX = { requirement: 'R', task: 'T', session: 'S', assignment: 'A' } as const
+const PREFIX = { requirement: 'R', task: 'T', session: 'S' } as const
 type Kind = keyof typeof PREFIX
 
 type TxClient = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0]
 
 // Atomic per-(project, kind) counter increment via upsert. First-ever use of a
-// kind creates the row at next=2 (consumed 1); subsequent uses bump by 1. Lets
-// us add new kinds (session, assignment, …) without seeding upfront.
+// kind creates the row at next=2 (consumed 1); subsequent uses bump by 1.
 const nextCode = async (tx: TxClient, projectId: number, kind: Kind): Promise<string> => {
   const c = await tx.codeCounter.upsert({
     where: { projectId_kind: { projectId, kind } },
@@ -32,9 +30,14 @@ const nextCode = async (tx: TxClient, projectId: number, kind: Kind): Promise<st
 
 const issueToken = (): string => randomBytes(32).toString('base64url')
 
-const isSubset = (needed: readonly string[], provided: readonly string[]): boolean => {
-  const set = new Set(provided)
-  return needed.every(n => set.has(n))
+// Per-session monotonic sequence: next int after the current max (or 0 when empty).
+const nextSequence = async (tx: TxClient, sessionId: number): Promise<number> => {
+  const top = await tx.sessionEvent.findFirst({
+    where: { sessionId },
+    orderBy: { sequence: 'desc' },
+    select: { sequence: true },
+  })
+  return (top?.sequence ?? -1) + 1
 }
 
 // PrismaStore: first implementation of the Store port. Maps rows ↔ domain types
@@ -134,7 +137,6 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
             code,
             title: input.title,
             spec: input.spec,
-            requires: JSON.stringify(input.requires ?? []),
             dependsOn: JSON.stringify(input.dependsOn ?? []),
             status: input.status ?? 'todo',
           },
@@ -158,7 +160,6 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
           data: {
             title: patch.title,
             spec: patch.spec,
-            requires: patch.requires ? JSON.stringify(patch.requires) : undefined,
             dependsOn: patch.dependsOn ? JSON.stringify(patch.dependsOn) : undefined,
             status: patch.status,
           },
@@ -179,9 +180,10 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
             code,
             mode: input.mode,
             name: input.name,
-            capabilities: JSON.stringify(input.capabilities ?? []),
             apiToken,
-            status: 'active',
+            state: 'idle',
+            claudeSessionId: input.claudeSessionId,
+            worktreePath: input.worktreePath,
           },
         })
         return { ...toSession(s), apiToken }
@@ -202,157 +204,55 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
       (await prisma.session.findMany({ where: { projectId }, orderBy: { id: 'asc' } })).map(
         toSession,
       ),
-    heartbeat: async (id, status) =>
-      toSession(
-        await prisma.session.update({
-          where: { id },
-          data: { heartbeatAt: new Date(), status: status ?? 'active' },
-        }),
-      ),
+    heartbeat: async id =>
+      toSession(await prisma.session.update({ where: { id }, data: { heartbeatAt: new Date() } })),
+    setState: async (id, state) =>
+      toSession(await prisma.session.update({ where: { id }, data: { state } })),
     close: async id => {
       await prisma.session.update({
         where: { id },
-        data: { status: 'closed', closedAt: new Date() },
+        data: { state: 'closed', closedAt: new Date() },
       })
     },
-    claim: async sessionId =>
+    appendEvent: async (sessionId, type, payload) =>
       prisma.$transaction(async tx => {
-        const session = await tx.session.findUnique({ where: { id: sessionId } })
-        if (!session || session.status === 'closed') return null
-        const caps = JSON.parse(session.capabilities) as string[]
-        const projectId = session.projectId
-
-        // Tasks already executing (running assignment) are off-limits.
-        const taken = await tx.assignment.findMany({
-          where: { projectId, status: 'running' },
-          select: { taskId: true },
+        const sequence = await nextSequence(tx, sessionId)
+        const ev = await tx.sessionEvent.create({
+          data: { sessionId, sequence, type, payload: JSON.stringify(payload) },
         })
-        const takenIds = new Set(taken.map(t => t.taskId))
-
-        // Done set for dependency satisfaction.
-        const done = await tx.task.findMany({
-          where: { projectId, status: 'done' },
-          select: { id: true },
-        })
-        const doneIds = new Set(done.map(t => t.id))
-
-        const todos = await tx.task.findMany({
-          where: { projectId, status: 'todo' },
-          orderBy: { createdAt: 'asc' },
-        })
-        const eligible = todos.find(t => {
-          if (takenIds.has(t.id)) return false
-          const deps = JSON.parse(t.dependsOn) as Id[]
-          if (!deps.every(d => doneIds.has(d))) return false
-          const requires = JSON.parse(t.requires) as string[]
-          return isSubset(requires, caps)
-        })
-        if (!eligible) return null
-
-        const code = await nextCode(tx, projectId, 'assignment')
-        const updatedTask = await tx.task.update({
-          where: { id: eligible.id },
-          data: { status: 'in_progress' },
-        })
-        const assignment = await tx.assignment.create({
-          data: {
-            projectId,
-            code,
-            sessionId,
-            taskId: eligible.id,
-            status: 'running',
-          },
-        })
-        return { assignment: toAssignment(assignment), task: toTask(updatedTask) }
+        return toSessionEvent(ev)
       }),
-    sweepStale: async (now, idleThresholdMs) => {
-      const cutoff = new Date(now - idleThresholdMs)
-      // Find active sessions whose heartbeat is older than cutoff.
-      const stale = await prisma.session.findMany({
-        where: { status: 'active', heartbeatAt: { lt: cutoff } },
-        select: { id: true },
-      })
-      if (stale.length === 0) return 0
-      let released = 0
-      for (const { id } of stale) {
-        await prisma.$transaction(async tx => {
-          const running = await tx.assignment.findMany({
-            where: { sessionId: id, status: 'running' },
-            select: { id: true, taskId: true },
-          })
-          for (const a of running) {
-            await tx.assignment.update({
-              where: { id: a.id },
-              data: { status: 'abandoned', endedAt: new Date() },
-            })
-            await tx.task.update({ where: { id: a.taskId }, data: { status: 'todo' } })
-            released += 1
-          }
-          await tx.session.update({ where: { id }, data: { status: 'idle' } })
-        })
-      }
-      return released
-    },
-  },
-  assignments: {
-    get: async id => {
-      const r = await prisma.assignment.findUnique({ where: { id } })
-      return r ? toAssignment(r) : null
-    },
-    getByCode: async (projectId, code) => {
-      const r = await prisma.assignment.findUnique({
-        where: { projectId_code: { projectId, code } },
-      })
-      return r ? toAssignment(r) : null
-    },
-    listByProject: async (projectId, filter) =>
+    listEvents: async sessionId =>
       (
-        await prisma.assignment.findMany({
-          where: {
-            projectId,
-            ...(filter?.status ? { status: { in: filter.status } } : {}),
-            ...(filter?.sessionId ? { sessionId: filter.sessionId } : {}),
-          },
-          orderBy: { id: 'desc' },
-        })
-      ).map(toAssignment),
-    appendEvent: async (id, sequence, payload) =>
-      toAssignmentEvent(
-        await prisma.assignmentEvent.create({
-          data: { assignmentId: id, sequence, payload: JSON.stringify(payload) },
-        }),
-      ),
-    listEvents: async id =>
-      (
-        await prisma.assignmentEvent.findMany({
-          where: { assignmentId: id },
+        await prisma.sessionEvent.findMany({
+          where: { sessionId },
           orderBy: { sequence: 'asc' },
         })
-      ).map(toAssignmentEvent),
-    complete: async (id, status, result) =>
-      prisma.$transaction(async tx => {
-        const a = await tx.assignment.findUniqueOrThrow({ where: { id } })
-        const updated = await tx.assignment.update({
-          where: { id },
-          data: { status, result, endedAt: new Date() },
-        })
-        await tx.task.update({
-          where: { id: a.taskId },
-          data: { status: status === 'done' ? 'done' : 'failed' },
-        })
-        return toAssignment(updated)
+      ).map(toSessionEvent),
+    findNextPendingMessage: async sessionId => {
+      const r = await prisma.sessionEvent.findFirst({
+        where: { sessionId, type: 'user_message', processedAt: null },
+        orderBy: { sequence: 'asc' },
+      })
+      return r ? toSessionEvent(r) : null
+    },
+    markMessageProcessed: async eventId => {
+      await prisma.sessionEvent.update({
+        where: { id: eventId },
+        data: { processedAt: new Date() },
+      })
+    },
+    pendingMessageCount: async sessionId =>
+      prisma.sessionEvent.count({
+        where: { sessionId, type: 'user_message', processedAt: null },
       }),
-    abandon: async (id, reason) =>
-      prisma.$transaction(async tx => {
-        const a = await tx.assignment.findUniqueOrThrow({ where: { id } })
-        const updated = await tx.assignment.update({
-          where: { id },
-          data: { status: 'abandoned', result: reason, endedAt: new Date() },
-        })
-        // Release task back to todo so another session can claim it.
-        await tx.task.update({ where: { id: a.taskId }, data: { status: 'todo' } })
-        return toAssignment(updated)
-      }),
+    resetBusySessions: async () => {
+      const r = await prisma.session.updateMany({
+        where: { state: 'busy' },
+        data: { state: 'idle' },
+      })
+      return r.count
+    },
   },
   getRequirementWithTasks: async id => {
     const r = await prisma.requirement.findUnique({ where: { id }, include: { tasks: true } })

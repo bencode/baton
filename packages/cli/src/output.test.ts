@@ -51,7 +51,6 @@ describe('output', () => {
       projectId: 1,
       code: 'T-1',
       title: 'impl',
-      requires: [],
       dependsOn: [],
       status: 'todo',
       createdAt: 0,

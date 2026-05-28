@@ -1,20 +1,20 @@
-import type { AssignmentEvent, Id } from '@baton/shared'
+import type { Id, SessionEvent } from '@baton/shared'
 
-// In-memory pub/sub keyed by assignmentId. Single-process: M2 enough. For
-// multi-process deployments switch to Redis pub/sub behind the same interface.
-type Subscriber = (event: AssignmentEvent) => void
+// In-memory pub/sub keyed by sessionId. Single-process: M2.5 enough. For
+// multi-process deployments swap to Redis pub/sub behind the same interface.
+type Subscriber = (event: SessionEvent) => void
 
 export type EventBus = {
-  publish(assignmentId: Id, event: AssignmentEvent): void
-  subscribe(assignmentId: Id, cb: Subscriber): () => void
-  subscriberCount(assignmentId: Id): number
+  publish(sessionId: Id, event: SessionEvent): void
+  subscribe(sessionId: Id, cb: Subscriber): () => void
+  subscriberCount(sessionId: Id): number
 }
 
 export const createEventBus = (): EventBus => {
   const subs = new Map<Id, Set<Subscriber>>()
   return {
-    publish(assignmentId, event) {
-      const set = subs.get(assignmentId)
+    publish(sessionId, event) {
+      const set = subs.get(sessionId)
       if (!set) return
       for (const cb of set) {
         try {
@@ -24,22 +24,22 @@ export const createEventBus = (): EventBus => {
         }
       }
     },
-    subscribe(assignmentId, cb) {
-      let set = subs.get(assignmentId)
+    subscribe(sessionId, cb) {
+      let set = subs.get(sessionId)
       if (!set) {
         set = new Set()
-        subs.set(assignmentId, set)
+        subs.set(sessionId, set)
       }
       set.add(cb)
       return () => {
-        const s = subs.get(assignmentId)
+        const s = subs.get(sessionId)
         if (!s) return
         s.delete(cb)
-        if (s.size === 0) subs.delete(assignmentId)
+        if (s.size === 0) subs.delete(sessionId)
       }
     },
-    subscriberCount(assignmentId) {
-      return subs.get(assignmentId)?.size ?? 0
+    subscriberCount(sessionId) {
+      return subs.get(sessionId)?.size ?? 0
     },
   }
 }

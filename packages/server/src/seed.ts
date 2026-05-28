@@ -47,14 +47,12 @@ const t1 = await store.tasks.create({
   requirementId: v01.id,
   title: 'M1 领域模型与持久化',
   spec: 'Workspace/Project/Requirement/Task 模型 + Prisma/libsql + Store port + 契约测',
-  requires: ['backend'],
   status: 'done',
 })
 await store.tasks.create({
   requirementId: v01.id,
   title: 'CLI 管理命令',
   spec: 'W/P/R/T 的 create / ls / get / set-status / rm',
-  requires: ['cli'],
   dependsOn: [t1.id],
   status: 'done',
 })
@@ -62,7 +60,6 @@ const t3 = await store.tasks.create({
   requirementId: v01.id,
   title: 'Web 布局外壳',
   spec: 'resizable 分栏 + 多页签 React <Activity> keep-alive + LRU',
-  requires: ['frontend'],
   dependsOn: [t1.id],
   status: 'done',
 })
@@ -70,7 +67,6 @@ await store.tasks.create({
   requirementId: v01.id,
   title: 'Web 左侧资源面板',
   spec: 'workspace▾/project▾ + Requirements→Tasks 依赖缩进树 + 路径路由 + seed',
-  requires: ['frontend'],
   dependsOn: [t3.id],
   status: 'done',
 })
@@ -78,7 +74,6 @@ await store.tasks.create({
   requirementId: v01.id,
   title: '项目内自增编号与主键自增化',
   spec: 'PK 由 UUID 字符串改为 INT autoincrement；Requirement/Task 新增 project 内唯一的 code (R-N / T-N)；CodeCounter 支撑表承载 next 计数；URL /proj/<id>/<code>',
-  requires: ['backend'],
   dependsOn: [t1.id],
   status: 'done',
 })

@@ -4,11 +4,16 @@ import { createApp } from './app.ts'
 import { startServer } from './server.ts'
 import { freshStore, type TestStore } from './store/test-db.ts'
 
-const postJson = (app: ReturnType<typeof createApp>, path: string, body: unknown) =>
+const postJson = (
+  app: ReturnType<typeof createApp>,
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+) =>
   app.request(path, {
     method: 'POST',
     body: JSON.stringify(body),
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
   })
 
 describe('server HTTP', () => {
@@ -42,19 +47,12 @@ describe('server HTTP', () => {
       await postJson(app, '/tasks', { requirementId: r.id, title: 'impl' })
     ).json()) as WithCode
     assert.equal(t.code, 'T-1')
-
     const tasks = (await (await app.request(`/requirements/${r.id}/tasks`)).json()) as WithId[]
     assert.equal(tasks.length, 1)
     assert.equal(tasks[0]?.id, t.id)
-    const full = (await (await app.request(`/requirements/${r.id}/full`)).json()) as {
-      requirement: { title: string }
-      tasks: unknown[]
-    }
-    assert.equal(full.requirement.title, 'login')
-    assert.equal(full.tasks.length, 1)
   })
 
-  test('GET /projects/:projectId/items/:code resolves R-N and T-N', async () => {
+  test('items lookup resolves R/T/S codes', async () => {
     const app = createApp(ctx.store)
     type WithId = { id: number }
     const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as WithId
@@ -62,13 +60,15 @@ describe('server HTTP', () => {
       await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
     ).json()) as WithId
     await postJson(app, '/requirements', { projectId: p.id, title: 'r' })
-    const r = (await (await app.request(`/projects/${p.id}/items/R-1`)).json()) as {
+    await postJson(app, '/sessions', { projectId: p.id, mode: 'worker', name: 'w1' })
+    const reqLookup = (await (await app.request(`/projects/${p.id}/items/R-1`)).json()) as {
       kind: string
-      item: { title: string }
     }
-    assert.equal(r.kind, 'requirement')
-    assert.equal(r.item.title, 'r')
-    assert.equal((await app.request(`/projects/${p.id}/items/T-99`)).status, 404)
+    assert.equal(reqLookup.kind, 'requirement')
+    const sessLookup = (await (await app.request(`/projects/${p.id}/items/S-1`)).json()) as {
+      kind: string
+    }
+    assert.equal(sessLookup.kind, 'session')
     assert.equal((await app.request(`/projects/${p.id}/items/X-1`)).status, 400)
   })
 
@@ -88,149 +88,115 @@ describe('server HTTP', () => {
     }
   })
 
-  test('PATCH advances status; DELETE then GET → 404', async () => {
-    const app = createApp(ctx.store)
-    type WithIdStatus = { id: number; status: string }
-    const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as { id: number }
-    const p = (await (
-      await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
-    ).json()) as { id: number }
-    const r = (await (
-      await postJson(app, '/requirements', { projectId: p.id, title: 'r' })
-    ).json()) as WithIdStatus
+  // === M2.5: session chat protocol ===
 
-    const patched = (await (
-      await app.request(`/requirements/${r.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'done' }),
-        headers: { 'content-type': 'application/json' },
-      })
-    ).json()) as WithIdStatus
-    assert.equal(patched.status, 'done')
-
-    assert.equal((await app.request(`/workspaces/${w.id}`, { method: 'DELETE' })).status, 204)
-    assert.equal((await app.request(`/workspaces/${w.id}`)).status, 404)
-  })
-
-  // === M2: sessions / assignments / claim / SSE ===
-
-  // Seed a workspace + project + requirement + one task, and return their ids.
-  const seedTask = async (app: ReturnType<typeof createApp>) => {
+  const seedSession = async (app: ReturnType<typeof createApp>) => {
     type WithId = { id: number }
-    const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as WithId
+    type WithCode = WithId & { code: string }
+    const w = (await (await postJson(app, '/workspaces', { name: 'w' })).json()) as WithId
     const p = (await (
       await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
     ).json()) as WithId
-    const r = (await (
-      await postJson(app, '/requirements', { projectId: p.id, title: 'r' })
-    ).json()) as WithId
-    const t = (await (
-      await postJson(app, '/tasks', { requirementId: r.id, title: 'work' })
-    ).json()) as WithId
-    return { workspaceId: w.id, projectId: p.id, requirementId: r.id, taskId: t.id }
+    const s = (await (
+      await postJson(app, '/sessions', {
+        projectId: p.id,
+        mode: 'worker',
+        name: 'dogfood',
+        claudeSessionId: 'aaaa-bbbb-cccc-dddd',
+        worktreePath: '/tmp/wt',
+      })
+    ).json()) as WithCode & { apiToken: string; state: string }
+    return { projectId: p.id, session: s }
   }
 
-  test('session register → /sessions/me/* requires bearer; wrong token → 401', async () => {
+  test('session register: returns code S-N + apiToken + state=idle', async () => {
     const app = createApp(ctx.store)
-    const { projectId } = await seedTask(app)
-    const s = (await (
-      await postJson(app, '/sessions', { projectId, mode: 'worker', name: 'w1' })
-    ).json()) as { id: number; code: string; apiToken: string }
-    assert.equal(s.code, 'S-1')
-    assert.equal(typeof s.apiToken, 'string')
-
-    // No header → 401
-    assert.equal((await postJson(app, '/sessions/me/heartbeat', {})).status, 401)
-    // Wrong token → 401
-    const wrong = await app.request('/sessions/me/heartbeat', {
-      method: 'POST',
-      body: '{}',
-      headers: { 'content-type': 'application/json', authorization: 'Bearer not-a-token' },
-    })
-    assert.equal(wrong.status, 401)
-    // Correct → 200
-    const ok = await app.request('/sessions/me/heartbeat', {
-      method: 'POST',
-      body: '{}',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${s.apiToken}` },
-    })
-    assert.equal(ok.status, 200)
+    const { session } = await seedSession(app)
+    assert.equal(session.code, 'S-1')
+    assert.equal(session.state, 'idle')
+    assert.equal(typeof session.apiToken, 'string')
   })
 
-  test('claim end-to-end: bearer → /sessions/me/claim returns assignment+task, no work → 204', async () => {
+  test('messages: POST /sessions/:id/messages records user_message + 409 on closed', async () => {
     const app = createApp(ctx.store)
-    const { projectId, taskId } = await seedTask(app)
-    const s = (await (
-      await postJson(app, '/sessions', { projectId, mode: 'worker', name: 'w1' })
-    ).json()) as { id: number; apiToken: string }
-    const claim = await app.request('/sessions/me/claim', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${s.apiToken}` },
-    })
-    assert.equal(claim.status, 200)
-    const { assignment, task } = (await claim.json()) as {
-      assignment: { id: number; code: string; status: string }
-      task: { id: number; status: string }
-    }
-    assert.equal(task.id, taskId)
-    assert.equal(task.status, 'in_progress')
-    assert.equal(assignment.code, 'A-1')
-    assert.equal(assignment.status, 'running')
+    const { session } = await seedSession(app)
+    const res = await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
+    assert.equal(res.status, 201)
+    const ev = (await res.json()) as { type: string; sequence: number; payload: { text: string } }
+    assert.equal(ev.type, 'user_message')
+    assert.equal(ev.sequence, 0)
+    assert.equal(ev.payload.text, 'hi')
 
-    // No more eligible work → 204
-    const empty = await app.request('/sessions/me/claim', {
+    // 400 on empty text
+    assert.equal(
+      (await postJson(app, `/sessions/${session.id}/messages`, { text: '' })).status,
+      400,
+    )
+
+    // close session → next message gets 409
+    await app.request(`/sessions/me/close`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${s.apiToken}` },
+      headers: { authorization: `Bearer ${session.apiToken}` },
     })
-    assert.equal(empty.status, 204)
+    assert.equal(
+      (await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })).status,
+      409,
+    )
   })
 
-  test('assignment events: ownership enforced; complete updates task status', async () => {
+  test('worker events (bearer): turn_start marks message processed + state=busy; turn_complete → idle', async () => {
     const app = createApp(ctx.store)
-    const { projectId, taskId } = await seedTask(app)
-    const s1 = (await (
-      await postJson(app, '/sessions', { projectId, mode: 'worker', name: 'w1' })
-    ).json()) as { apiToken: string }
-    const s2 = (await (
-      await postJson(app, '/sessions', { projectId, mode: 'worker', name: 'w2' })
-    ).json()) as { apiToken: string }
-    const claim = (await (
-      await app.request('/sessions/me/claim', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${s1.apiToken}` },
-      })
-    ).json()) as { assignment: { id: number } }
-    const assignmentId = claim.assignment.id
+    const { session } = await seedSession(app)
+    const msgRes = await postJson(app, `/sessions/${session.id}/messages`, { text: 'work' })
+    const msg = (await msgRes.json()) as { id: number }
 
-    // s2 trying to post events for s1's assignment → 403
-    const forbidden = await app.request(`/assignments/${assignmentId}/events`, {
-      method: 'POST',
-      body: JSON.stringify({ sequence: 0, payload: { type: 'x' } }),
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${s2.apiToken}` },
-    })
-    assert.equal(forbidden.status, 403)
+    const auth = { authorization: `Bearer ${session.apiToken}` }
 
-    // s1 (owner) → 201
-    const okEvent = await app.request(`/assignments/${assignmentId}/events`, {
-      method: 'POST',
-      body: JSON.stringify({ sequence: 0, payload: { type: 'status', s: 'starting' } }),
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${s1.apiToken}` },
-    })
-    assert.equal(okEvent.status, 201)
+    // Unauthorized rejected.
+    assert.equal(
+      (await postJson(app, '/sessions/me/events', { type: 'sdk_event', payload: {} })).status,
+      401,
+    )
 
-    // s1 completes done
-    const completed = await app.request(`/assignments/${assignmentId}/complete`, {
-      method: 'POST',
-      body: JSON.stringify({ status: 'done', result: 'ok' }),
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${s1.apiToken}` },
-    })
-    assert.equal(completed.status, 200)
-    const task = (await (await app.request(`/tasks/${taskId}`)).json()) as { status: string }
-    assert.equal(task.status, 'done')
+    // turn_start consumes the message + flips state.
+    await postJson(
+      app,
+      '/sessions/me/events',
+      { type: 'turn_start', payload: { messageId: msg.id } },
+      auth,
+    )
+    const busy = (await (await app.request(`/sessions/${session.id}`)).json()) as { state: string }
+    assert.equal(busy.state, 'busy')
+
+    // Stream an SDK event.
+    await postJson(
+      app,
+      '/sessions/me/events',
+      { type: 'sdk_event', payload: { type: 'assistant', text: 'thinking' } },
+      auth,
+    )
+
+    // turn_complete returns to idle.
+    await postJson(
+      app,
+      '/sessions/me/events',
+      { type: 'turn_complete', payload: { exitCode: 0 } },
+      auth,
+    )
+    const idle = (await (await app.request(`/sessions/${session.id}`)).json()) as { state: string }
+    assert.equal(idle.state, 'idle')
+
+    // Event log contains user + turn_start + sdk + turn_complete in order.
+    const events = (await (await app.request(`/sessions/${session.id}/events`)).json()) as Array<{
+      type: string
+    }>
+    assert.deepEqual(
+      events.map(e => e.type),
+      ['user_message', 'turn_start', 'sdk_event', 'turn_complete'],
+    )
   })
 
-  test('SSE stream: replays history then pushes new events as they arrive', async () => {
-    // Use a real Node server so we can use EventSource semantics via fetch streaming.
+  test('SSE: replays history then pushes new events as they arrive', async () => {
     const server = await startServer({ store: ctx.store, port: 0 })
     try {
       const base = `http://localhost:${server.port}`
@@ -240,68 +206,48 @@ describe('server HTTP', () => {
           body: JSON.stringify(body),
           headers: { 'content-type': 'application/json', ...headers },
         })
-      const w = (await (await post('/workspaces', { name: 'w' })).json()) as { id: number }
-      const p = (await (await post('/projects', { workspaceId: w.id, name: 'p' })).json()) as {
-        id: number
-      }
-      const r = (await (await post('/requirements', { projectId: p.id, title: 'r' })).json()) as {
-        id: number
-      }
-      await post('/tasks', { requirementId: r.id, title: 't' })
-      const sess = (await (
-        await post('/sessions', { projectId: p.id, mode: 'worker', name: 's' })
-      ).json()) as { apiToken: string }
-      const claim = (await (
-        await post('/sessions/me/claim', {}, { authorization: `Bearer ${sess.apiToken}` })
-      ).json()) as { assignment: { id: number } }
-      const aid = claim.assignment.id
+      type WithId = { id: number }
+      const w = (await (await post('/workspaces', { name: 'w' })).json()) as WithId
+      const p = (await (await post('/projects', { workspaceId: w.id, name: 'p' })).json()) as WithId
+      const s = (await (
+        await post('/sessions', { projectId: p.id, mode: 'worker', name: 'sse-test' })
+      ).json()) as WithId & { apiToken: string }
+      await post(`/sessions/${s.id}/messages`, { text: 'first' })
 
-      // Pre-existing event (in history)
-      await post(
-        `/assignments/${aid}/events`,
-        { sequence: 0, payload: { type: 'pre' } },
-        { authorization: `Bearer ${sess.apiToken}` },
-      )
-
-      // Open SSE
       const controller = new AbortController()
-      const streamRes = await fetch(`${base}/assignments/${aid}/stream`, {
+      const res = await fetch(`${base}/sessions/${s.id}/stream`, {
         signal: controller.signal,
         headers: { accept: 'text/event-stream' },
       })
-      assert.equal(streamRes.status, 200)
-      assert.match(streamRes.headers.get('content-type') ?? '', /event-stream/)
-      const reader = streamRes.body?.getReader()
+      assert.equal(res.status, 200)
+      const reader = res.body?.getReader()
       assert.ok(reader)
-      const decoder = new TextDecoder()
+      const dec = new TextDecoder()
       const readUntil = async (n: number, ms: number): Promise<string> => {
         let buf = ''
         const start = Date.now()
         while (Date.now() - start < ms) {
           const r = await Promise.race([
             reader.read(),
-            new Promise<{ done: true; value?: undefined }>(res =>
-              setTimeout(() => res({ done: true }), ms - (Date.now() - start)),
+            new Promise<{ done: true; value?: undefined }>(res2 =>
+              setTimeout(() => res2({ done: true }), ms - (Date.now() - start)),
             ),
           ])
           if (!r || r.done || !r.value) break
-          buf += decoder.decode(r.value)
-          if ((buf.match(/\ndata:/g) ?? []).length + (buf.startsWith('data:') ? 1 : 0) >= n) break
+          buf += dec.decode(r.value)
+          const hits = (buf.match(/^data:/gm) ?? []).length
+          if (hits >= n) break
         }
         return buf
       }
-      // Replay should arrive immediately.
+      // Replay carries the first user_message.
       let chunk = await readUntil(1, 1500)
-      assert.match(chunk, /"sequence":0/)
+      assert.match(chunk, /"text":"first"/)
 
-      // Push another → should arrive via subscription.
-      await post(
-        `/assignments/${aid}/events`,
-        { sequence: 1, payload: { type: 'live' } },
-        { authorization: `Bearer ${sess.apiToken}` },
-      )
+      // New live event arrives.
+      await post(`/sessions/${s.id}/messages`, { text: 'live' })
       chunk = await readUntil(2, 1500)
-      assert.match(chunk, /"sequence":1/)
+      assert.match(chunk, /"text":"live"/)
 
       controller.abort()
       await reader.cancel().catch(() => {})

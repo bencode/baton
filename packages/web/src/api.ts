@@ -1,7 +1,4 @@
 import type {
-  Assignment,
-  AssignmentEvent,
-  AssignmentStatus,
   Code,
   Id,
   Project,
@@ -9,6 +6,7 @@ import type {
   RequirementStatus,
   ResourceRef,
   Session,
+  SessionEvent,
   Task,
   TaskStatus,
   Workspace,
@@ -44,7 +42,6 @@ export type TaskInput = {
   requirementId: Id
   title: string
   spec?: string
-  requires?: string[]
   dependsOn?: Id[]
 }
 
@@ -82,24 +79,10 @@ export type Api = {
   sessions: {
     listByProject(projectId: Id): Promise<Session[]>
     get(id: Id): Promise<Session>
+    getByCode(projectId: Id, code: Code): Promise<Session>
+    listEvents(id: Id): Promise<SessionEvent[]>
+    sendMessage(id: Id, text: string): Promise<SessionEvent>
   }
-  assignments: {
-    listByProject(
-      projectId: Id,
-      filter?: { status?: AssignmentStatus[]; sessionId?: Id },
-    ): Promise<Assignment[]>
-    get(id: Id): Promise<Assignment>
-    getByCode(projectId: Id, code: Code): Promise<Assignment>
-    events(id: Id): Promise<AssignmentEvent[]>
-  }
-}
-
-const buildAssignmentQuery = (filter?: { status?: AssignmentStatus[]; sessionId?: Id }): string => {
-  if (!filter) return ''
-  const params: string[] = []
-  if (filter.status?.length) params.push(`status=${filter.status.join(',')}`)
-  if (filter.sessionId) params.push(`sessionId=${filter.sessionId}`)
-  return params.length ? `?${params.join('&')}` : ''
 }
 
 export const createApi = (base: string = API_BASE): Api => {
@@ -107,7 +90,7 @@ export const createApi = (base: string = API_BASE): Api => {
   const fetchItemByCode = async (
     projectId: Id,
     code: Code,
-    expectKind: 'requirement' | 'task' | 'session' | 'assignment',
+    expectKind: 'requirement' | 'task' | 'session',
   ) => {
     const r = await request<{ kind: string; item: unknown }>(
       u(`/projects/${projectId}/items/${encodeURIComponent(code)}`),
@@ -156,16 +139,11 @@ export const createApi = (base: string = API_BASE): Api => {
     sessions: {
       listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
       get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
-    },
-    assignments: {
-      listByProject: (projectId, filter) =>
-        request(u(`/projects/${projectId}/assignments${buildAssignmentQuery(filter)}`), {
-          method: 'GET',
-        }),
-      get: id => request(u(`/assignments/${id}`), { method: 'GET' }),
       getByCode: async (projectId, code) =>
-        (await fetchItemByCode(projectId, code, 'assignment')) as Assignment,
-      events: id => request(u(`/assignments/${id}/events`), { method: 'GET' }),
+        (await fetchItemByCode(projectId, code, 'session')) as Session,
+      listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
+      sendMessage: (id, text) =>
+        request(u(`/sessions/${id}/messages`), { method: 'POST', body: { text } }),
     },
   }
 }

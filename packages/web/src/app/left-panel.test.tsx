@@ -29,7 +29,6 @@ const tasks: Task[] = [
     projectId: 1,
     code: 'T-2',
     title: 'Implement',
-    requires: [],
     dependsOn: [1],
     status: 'todo',
     createdAt: 2,
@@ -41,7 +40,6 @@ const tasks: Task[] = [
     projectId: 1,
     code: 'T-1',
     title: 'Design',
-    requires: [],
     dependsOn: [],
     status: 'done',
     createdAt: 1,
@@ -55,7 +53,6 @@ const fakeApi = () =>
     requirements: { listByProject: vi.fn(async () => [login]) },
     tasks: { listByRequirement: vi.fn(async () => tasks) },
     sessions: { listByProject: vi.fn(async () => []) },
-    assignments: { listByProject: vi.fn(async () => []) },
   }) as unknown as Api
 
 test('LeftPanel renders the requirement tree (deps + ready) and opens a task on click', async () => {

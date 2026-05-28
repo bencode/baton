@@ -1,25 +1,23 @@
 import type {
-  Assignment,
-  AssignmentEvent,
-  AssignmentStatus,
   Id,
   Project,
   Requirement,
   RequirementStatus,
   ResourceRef,
   Session,
+  SessionEvent,
+  SessionEventType,
   SessionMode,
-  SessionStatus,
+  SessionState,
   Task,
   TaskStatus,
   Workspace,
 } from '@baton/shared'
 import type {
-  Assignment as DbAssignment,
-  AssignmentEvent as DbAssignmentEvent,
   Project as DbProject,
   Requirement as DbRequirement,
   Session as DbSession,
+  SessionEvent as DbSessionEvent,
   Task as DbTask,
   Workspace as DbWorkspace,
 } from '@prisma/client'
@@ -60,43 +58,34 @@ export const toTask = (r: DbTask): Task => ({
   code: r.code,
   title: r.title,
   spec: r.spec ?? undefined,
-  requires: parseJson<string[]>(r.requires),
   dependsOn: parseJson<Id[]>(r.dependsOn),
   status: r.status as TaskStatus,
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),
 })
 
-// apiToken intentionally NOT in the domain shape — caller selects it separately when issuing.
+// apiToken intentionally NOT in the domain shape — register selects it
+// separately when issuing the token; subsequent reads never re-expose it.
 export const toSession = (r: DbSession): Session => ({
   id: r.id,
   projectId: r.projectId,
   code: r.code,
   mode: r.mode as SessionMode,
   name: r.name,
-  capabilities: parseJson<string[]>(r.capabilities),
-  status: r.status as SessionStatus,
+  state: r.state as SessionState,
+  claudeSessionId: r.claudeSessionId ?? undefined,
+  worktreePath: r.worktreePath ?? undefined,
   startedAt: r.startedAt.getTime(),
   heartbeatAt: r.heartbeatAt.getTime(),
   closedAt: r.closedAt?.getTime(),
 })
 
-export const toAssignment = (r: DbAssignment): Assignment => ({
+export const toSessionEvent = (r: DbSessionEvent): SessionEvent => ({
   id: r.id,
-  projectId: r.projectId,
-  code: r.code,
   sessionId: r.sessionId,
-  taskId: r.taskId,
-  status: r.status as AssignmentStatus,
-  result: r.result ?? undefined,
-  startedAt: r.startedAt.getTime(),
-  endedAt: r.endedAt?.getTime(),
-})
-
-export const toAssignmentEvent = (r: DbAssignmentEvent): AssignmentEvent => ({
-  id: r.id,
-  assignmentId: r.assignmentId,
   sequence: r.sequence,
+  type: r.type as SessionEventType,
   payload: JSON.parse(r.payload),
+  processedAt: r.processedAt?.getTime(),
   createdAt: r.createdAt.getTime(),
 })

@@ -1,7 +1,4 @@
 import type {
-  Assignment,
-  AssignmentEvent,
-  AssignmentStatus,
   Code,
   Id,
   Project,
@@ -9,10 +6,12 @@ import type {
   RequirementStatus,
   ResourceRef,
   Session,
+  SessionEvent,
+  SessionEventType,
   SessionMode,
-  SessionStatus,
   Task,
   TaskStatus,
+  Workspace,
 } from '@baton/shared'
 
 type ReqInit = { method: string; body?: unknown; headers?: Record<string, string> }
@@ -43,19 +42,18 @@ export type TaskInput = {
   requirementId: Id
   title: string
   spec?: string
-  requires?: string[]
   dependsOn?: Id[]
 }
 export type SessionRegisterInput = {
   projectId: Id
   mode: SessionMode
   name: string
-  capabilities?: string[]
+  claudeSessionId?: string
+  worktreePath?: string
 }
 export type SessionRegistered = Session & { apiToken: string }
-export type ClaimResult = { assignment: Assignment; task: Task }
 
-// Thin HTTP client mirroring the server routes; each method returns the parsed domain object.
+// Public HTTP client (UI / CLI / observability tools).
 export type ApiClient = {
   workspaces: {
     create(input: WorkspaceInput): Promise<Workspace>
@@ -89,28 +87,19 @@ export type ApiClient = {
     register(input: SessionRegisterInput): Promise<SessionRegistered>
     listByProject(projectId: Id): Promise<Session[]>
     get(id: Id): Promise<Session>
-  }
-  assignments: {
-    listByProject(
-      projectId: Id,
-      filter?: { status?: AssignmentStatus[]; sessionId?: Id },
-    ): Promise<Assignment[]>
-    get(id: Id): Promise<Assignment>
-    events(id: Id): Promise<AssignmentEvent[]>
+    getByCode(projectId: Id, code: Code): Promise<Session>
+    listEvents(id: Id): Promise<SessionEvent[]>
+    sendMessage(id: Id, text: string): Promise<SessionEvent>
   }
 }
 
-// Worker-private client: same routes but with Authorization: Bearer <token>.
+// Worker-private client: bearer-authed write endpoints. Mostly used by the
+// long-running `baton session run` daemon (commit 2).
 export type WorkerClient = {
-  heartbeat(status?: SessionStatus): Promise<Session>
-  claim(): Promise<ClaimResult | null>
+  heartbeat(): Promise<Session>
   close(): Promise<void>
-  appendEvent(assignmentId: Id, sequence: number, payload: unknown): Promise<AssignmentEvent>
-  complete(assignmentId: Id, status: 'done' | 'failed', result?: string): Promise<Assignment>
-  abandon(assignmentId: Id, reason?: string): Promise<Assignment>
+  emitEvent(type: SessionEventType, payload: unknown): Promise<SessionEvent>
 }
-
-import type { Workspace } from '@baton/shared'
 
 const fetchItemByCode = async <T>(
   baseUrl: string,
@@ -128,13 +117,6 @@ const fetchItemByCode = async <T>(
 
 export const createClient = (baseUrl: string): ApiClient => {
   const u = (p: string): string => `${baseUrl}${p}`
-  const buildQuery = (filter?: { status?: AssignmentStatus[]; sessionId?: Id }): string => {
-    if (!filter) return ''
-    const params: string[] = []
-    if (filter.status?.length) params.push(`status=${filter.status.join(',')}`)
-    if (filter.sessionId) params.push(`sessionId=${filter.sessionId}`)
-    return params.length ? `?${params.join('&')}` : ''
-  }
   return {
     workspaces: {
       create: input => request(u('/workspaces'), { method: 'POST', body: input }),
@@ -173,12 +155,10 @@ export const createClient = (baseUrl: string): ApiClient => {
       register: input => request(u('/sessions'), { method: 'POST', body: input }),
       listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
       get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
-    },
-    assignments: {
-      listByProject: (projectId, filter) =>
-        request(u(`/projects/${projectId}/assignments${buildQuery(filter)}`), { method: 'GET' }),
-      get: id => request(u(`/assignments/${id}`), { method: 'GET' }),
-      events: id => request(u(`/assignments/${id}/events`), { method: 'GET' }),
+      getByCode: (projectId, code) => fetchItemByCode<Session>(baseUrl, projectId, code, 'session'),
+      listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
+      sendMessage: (id, text) =>
+        request(u(`/sessions/${id}/messages`), { method: 'POST', body: { text } }),
     },
   }
 }
@@ -187,35 +167,13 @@ export const createWorkerClient = (baseUrl: string, apiToken: string): WorkerCli
   const u = (p: string): string => `${baseUrl}${p}`
   const auth = { authorization: `Bearer ${apiToken}` }
   return {
-    heartbeat: status =>
-      request(u('/sessions/me/heartbeat'), {
-        method: 'POST',
-        body: status ? { status } : {},
-        headers: auth,
-      }),
-    claim: async () => {
-      const res = await fetch(u('/sessions/me/claim'), { method: 'POST', headers: auth })
-      if (res.status === 204) return null
-      if (!res.ok) throw new Error(`POST /sessions/me/claim → ${res.status}: ${await res.text()}`)
-      return (await res.json()) as ClaimResult
-    },
+    heartbeat: () =>
+      request(u('/sessions/me/heartbeat'), { method: 'POST', body: {}, headers: auth }),
     close: () => request(u('/sessions/me/close'), { method: 'POST', headers: auth }),
-    appendEvent: (assignmentId, sequence, payload) =>
-      request(u(`/assignments/${assignmentId}/events`), {
+    emitEvent: (type, payload) =>
+      request(u('/sessions/me/events'), {
         method: 'POST',
-        body: { sequence, payload },
-        headers: auth,
-      }),
-    complete: (assignmentId, status, result) =>
-      request(u(`/assignments/${assignmentId}/complete`), {
-        method: 'POST',
-        body: { status, result },
-        headers: auth,
-      }),
-    abandon: (assignmentId, reason) =>
-      request(u(`/assignments/${assignmentId}/abandon`), {
-        method: 'POST',
-        body: reason ? { reason } : {},
+        body: { type, payload },
         headers: auth,
       }),
   }

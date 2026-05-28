@@ -1,10 +1,10 @@
-import type { Id, Session } from '@baton/shared'
+import type { Code, Id, Session } from '@baton/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
+import { useAsync } from '../../hooks/use-async'
 
-// Poll the server for sessions in this project; refresh every `pollMs`. Errors
-// surface as `error` and keep the last-known data so transient blips don't
-// blank the panel.
+// Poll sessions in this project; refresh every `pollMs`. Errors surface as
+// `error` and keep last-known data so transient blips don't blank the panel.
 export const useSessions = (
   projectId: Id | null,
   pollMs = 2000,
@@ -47,4 +47,14 @@ export const useSessions = (
     }
   }, [api, projectId, pollMs])
   return { data, loading, error }
+}
+
+export const useSessionByCode = (projectId: Id | null, code: Code | null) => {
+  const api = useApi()
+  const key = projectId !== null && code ? `${projectId}/${code}` : null
+  return useAsync<Session | null>(
+    () =>
+      projectId !== null && code ? api.sessions.getByCode(projectId, code) : Promise.resolve(null),
+    key,
+  )
 }

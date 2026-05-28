@@ -1,11 +1,12 @@
 import type { Code, Id } from './ids.ts'
 
-// A Session represents a long-lived worker presence. The actual Worker concept
-// (capabilities, identity) is folded into the Session record so M2 has one
-// persisted unit; future skill-mode (claude-code as a tool) can reuse the same
-// shape with `mode = 'skill'`. apiToken stays server-side, never in domain JSON.
+// A Session is one Claude Code conversation. claudeSessionId is a UUID baton
+// generates at creation time and passes to the CLI as --session-id (first
+// turn) / --resume (subsequent turns). worktreePath is provisioned by the
+// CLI at `baton session new`. state serialises turns: only one claude
+// subprocess at a time per session.
 export type SessionMode = 'worker' | 'skill'
-export type SessionStatus = 'active' | 'idle' | 'closed'
+export type SessionState = 'idle' | 'busy' | 'closed'
 
 export type Session = {
   id: Id
@@ -13,8 +14,9 @@ export type Session = {
   code: Code // 'S-1'
   mode: SessionMode
   name: string
-  capabilities: string[]
-  status: SessionStatus
+  state: SessionState
+  claudeSessionId?: string
+  worktreePath?: string
   startedAt: number
   heartbeatAt: number
   closedAt?: number

@@ -32,8 +32,6 @@ export const TaskDetail = ({ projectId, code }: TaskDetailProps) => {
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 rounded-md border border-gray-100 bg-gray-50/60 p-3 text-sm text-gray-700">
         <dt className="text-gray-400">ready</dt>
         <dd>{ready ? 'yes, deps met' : 'no'}</dd>
-        <dt className="text-gray-400">requires</dt>
-        <dd>{task.requires.length ? task.requires.join(', ') : '—'}</dd>
         <dt className="text-gray-400">depends on</dt>
         <dd>{task.dependsOn.length ? `${task.dependsOn.length} task(s)` : '—'}</dd>
       </dl>
