@@ -3,10 +3,11 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Id, SessionMode } from '@baton/shared'
 import { defineCommand } from 'citty'
-import { type ApiClient, createClient, createWorkerClient } from '../client.ts'
+import { type ApiClient, createWorkerClient } from '../client.ts'
 import { resolveBaseUrl } from '../config.ts'
 import { fmtSession, renderList, renderOne, toJson } from '../output.ts'
 import { defaultConfigPath, loadConfig, type SessionConfig, saveConfig } from '../session/config.ts'
+import { runDaemon } from '../session/runner.ts'
 import { createWorktree, removeWorktree } from '../session/worktree.ts'
 import { clientFor, common } from '../util.ts'
 
@@ -180,6 +181,35 @@ export const session = defineCommand({
         const c = clientFor(args)
         const s = await c.sessions.getByCode(Number(args.project), args.code)
         console.log(renderOne(s, fmtSession, Boolean(args.json)))
+      },
+    }),
+    run: defineCommand({
+      meta: {
+        name: 'run',
+        description: 'subscribe to a session and run claude turns as messages arrive',
+      },
+      args: {
+        code: { type: 'positional', required: true, description: 'session code (S-N)' },
+        project: { type: 'string', required: true, description: 'project id (int)' },
+        config: {
+          type: 'string',
+          description: 'override config path (default ~/.config/baton/session-S-N.json)',
+        },
+        ...common,
+      },
+      run: async ({ args }) => {
+        const cliClient = clientFor(args)
+        const s = await cliClient.sessions.getByCode(Number(args.project), args.code)
+        const cfgPath = args.config ?? defaultConfigPath(s.code)
+        const cfg = loadConfig(cfgPath)
+        const worker = createWorkerClient(cfg.server, cfg.apiToken)
+        const ac = new AbortController()
+        const stop = () => ac.abort()
+        process.on('SIGINT', stop)
+        process.on('SIGTERM', stop)
+        console.log(`[${cfg.sessionCode}] running (worktree: ${cfg.worktreePath})`)
+        await runDaemon(cfg, { client: cliClient, worker }, ac.signal)
+        console.log(`[${cfg.sessionCode}] stopped`)
       },
     }),
   },
