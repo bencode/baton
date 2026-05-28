@@ -3,89 +3,78 @@ import { loadConfig } from './config.ts'
 import { createPrisma } from './db/client.ts'
 import { createPrismaStore } from './store/prisma-store.ts'
 
-// Dev seed: reset the database and create a realistic Workspace -> Project ->
-// Requirements -> Task DAG so the UI tree (dependency indentation, status
-// badges, ready/blocked) has something to render. Run: pnpm --filter @baton/server seed
+// Self-hosting bootstrap: populate baton's own v0.1 iteration as real data
+// (lesscap -> baton -> "v0.1 迭代" + the foundation tasks already shipped).
+// Idempotent — if the lesscap workspace already exists this is a no-op, so
+// re-running never clobbers live data created via the CLI/UI.
+// Run once for the demo -> real transition: pnpm --filter @baton/server seed
 
 const config = loadConfig()
 const store = createPrismaStore(createPrisma(config.databaseUrl))
 
-// Reset: deleting a workspace cascades to its projects/requirements/tasks.
-for (const w of await store.workspaces.list()) await store.workspaces.delete(w.id)
+const existing = await store.workspaces.list()
+if (existing.some(w => w.name === 'lesscap')) {
+  console.log('already seeded (workspace "lesscap" exists); skipping to protect live data')
+  await store.close()
+  process.exit(0)
+}
 
-const ws = await store.workspaces.create({ name: 'Engineering' })
+// First real seed: clear any prior demo data (cascades to its whole subtree).
+for (const w of existing) await store.workspaces.delete(w.id)
+
+const ws = await store.workspaces.create({ name: 'lesscap' })
 const project = await store.projects.create({
   workspaceId: ws.id,
-  name: 'web',
-  description: 'baton web client',
+  name: 'baton',
+  description: 'baton 自身开发：agent 协同执行引擎',
 })
 
-// Requirement with a multi-level DAG: design -> impl -> test, design -> ui,
-// then ship depends on test + ui (multi-dependency). Mixed statuses make
-// `ui` ready (design done) while `test`/`ship` stay blocked.
-const login = await store.requirements.create({
+const v01 = await store.requirements.create({
   projectId: project.id,
-  title: 'User login',
-  description: 'Email + password auth with a session cookie.',
-  tags: ['auth'],
+  title: 'v0.1 迭代',
+  description:
+    'v0.1 = 协同维度管理闭环：CLI 与 Web UI 都能对 Workspace/Project/Requirement/Task 做 CRUD 与状态推进。M2 执行（worker/session）归 v0.2。',
+  tags: ['v0.1', 'mvp'],
+  resources: [
+    { kind: 'doc', uri: 'docs/plans/00-overview.md', label: '总体概念对齐' },
+    { kind: 'doc', uri: 'docs/plans/03-web-ui.md', label: 'Web UI 方案' },
+  ],
   status: 'active',
 })
-const design = await store.tasks.create({
-  requirementId: login.id,
-  title: 'Design auth flow',
+
+const m1 = await store.tasks.create({
+  requirementId: v01.id,
+  title: 'M1 领域模型与持久化',
+  spec: 'Workspace/Project/Requirement/Task 模型 + Prisma/libsql + Store port + 契约测',
+  requires: ['backend'],
   status: 'done',
 })
-const impl = await store.tasks.create({
-  requirementId: login.id,
-  title: 'Implement login endpoint',
-  dependsOn: [design.id],
-  status: 'in_progress',
+await store.tasks.create({
+  requirementId: v01.id,
+  title: 'CLI 管理命令',
+  spec: 'W/P/R/T 的 create / ls / get / set-status / rm',
+  requires: ['cli'],
+  dependsOn: [m1.id],
+  status: 'done',
 })
-const ui = await store.tasks.create({
-  requirementId: login.id,
-  title: 'Build login form',
+const shell = await store.tasks.create({
+  requirementId: v01.id,
+  title: 'Web 布局外壳',
+  spec: 'resizable 分栏 + 多页签 React <Activity> keep-alive + LRU',
   requires: ['frontend'],
-  dependsOn: [design.id],
-  status: 'todo',
+  dependsOn: [m1.id],
+  status: 'done',
 })
-const test = await store.tasks.create({
-  requirementId: login.id,
-  title: 'Write login tests',
-  dependsOn: [impl.id],
-  status: 'todo',
-})
-await store.tasks.create({
-  requirementId: login.id,
-  title: 'Ship login',
-  dependsOn: [test.id, ui.id],
-  status: 'todo',
-})
-
-const dashboard = await store.requirements.create({
-  projectId: project.id,
-  title: 'Dashboard',
-  tags: ['ui'],
-  status: 'active',
-})
-const dashApi = await store.tasks.create({
-  requirementId: dashboard.id,
-  title: 'Dashboard data API',
-  status: 'todo',
-})
-await store.tasks.create({
-  requirementId: dashboard.id,
-  title: 'Dashboard widgets',
-  dependsOn: [dashApi.id],
-  status: 'todo',
-})
-
-await store.requirements.create({
-  projectId: project.id,
-  title: 'Billing',
-  description: 'Stripe subscriptions.',
-  tags: ['payments'],
+const panel = await store.tasks.create({
+  requirementId: v01.id,
+  title: 'Web 左侧资源面板',
+  spec: 'workspace▾/project▾ + Requirements→Tasks 依赖缩进树 + 路径路由 + seed',
+  requires: ['frontend'],
+  dependsOn: [shell.id],
   status: 'done',
 })
 
 await store.close()
-console.log(`seeded workspace ${ws.id}: project "web" with 3 requirements and 8 tasks`)
+console.log('seeded lesscap -> baton -> "v0.1 迭代"')
+console.log(`  requirementId = ${v01.id}`)
+console.log(`  task "Web 左侧资源面板" id = ${panel.id}  (use as --deps for upcoming work)`)
