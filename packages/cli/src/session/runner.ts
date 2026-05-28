@@ -40,7 +40,6 @@ const buildClaudeArgs = (claudeSessionId: string, text: string, resuming: boolea
   claudeSessionId,
   '--output-format',
   'stream-json',
-  '--include-partial-messages',
   '--dangerously-skip-permissions',
   text,
 ]
