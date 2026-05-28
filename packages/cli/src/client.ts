@@ -1,23 +1,29 @@
 import type {
+  Assignment,
+  AssignmentEvent,
+  AssignmentStatus,
   Code,
   Id,
   Project,
   Requirement,
   RequirementStatus,
   ResourceRef,
+  Session,
+  SessionMode,
+  SessionStatus,
   Task,
   TaskStatus,
-  Workspace,
 } from '@baton/shared'
 
-type ReqInit = { method: string; body?: unknown }
+type ReqInit = { method: string; body?: unknown; headers?: Record<string, string> }
 
 const request = async <T>(url: string, init: ReqInit): Promise<T> => {
+  const baseHeaders: Record<string, string> =
+    init.body !== undefined ? { 'content-type': 'application/json' } : {}
   const res = await fetch(url, {
     method: init.method,
-    ...(init.body !== undefined
-      ? { body: JSON.stringify(init.body), headers: { 'content-type': 'application/json' } }
-      : {}),
+    headers: { ...baseHeaders, ...(init.headers ?? {}) },
+    ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
   })
   if (!res.ok) throw new Error(`${init.method} ${url} → ${res.status}: ${await res.text()}`)
   if (res.status === 204) return undefined as T
@@ -40,6 +46,14 @@ export type TaskInput = {
   requires?: string[]
   dependsOn?: Id[]
 }
+export type SessionRegisterInput = {
+  projectId: Id
+  mode: SessionMode
+  name: string
+  capabilities?: string[]
+}
+export type SessionRegistered = Session & { apiToken: string }
+export type ClaimResult = { assignment: Assignment; task: Task }
 
 // Thin HTTP client mirroring the server routes; each method returns the parsed domain object.
 export type ApiClient = {
@@ -71,18 +85,55 @@ export type ApiClient = {
     setStatus(id: Id, status: TaskStatus): Promise<Task>
     remove(id: Id): Promise<void>
   }
+  sessions: {
+    register(input: SessionRegisterInput): Promise<SessionRegistered>
+    listByProject(projectId: Id): Promise<Session[]>
+    get(id: Id): Promise<Session>
+  }
+  assignments: {
+    listByProject(
+      projectId: Id,
+      filter?: { status?: AssignmentStatus[]; sessionId?: Id },
+    ): Promise<Assignment[]>
+    get(id: Id): Promise<Assignment>
+    events(id: Id): Promise<AssignmentEvent[]>
+  }
+}
+
+// Worker-private client: same routes but with Authorization: Bearer <token>.
+export type WorkerClient = {
+  heartbeat(status?: SessionStatus): Promise<Session>
+  claim(): Promise<ClaimResult | null>
+  close(): Promise<void>
+  appendEvent(assignmentId: Id, sequence: number, payload: unknown): Promise<AssignmentEvent>
+  complete(assignmentId: Id, status: 'done' | 'failed', result?: string): Promise<Assignment>
+  abandon(assignmentId: Id, reason?: string): Promise<Assignment>
+}
+
+import type { Workspace } from '@baton/shared'
+
+const fetchItemByCode = async <T>(
+  baseUrl: string,
+  projectId: Id,
+  code: Code,
+  expectKind: string,
+): Promise<T> => {
+  const r = await request<{ kind: string; item: unknown }>(
+    `${baseUrl}/projects/${projectId}/items/${encodeURIComponent(code)}`,
+    { method: 'GET' },
+  )
+  if (r.kind !== expectKind) throw new Error(`expected ${expectKind} but got ${r.kind} for ${code}`)
+  return r.item as T
 }
 
 export const createClient = (baseUrl: string): ApiClient => {
   const u = (p: string): string => `${baseUrl}${p}`
-  const fetchItemByCode = async (projectId: Id, code: Code, expectKind: 'requirement' | 'task') => {
-    const r = await request<{ kind: string; item: unknown }>(
-      u(`/projects/${projectId}/items/${encodeURIComponent(code)}`),
-      { method: 'GET' },
-    )
-    if (r.kind !== expectKind)
-      throw new Error(`expected ${expectKind} but got ${r.kind} for ${code}`)
-    return r.item
+  const buildQuery = (filter?: { status?: AssignmentStatus[]; sessionId?: Id }): string => {
+    if (!filter) return ''
+    const params: string[] = []
+    if (filter.status?.length) params.push(`status=${filter.status.join(',')}`)
+    if (filter.sessionId) params.push(`sessionId=${filter.sessionId}`)
+    return params.length ? `?${params.join('&')}` : ''
   }
   return {
     workspaces: {
@@ -103,8 +154,8 @@ export const createClient = (baseUrl: string): ApiClient => {
       listByProject: projectId =>
         request(u(`/projects/${projectId}/requirements`), { method: 'GET' }),
       get: id => request(u(`/requirements/${id}`), { method: 'GET' }),
-      getByCode: async (projectId, code) =>
-        (await fetchItemByCode(projectId, code, 'requirement')) as Requirement,
+      getByCode: (projectId, code) =>
+        fetchItemByCode<Requirement>(baseUrl, projectId, code, 'requirement'),
       setStatus: (id, status) =>
         request(u(`/requirements/${id}`), { method: 'PATCH', body: { status } }),
       remove: id => request(u(`/requirements/${id}`), { method: 'DELETE' }),
@@ -114,10 +165,58 @@ export const createClient = (baseUrl: string): ApiClient => {
       listByRequirement: requirementId =>
         request(u(`/requirements/${requirementId}/tasks`), { method: 'GET' }),
       get: id => request(u(`/tasks/${id}`), { method: 'GET' }),
-      getByCode: async (projectId, code) =>
-        (await fetchItemByCode(projectId, code, 'task')) as Task,
+      getByCode: (projectId, code) => fetchItemByCode<Task>(baseUrl, projectId, code, 'task'),
       setStatus: (id, status) => request(u(`/tasks/${id}`), { method: 'PATCH', body: { status } }),
       remove: id => request(u(`/tasks/${id}`), { method: 'DELETE' }),
     },
+    sessions: {
+      register: input => request(u('/sessions'), { method: 'POST', body: input }),
+      listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
+      get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
+    },
+    assignments: {
+      listByProject: (projectId, filter) =>
+        request(u(`/projects/${projectId}/assignments${buildQuery(filter)}`), { method: 'GET' }),
+      get: id => request(u(`/assignments/${id}`), { method: 'GET' }),
+      events: id => request(u(`/assignments/${id}/events`), { method: 'GET' }),
+    },
+  }
+}
+
+export const createWorkerClient = (baseUrl: string, apiToken: string): WorkerClient => {
+  const u = (p: string): string => `${baseUrl}${p}`
+  const auth = { authorization: `Bearer ${apiToken}` }
+  return {
+    heartbeat: status =>
+      request(u('/sessions/me/heartbeat'), {
+        method: 'POST',
+        body: status ? { status } : {},
+        headers: auth,
+      }),
+    claim: async () => {
+      const res = await fetch(u('/sessions/me/claim'), { method: 'POST', headers: auth })
+      if (res.status === 204) return null
+      if (!res.ok) throw new Error(`POST /sessions/me/claim → ${res.status}: ${await res.text()}`)
+      return (await res.json()) as ClaimResult
+    },
+    close: () => request(u('/sessions/me/close'), { method: 'POST', headers: auth }),
+    appendEvent: (assignmentId, sequence, payload) =>
+      request(u(`/assignments/${assignmentId}/events`), {
+        method: 'POST',
+        body: { sequence, payload },
+        headers: auth,
+      }),
+    complete: (assignmentId, status, result) =>
+      request(u(`/assignments/${assignmentId}/complete`), {
+        method: 'POST',
+        body: { status, result },
+        headers: auth,
+      }),
+    abandon: (assignmentId, reason) =>
+      request(u(`/assignments/${assignmentId}/abandon`), {
+        method: 'POST',
+        body: reason ? { reason } : {},
+        headers: auth,
+      }),
   }
 }
