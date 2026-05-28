@@ -4,5 +4,5 @@ export type Config = { databaseUrl: string; port: number }
 export const loadConfig = (env: Record<string, string | undefined> = process.env): Config => {
   const databaseUrl = env.DATABASE_URL
   if (!databaseUrl) throw new Error('DATABASE_URL is required')
-  return { databaseUrl, port: Number(env.PORT ?? 3030) }
+  return { databaseUrl, port: Number(env.PORT ?? 3280) }
 }

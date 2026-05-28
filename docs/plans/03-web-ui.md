@@ -12,7 +12,7 @@
 
 1. UI 自带 `api.ts`（fetch），类型 `import` 自 `@baton/shared`；**不抽共享 client**（两端各写、独立检验）。
 2. 栈：React 19 + Vite + Tailwind 4（`@tailwindcss/vite`，无 postcss / 无 tailwind.config）。
-3. 连接：Vite dev proxy `/api` → `http://localhost:3030`（`BATON_BACKEND` 可覆盖，rewrite 去 `/api`，changeOrigin）；浏览器 `API_BASE='/api'`；**server 不动、无需 CORS**。
+3. 连接：Vite dev proxy `/api` → `http://localhost:3280`（`BATON_BACKEND` 可覆盖，rewrite 去 `/api`，changeOrigin）；浏览器 `API_BASE='/api'`；**server 不动、无需 CORS**。
 4. harness：`api.ts` 契约测（mock fetch）+ 组件/交互测（vitest + @testing-library/react + jsdom）；`api` 经 `ApiContext` 注入。
 
 ## 部署拓扑 & 包边界
@@ -62,5 +62,5 @@ CLI 与 UI 是同一 server HTTP API 的两个独立消费端，共享 `@baton/s
 ## 开放 / 延后
 
 - 鉴权、路由库、富样式、worker 视图（M2）、自动化浏览器 e2e。
-- web dev 端口默认 5173（被占自动顺延；注意 vite 默认绑 IPv6 localhost）。
+- web dev 端口默认 5280（被占自动顺延；注意 vite 默认绑 IPv6 localhost）。
 - 生产部署（独立任务）：server 托管 UI 静态产物 + 统一 API base（建议届时 server 路由挪 `/api`）。

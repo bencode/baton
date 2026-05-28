@@ -25,7 +25,7 @@ baton requirement  create <title> --project <id> [--desc][--tags a,b] | ls --pro
                    | set-status <id> <active|done|cancelled> | rm <id>
 baton task         create <title> --requirement <id> [--spec][--requires a,b][--deps id1,id2]
                    | ls --requirement <id> | get <id> | set-status <id> <status> | rm <id>
-全局：--json（机器可读，给 agent/脚本）、--url（默认 BATON_URL / http://localhost:3030）
+全局：--json（机器可读，给 agent/脚本）、--url（默认 BATON_URL / http://localhost:3280）
 ```
 
 ## 结构
@@ -33,7 +33,7 @@ baton task         create <title> --requirement <id> [--spec][--requires a,b][--
 ```
 packages/cli/src/
   index.ts        citty main，挂载 4 个资源子命令
-  config.ts       resolveBaseUrl：--url > BATON_URL > http://localhost:3030
+  config.ts       resolveBaseUrl：--url > BATON_URL > http://localhost:3280
   client.ts       createClient(baseUrl)：fetch 薄封装，方法镜像 server 路由
   output.ts       纯函数：renderOne / renderList（human 行）+ --json 直出
   util.ts         common args（--url/--json）、clientFor、splitCsv
@@ -54,7 +54,7 @@ packages/cli/src/
 
 1. ✅ CLI 框架 **citty**；运行时 Node + tsx。
 2. ✅ **server 启停不入 CLI**（前台 pnpm dev / supervisor 后台）。
-3. ✅ `--json` 一等公民；`--url` / `BATON_URL` 配 server 地址（默认本地 3030）。
+3. ✅ `--json` 一等公民；`--url` / `BATON_URL` 配 server 地址（默认本地 3280）。
 4. ✅ 为支持 rm/set-status，给 server 补 `DELETE`（四类）+ `PATCH`（requirement/task）路由。
 
 ## 开放 / 延后

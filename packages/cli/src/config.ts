@@ -2,4 +2,4 @@
 export const resolveBaseUrl = (
   urlArg?: string,
   env: Record<string, string | undefined> = process.env,
-): string => urlArg ?? env.BATON_URL ?? 'http://localhost:3030'
+): string => urlArg ?? env.BATON_URL ?? 'http://localhost:3280'

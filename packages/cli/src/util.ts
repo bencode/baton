@@ -5,7 +5,7 @@ import { resolveBaseUrl } from './config.ts'
 export const common = {
   url: {
     type: 'string' as const,
-    description: 'baton server url (default BATON_URL or http://localhost:3030)',
+    description: 'baton server url (default BATON_URL or http://localhost:3280)',
   },
   json: { type: 'boolean' as const, description: 'output JSON' },
 }
