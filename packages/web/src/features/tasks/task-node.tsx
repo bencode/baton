@@ -1,31 +1,29 @@
 import type { Task } from '@baton/shared'
-import { StatusBadge } from '../../components/status-badge'
+import { StatusDot } from '../../components/status-dot'
 
-type TaskNodeProps = {
-  task: Task
-  depth: number
-  ready: boolean
-  active: boolean
-  onOpen: () => void
-}
+type TaskNodeProps = { task: Task; depth: number; active: boolean; onOpen: () => void }
 
-// `depth` indents along the dependency chain; the ↳ marker shows it depends on
-// others (↳×N for multiple). `ready` flags a todo task whose deps are all done.
-export const TaskNode = ({ task, depth, ready, active, onOpen }: TaskNodeProps) => {
+// Leaf-row weight: regular weight, dot trails on the right. `depth` indents
+// along the dependency chain; `↳` (or `↳N`) marks multi-dep tasks. "Ready" is
+// surfaced in the task detail view, not at the row level.
+export const TaskNode = ({ task, depth, active, onOpen }: TaskNodeProps) => {
   const deps = task.dependsOn.length
   return (
     <button
       type="button"
       onClick={onOpen}
-      style={{ paddingLeft: `${12 + depth * 14}px` }}
-      className={`flex w-full items-center gap-2 rounded py-1 pr-2 text-left text-sm ${
-        active ? 'bg-blue-50 text-blue-900' : 'text-gray-700 hover:bg-gray-100'
+      style={{ paddingLeft: `${28 + depth * 14}px` }}
+      className={`flex w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-sm transition-colors duration-150 ${
+        active ? 'bg-blue-50 text-blue-900' : 'text-gray-600 hover:bg-gray-100/70'
       }`}
     >
-      {deps > 0 && <span className="text-gray-400">{deps > 1 ? `↳×${deps}` : '↳'}</span>}
+      {deps > 0 && (
+        <span className="font-mono text-xs text-gray-400" aria-hidden="true">
+          {deps > 1 ? `↳${deps}` : '↳'}
+        </span>
+      )}
       <span className="truncate">{task.title}</span>
-      <StatusBadge status={task.status} />
-      {ready && <span className="text-[10px] font-medium text-green-600">ready</span>}
+      <StatusDot status={task.status} className="ml-auto" />
     </button>
   )
 }

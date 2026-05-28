@@ -37,8 +37,8 @@ export const HealthBadge = () => {
   const dot =
     health === 'ok' ? 'bg-green-500' : health === 'unreachable' ? 'bg-red-500' : 'bg-gray-400'
   return (
-    <span className="inline-flex items-center gap-2 text-sm text-gray-600">
-      <span className={`h-2 w-2 rounded-full ${dot}`} />
+    <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
       {`server: ${health}`}
     </span>
   )
@@ -53,8 +53,9 @@ const renderTab = (tab: Tab) => {
 }
 
 const EmptyMain = () => (
-  <div className="flex h-full items-center justify-center text-sm text-gray-400">
-    Select a requirement or task to open it.
+  <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+    <p className="text-sm text-gray-500">Nothing open.</p>
+    <p className="text-xs text-gray-400">Pick a requirement or task from the left to begin.</p>
   </div>
 )
 
@@ -87,8 +88,12 @@ export const Shell = () => {
   return (
     <div className="flex h-screen flex-col bg-gray-50 text-gray-900">
       <header className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-4">
-          <h1 className="font-mono text-lg font-semibold">baton</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="flex items-center gap-2 font-mono text-[15px] font-semibold tracking-tight text-gray-900">
+            <span className="inline-block h-2 w-2 rotate-45 bg-emerald-500" aria-hidden />
+            baton
+          </h1>
+          <span aria-hidden className="h-5 w-px bg-gray-200" />
           <WorkspaceSwitcher activeWorkspaceId={workspaceId} />
         </div>
         <HealthBadge />
@@ -107,7 +112,7 @@ export const Shell = () => {
             open={open}
           />
         </Panel>
-        <Separator className="w-px bg-gray-200 transition-colors hover:bg-blue-400" />
+        <Separator className="w-px bg-gray-200 transition-colors hover:bg-gray-300" />
         <Panel id="detail" minSize="1%">
           <div className="flex h-full flex-col bg-white">
             <TabBar

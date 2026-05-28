@@ -14,7 +14,7 @@ export const WorkspaceSwitcher = ({ activeWorkspaceId }: WorkspaceSwitcherProps)
       aria-label="Workspace"
       value={activeWorkspaceId ?? ''}
       onChange={e => navigate(workspacePath(e.target.value))}
-      className="rounded border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700"
+      className="rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 transition-colors hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
     >
       {activeWorkspaceId === null && (
         <option value="" disabled>

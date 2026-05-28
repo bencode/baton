@@ -10,22 +10,25 @@ type TabBarProps = {
 export const TabBar = ({ tabs, activeId, onSelect, onClose }: TabBarProps) => {
   if (tabs.length === 0) return null
   return (
-    <div className="flex h-9 shrink-0 items-center overflow-x-auto border-b border-gray-200 bg-gray-100">
+    <div className="flex h-9 shrink-0 items-center overflow-x-auto border-b border-gray-200 bg-gray-50">
       {tabs.map(tab => {
         const isActive = tab.id === activeId
         return (
           <div
             key={tab.id}
-            className={`group flex h-full items-center border-r border-gray-200 ${
-              isActive ? 'bg-white' : 'hover:bg-gray-50'
+            className={`group relative flex h-full items-center border-r border-gray-200 transition-colors duration-150 ${
+              isActive ? 'bg-white' : 'hover:bg-white/70'
             }`}
           >
+            {isActive && (
+              <span className="absolute inset-x-0 top-0 h-[2px] bg-blue-500" aria-hidden />
+            )}
             <button
               type="button"
               onClick={() => onSelect(tab.id)}
-              title={tab.id}
-              className={`max-w-[160px] truncate py-1 pl-3 text-sm ${
-                isActive ? 'text-gray-900' : 'text-gray-500'
+              title={tab.title}
+              className={`max-w-[220px] truncate py-1 pl-3 text-sm ${
+                isActive ? 'text-gray-900' : 'text-gray-600'
               }`}
             >
               {tab.title}

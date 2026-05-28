@@ -14,7 +14,7 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
       aria-label="Project"
       value={activeProjectId ?? ''}
       onChange={e => navigate(projectPath(e.target.value))}
-      className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700"
+      className="w-full rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 transition-colors hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
     >
       {activeProjectId === null && (
         <option value="" disabled>

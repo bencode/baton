@@ -45,6 +45,6 @@ test('Shell renders the top bar, a resize separator and empty states with no dat
   expect(screen.getByText('baton')).toBeTruthy()
   expect(await screen.findByText('no workspace')).toBeTruthy()
   expect(screen.getByText('Select a project.')).toBeTruthy()
-  expect(screen.getByText('Select a requirement or task to open it.')).toBeTruthy()
+  expect(screen.getByText('Nothing open.')).toBeTruthy()
   expect(container.querySelector('[data-separator]')).toBeTruthy()
 })
