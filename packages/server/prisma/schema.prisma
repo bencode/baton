@@ -29,6 +29,8 @@ model Project {
   workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   requirements Requirement[]
   tasks        Task[]
+  sessions     Session[]
+  assignments  Assignment[]
   counters     CodeCounter[]
 
   @@unique([workspaceId, name])
@@ -37,7 +39,7 @@ model Project {
 
 model CodeCounter {
   projectId Int
-  kind      String // 'requirement' | 'task' (extend with 'worker' / 'session' later)
+  kind      String // 'requirement' | 'task' | 'session' | 'assignment' (open-ended; created on demand)
   next      Int    @default(1)
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -78,11 +80,74 @@ model Task {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement  @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
 
   @@unique([projectId, code])
   @@index([requirementId])
   @@index([projectId])
   @@index([status])
+}
+
+// A long-lived worker presence: registered once, then heartbeats + claims tasks.
+// apiToken is the bearer credential issued at registration; not exposed in domain JSON.
+model Session {
+  id           Int       @id @default(autoincrement())
+  projectId    Int
+  code         String // 'S-N'
+  mode         String // 'worker' | 'skill'
+  name         String
+  capabilities String    @default("[]") // JSON string[]
+  apiToken     String    @unique
+  status       String // 'active' | 'idle' | 'closed'
+  startedAt    DateTime  @default(now())
+  heartbeatAt  DateTime  @default(now())
+  closedAt     DateTime?
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+
+  @@unique([projectId, code])
+  @@index([projectId])
+  @@index([status])
+}
+
+// One execution of a Task by a Session. Lifecycle: running → done | failed | abandoned.
+model Assignment {
+  id        Int       @id @default(autoincrement())
+  projectId Int
+  code      String // 'A-N'
+  sessionId Int
+  taskId    Int
+  status    String // 'running' | 'done' | 'failed' | 'abandoned'
+  result    String?
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session Session           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  task    Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  events  AssignmentEvent[]
+
+  @@unique([projectId, code])
+  @@index([projectId])
+  @@index([sessionId])
+  @@index([taskId])
+  @@index([status])
+}
+
+// Opaque SDK event envelope. baton stores payload as JSON without interpreting.
+// sequence is monotonic per assignment (assigned by the worker).
+model AssignmentEvent {
+  id           Int      @id @default(autoincrement())
+  assignmentId Int
+  sequence     Int
+  payload      String // JSON
+  createdAt    DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, sequence])
+  @@index([assignmentId])
 }

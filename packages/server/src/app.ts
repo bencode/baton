@@ -1,13 +1,29 @@
-import type { Id, RequirementStatus, ResourceRef, TaskStatus } from '@baton/shared'
+import type {
+  AssignmentEvent,
+  AssignmentStatus,
+  Id,
+  RequirementStatus,
+  ResourceRef,
+  SessionMode,
+  SessionStatus,
+  TaskStatus,
+} from '@baton/shared'
 import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
+import { createEventBus, type EventBus } from './event-bus.ts'
+import { type AuthVars, bearerAuth, requireOwnership } from './middleware/auth.ts'
 import type { RequirementPatch, Store, TaskPatch } from './store/types.ts'
 
 // Parse an `:id` URL param to int; NaN is fine — downstream finds return null → 404.
 const intParam = (s: string): Id => Number(s)
 
-// Minimal core HTTP surface: a thin layer over Store (connection/claim land in M2).
-export const createApp = (store: Store): Hono => {
-  const app = new Hono()
+export type AppEnv = { Variables: AuthVars }
+
+// HTTP surface: thin layer over Store + auth middleware + SSE assignment stream.
+// Bus is internal so the same app fans events from POST → SSE subscribers.
+export const createApp = (store: Store, bus: EventBus = createEventBus()): Hono<AppEnv> => {
+  const app = new Hono<AppEnv>()
+  const auth = bearerAuth(store)
 
   app.get('/health', c => c.json({ ok: true }))
 
@@ -49,7 +65,18 @@ export const createApp = (store: Store): Hono => {
   app.get('/projects/:id/requirements', async c =>
     c.json(await store.requirements.listByProject(intParam(c.req.param('id')))),
   )
-  // Resolve an item by its project-scoped code (R-N / T-N); kind is derived from prefix.
+  app.get('/projects/:id/sessions', async c =>
+    c.json(await store.sessions.listByProject(intParam(c.req.param('id')))),
+  )
+  app.get('/projects/:id/assignments', async c => {
+    const projectId = intParam(c.req.param('id'))
+    const statusQ = c.req.query('status')
+    const sessionIdQ = c.req.query('sessionId')
+    const status = statusQ ? (statusQ.split(',') as AssignmentStatus[]) : undefined
+    const sessionId = sessionIdQ ? Number(sessionIdQ) : undefined
+    return c.json(await store.assignments.listByProject(projectId, { status, sessionId }))
+  })
+  // Resolve an item by its project-scoped code (R-N / T-N / S-N / A-N).
   app.get('/projects/:projectId/items/:code', async c => {
     const projectId = intParam(c.req.param('projectId'))
     const code = c.req.param('code')
@@ -60,6 +87,14 @@ export const createApp = (store: Store): Hono => {
     if (code.startsWith('T-')) {
       const t = await store.tasks.getByCode(projectId, code)
       return t ? c.json({ kind: 'task', item: t }) : c.json({ error: 'not found' }, 404)
+    }
+    if (code.startsWith('S-')) {
+      const s = await store.sessions.getByCode(projectId, code)
+      return s ? c.json({ kind: 'session', item: s }) : c.json({ error: 'not found' }, 404)
+    }
+    if (code.startsWith('A-')) {
+      const a = await store.assignments.getByCode(projectId, code)
+      return a ? c.json({ kind: 'assignment', item: a }) : c.json({ error: 'not found' }, 404)
     }
     return c.json({ error: 'unknown code prefix' }, 400)
   })
@@ -141,6 +176,123 @@ export const createApp = (store: Store): Hono => {
     if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
     await store.tasks.delete(id)
     return c.body(null, 204)
+  })
+
+  // === M2: sessions + assignments ===
+
+  // Session register: public, returns apiToken once.
+  app.post('/sessions', async c => {
+    const body = (await c.req.json()) as {
+      projectId?: Id
+      mode?: SessionMode
+      name?: string
+      capabilities?: string[]
+    }
+    if (!body.projectId || !body.name || !body.mode)
+      return c.json({ error: 'projectId, name, mode required' }, 400)
+    const { projectId, mode, name, capabilities } = body
+    return c.json(await store.sessions.register({ projectId, mode, name, capabilities }), 201)
+  })
+  app.get('/sessions/:id', async c => {
+    const s = await store.sessions.get(intParam(c.req.param('id')))
+    return s ? c.json(s) : c.json({ error: 'not found' }, 404)
+  })
+
+  // Session-private (bearer): heartbeat, claim, close.
+  app.post('/sessions/me/heartbeat', auth, async c => {
+    const body = (await c.req.json().catch(() => ({}))) as { status?: SessionStatus }
+    const session = c.get('session')
+    return c.json(await store.sessions.heartbeat(session.id, body.status))
+  })
+  app.post('/sessions/me/claim', auth, async c => {
+    const session = c.get('session')
+    const result = await store.sessions.claim(session.id)
+    if (!result) return c.body(null, 204)
+    return c.json(result)
+  })
+  app.post('/sessions/me/close', auth, async c => {
+    const session = c.get('session')
+    await store.sessions.close(session.id)
+    return c.body(null, 204)
+  })
+
+  app.get('/assignments/:id', async c => {
+    const a = await store.assignments.get(intParam(c.req.param('id')))
+    return a ? c.json(a) : c.json({ error: 'not found' }, 404)
+  })
+  app.get('/assignments/:id/events', async c =>
+    c.json(await store.assignments.listEvents(intParam(c.req.param('id')))),
+  )
+
+  // Live tail (SSE): replay history then subscribe to bus.
+  app.get('/assignments/:id/stream', async c => {
+    const id = intParam(c.req.param('id'))
+    const exists = await store.assignments.get(id)
+    if (!exists) return c.json({ error: 'not found' }, 404)
+    const signal = c.req.raw.signal
+    return streamSSE(c, async stream => {
+      const history = await store.assignments.listEvents(id)
+      for (const e of history) {
+        if (signal.aborted) return
+        await stream.writeSSE({ data: JSON.stringify(e) })
+      }
+      let resolve = (): void => {}
+      const pending: AssignmentEvent[] = []
+      const wake = () => {
+        const r = resolve
+        resolve = () => {}
+        r()
+      }
+      const unsub = bus.subscribe(id, e => {
+        pending.push(e)
+        wake()
+      })
+      signal.addEventListener('abort', wake)
+      try {
+        while (!signal.aborted) {
+          while (pending.length > 0 && !signal.aborted) {
+            const e = pending.shift()
+            if (e) await stream.writeSSE({ data: JSON.stringify(e) })
+          }
+          if (signal.aborted) break
+          await new Promise<void>(r => {
+            resolve = r
+          })
+        }
+      } finally {
+        unsub()
+        signal.removeEventListener('abort', wake)
+      }
+    })
+  })
+
+  // Assignment progress (bearer + ownership).
+  app.post('/assignments/:id/events', auth, async c => {
+    const id = intParam(c.req.param('id'))
+    const owned = await requireOwnership(c, store, id)
+    if (owned instanceof Response) return owned
+    const body = (await c.req.json()) as { sequence?: number; payload?: unknown }
+    if (typeof body.sequence !== 'number' || body.payload === undefined)
+      return c.json({ error: 'sequence (number) and payload required' }, 400)
+    const event = await store.assignments.appendEvent(id, body.sequence, body.payload)
+    bus.publish(id, event)
+    return c.json(event, 201)
+  })
+  app.post('/assignments/:id/complete', auth, async c => {
+    const id = intParam(c.req.param('id'))
+    const owned = await requireOwnership(c, store, id)
+    if (owned instanceof Response) return owned
+    const body = (await c.req.json()) as { status?: 'done' | 'failed'; result?: string }
+    if (body.status !== 'done' && body.status !== 'failed')
+      return c.json({ error: 'status must be done|failed' }, 400)
+    return c.json(await store.assignments.complete(id, body.status, body.result))
+  })
+  app.post('/assignments/:id/abandon', auth, async c => {
+    const id = intParam(c.req.param('id'))
+    const owned = await requireOwnership(c, store, id)
+    if (owned instanceof Response) return owned
+    const body = (await c.req.json().catch(() => ({}))) as { reason?: string }
+    return c.json(await store.assignments.abandon(id, body.reason))
   })
 
   return app
