@@ -11,7 +11,7 @@
     "check": "biome check --write . && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.15"
+    "@biomejs/biome": "^2.4.16"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
