@@ -36,12 +36,15 @@ export type EventSourceLike = {
   close(): void
 }
 
+// Claude requires --verbose alongside --print + --output-format=stream-json
+// (otherwise it errors out before producing any events).
 const buildClaudeArgs = (claudeSessionId: string, text: string, resuming: boolean): string[] => [
   '--print',
   resuming ? '--resume' : '--session-id',
   claudeSessionId,
   '--output-format',
   'stream-json',
+  '--verbose',
   '--dangerously-skip-permissions',
   text,
 ]
