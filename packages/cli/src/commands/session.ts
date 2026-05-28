@@ -224,6 +224,11 @@ export const session = defineCommand({
           type: 'string',
           description: 'override config path (default ~/.config/baton/session-S-N.json)',
         },
+        env: {
+          type: 'string',
+          description:
+            'override env injected into the spawned claude (KEY=VAL; repeatable; merged on top of saved session env)',
+        },
         ...common,
       },
       run: async ({ args }) => {
@@ -231,14 +236,19 @@ export const session = defineCommand({
         const s = await cliClient.sessions.getByCode(Number(args.project), args.code)
         const cfgPath = args.config ?? defaultConfigPath(s.code)
         const cfg = loadConfig(cfgPath)
-        const worker = createWorkerClient(cfg.server, cfg.apiToken)
+        const overrideEnv = parseEnvPairs(args.env as string | string[] | undefined)
+        const merged: typeof cfg = overrideEnv
+          ? { ...cfg, env: { ...(cfg.env ?? {}), ...overrideEnv } }
+          : cfg
+        const worker = createWorkerClient(merged.server, merged.apiToken)
         const ac = new AbortController()
         const stop = () => ac.abort()
         process.on('SIGINT', stop)
         process.on('SIGTERM', stop)
-        console.log(`[${cfg.sessionCode}] running (worktree: ${cfg.worktreePath})`)
-        await runDaemon(cfg, { client: cliClient, worker }, ac.signal)
-        console.log(`[${cfg.sessionCode}] stopped`)
+        console.log(`[${merged.sessionCode}] running (worktree: ${merged.worktreePath})`)
+        if (merged.env) console.log(`[${merged.sessionCode}] env keys: ${Object.keys(merged.env).join(', ')}`)
+        await runDaemon(merged, { client: cliClient, worker }, ac.signal)
+        console.log(`[${merged.sessionCode}] stopped`)
       },
     }),
   },
