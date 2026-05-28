@@ -20,6 +20,10 @@ export type SpawnImpl = (
 export type RunnerDeps = {
   client: ApiClient
   worker: WorkerClient
+  // Env vars merged on top of process.env when spawning claude. Set at
+  // `session run` time so proxy / mirror configs are runtime concerns, not
+  // baked into the session record.
+  env?: Record<string, string>
   spawnImpl?: SpawnImpl
   // Default uses the eventsource package; tests pass a fake constructor.
   eventSourceImpl?: new (url: string) => EventSourceLike
@@ -65,11 +69,14 @@ const maskedEnvKeys = (env: Record<string, string> | undefined): string =>
 const previewText = (text: string, max = 80): string =>
   text.length > max ? `${text.slice(0, max)}…` : text
 
-// Run exactly one turn end-to-end. POSTs turn_start, spawns claude, forwards
-// each stream-json line as sdk_event, finishes with turn_complete on exit
-// (regardless of exitCode — non-zero still ends the turn); spawn/IO failures
-// become turn_error. Claude stderr is streamed to the daemon terminal and
-// the last 2KB is attached to the terminal event for UI visibility.
+// Run exactly one turn end-to-end. Returns the child exit code so the caller
+// can decide whether to advance the resume counter (only successful turns
+// count — Claude's session file only exists after at least one clean run).
+// POSTs turn_start, spawns claude, forwards each stream-json line as
+// sdk_event, finishes with turn_complete on exit; non-zero exit also emits a
+// turn_error with stderr tail so the UI surfaces the failure prominently.
+// Spawn/IO failures (no subprocess to wait on) become turn_error and return
+// -1.
 export const runTurn = async (
   config: SessionConfig,
   worker: WorkerClient,
@@ -77,17 +84,18 @@ export const runTurn = async (
   resuming: boolean,
   spawnImpl: SpawnImpl,
   log: (m: string) => void = m => console.log(m),
-): Promise<void> => {
+  envOverlay?: Record<string, string>,
+): Promise<number> => {
   await worker.emitEvent('turn_start', { messageId: msg.id })
   const text = (msg.payload as { text?: unknown })?.text
   if (typeof text !== 'string' || text.length === 0) {
     await worker.emitEvent('turn_error', { message: 'user_message missing text' })
-    return
+    return -1
   }
-  // Inherit daemon env, then overlay session-specific env (e.g.
-  // ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN for proxy/mirror services).
-  const childEnv: NodeJS.ProcessEnv = config.env
-    ? { ...process.env, ...config.env }
+  // Inherit daemon env, then overlay runtime env (e.g. ANTHROPIC_BASE_URL +
+  // ANTHROPIC_AUTH_TOKEN from `session run --env`, or HTTPS_PROXY).
+  const childEnv: NodeJS.ProcessEnv = envOverlay
+    ? { ...process.env, ...envOverlay }
     : process.env
 
   const bin = claudeBin()
@@ -96,7 +104,7 @@ export const runTurn = async (
   // Operator-facing spawn dump (no values for safety; key names only).
   log(`[spawn] ${bin} ${args.slice(0, -1).join(' ')} -- "${previewText(text)}"`)
   log(`[spawn] cwd: ${config.worktreePath}`)
-  log(`[spawn] session env keys: ${maskedEnvKeys(config.env)}`)
+  log(`[spawn] runtime env keys: ${maskedEnvKeys(envOverlay)}`)
 
   let child: ChildProcess
   try {
@@ -109,13 +117,13 @@ export const runTurn = async (
     const message = err instanceof Error ? err.message : String(err)
     log(`[spawn] failed: ${message}`)
     await worker.emitEvent('turn_error', { message: `spawn failed: ${message}` })
-    return
+    return -1
   }
   const stdout = child.stdout
   if (!stdout) {
     log('[spawn] no stdout from claude — aborting turn')
     await worker.emitEvent('turn_error', { message: 'no stdout from claude' })
-    return
+    return -1
   }
 
   // Pipe stderr → daemon terminal + buffer last 2KB for the post-mortem.
@@ -160,10 +168,12 @@ export const runTurn = async (
       exitCode,
       ...(stderrTail ? { stderrTail } : {}),
     })
+    return exitCode
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log(`[run] ${message}`)
     await worker.emitEvent('turn_error', { message, stderrTail: tail.toString() })
+    return -1
   }
 }
 
@@ -179,10 +189,17 @@ export const runDaemon = async (
     deps.eventSourceImpl ?? (EventSource as unknown as new (u: string) => EventSourceLike)
 
   log(`bin: ${claudeBin()}  cwd: ${config.worktreePath}`)
-  log(`session env keys: ${maskedEnvKeys(config.env)}`)
+  log(`runtime env keys: ${maskedEnvKeys(deps.env)}`)
 
   const history = await deps.client.sessions.listEvents(config.sessionId)
-  let turns = history.filter(e => e.type === 'turn_complete').length
+  // Resume only after a turn that exited 0 — a failed first attempt (proxy
+  // misconfig, network) leaves Claude's session file uncreated, so the next
+  // turn must re-use --session-id, not --resume.
+  let successfulTurns = history.filter(e => {
+    if (e.type !== 'turn_complete') return false
+    const p = e.payload as { exitCode?: unknown } | null
+    return p?.exitCode === 0
+  }).length
   const pendingQueue: SessionEvent[] = history.filter(
     e => e.type === 'user_message' && e.processedAt == null,
   )
@@ -196,10 +213,13 @@ export const runDaemon = async (
       while (pendingQueue.length > 0 && !signal.aborted) {
         const msg = pendingQueue.shift()
         if (!msg) break
-        log(`▶ msg #${msg.sequence} (${turns > 0 ? 'resume' : 'first'})`)
-        await runTurn(config, deps.worker, msg, turns > 0, sp, log)
-        turns += 1
-        log(`✔ msg #${msg.sequence}`)
+        const resuming = successfulTurns > 0
+        log(`▶ msg #${msg.sequence} (${resuming ? 'resume' : 'first'})`)
+        // runTurn returns the exit code so we can decide if this turn counts
+        // toward successful turns for the next resume decision.
+        const code = await runTurn(config, deps.worker, msg, resuming, sp, log, deps.env)
+        if (code === 0) successfulTurns += 1
+        log(`✔ msg #${msg.sequence}${code === 0 ? '' : ` (exit ${code})`}`)
       }
     } finally {
       busy = false

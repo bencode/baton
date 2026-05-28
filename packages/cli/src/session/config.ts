@@ -5,10 +5,8 @@ import type { Code, Id, SessionMode } from '@baton/shared'
 
 // Persisted session identity: enough to reconnect / dogfood. One file per
 // registered session at ${XDG_CONFIG_HOME ?? ~/.config}/baton/session-<S-N>.json.
-//
-// `env` is an optional bag of vars the daemon injects into the spawned
-// `claude` subprocess. Typical use: ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN
-// for Anthropic-compatible proxy services (mirror, gateway, etc).
+// Runtime knobs (proxy, tokens, …) intentionally live on `session run` flags
+// or the shell env — not here — because they change independently of identity.
 export type SessionConfig = {
   server: string
   apiToken: string
@@ -19,7 +17,6 @@ export type SessionConfig = {
   mode: SessionMode
   claudeSessionId: string
   worktreePath: string
-  env?: Record<string, string>
 }
 
 const configDir = (env: NodeJS.ProcessEnv = process.env): string =>

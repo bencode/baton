@@ -26,18 +26,26 @@ export type SessionNewInput = {
   worktreeDir: string
   mode: SessionMode
   server: string
-  env?: Record<string, string>
 }
 
-// Parse `KEY=VAL` strings into a flat record. Whitespace around `=` is kept
-// (env values frequently have meaningful spacing); empty input → undefined.
+// Parse `KEY=VAL` strings into a flat record. Accepts:
+//   - undefined → undefined
+//   - "KEY=VAL"
+//   - "K1=V1,K2=V2"           (citty only keeps the last `--env`; CSV is the
+//                              escape hatch for multi-var in a single flag)
+//   - ["KEY=VAL", "K2=V2"]    (in case citty array-mode kicks in)
+// Caveat: comma in a value is currently ambiguous; if your value contains a
+// comma, use shell env inheritance instead (`HTTPS_PROXY=... baton session run …`).
 export const parseEnvPairs = (
   pairs: string | string[] | undefined,
 ): Record<string, string> | undefined => {
   if (pairs === undefined) return undefined
-  const list = Array.isArray(pairs) ? pairs : [pairs]
+  const tokens = (Array.isArray(pairs) ? pairs : [pairs])
+    .flatMap(p => p.split(','))
+    .map(t => t.trim())
+    .filter(Boolean)
   const out: Record<string, string> = {}
-  for (const p of list) {
+  for (const p of tokens) {
     const idx = p.indexOf('=')
     if (idx <= 0) throw new Error(`invalid --env "${p}" (expected KEY=VAL)`)
     out[p.slice(0, idx)] = p.slice(idx + 1)
@@ -95,7 +103,6 @@ export const newSession = async (
     mode: input.mode,
     claudeSessionId,
     worktreePath: provisional,
-    ...(input.env ? { env: input.env } : {}),
   }
   const path = resolvePath(registered.code)
   saveConfig(path, config)
@@ -114,17 +121,11 @@ export const session = defineCommand({
         base: { type: 'string', description: 'base branch / ref (default: main)' },
         'worktree-dir': { type: 'string', description: 'override worktree parent dir' },
         mode: { type: 'string', description: 'worker | skill (default worker)' },
-        env: {
-          type: 'string',
-          description:
-            'env var to inject into the spawned claude (e.g. ANTHROPIC_BASE_URL=https://… ; repeatable)',
-        },
         ...common,
       },
       run: async ({ args }) => {
         const server = resolveBaseUrl(args.url)
         const c = clientFor(args)
-        const env = parseEnvPairs(args.env as string | string[] | undefined)
         const { config, path } = await newSession(c, {
           projectId: Number(args.project),
           name: args.name,
@@ -133,14 +134,9 @@ export const session = defineCommand({
           worktreeDir: args['worktree-dir'] ?? defaultWorktreeDir(),
           mode: (args.mode as SessionMode) ?? 'worker',
           server,
-          env,
         })
         console.log(`created ${config.sessionCode}  (${config.worktreePath})`)
         console.log(`  claudeSessionId: ${config.claudeSessionId}`)
-        if (config.env) {
-          const keys = Object.keys(config.env).join(', ')
-          console.log(`  env (per-session): ${keys}`)
-        }
         console.log(`  token saved to:  ${path}`)
       },
     }),
@@ -236,19 +232,16 @@ export const session = defineCommand({
         const s = await cliClient.sessions.getByCode(Number(args.project), args.code)
         const cfgPath = args.config ?? defaultConfigPath(s.code)
         const cfg = loadConfig(cfgPath)
-        const overrideEnv = parseEnvPairs(args.env as string | string[] | undefined)
-        const merged: typeof cfg = overrideEnv
-          ? { ...cfg, env: { ...(cfg.env ?? {}), ...overrideEnv } }
-          : cfg
-        const worker = createWorkerClient(merged.server, merged.apiToken)
+        const runEnv = parseEnvPairs(args.env as string | string[] | undefined)
+        const worker = createWorkerClient(cfg.server, cfg.apiToken)
         const ac = new AbortController()
         const stop = () => ac.abort()
         process.on('SIGINT', stop)
         process.on('SIGTERM', stop)
-        console.log(`[${merged.sessionCode}] running (worktree: ${merged.worktreePath})`)
-        if (merged.env) console.log(`[${merged.sessionCode}] env keys: ${Object.keys(merged.env).join(', ')}`)
-        await runDaemon(merged, { client: cliClient, worker }, ac.signal)
-        console.log(`[${merged.sessionCode}] stopped`)
+        console.log(`[${cfg.sessionCode}] running (worktree: ${cfg.worktreePath})`)
+        if (runEnv) console.log(`[${cfg.sessionCode}] env keys: ${Object.keys(runEnv).join(', ')}`)
+        await runDaemon(cfg, { client: cliClient, worker, env: runEnv }, ac.signal)
+        console.log(`[${cfg.sessionCode}] stopped`)
       },
     }),
   },

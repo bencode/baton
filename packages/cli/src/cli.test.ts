@@ -32,6 +32,12 @@ describe('parseEnvPairs', () => {
   test('value containing = sign', () => {
     assert.deepEqual(parseEnvPairs('URL=https://x/api?a=b'), { URL: 'https://x/api?a=b' })
   })
+  test('CSV multi-pair in one string (workaround for citty single-flag)', () => {
+    assert.deepEqual(parseEnvPairs('HTTPS_PROXY=http://p:80,HTTP_PROXY=http://p:80'), {
+      HTTPS_PROXY: 'http://p:80',
+      HTTP_PROXY: 'http://p:80',
+    })
+  })
   test('undefined → undefined', () => {
     assert.equal(parseEnvPairs(undefined), undefined)
   })
@@ -239,7 +245,7 @@ describe('command handlers (fake client)', () => {
     }) as never
 
     // first turn → --session-id
-    await runTurn(
+    const code1 = await runTurn(
       cfg,
       worker,
       {
@@ -261,6 +267,7 @@ describe('command handlers (fake client)', () => {
     )
     assert.deepEqual(calls[0]?.payload, { messageId: 99 })
     assert.deepEqual(calls[4]?.payload, { exitCode: 0 })
+    assert.equal(code1, 0)
 
     // second turn → --resume
     calls.length = 0
