@@ -26,7 +26,9 @@ export type RunnerDeps = {
   env?: Record<string, string>
   spawnImpl?: SpawnImpl
   // Default uses the eventsource package; tests pass a fake constructor.
-  eventSourceImpl?: new (url: string) => EventSourceLike
+  eventSourceImpl?: new (
+    url: string,
+  ) => EventSourceLike
   log?: (msg: string) => void
 }
 
@@ -97,9 +99,7 @@ export const runTurn = async (
   }
   // Inherit daemon env, then overlay runtime env (e.g. ANTHROPIC_BASE_URL +
   // ANTHROPIC_AUTH_TOKEN from `session run --env`, or HTTPS_PROXY).
-  const childEnv: NodeJS.ProcessEnv = envOverlay
-    ? { ...process.env, ...envOverlay }
-    : process.env
+  const childEnv: NodeJS.ProcessEnv = envOverlay ? { ...process.env, ...envOverlay } : process.env
 
   const bin = claudeBin()
   const args = buildClaudeArgs(config.claudeSessionId, text, resuming)

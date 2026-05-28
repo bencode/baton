@@ -25,6 +25,7 @@ export const SessionDetail = ({ projectId, code }: SessionDetailProps) => {
   // Crude v0 — always scrolls (doesn't respect user-scrolled-up). Good enough
   // until the chat panel gets the bigger overhaul.
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: items.length is the intended trigger
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return

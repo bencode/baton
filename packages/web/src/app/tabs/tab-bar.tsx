@@ -10,7 +10,7 @@ type TabBarProps = {
 export const TabBar = ({ tabs, activeId, onSelect, onClose }: TabBarProps) => {
   if (tabs.length === 0) return null
   return (
-    <div className="flex h-9 shrink-0 items-center overflow-x-auto border-b border-gray-200 bg-gray-50">
+    <div className="flex h-8 shrink-0 items-center overflow-x-auto border-b border-gray-200 bg-gray-50">
       {tabs.map(tab => {
         const isActive = tab.id === activeId
         return (
@@ -27,7 +27,7 @@ export const TabBar = ({ tabs, activeId, onSelect, onClose }: TabBarProps) => {
               type="button"
               onClick={() => onSelect(tab.id)}
               title={tab.title}
-              className={`max-w-[220px] truncate py-1 pl-3 text-sm ${
+              className={`max-w-[220px] truncate pl-3.5 text-sm ${
                 isActive ? 'text-gray-900' : 'text-gray-600'
               }`}
             >
@@ -37,7 +37,7 @@ export const TabBar = ({ tabs, activeId, onSelect, onClose }: TabBarProps) => {
               type="button"
               aria-label={`Close ${tab.title}`}
               onClick={() => onClose(tab.id)}
-              className={`mr-1 ml-1 rounded px-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 ${
+              className={`mr-2 ml-2 rounded px-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 ${
                 isActive ? 'opacity-70' : 'opacity-0 group-hover:opacity-70'
               }`}
             >
