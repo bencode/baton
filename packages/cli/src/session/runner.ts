@@ -61,12 +61,16 @@ export const runTurn = async (
     await worker.emitEvent('turn_error', { message: 'user_message missing text' })
     return
   }
+  // Inherit daemon env, then overlay session-specific env (e.g.
+  // ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN for proxy/mirror services).
+  const childEnv: NodeJS.ProcessEnv = config.env ? { ...process.env, ...config.env } : process.env
+
   let child: ChildProcess
   try {
     child = spawnImpl(claudeBin(), buildClaudeArgs(config.claudeSessionId, text, resuming), {
       cwd: config.worktreePath,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      env: childEnv,
     })
   } catch (err) {
     await worker.emitEvent('turn_error', {

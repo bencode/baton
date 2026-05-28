@@ -26,6 +26,23 @@ export type SessionNewInput = {
   worktreeDir: string
   mode: SessionMode
   server: string
+  env?: Record<string, string>
+}
+
+// Parse `KEY=VAL` strings into a flat record. Whitespace around `=` is kept
+// (env values frequently have meaningful spacing); empty input → undefined.
+export const parseEnvPairs = (
+  pairs: string | string[] | undefined,
+): Record<string, string> | undefined => {
+  if (pairs === undefined) return undefined
+  const list = Array.isArray(pairs) ? pairs : [pairs]
+  const out: Record<string, string> = {}
+  for (const p of list) {
+    const idx = p.indexOf('=')
+    if (idx <= 0) throw new Error(`invalid --env "${p}" (expected KEY=VAL)`)
+    out[p.slice(0, idx)] = p.slice(idx + 1)
+  }
+  return Object.keys(out).length === 0 ? undefined : out
 }
 
 // Provision a Session end-to-end: claudeSessionId UUID we generate, git worktree
@@ -78,6 +95,7 @@ export const newSession = async (
     mode: input.mode,
     claudeSessionId,
     worktreePath: provisional,
+    ...(input.env ? { env: input.env } : {}),
   }
   const path = resolvePath(registered.code)
   saveConfig(path, config)
@@ -96,11 +114,17 @@ export const session = defineCommand({
         base: { type: 'string', description: 'base branch / ref (default: main)' },
         'worktree-dir': { type: 'string', description: 'override worktree parent dir' },
         mode: { type: 'string', description: 'worker | skill (default worker)' },
+        env: {
+          type: 'string',
+          description:
+            'env var to inject into the spawned claude (e.g. ANTHROPIC_BASE_URL=https://… ; repeatable)',
+        },
         ...common,
       },
       run: async ({ args }) => {
         const server = resolveBaseUrl(args.url)
         const c = clientFor(args)
+        const env = parseEnvPairs(args.env as string | string[] | undefined)
         const { config, path } = await newSession(c, {
           projectId: Number(args.project),
           name: args.name,
@@ -109,9 +133,14 @@ export const session = defineCommand({
           worktreeDir: args['worktree-dir'] ?? defaultWorktreeDir(),
           mode: (args.mode as SessionMode) ?? 'worker',
           server,
+          env,
         })
         console.log(`created ${config.sessionCode}  (${config.worktreePath})`)
         console.log(`  claudeSessionId: ${config.claudeSessionId}`)
+        if (config.env) {
+          const keys = Object.keys(config.env).join(', ')
+          console.log(`  env (per-session): ${keys}`)
+        }
         console.log(`  token saved to:  ${path}`)
       },
     }),

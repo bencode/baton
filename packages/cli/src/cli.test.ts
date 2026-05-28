@@ -7,7 +7,7 @@ import { Readable } from 'node:stream'
 import { describe, test } from 'node:test'
 import type { ApiClient, WorkerClient } from './client.ts'
 import { setRequirementStatus } from './commands/requirement.ts'
-import { newSession } from './commands/session.ts'
+import { newSession, parseEnvPairs } from './commands/session.ts'
 import { createTask } from './commands/task.ts'
 import { createWorkspace, removeWorkspace } from './commands/workspace.ts'
 import type { SessionConfig } from './session/config.ts'
@@ -19,6 +19,24 @@ describe('splitCsv', () => {
     assert.deepEqual(splitCsv('a, b ,,c'), ['a', 'b', 'c'])
     assert.equal(splitCsv(undefined), undefined)
     assert.equal(splitCsv(''), undefined)
+  })
+})
+
+describe('parseEnvPairs', () => {
+  test('single KEY=VAL', () => {
+    assert.deepEqual(parseEnvPairs('FOO=bar'), { FOO: 'bar' })
+  })
+  test('array of pairs', () => {
+    assert.deepEqual(parseEnvPairs(['A=1', 'B=2']), { A: '1', B: '2' })
+  })
+  test('value containing = sign', () => {
+    assert.deepEqual(parseEnvPairs('URL=https://x/api?a=b'), { URL: 'https://x/api?a=b' })
+  })
+  test('undefined → undefined', () => {
+    assert.equal(parseEnvPairs(undefined), undefined)
+  })
+  test('missing = throws', () => {
+    assert.throws(() => parseEnvPairs('JUSTAKEY'), /KEY=VAL/)
   })
 })
 
