@@ -53,7 +53,11 @@ const renderToolResult = (blocks: ContentBlock[]): void => {
   for (const b of blocks) {
     if (b.type === 'tool_result' && b.content !== undefined) {
       const text = Array.isArray(b.content)
-        ? b.content.map(c => (typeof c === 'object' && c && 'text' in c ? (c as { text: string }).text : '')).join('')
+        ? b.content
+            .map(c =>
+              typeof c === 'object' && c && 'text' in c ? (c as { text: string }).text : '',
+            )
+            .join('')
         : typeof b.content === 'string'
           ? b.content
           : JSON.stringify(b.content)

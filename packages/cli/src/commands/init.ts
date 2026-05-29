@@ -5,11 +5,7 @@ import type { Project, Workspace } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { createClient } from '../client.ts'
 import { resolveBaseUrl } from '../config.ts'
-import {
-  PROJECT_CONFIG_NAME,
-  type ProjectConfig,
-  saveProjectConfig,
-} from '../project-config.ts'
+import { PROJECT_CONFIG_NAME, type ProjectConfig, saveProjectConfig } from '../project-config.ts'
 import { common } from '../util.ts'
 
 type WithIdName = { id: number; name: string }
@@ -18,7 +14,9 @@ type WithIdName = { id: number; name: string }
 const promptPick = async <T extends WithIdName>(label: string, items: T[]): Promise<T> => {
   if (items.length === 0) throw new Error(`no ${label}s found on server`)
   console.log(`${label}s:`)
-  items.forEach((it, i) => console.log(`  [${i + 1}] #${it.id}  ${it.name}`))
+  items.forEach((it, i) => {
+    console.log(`  [${i + 1}] #${it.id}  ${it.name}`)
+  })
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   try {
     const ans = (await rl.question(`pick a ${label} (1-${items.length}): `)).trim()

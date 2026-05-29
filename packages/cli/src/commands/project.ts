@@ -43,7 +43,9 @@ export const project = defineCommand({
         ...common,
       },
       run: async ({ args }) => {
-        console.log(await listProjects(clientFor(args), resolveWorkspaceId(args), Boolean(args.json)))
+        console.log(
+          await listProjects(clientFor(args), resolveWorkspaceId(args), Boolean(args.json)),
+        )
       },
     }),
     get: defineCommand({

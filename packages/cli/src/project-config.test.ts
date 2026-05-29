@@ -3,11 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import {
-  findProjectConfig,
-  PROJECT_CONFIG_NAME,
-  saveProjectConfig,
-} from './project-config.ts'
+import { findProjectConfig, PROJECT_CONFIG_NAME, saveProjectConfig } from './project-config.ts'
 
 describe('project-config', () => {
   test('save + find round-trip; walks up from a nested directory', () => {

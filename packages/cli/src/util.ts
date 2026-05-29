@@ -22,9 +22,7 @@ export const resolveProjectId = (args: { project?: string | number }): Id => {
   if (args.project !== undefined && args.project !== '') return Number(args.project)
   const found = findProjectConfig()
   if (found?.config.project !== undefined) return found.config.project
-  throw new Error(
-    'no project in scope. pass --project <id> or run `baton init` in this directory.',
-  )
+  throw new Error('no project in scope. pass --project <id> or run `baton init` in this directory.')
 }
 
 // Same shape for workspace. Used by project create/ls etc.

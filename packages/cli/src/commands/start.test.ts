@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { ApiClient } from '../client.ts'
-import { saveConfig, type SessionConfig } from '../session/config.ts'
+import { type SessionConfig, saveConfig } from '../session/config.ts'
 import { saveWorkerConfig, type WorkerConfig } from '../worker/config.ts'
 import { startSession } from './start.ts'
 
@@ -52,11 +52,7 @@ describe('startSession', () => {
     try {
       writeWorkerCfg(1, 9)
       // pre-write session config so attach can load it
-      const sessCfgPath = join(
-        process.env.XDG_CONFIG_HOME as string,
-        'baton',
-        'session-42.json',
-      )
+      const sessCfgPath = join(process.env.XDG_CONFIG_HOME as string, 'baton', 'session-42.json')
       const sessCfg: SessionConfig = {
         server: 'http://localhost:3280',
         apiToken: 'tok-old',

@@ -9,11 +9,7 @@ import { resolveBaseUrl } from '../config.ts'
 import { defaultConfigPath, loadConfig, type SessionConfig } from '../session/config.ts'
 import { runDaemon } from '../session/runner.ts'
 import { clientFor, common, resolveProjectId } from '../util.ts'
-import {
-  loadWorkerConfigOrNull,
-  type WorkerConfig,
-  workerConfigPath,
-} from '../worker/config.ts'
+import { loadWorkerConfigOrNull, type WorkerConfig, workerConfigPath } from '../worker/config.ts'
 import { readOrCreateMachineId } from '../worker/machine-id.ts'
 import { newSession } from './session/new.ts'
 import { defaultWorktreeDir, parseEnvPairs } from './session/shared.ts'
@@ -34,7 +30,10 @@ export type StartInput = {
 // "<cwd-basename>-<5 base36 chars>". Random suffix avoids collisions when
 // the same repo spawns multiple unrelated sessions.
 const autoName = (cwd: string): string => {
-  const base = basename(cwd).toLowerCase().replace(/[^a-z0-9_-]+/g, '-') || 'session'
+  const base =
+    basename(cwd)
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-') || 'session'
   const suffix = Math.random().toString(36).slice(2, 7)
   return `${base}-${suffix}`
 }
@@ -64,10 +63,11 @@ const ensureWorker = async (
 
 // Tiny wrapper so we can re-read the worker config we just wrote — same shape
 // as `loadWorkerConfig` from worker/config.ts, kept local to avoid a circular
-// re-export.
+// re-export. Throws if the just-written file vanished (shouldn't happen).
 const loadConfigForWorker = (path: string): WorkerConfig => {
-  // biome-ignore lint/style/noNonNullAssertion: just written above
-  return loadWorkerConfigOrNull(path)!
+  const cfg = loadWorkerConfigOrNull(path)
+  if (!cfg) throw new Error(`worker config write/read failed at ${path}`)
+  return cfg
 }
 
 // Resolve a session by name into a runnable SessionConfig. Three outcomes:
@@ -82,8 +82,7 @@ const tryAttach = async (
 ): Promise<SessionConfig | null> => {
   const existing = await client.sessions.findByName(projectId, name)
   if (!existing) return null
-  if (existing.closedAt)
-    throw new Error(`session '${name}' is closed; pick another name`)
+  if (existing.closedAt) throw new Error(`session '${name}' is closed; pick another name`)
   if (existing.workerId !== workerCfg.workerId)
     throw new Error(
       `session '${name}' belongs to worker #${existing.workerId}; cannot attach from this machine`,
@@ -158,8 +157,7 @@ export const start = defineCommand({
     const server = resolveBaseUrl(args.url)
     const c = clientFor(args)
     const projectId = resolveProjectId(args)
-    if (args.resume && !args.name)
-      throw new Error('--resume requires --name')
+    if (args.resume && !args.name) throw new Error('--resume requires --name')
     const { config } = await startSession(c, {
       projectId,
       name: args.name,
