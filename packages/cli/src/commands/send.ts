@@ -38,12 +38,16 @@ export const send = defineCommand({
 
     if (args['no-follow']) return
 
-    // Skip subscribing if the worker side has no live daemon — the message
-    // queues, but the user would otherwise sit and wait for events that
-    // never come.
+    // Skip subscribing if no daemon is processing this session — otherwise the
+    // user sits waiting for events that never come. The daemon seeds liveness
+    // on start (immediate ping), so a quick send-after-start should still see
+    // alive=true.
     const view = (await c.sessions.get(found.id)) as typeof found & { alive?: boolean }
     if (view.alive === false) {
-      console.log(`[!] worker not alive — message queued; check back with 'baton session ls'`)
+      console.log(
+        '[!] no live daemon for this session — message is queued.\n' +
+          `    run \`baton start --name ${args.name}\` in another window, then re-send.`,
+      )
       return
     }
 

@@ -55,10 +55,16 @@ const startHeartbeat = (
   client: ApiClient,
   machineId: string,
   log: (m: string) => void,
-): NodeJS.Timeout =>
-  setInterval(() => {
-    client.workers.heartbeat(machineId).catch(e => log(`heartbeat failed: ${String(e)}`))
-  }, 30_000)
+): NodeJS.Timeout => {
+  // Ping immediately so the server's in-memory liveness is seeded before the
+  // first interval fires 30s later — otherwise `baton send` right after
+  // `baton start` sees alive=false and refuses to stream.
+  const ping = (): void => {
+    void client.workers.heartbeat(machineId).catch(e => log(`heartbeat failed: ${String(e)}`))
+  }
+  ping()
+  return setInterval(ping, 30_000)
+}
 
 // Build the SSE subscription wrapper. Each unseen `user_message` not yet
 // processed is forwarded to `onUserMessage`; seen sequences are deduped here.
