@@ -113,6 +113,10 @@ describe('server HTTP — sessions + chat protocol', () => {
       401,
     )
 
+    // Real daemons heartbeat first — required for busy derivation to register
+    // (busy = open turn_start AND attached).
+    await postJson(app, '/sessions/me/heartbeat', {}, auth)
+
     // turn_start consumes the message → busy=true (derived).
     await postJson(
       app,
@@ -149,5 +153,29 @@ describe('server HTTP — sessions + chat protocol', () => {
       events.map(e => e.type),
       ['user_message', 'turn_start', 'sdk_event', 'turn_complete'],
     )
+  })
+
+  test('busy=false when daemon never heartbeated (orphan turn_start, sticky-yellow fix)', async () => {
+    // Simulates the SIGKILL / crash class: daemon emitted turn_start, then
+    // died before sending a closer. With the timeline-only derivation the
+    // session would have been stuck busy=true forever. The fix ANDs busy
+    // with sessionLiveness — no heartbeat → busy=false regardless of timeline.
+    const app = createApp(ctx.store)
+    const { session } = await seedSession(app)
+    const auth = { authorization: `Bearer ${session.apiToken}` }
+    // Skip /sessions/me/heartbeat. Post turn_start anyway (bearer-auth works
+    // even on un-heartbeated sessions — it's the apiToken that gates).
+    await postJson(
+      app,
+      '/sessions/me/events',
+      { type: 'turn_start', payload: { messageId: 999 } },
+      auth,
+    )
+    const view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
+      attached: boolean
+      busy: boolean
+    }
+    assert.equal(view.attached, false)
+    assert.equal(view.busy, false, 'orphan turn_start without daemon must not register as busy')
   })
 })

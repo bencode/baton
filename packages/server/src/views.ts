@@ -19,12 +19,19 @@ export const sessionWithView = async (
   sessionLiveness: LivenessTracker,
 ): Promise<SessionView> => {
   const worker = await store.workers.get(session.workerId)
+  // busy semantically = "a daemon is currently running a turn". Requires both:
+  //   1. timeline has an unresolved turn_start (work was started)
+  //   2. session-level heartbeat is alive (daemon is still around to finish)
+  // Either being false → busy=false. This kills the sticky-yellow bug class
+  // (SIGKILL / crash / partition leave orphan turn_start in the log; the
+  // liveness AND auto-resets UI within the 90s heartbeat window).
+  const attached = sessionLiveness.isAlive(String(session.id))
   return {
     ...session,
     worker: worker ?? unknownWorker(session.workerId, session.projectId),
     alive: worker ? workerLiveness.isAlive(worker.machineId) : false,
-    attached: sessionLiveness.isAlive(String(session.id)),
-    busy: await store.sessions.isBusy(session.id),
+    attached,
+    busy: attached && (await store.sessions.isBusy(session.id)),
   }
 }
 
