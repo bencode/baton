@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { RenderItem, TurnEndSummary } from '../event-render'
+import type { RateLimitInfo, RenderItem, TurnEndSummary } from '../event-render'
 import { Markdown } from './markdown'
 import { ToolBlock } from './tool-block'
 
@@ -17,14 +17,22 @@ export const RenderItemView = ({ item }: { item: RenderItem }) => {
         isError={item.isError}
       />
     )
-  if (item.kind === 'turn-end') return <TurnEnd result={item.result} />
-  if (item.kind === 'turn-error') return <TurnErrorRow message={item.message} />
-  if (item.kind === 'rate-limit')
+  if (item.kind === 'turn-end')
     return (
-      <RateLimitNotice
-        rateLimitType={item.rateLimitType}
-        status={item.status}
-        resetsAt={item.resetsAt}
+      <TurnDivider
+        variant="success"
+        turnIndex={item.turnIndex}
+        result={item.result}
+        rateLimit={item.rateLimit}
+      />
+    )
+  if (item.kind === 'turn-error')
+    return (
+      <TurnDivider
+        variant="error"
+        turnIndex={item.turnIndex}
+        message={item.message}
+        rateLimit={item.rateLimit}
       />
     )
   if (item.kind === 'thinking') return <ThinkingBlock text={item.text} />
@@ -32,66 +40,46 @@ export const RenderItemView = ({ item }: { item: RenderItem }) => {
 }
 
 const SystemHeader = ({ model, sessionId }: { model?: string; sessionId?: string }) => (
-  <div className="flex items-center gap-2 text-[11px] text-gray-400">
-    <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 font-mono">
+  <div className="flex items-center gap-2 font-mono text-[11px] text-gray-400">
+    <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5">
       {model ?? 'claude'}
     </span>
-    {sessionId && <span className="font-mono">session {sessionId.slice(0, 8)}</span>}
+    {sessionId && <span>session {sessionId.slice(0, 8)}</span>}
   </div>
 )
 
 const UserBubble = ({ text, images }: { text: string; images?: string[] }) => (
-  <div className="flex justify-end">
-    <div className="flex max-w-prose flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm whitespace-pre-wrap text-gray-900">
-      {text && <span>{text}</span>}
-      {images?.map(src => (
-        // biome-ignore lint/a11y/useAltText: pasted screenshot, no caption available
-        <img
-          key={src.slice(0, 64)}
-          src={src}
-          className="max-h-80 max-w-full rounded border border-blue-200"
-        />
-      ))}
-    </div>
-  </div>
-)
-
-const AssistantBubble = ({ text }: { text: string }) => (
-  <div className="flex justify-start">
-    <div className="max-w-4xl rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
-      <Markdown text={text} />
-    </div>
-  </div>
-)
-
-const TurnEnd = ({ result }: { result?: TurnEndSummary }) => (
-  <div className="flex items-center gap-2 text-[11px] text-gray-400">
-    <span>turn done</span>
-    {result?.numTurns !== undefined && <span>· {result.numTurns} turn(s)</span>}
-    {result?.totalCostUsd !== undefined && <span>· ${result.totalCostUsd.toFixed(4)}</span>}
-    {result?.subtype && result.subtype !== 'success' && (
-      <span className="text-red-600">· {result.subtype}</span>
+  <div className="rounded-md bg-gray-50 px-3 py-2">
+    <span className="mr-2 font-mono text-xs text-gray-500 select-none">you›</span>
+    <span className="text-sm whitespace-pre-wrap text-gray-800">{text}</span>
+    {images && images.length > 0 && (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {images.map(src => (
+          // biome-ignore lint/a11y/useAltText: pasted screenshot, no caption available
+          <img
+            key={src.slice(0, 64)}
+            src={src}
+            className="max-h-80 max-w-full rounded border border-gray-200"
+          />
+        ))}
+      </div>
     )}
   </div>
 )
 
-const TurnErrorRow = ({ message }: { message: string }) => (
-  <div className="flex">
-    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
-      turn error: {message}
-    </div>
+const AssistantBubble = ({ text }: { text: string }) => (
+  <div className="max-w-prose text-sm text-gray-800">
+    <Markdown text={text} />
   </div>
 )
 
-// Map common claude rate-limit window names to short forms; fall back to the
-// raw `foo_bar` → `foo-bar` if unrecognized.
+// Format helpers for the turn capsule. Kept module-local because they're only
+// meaningful in this divider's vocabulary; no shared util warranted.
 const formatLimitType = (t: string): string => {
   const map: Record<string, string> = { one_hour: '1h', five_hour: '5h', daily: '24h' }
   return map[t] ?? t.replace(/_/g, '-')
 }
 
-// resetsAt is unix-seconds. Future → relative ('resets in 2h 13m'); past →
-// absolute local time ('reset at 18:30').
 const formatResets = (resetsAtSec: number): string => {
   const now = Date.now() / 1000
   const delta = resetsAtSec - now
@@ -104,22 +92,66 @@ const formatResets = (resetsAtSec: number): string => {
   return h > 0 ? `resets in ${h}h ${m}m` : `resets in ${m}m`
 }
 
-const RateLimitNotice = ({
-  rateLimitType,
-  status,
-  resetsAt,
-}: {
-  rateLimitType?: string
-  status?: string
-  resetsAt?: number
-}) => {
-  const bad = status === 'rejected' || status === 'denied'
+const formatDuration = (ms: number): string => {
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
+  const m = Math.floor(ms / 60_000)
+  const s = Math.floor((ms % 60_000) / 1000)
+  return `${m}m ${s}s`
+}
+
+const formatRateLimit = (r: RateLimitInfo): string | null => {
+  if (!r.rateLimitType && !r.status) return null
+  const parts: string[] = []
+  if (r.rateLimitType) parts.push(`${formatLimitType(r.rateLimitType)} ${r.status ?? ''}`.trim())
+  else if (r.status) parts.push(r.status)
+  if (r.resetsAt !== undefined) parts.push(formatResets(r.resetsAt))
+  return parts.join(' · ')
+}
+
+type TurnDividerProps = {
+  variant: 'success' | 'error'
+  turnIndex: number
+  result?: TurnEndSummary
+  rateLimit?: RateLimitInfo
+  message?: string
+}
+
+// Full-width hairline + centered capsule that closes a turn. Wraps `turn N`
+// with whatever metadata is available: duration, cost, rate-limit hint, or
+// (on error) the failure message. Replaces the old TurnEnd / TurnErrorRow /
+// standalone RateLimitNotice — all three were conceptually "this turn ended,
+// here's a summary".
+const TurnDivider = ({ variant, turnIndex, result, rateLimit, message }: TurnDividerProps) => {
+  const isError = variant === 'error'
+  const rateBad = rateLimit?.status === 'rejected' || rateLimit?.status === 'denied'
+  const rateText = rateLimit ? formatRateLimit(rateLimit) : null
+  const parts: { text: string; tone?: 'red' }[] = []
+  if (result?.durationMs !== undefined) parts.push({ text: formatDuration(result.durationMs) })
+  if (result?.totalCostUsd !== undefined) parts.push({ text: `$${result.totalCostUsd.toFixed(4)}` })
+  if (result?.subtype && result.subtype !== 'success')
+    parts.push({ text: result.subtype, tone: 'red' })
+  if (rateText) parts.push({ text: rateText, tone: rateBad ? 'red' : undefined })
+  if (isError && message) parts.push({ text: message, tone: 'red' })
+
+  const lineColor = isError ? 'bg-red-200' : 'bg-gray-200'
+  const capsuleStyle = isError
+    ? 'border-red-200 bg-red-50 text-red-700'
+    : 'border-gray-200 bg-white text-gray-500'
   return (
-    <div className="flex items-center gap-2 text-[11px] text-gray-400">
-      <span>rate limit</span>
-      {rateLimitType && <span>· {formatLimitType(rateLimitType)}</span>}
-      {status && <span className={bad ? 'text-red-600' : ''}>· {status}</span>}
-      {resetsAt !== undefined && <span>· {formatResets(resetsAt)}</span>}
+    <div className="my-6 flex items-center gap-3">
+      <div className={`h-px flex-1 ${lineColor}`} />
+      <div
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[11px] ${capsuleStyle}`}
+      >
+        <span>turn {turnIndex}</span>
+        {parts.map(p => (
+          <span key={p.text} className={p.tone === 'red' ? 'text-red-600' : ''}>
+            · {p.text}
+          </span>
+        ))}
+      </div>
+      <div className={`h-px flex-1 ${lineColor}`} />
     </div>
   )
 }

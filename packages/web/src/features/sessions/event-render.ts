@@ -18,13 +18,18 @@ export type RenderItem =
       isError?: boolean
       key: string
     }
-  | { kind: 'turn-end'; result?: TurnEndSummary; key: string }
-  | { kind: 'turn-error'; message: string; key: string }
   | {
-      kind: 'rate-limit'
-      rateLimitType?: string
-      status?: string
-      resetsAt?: number
+      kind: 'turn-end'
+      turnIndex: number
+      result?: TurnEndSummary
+      rateLimit?: RateLimitInfo
+      key: string
+    }
+  | {
+      kind: 'turn-error'
+      turnIndex: number
+      message: string
+      rateLimit?: RateLimitInfo
       key: string
     }
   | { kind: 'thinking'; text: string; key: string }
@@ -34,6 +39,13 @@ export type TurnEndSummary = {
   subtype?: string
   numTurns?: number
   totalCostUsd?: number
+  durationMs?: number
+}
+
+export type RateLimitInfo = {
+  rateLimitType?: string
+  status?: string
+  resetsAt?: number
 }
 
 // --- loose type guards -------------------------------------------------------
@@ -81,6 +93,8 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
   const items: RenderItem[] = []
   const pendingTools = new Map<string, Extract<RenderItem, { kind: 'tool-block' }>>()
   let pendingResult: TurnEndSummary | undefined
+  let pendingRateLimit: RateLimitInfo | undefined
+  let turnIndex = 0
   let systemEmitted = false
 
   for (const e of events) {
@@ -98,12 +112,29 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
     if (e.type === 'turn_error') {
       const msg =
         isRecord(e.payload) && typeof e.payload.message === 'string' ? e.payload.message : 'error'
-      items.push({ kind: 'turn-error', message: msg, key })
+      turnIndex += 1
+      items.push({
+        kind: 'turn-error',
+        turnIndex,
+        message: msg,
+        rateLimit: pendingRateLimit,
+        key,
+      })
+      pendingResult = undefined
+      pendingRateLimit = undefined
       continue
     }
     if (e.type === 'turn_complete') {
-      items.push({ kind: 'turn-end', result: pendingResult, key })
+      turnIndex += 1
+      items.push({
+        kind: 'turn-end',
+        turnIndex,
+        result: pendingResult,
+        rateLimit: pendingRateLimit,
+        key,
+      })
       pendingResult = undefined
+      pendingRateLimit = undefined
       continue
     }
     if (e.type === 'system') {
@@ -199,19 +230,19 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
         subtype: str(p.subtype),
         numTurns: typeof p.num_turns === 'number' ? p.num_turns : undefined,
         totalCostUsd: typeof p.total_cost_usd === 'number' ? p.total_cost_usd : undefined,
+        durationMs: typeof p.duration_ms === 'number' ? p.duration_ms : undefined,
       }
       continue
     }
 
     if (t === 'rate_limit_event') {
+      // Captured and folded into the next turn capsule, not rendered standalone.
       const info = isRecord(p.rate_limit_info) ? p.rate_limit_info : null
-      items.push({
-        kind: 'rate-limit',
+      pendingRateLimit = {
         rateLimitType: info ? str(info.rateLimitType) : undefined,
         status: info ? str(info.status) : undefined,
         resetsAt: info && typeof info.resetsAt === 'number' ? info.resetsAt : undefined,
-        key,
-      })
+      }
       continue
     }
 

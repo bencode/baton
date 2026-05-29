@@ -2,7 +2,7 @@ import type { Id } from '@baton/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { reduceEvents } from './event-render'
-import { Composer, deriveBadgeStatus, EventStream, SessionHeader } from './session-detail/parts'
+import { Composer, EventStream, SessionHeader } from './session-detail/parts'
 import { useSessionStream } from './use-session-stream'
 import { useSession, useSessions } from './use-sessions'
 
@@ -45,14 +45,13 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
     }
   }
 
-  const badgeStatus = deriveBadgeStatus(session as typeof session & { busy?: boolean })
   // Sessions don't have a persistent closed state anymore (destroy = DELETE);
   // a row that exists is always sendable.
   const disabled = false
 
   return (
     <div className="flex h-full flex-col">
-      <SessionHeader session={session} badgeStatus={badgeStatus} streamStatus={status} />
+      <SessionHeader session={session} streamStatus={status} />
       <EventStream items={items} scrollRef={scrollRef} />
       <Composer
         draft={draft}
