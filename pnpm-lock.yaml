@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@baton/cli':
+        specifier: workspace:*
+        version: link:packages/cli
       '@biomejs/biome':
         specifier: ^2.4.16
         version: 2.4.16

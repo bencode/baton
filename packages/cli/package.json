@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "baton": "./bin/baton.mjs"
+  },
   "scripts": {
     "baton": "tsx src/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
