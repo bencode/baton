@@ -55,19 +55,72 @@ export const EventStream = ({ items, scrollRef }: EventStreamProps) => (
   </div>
 )
 
+// Pull image files out of a paste/clipboard synchronously (getAsFile must run
+// inside the event), then convert to data URLs off the event loop.
+const extractImageFiles = (items: DataTransferItemList): File[] =>
+  Array.from(items)
+    .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
+    .map(it => it.getAsFile())
+    .filter((f): f is File => f !== null)
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+
+const ThumbStrip = ({ images, onRemove }: { images: string[]; onRemove: (i: number) => void }) => (
+  <div className="mx-auto mb-2 flex max-w-3xl flex-wrap gap-2">
+    {images.map((src, i) => (
+      <div key={src.slice(0, 64)} className="relative">
+        {/* biome-ignore lint/a11y/useAltText: pasted screenshot preview */}
+        <img src={src} className="h-16 w-16 rounded border border-gray-200 object-cover" />
+        <button
+          type="button"
+          onClick={() => onRemove(i)}
+          className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white text-[10px] leading-none text-gray-500 shadow-sm hover:text-gray-800"
+        >
+          ×
+        </button>
+      </div>
+    ))}
+  </div>
+)
+
 type ComposerProps = {
   draft: string
   setDraft: (v: string) => void
+  images: string[]
+  setImages: (v: string[]) => void
   sending: boolean
   disabled: boolean
   onSend: () => void
 }
-export const Composer = ({ draft, setDraft, sending, disabled, onSend }: ComposerProps) => (
+export const Composer = ({
+  draft,
+  setDraft,
+  images,
+  setImages,
+  sending,
+  disabled,
+  onSend,
+}: ComposerProps) => (
   <div className="shrink-0 border-t border-gray-200 bg-white p-3">
+    {images.length > 0 && (
+      <ThumbStrip images={images} onRemove={i => setImages(images.filter((_, j) => j !== i))} />
+    )}
     <div className="mx-auto flex max-w-3xl items-end gap-2">
       <textarea
         value={draft}
         onChange={e => setDraft(e.target.value)}
+        onPaste={e => {
+          const files = extractImageFiles(e.clipboardData.items)
+          if (files.length === 0) return
+          e.preventDefault()
+          void Promise.all(files.map(fileToDataUrl)).then(urls => setImages([...images, ...urls]))
+        }}
         onKeyDown={e => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault()
@@ -75,14 +128,16 @@ export const Composer = ({ draft, setDraft, sending, disabled, onSend }: Compose
           }
         }}
         disabled={disabled}
-        placeholder={disabled ? 'session closed' : 'Message (⌘/Ctrl-Enter to send)'}
+        placeholder={
+          disabled ? 'session closed' : 'Message (⌘/Ctrl-Enter to send, paste to attach images)'
+        }
         className="min-h-[44px] flex-1 resize-y rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
         rows={2}
       />
       <button
         type="button"
         onClick={onSend}
-        disabled={disabled || sending || draft.trim().length === 0}
+        disabled={disabled || sending || (draft.trim().length === 0 && images.length === 0)}
         className="rounded-md border border-blue-500 bg-blue-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-300"
       >
         Send

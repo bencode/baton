@@ -18,6 +18,7 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
   const { events, status } = useSessionStream(session?.id ?? null)
   const items = useMemo(() => reduceEvents(events), [events])
   const [draft, setDraft] = useState('')
+  const [images, setImages] = useState<string[]>([])
   const [sending, setSending] = useState(false)
 
   // Auto-scroll the event list to the bottom whenever new items arrive.
@@ -33,11 +34,12 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
 
   const send = async () => {
     const text = draft.trim()
-    if (!text) return
+    if (!text && images.length === 0) return
     setSending(true)
     try {
-      await api.sessions.sendMessage(session.id, text)
+      await api.sessions.sendMessage(session.id, text, images)
       setDraft('')
+      setImages([])
     } finally {
       setSending(false)
     }
@@ -55,6 +57,8 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
       <Composer
         draft={draft}
         setDraft={setDraft}
+        images={images}
+        setImages={setImages}
         sending={sending}
         disabled={disabled}
         onSend={() => void send()}

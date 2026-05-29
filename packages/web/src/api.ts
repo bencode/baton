@@ -80,7 +80,7 @@ export type Api = {
     listByProject(projectId: Id): Promise<Session[]>
     get(id: Id): Promise<Session>
     listEvents(id: Id): Promise<SessionEvent[]>
-    sendMessage(id: Id, text: string): Promise<SessionEvent>
+    sendMessage(id: Id, text: string, images?: string[]): Promise<SessionEvent>
   }
   workers: {
     listByProject(projectId: Id): Promise<WorkerView[]>
@@ -139,8 +139,11 @@ export const createApi = (base: string = API_BASE): Api => {
       listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
       get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
       listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
-      sendMessage: (id, text) =>
-        request(u(`/sessions/${id}/messages`), { method: 'POST', body: { text } }),
+      sendMessage: (id, text, images) =>
+        request(u(`/sessions/${id}/messages`), {
+          method: 'POST',
+          body: images && images.length > 0 ? { text, images } : { text },
+        }),
     },
     workers: {
       listByProject: projectId => request(u(`/projects/${projectId}/workers`), { method: 'GET' }),

@@ -4,7 +4,7 @@ import { ToolBlock } from './tool-block'
 export const RenderItemView = ({ item }: { item: RenderItem }) => {
   if (item.kind === 'system-header')
     return <SystemHeader model={item.model} sessionId={item.sessionId} />
-  if (item.kind === 'user-bubble') return <UserBubble text={item.text} />
+  if (item.kind === 'user-bubble') return <UserBubble text={item.text} images={item.images} />
   if (item.kind === 'assistant-text') return <AssistantBubble text={item.text} />
   if (item.kind === 'tool-block')
     return (
@@ -29,10 +29,18 @@ const SystemHeader = ({ model, sessionId }: { model?: string; sessionId?: string
   </div>
 )
 
-const UserBubble = ({ text }: { text: string }) => (
+const UserBubble = ({ text, images }: { text: string; images?: string[] }) => (
   <div className="flex justify-end">
-    <div className="max-w-prose rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm whitespace-pre-wrap text-gray-900">
-      {text}
+    <div className="flex max-w-prose flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm whitespace-pre-wrap text-gray-900">
+      {text && <span>{text}</span>}
+      {images?.map(src => (
+        // biome-ignore lint/a11y/useAltText: pasted screenshot, no caption available
+        <img
+          key={src.slice(0, 64)}
+          src={src}
+          className="max-h-80 max-w-full rounded border border-blue-200"
+        />
+      ))}
     </div>
   </div>
 )

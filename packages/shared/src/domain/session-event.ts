@@ -2,7 +2,7 @@ import type { Id } from './ids.ts'
 
 // Append-only chat / SDK event log per session.
 // type discriminator (kept loose; payload shape is owned by the producer):
-//   - user_message:  payload = { text: string }
+//   - user_message:  payload = { text: string; images?: string[] }  — images are data URLs
 //   - turn_start:    payload = { messageId: number }  — worker claims the next user_message
 //   - sdk_event:     payload = a parsed line from `claude --output-format stream-json`
 //   - turn_complete: payload = { exitCode: number }

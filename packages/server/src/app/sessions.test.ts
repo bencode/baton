@@ -50,6 +50,32 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
   })
 
+  test('messages: accepts pasted images (data URLs), rejects empty and oversized', async () => {
+    const app = createApp(ctx.store)
+    const { session } = await seedSession(app)
+    const img = 'data:image/png;base64,AAAA'
+
+    // images-only (no text) records a user_message carrying the images.
+    const res = await postJson(app, `/sessions/${session.id}/messages`, { text: '', images: [img] })
+    assert.equal(res.status, 201)
+    const ev = (await res.json()) as { type: string; payload: { text: string; images: string[] } }
+    assert.equal(ev.type, 'user_message')
+    assert.deepEqual(ev.payload.images, [img])
+
+    // neither text nor images → 400
+    assert.equal(
+      (await postJson(app, `/sessions/${session.id}/messages`, { images: [] })).status,
+      400,
+    )
+
+    // oversized image → 413
+    const huge = `data:image/png;base64,${'A'.repeat(8_000_001)}`
+    assert.equal(
+      (await postJson(app, `/sessions/${session.id}/messages`, { images: [huge] })).status,
+      413,
+    )
+  })
+
   test('worker events (bearer): turn_start marks message processed; busy derived from event log', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)

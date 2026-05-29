@@ -7,7 +7,7 @@ import type { SessionEvent } from '@baton/shared'
 
 export type RenderItem =
   | { kind: 'system-header'; model?: string; sessionId?: string; key: string }
-  | { kind: 'user-bubble'; text: string; key: string }
+  | { kind: 'user-bubble'; text: string; images?: string[]; key: string }
   | { kind: 'assistant-text'; text: string; key: string }
   | {
       kind: 'tool-block'
@@ -79,7 +79,11 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
     const key = `${e.sessionId}-${e.sequence}`
     if (e.type === 'user_message') {
       const text = isRecord(e.payload) && typeof e.payload.text === 'string' ? e.payload.text : ''
-      items.push({ kind: 'user-bubble', text, key })
+      const images =
+        isRecord(e.payload) && Array.isArray(e.payload.images)
+          ? e.payload.images.filter((i): i is string => typeof i === 'string')
+          : undefined
+      items.push({ kind: 'user-bubble', text, images, key })
       continue
     }
     if (e.type === 'turn_start') continue

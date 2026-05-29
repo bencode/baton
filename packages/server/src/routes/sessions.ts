@@ -7,6 +7,9 @@ import { bearerAuth } from '../middleware/auth.ts'
 import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam, sessionWithView } from '../views.ts'
 
+// ~8MB base64 ≈ ~6MB raw image; enough for screenshots, bounded for the log.
+const MAX_IMAGE_DATA_URL = 8_000_000
+
 export const registerSessionRoutes = (
   app: Hono<AppEnv>,
   store: Store,
@@ -94,10 +97,19 @@ export const registerSessionRoutes = (
     const session = await store.sessions.get(sessionId)
     if (!session) return c.json({ error: 'not found' }, 404)
     if (session.closedAt) return c.json({ error: 'session closed' }, 409)
-    const body = (await c.req.json()) as { text?: string }
-    if (typeof body.text !== 'string' || body.text.length === 0)
-      return c.json({ error: 'text required' }, 400)
-    const ev = await store.sessions.appendEvent(sessionId, 'user_message', { text: body.text })
+    const body = (await c.req.json()) as { text?: string; images?: unknown }
+    const text = typeof body.text === 'string' ? body.text : ''
+    const images = Array.isArray(body.images)
+      ? body.images.filter((i): i is string => typeof i === 'string')
+      : []
+    if (text.length === 0 && images.length === 0)
+      return c.json({ error: 'text or images required' }, 400)
+    // Inline base64 data URLs live in the event log; cap so a single paste can't
+    // bloat the DB / SSE stream unbounded.
+    if (images.some(i => i.length > MAX_IMAGE_DATA_URL))
+      return c.json({ error: 'image too large (max ~8MB)' }, 413)
+    const payload = images.length > 0 ? { text, images } : { text }
+    const ev = await store.sessions.appendEvent(sessionId, 'user_message', payload)
     bus.publish(sessionId, ev)
     return c.json(ev, 201)
   })
