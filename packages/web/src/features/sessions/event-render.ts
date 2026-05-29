@@ -27,6 +27,7 @@ export type RenderItem =
       resetsAt?: number
       key: string
     }
+  | { kind: 'thinking'; text: string; key: string }
   | { kind: 'raw'; payload: unknown; key: string }
 
 export type TurnEndSummary = {
@@ -157,9 +158,15 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
           }
           items.push(item)
           pendingTools.set(id, item)
-        }
-        // other block types: thinking, etc. — fall through to raw
-        else {
+        } else if (b.type === 'thinking') {
+          // Drop empty thinking frames (extended-thinking streams open with one);
+          // signature is an opaque verification token — never surface it.
+          const thoughtText = typeof b.thinking === 'string' ? b.thinking : ''
+          if (thoughtText.trim().length > 0) {
+            items.push({ kind: 'thinking', text: thoughtText, key: `${key}-think-${i}` })
+          }
+        } else {
+          // unknown block types fall through to raw so nothing is silently lost
           items.push({ kind: 'raw', payload: b, key: `${key}-blk-${i}` })
         }
       }
