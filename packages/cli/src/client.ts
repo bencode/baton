@@ -1,19 +1,19 @@
 import type { SessionEvent, SessionEventType } from '@baton/shared'
-import { projectClient, type ProjectClient } from './client/projects.ts'
-import { requirementClient, type RequirementClient } from './client/requirements.ts'
+import { type ProjectClient, projectClient } from './client/projects.ts'
 import { request } from './client/request.ts'
-import { sessionsClient, type SessionsClient } from './client/sessions.ts'
-import { taskClient, type TaskClient } from './client/tasks.ts'
-import { workersClient, type WorkersClient } from './client/workers.ts'
-import { workspaceClient, type WorkspaceClient } from './client/workspaces.ts'
+import { type RequirementClient, requirementClient } from './client/requirements.ts'
+import { type SessionsClient, sessionsClient } from './client/sessions.ts'
+import { type TaskClient, taskClient } from './client/tasks.ts'
+import { type WorkersClient, workersClient } from './client/workers.ts'
+import { type WorkspaceClient, workspaceClient } from './client/workspaces.ts'
 
 // Re-export per-resource input / output types so the rest of the cli
 // (commands, tests) can keep importing from '../client.ts'.
 export type { ProjectInput } from './client/projects.ts'
 export type { RequirementInput } from './client/requirements.ts'
 export type {
-  SessionRegisterInput,
   SessionRegistered,
+  SessionRegisterInput,
 } from './client/sessions.ts'
 export type { TaskInput } from './client/tasks.ts'
 export type {

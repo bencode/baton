@@ -6,9 +6,9 @@ import { sessionNewCommand } from './session/new.ts'
 import { sessionRunCommand } from './session/run.ts'
 import { sessionSayCommand } from './session/say.ts'
 
+export type { SessionNewInput } from './session/new.ts'
 // Re-exported for cli.test.ts (tests import these helpers directly).
 export { newSession } from './session/new.ts'
-export type { SessionNewInput } from './session/new.ts'
 export { parseEnvPairs } from './session/shared.ts'
 
 export const session = defineCommand({

@@ -2,12 +2,7 @@ import type { Id } from '@baton/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { reduceEvents } from './event-render'
-import {
-  Composer,
-  deriveBadgeStatus,
-  EventStream,
-  SessionHeader,
-} from './session-detail/parts'
+import { Composer, deriveBadgeStatus, EventStream, SessionHeader } from './session-detail/parts'
 import { useSessionStream } from './use-session-stream'
 import { useSession, useSessions } from './use-sessions'
 
@@ -48,7 +43,9 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
     }
   }
 
-  const badgeStatus = deriveBadgeStatus(session as typeof session & { alive?: boolean; busy?: boolean })
+  const badgeStatus = deriveBadgeStatus(
+    session as typeof session & { alive?: boolean; busy?: boolean },
+  )
   const disabled = !!session.closedAt
 
   return (

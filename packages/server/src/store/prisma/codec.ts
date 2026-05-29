@@ -8,11 +8,7 @@ export type Kind = keyof typeof PREFIX
 
 // Atomic per-(project, kind) counter increment via upsert. First-ever use of a
 // kind creates the row at next=2 (consumed 1); subsequent uses bump by 1.
-export const nextCode = async (
-  tx: TxClient,
-  projectId: number,
-  kind: Kind,
-): Promise<string> => {
+export const nextCode = async (tx: TxClient, projectId: number, kind: Kind): Promise<string> => {
   const c = await tx.codeCounter.upsert({
     where: { projectId_kind: { projectId, kind } },
     update: { next: { increment: 1 } },

@@ -2,7 +2,14 @@ import type { ChildProcess, spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import type { WorkerClient } from '../../client.ts'
 import type { SessionConfig } from '../config.ts'
-import { buildClaudeArgs, claudeBin, maskedEnvKeys, previewText, type TailBuffer, tailBuffer } from './log.ts'
+import {
+  buildClaudeArgs,
+  claudeBin,
+  maskedEnvKeys,
+  previewText,
+  type TailBuffer,
+  tailBuffer,
+} from './log.ts'
 
 export type SpawnImpl = (
   command: string,
