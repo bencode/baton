@@ -16,3 +16,6 @@ dist
 
 # Bun lockfile (this repo is pnpm-managed)
 bun.lockb
+
+# Claude Code runtime artifacts (per-session lockfile)
+.claude/scheduled_tasks.lock
