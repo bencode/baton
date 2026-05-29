@@ -1,6 +1,5 @@
 import type { Id, Session, WorkerView } from '@baton/shared'
 import { sessionPath } from '../../app/route'
-import { StatusDot } from '../../components/status-dot'
 import { useSessions } from '../sessions/use-sessions'
 import { useWorkers } from './use-workers'
 
@@ -11,15 +10,13 @@ type WorkersPanelProps = {
 }
 
 type SessionView = Session & { alive?: boolean; attached?: boolean; busy?: boolean }
+type SessionStatus = 'idle' | 'streaming' | 'detached' | 'closed' | 'offline'
 
 // 5-state ladder, ordered by priority. `attached` distinguishes 'this session
 // has a daemon pinging' from 'just the machine is up' — without it, sessions
 // whose daemon was killed look identical to ready ones and the user sends
 // into a queue with no one listening.
-const sessionDotStatus = (
-  s: SessionView,
-  workerAlive: boolean,
-): 'idle' | 'streaming' | 'detached' | 'closed' | 'offline' => {
+const sessionStatus = (s: SessionView, workerAlive: boolean): SessionStatus => {
   if (s.closedAt) return 'closed'
   if (!workerAlive) return 'offline'
   if (!s.attached) return 'detached'
@@ -61,6 +58,14 @@ export const WorkersPanel = ({ projectId, activeId, open }: WorkersPanelProps) =
   )
 }
 
+// Layout principle (per design review):
+//   - LEFT column = structure (name, hierarchy). No status glyphs that look
+//     like list bullets.
+//   - RIGHT column = state. Status chips / pulse / text show up only when
+//     non-default; idle ⇒ clean.
+// Worker rows keep a tiny presence dot before the name — visually distinct
+// from the (now bullet-free) session rows, so the hierarchy reads instantly.
+
 type WorkerGroupProps = {
   worker: WorkerView
   sessions: SessionView[]
@@ -75,36 +80,85 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
   return (
     <div className="flex flex-col gap-1">
       <div
-        className={`flex items-center gap-2 px-1 text-xs ${dim ? 'text-gray-400' : 'text-gray-600'}`}
+        className={`flex items-center gap-2 px-1 text-xs ${dim ? 'text-gray-400' : 'text-gray-700'}`}
       >
-        <StatusDot status={alive ? 'idle' : 'offline'} />
+        <PresenceDot online={alive} />
         <span className="font-semibold tracking-wide">{worker.name}</span>
         {worker.hostname !== worker.name && (
           <span className="font-mono text-[10px] text-gray-400">{worker.hostname}</span>
         )}
-        {!alive && <span className="text-[10px] text-gray-400">offline</span>}
+        {!alive && <span className="ml-auto text-[10px] text-gray-400">offline</span>}
       </div>
       {sessions.length === 0 ? (
         <p className="px-3 text-[11px] text-gray-400">no sessions</p>
       ) : (
-        sessions.map(s => {
-          const path = sessionPath(projectId, s.id)
-          const active = activeId === path
-          return (
-            <button
-              type="button"
-              key={s.id}
-              onClick={() => open(path, s.name)}
-              className={`flex w-full items-center gap-2 rounded-md pr-1.5 pl-4 py-1 text-left text-sm transition-colors duration-150 ${
-                active ? 'bg-blue-50 text-blue-900' : 'text-gray-700 hover:bg-gray-100/70'
-              } ${dim ? 'opacity-60' : ''}`}
-            >
-              <StatusDot status={sessionDotStatus(s, alive)} />
-              <span className="truncate">{s.name}</span>
-            </button>
-          )
-        })
+        sessions.map(s => (
+          <SessionRow
+            key={s.id}
+            session={s}
+            status={sessionStatus(s, alive)}
+            path={sessionPath(projectId, s.id)}
+            active={activeId === sessionPath(projectId, s.id)}
+            dim={dim}
+            open={open}
+          />
+        ))
       )}
     </div>
+  )
+}
+
+type SessionRowProps = {
+  session: SessionView
+  status: SessionStatus
+  path: string
+  active: boolean
+  dim: boolean
+  open: (id: string, title: string) => void
+}
+
+const SessionRow = ({ session, status, path, active, dim, open }: SessionRowProps) => (
+  <button
+    type="button"
+    onClick={() => open(path, session.name)}
+    className={`flex w-full items-center justify-between gap-2 rounded-md pr-1.5 pl-4 py-1 text-left text-sm transition-colors duration-150 ${
+      active ? 'bg-blue-50 text-blue-900' : 'text-gray-700 hover:bg-gray-100/70'
+    } ${dim ? 'opacity-60' : ''}`}
+  >
+    <span className={`truncate ${status === 'closed' ? 'line-through opacity-60' : ''}`}>
+      {session.name}
+    </span>
+    <SessionStateChip status={status} />
+  </button>
+)
+
+// Tiny presence dot for the worker header. Solid emerald = online; solid gray
+// = offline. Same role as Slack's avatar dot — pure "here-or-not", not a
+// session state.
+const PresenceDot = ({ online }: { online: boolean }) => (
+  <span
+    role="img"
+    aria-label={online ? 'online' : 'offline'}
+    className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-emerald-500' : 'bg-gray-300'}`}
+  />
+)
+
+// Right-column status indicator. idle renders nothing on purpose: the absence
+// of a chip means "ready, nothing notable" — that's the calm baseline state.
+const SessionStateChip = ({ status }: { status: SessionStatus }) => {
+  if (status === 'idle') return null
+  if (status === 'streaming')
+    return (
+      <span
+        role="img"
+        aria-label="streaming"
+        className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-500"
+      />
+    )
+  // Text labels for the "not ready" trio. Tone-down color so they sit quietly
+  // in the right margin and don't compete with the session name.
+  const label = status // 'detached' | 'closed' | 'offline'
+  return (
+    <span className="shrink-0 text-[10px] tracking-wide text-gray-400 uppercase">{label}</span>
   )
 }
