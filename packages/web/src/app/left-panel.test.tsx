@@ -67,8 +67,11 @@ test('LeftPanel renders the requirement tree (deps + ready) and opens a task on 
   expect(await screen.findByText('User login')).toBeTruthy()
   expect(await screen.findByText('Design')).toBeTruthy()
   const impl = await screen.findByText('Implement')
-  // Implement depends on the done Design task; row shows status dot + ↳ marker + code.
-  expect(screen.getByLabelText('todo')).toBeTruthy()
+  // Implement depends on the done Design task; row shows ↳ marker + code.
+  // 'todo' (default) renders no chip — absence is the baseline. 'done' shows
+  // up as a small uppercase 'done' state chip on the right.
+  expect(screen.queryByText('todo')).toBeNull()
+  expect(screen.getByText('done')).toBeTruthy()
   expect(screen.getByText('↳')).toBeTruthy()
   expect(screen.getByText('T-2')).toBeTruthy()
   expect(screen.getByText('R-1')).toBeTruthy()

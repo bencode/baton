@@ -1,5 +1,6 @@
 import type { Id, Session, WorkerView } from '@baton/shared'
 import { sessionPath } from '../../app/route'
+import { StateChip } from '../../components/state-chip'
 import { useSessions } from '../sessions/use-sessions'
 import { useWorkers } from './use-workers'
 
@@ -143,22 +144,11 @@ const PresenceDot = ({ online }: { online: boolean }) => (
   />
 )
 
-// Right-column status indicator. idle renders nothing on purpose: the absence
-// of a chip means "ready, nothing notable" — that's the calm baseline state.
+// Right-column status indicator — shares the project-wide StateChip vocabulary
+// (pulse for in-motion states, muted text for inactive states). idle renders
+// nothing: absence of a chip IS "ready", the calm baseline.
 const SessionStateChip = ({ status }: { status: SessionStatus }) => {
-  if (status === 'idle') return null
-  if (status === 'streaming')
-    return (
-      <span
-        role="img"
-        aria-label="streaming"
-        className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-500"
-      />
-    )
-  // Text labels for the "not ready" trio. Tone-down color so they sit quietly
-  // in the right margin and don't compete with the session name.
-  const label = status // 'detached' | 'closed' | 'offline'
-  return (
-    <span className="shrink-0 text-[10px] tracking-wide text-gray-400 uppercase">{label}</span>
-  )
+  if (status === 'idle') return <StateChip kind="none" />
+  if (status === 'streaming') return <StateChip kind="pulse" label="streaming" />
+  return <StateChip kind="text" label={status} tone="muted" />
 }
