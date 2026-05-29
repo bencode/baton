@@ -6,8 +6,11 @@ export const fmtWorkspace = (w: Workspace): string => `${w.id}  ${w.name}`
 export const fmtProject = (p: Project): string => `${p.id}  ${p.name}`
 export const fmtRequirement = (r: Requirement): string => `${r.code}  [${r.status}]  ${r.title}`
 export const fmtTask = (t: Task): string => `${t.code}  [${t.status}]  ${t.title}`
-export const fmtSession = (s: Session): string =>
-  `${s.code}  [${s.state}]  ${s.name}${s.worktreePath ? `  ${s.worktreePath}` : ''}`
+export const fmtSession = (s: Session): string => {
+  const closed = s.closedAt ? '  [closed]' : ''
+  const wt = s.worktreePath ? `  ${s.worktreePath}` : ''
+  return `${s.id}  ${s.name}${closed}${wt}`
+}
 
 export const renderOne = <T>(item: T, fmt: (x: T) => string, json: boolean): string =>
   json ? toJson(item) : fmt(item)

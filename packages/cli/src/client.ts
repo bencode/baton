@@ -50,6 +50,9 @@ export type SessionRegisterInput = {
   name: string
   claudeSessionId?: string
   worktreePath?: string
+  machineId?: string
+  hostname?: string
+  workerName?: string
 }
 export type SessionRegistered = Session & { apiToken: string }
 
@@ -87,7 +90,7 @@ export type ApiClient = {
     register(input: SessionRegisterInput): Promise<SessionRegistered>
     listByProject(projectId: Id): Promise<Session[]>
     get(id: Id): Promise<Session>
-    getByCode(projectId: Id, code: Code): Promise<Session>
+    findByName(projectId: Id, name: string): Promise<Session | null>
     listEvents(id: Id): Promise<SessionEvent[]>
     sendMessage(id: Id, text: string): Promise<SessionEvent>
   }
@@ -155,7 +158,14 @@ export const createClient = (baseUrl: string): ApiClient => {
       register: input => request(u('/sessions'), { method: 'POST', body: input }),
       listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
       get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
-      getByCode: (projectId, code) => fetchItemByCode<Session>(baseUrl, projectId, code, 'session'),
+      findByName: async (projectId, name) => {
+        const all = await request<Session[]>(u(`/projects/${projectId}/sessions`), {
+          method: 'GET',
+        })
+        // Latest (highest id) match wins when there are stale duplicates.
+        const matches = all.filter(s => s.name === name && !s.closedAt)
+        return matches.length === 0 ? null : (matches[matches.length - 1] ?? null)
+      },
       listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
       sendMessage: (id, text) =>
         request(u(`/sessions/${id}/messages`), { method: 'POST', body: { text } }),

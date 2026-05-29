@@ -1,5 +1,4 @@
 import { randomBytes } from 'node:crypto'
-import type { Id } from '@baton/shared'
 import type { PrismaClient } from '@prisma/client'
 import {
   toProject,
@@ -7,11 +6,12 @@ import {
   toSession,
   toSessionEvent,
   toTask,
+  toWorker,
   toWorkspace,
 } from './mappers.ts'
 import type { Store } from './types.ts'
 
-const PREFIX = { requirement: 'R', task: 'T', session: 'S' } as const
+const PREFIX = { requirement: 'R', task: 'T' } as const
 type Kind = keyof typeof PREFIX
 
 type TxClient = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0]
@@ -170,30 +170,25 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
     },
   },
   sessions: {
-    register: async input =>
-      prisma.$transaction(async tx => {
-        const code = await nextCode(tx, input.projectId, 'session')
-        const apiToken = issueToken()
-        const s = await tx.session.create({
-          data: {
-            projectId: input.projectId,
-            code,
-            mode: input.mode,
-            name: input.name,
-            apiToken,
-            state: 'idle',
-            claudeSessionId: input.claudeSessionId,
-            worktreePath: input.worktreePath,
-          },
-        })
-        return { ...toSession(s), apiToken }
-      }),
+    register: async input => {
+      const apiToken = issueToken()
+      const s = await prisma.session.create({
+        data: {
+          projectId: input.projectId,
+          mode: input.mode,
+          name: input.name,
+          apiToken,
+          claudeSessionId: input.claudeSessionId,
+          worktreePath: input.worktreePath,
+          machineId: input.machineId,
+          hostname: input.hostname,
+          workerName: input.workerName,
+        },
+      })
+      return { ...toSession(s), apiToken }
+    },
     get: async id => {
       const r = await prisma.session.findUnique({ where: { id } })
-      return r ? toSession(r) : null
-    },
-    getByCode: async (projectId, code) => {
-      const r = await prisma.session.findUnique({ where: { projectId_code: { projectId, code } } })
       return r ? toSession(r) : null
     },
     getByToken: async token => {
@@ -204,14 +199,10 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
       (await prisma.session.findMany({ where: { projectId }, orderBy: { id: 'asc' } })).map(
         toSession,
       ),
-    heartbeat: async id =>
-      toSession(await prisma.session.update({ where: { id }, data: { heartbeatAt: new Date() } })),
-    setState: async (id, state) =>
-      toSession(await prisma.session.update({ where: { id }, data: { state } })),
     close: async id => {
       await prisma.session.update({
         where: { id },
-        data: { state: 'closed', closedAt: new Date() },
+        data: { closedAt: new Date() },
       })
     },
     appendEvent: async (sessionId, type, payload) =>
@@ -246,12 +237,86 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
       prisma.sessionEvent.count({
         where: { sessionId, type: 'user_message', processedAt: null },
       }),
-    resetBusySessions: async () => {
-      const r = await prisma.session.updateMany({
-        where: { state: 'busy' },
-        data: { state: 'idle' },
+    // Busy ⇔ the latest turn_start has no following turn_complete / turn_error.
+    isBusy: async sessionId => {
+      const lastStart = await prisma.sessionEvent.findFirst({
+        where: { sessionId, type: 'turn_start' },
+        orderBy: { sequence: 'desc' },
+        select: { sequence: true },
       })
-      return r.count
+      if (!lastStart) return false
+      const closer = await prisma.sessionEvent.findFirst({
+        where: {
+          sessionId,
+          sequence: { gt: lastStart.sequence },
+          type: { in: ['turn_complete', 'turn_error'] },
+        },
+        select: { id: true },
+      })
+      return closer === null
+    },
+  },
+  workers: {
+    // Identity-recovery algorithm:
+    //   1) (projectId, machineId) alive → re-attach, update name if changed
+    //   2a) no name match → create
+    //   2b) name match with NULL machineId → legacy claim, fill machineId
+    //   2c) name match with different machineId → name-collision
+    register: async input => {
+      return prisma.$transaction(async tx => {
+        const byMachine = await tx.worker.findFirst({
+          where: { projectId: input.projectId, machineId: input.machineId, closedAt: null },
+        })
+        if (byMachine) {
+          const updated =
+            byMachine.name !== input.name || byMachine.hostname !== input.hostname
+              ? await tx.worker.update({
+                  where: { id: byMachine.id },
+                  data: { name: input.name, hostname: input.hostname },
+                })
+              : byMachine
+          return { kind: 'reattached-machine', worker: toWorker(updated) }
+        }
+        const byName = await tx.worker.findFirst({
+          where: { projectId: input.projectId, name: input.name, closedAt: null },
+        })
+        if (!byName) {
+          const created = await tx.worker.create({
+            data: {
+              projectId: input.projectId,
+              machineId: input.machineId,
+              name: input.name,
+              hostname: input.hostname,
+            },
+          })
+          return { kind: 'created', worker: toWorker(created) }
+        }
+        if (byName.machineId === '' || byName.machineId === null) {
+          const claimed = await tx.worker.update({
+            where: { id: byName.id },
+            data: { machineId: input.machineId, hostname: input.hostname },
+          })
+          return { kind: 'claimed-legacy', worker: toWorker(claimed) }
+        }
+        return { kind: 'name-collision', existing: toWorker(byName) }
+      })
+    },
+    get: async id => {
+      const r = await prisma.worker.findUnique({ where: { id } })
+      return r ? toWorker(r) : null
+    },
+    findAlive: async (projectId, machineId) => {
+      const r = await prisma.worker.findFirst({
+        where: { projectId, machineId, closedAt: null },
+      })
+      return r ? toWorker(r) : null
+    },
+    listByProject: async projectId =>
+      (await prisma.worker.findMany({ where: { projectId }, orderBy: { id: 'asc' } })).map(
+        toWorker,
+      ),
+    close: async id => {
+      await prisma.worker.update({ where: { id }, data: { closedAt: new Date() } })
     },
   },
   getRequirementWithTasks: async id => {

@@ -111,14 +111,11 @@ describe('command handlers (fake client)', () => {
             return {
               id: 7,
               projectId: input.projectId,
-              code: 'S-1',
               mode: input.mode,
               name: input.name,
-              state: 'idle',
               claudeSessionId: input.claudeSessionId,
               worktreePath: input.worktreePath,
               startedAt: 0,
-              heartbeatAt: 0,
               apiToken: 'tok-deadbeef',
             }
           },
@@ -148,9 +145,9 @@ describe('command handlers (fake client)', () => {
           server: 'http://localhost:3280',
         },
         fakeFs,
-        code => join(dir, `cfg-${code}.json`),
+        sid => join(dir, `cfg-${sid}.json`),
       )
-      assert.equal(config.sessionCode, 'S-1')
+      assert.equal(config.sessionId, 7)
       assert.equal(config.apiToken, 'tok-deadbeef')
       assert.ok(createdAt)
       assert.equal((createdAt as { repo: string }).repo, '/tmp/source')
@@ -206,7 +203,6 @@ describe('command handlers (fake client)', () => {
       server: 'http://localhost:3280',
       apiToken: 'tok',
       sessionId: 1,
-      sessionCode: 'S-1',
       projectId: 1,
       name: 'dogfood',
       mode: 'worker',
@@ -294,7 +290,6 @@ describe('command handlers (fake client)', () => {
       server: 's',
       apiToken: 't',
       sessionId: 1,
-      sessionCode: 'S-1',
       projectId: 1,
       name: 'x',
       mode: 'worker',

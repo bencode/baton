@@ -79,7 +79,6 @@ export type Api = {
   sessions: {
     listByProject(projectId: Id): Promise<Session[]>
     get(id: Id): Promise<Session>
-    getByCode(projectId: Id, code: Code): Promise<Session>
     listEvents(id: Id): Promise<SessionEvent[]>
     sendMessage(id: Id, text: string): Promise<SessionEvent>
   }
@@ -87,11 +86,7 @@ export type Api = {
 
 export const createApi = (base: string = API_BASE): Api => {
   const u = (p: string): string => `${base}${p}`
-  const fetchItemByCode = async (
-    projectId: Id,
-    code: Code,
-    expectKind: 'requirement' | 'task' | 'session',
-  ) => {
+  const fetchItemByCode = async (projectId: Id, code: Code, expectKind: 'requirement' | 'task') => {
     const r = await request<{ kind: string; item: unknown }>(
       u(`/projects/${projectId}/items/${encodeURIComponent(code)}`),
       { method: 'GET' },
@@ -139,8 +134,6 @@ export const createApi = (base: string = API_BASE): Api => {
     sessions: {
       listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
       get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
-      getByCode: async (projectId, code) =>
-        (await fetchItemByCode(projectId, code, 'session')) as Session,
       listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
       sendMessage: (id, text) =>
         request(u(`/sessions/${id}/messages`), { method: 'POST', body: { text } }),

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { homedir } from 'node:os'
+import { homedir, hostname as osHostname } from 'node:os'
 import { join } from 'node:path'
 import type { Id, SessionMode } from '@baton/shared'
 import { defineCommand } from 'citty'
@@ -26,6 +26,10 @@ export type SessionNewInput = {
   worktreeDir: string
   mode: SessionMode
   server: string
+  // Snapshot fields (optional in C1 — C2 wires up worker config + machine-id).
+  machineId?: string
+  hostname?: string
+  workerName?: string
 }
 
 // Parse `KEY=VAL` strings into a flat record. Accepts:
@@ -34,8 +38,6 @@ export type SessionNewInput = {
 //   - "K1=V1,K2=V2"           (citty only keeps the last `--env`; CSV is the
 //                              escape hatch for multi-var in a single flag)
 //   - ["KEY=VAL", "K2=V2"]    (in case citty array-mode kicks in)
-// Caveat: comma in a value is currently ambiguous; if your value contains a
-// comma, use shell env inheritance instead (`HTTPS_PROXY=... baton session run …`).
 export const parseEnvPairs = (
   pairs: string | string[] | undefined,
 ): Record<string, string> | undefined => {
@@ -53,6 +55,22 @@ export const parseEnvPairs = (
   return Object.keys(out).length === 0 ? undefined : out
 }
 
+// Resolve a session positional arg: tries int id first, then name lookup.
+const resolveSession = async (
+  client: ApiClient,
+  projectId: Id,
+  handle: string,
+): Promise<{ id: Id; name: string }> => {
+  const asInt = Number(handle)
+  if (Number.isInteger(asInt) && asInt > 0) {
+    const byId = await client.sessions.get(asInt).catch(() => null)
+    if (byId) return { id: byId.id, name: byId.name }
+  }
+  const byName = await client.sessions.findByName(projectId, handle)
+  if (byName) return { id: byName.id, name: byName.name }
+  throw new Error(`session "${handle}" not found in project ${projectId}`)
+}
+
 // Provision a Session end-to-end: claudeSessionId UUID we generate, git worktree
 // added off the source repo, then POST to baton with both. On worktree failure
 // nothing is sent; on POST failure the worktree is rolled back.
@@ -64,9 +82,8 @@ export const newSession = async (
     createWorktree,
     removeWorktree,
   },
-  resolvePath: (sessionCode: string) => string = defaultConfigPath,
+  resolvePath: (sessionId: Id) => string = defaultConfigPath,
 ): Promise<{ config: SessionConfig; path: string }> => {
-  // We don't know S-N until POST returns — slug by name + UUID short for a unique tmp path.
   const claudeSessionId = randomUUID()
   const provisional = join(input.worktreeDir, slug(`${input.name}-${claudeSessionId.slice(0, 8)}`))
 
@@ -86,6 +103,9 @@ export const newSession = async (
       name: input.name,
       claudeSessionId,
       worktreePath: provisional,
+      machineId: input.machineId,
+      hostname: input.hostname,
+      workerName: input.workerName,
     })
     .catch(err => {
       fs.removeWorktree(input.repo, provisional)
@@ -97,14 +117,13 @@ export const newSession = async (
     server: input.server,
     apiToken: registered.apiToken,
     sessionId: registered.id,
-    sessionCode: registered.code,
     projectId: input.projectId,
     name: input.name,
     mode: input.mode,
     claudeSessionId,
     worktreePath: provisional,
   }
-  const path = resolvePath(registered.code)
+  const path = resolvePath(registered.id)
   saveConfig(path, config)
   return { config, path }
 }
@@ -134,45 +153,51 @@ export const session = defineCommand({
           worktreeDir: args['worktree-dir'] ?? defaultWorktreeDir(),
           mode: (args.mode as SessionMode) ?? 'worker',
           server,
+          // Snapshot fields filled in C1 from local-only sources; C2 will
+          // route them through worker config + machine-id file.
+          hostname: osHostname(),
         })
-        console.log(`created ${config.sessionCode}  (${config.worktreePath})`)
+        console.log(`created session #${config.sessionId} (${config.name})`)
+        console.log(`  worktree:        ${config.worktreePath}`)
         console.log(`  claudeSessionId: ${config.claudeSessionId}`)
         console.log(`  token saved to:  ${path}`)
       },
     }),
     say: defineCommand({
-      meta: { name: 'say', description: 'send a chat message into a session' },
+      meta: { name: 'say', description: 'send a chat message into a session (by int id or name)' },
       args: {
-        code: { type: 'positional', required: true, description: 'session code (S-N)' },
+        session: { type: 'positional', required: true, description: 'session int id or name' },
         text: { type: 'positional', required: true, description: 'message text' },
         project: { type: 'string', required: true, description: 'project id (int)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const s = await c.sessions.getByCode(Number(args.project), args.code)
+        const projectId = Number(args.project)
+        const s = await resolveSession(c, projectId, args.session)
         const ev = await c.sessions.sendMessage(s.id, args.text)
         if (args.json) console.log(toJson(ev))
-        else console.log(`sent (seq ${ev.sequence}) → ${s.code}: ${args.text}`)
+        else console.log(`sent (seq ${ev.sequence}) → ${s.name} (#${s.id}): ${args.text}`)
       },
     }),
     close: defineCommand({
       meta: { name: 'close', description: 'close a session (optionally remove its worktree)' },
       args: {
-        code: { type: 'positional', required: true, description: 'session code (S-N)' },
+        session: { type: 'positional', required: true, description: 'session int id or name' },
         project: { type: 'string', required: true, description: 'project id (int)' },
         'rm-worktree': { type: 'boolean', description: 'also remove the git worktree' },
         repo: { type: 'string', description: 'source repo path (required with --rm-worktree)' },
         config: {
           type: 'string',
-          description: 'path to session config (default ~/.config/baton/session-S-N.json)',
+          description: 'path to session config (default ~/.config/baton/session-<id>.json)',
         },
         ...common,
       },
       run: async ({ args }) => {
         const cliClient = clientFor(args)
-        const s = await cliClient.sessions.getByCode(Number(args.project), args.code)
-        const cfgPath = args.config ?? defaultConfigPath(s.code)
+        const projectId = Number(args.project)
+        const s = await resolveSession(cliClient, projectId, args.session)
+        const cfgPath = args.config ?? defaultConfigPath(s.id)
         const cfg = loadConfig(cfgPath)
         const w = createWorkerClient(cfg.server, cfg.apiToken)
         await w.close()
@@ -180,7 +205,7 @@ export const session = defineCommand({
           if (!args.repo) throw new Error('--repo is required together with --rm-worktree')
           removeWorktree(args.repo, cfg.worktreePath)
         }
-        console.log(`closed ${s.code}`)
+        console.log(`closed ${s.name} (#${s.id})`)
       },
     }),
     ls: defineCommand({
@@ -196,15 +221,17 @@ export const session = defineCommand({
       },
     }),
     get: defineCommand({
-      meta: { name: 'get', description: 'get a session by code (S-N)' },
+      meta: { name: 'get', description: 'get a session by int id or name' },
       args: {
-        code: { type: 'positional', required: true },
+        session: { type: 'positional', required: true, description: 'session int id or name' },
         project: { type: 'string', required: true, description: 'project id (int)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const s = await c.sessions.getByCode(Number(args.project), args.code)
+        const projectId = Number(args.project)
+        const handle = await resolveSession(c, projectId, args.session)
+        const s = await c.sessions.get(handle.id)
         console.log(renderOne(s, fmtSession, Boolean(args.json)))
       },
     }),
@@ -214,23 +241,23 @@ export const session = defineCommand({
         description: 'subscribe to a session and run claude turns as messages arrive',
       },
       args: {
-        code: { type: 'positional', required: true, description: 'session code (S-N)' },
+        session: { type: 'positional', required: true, description: 'session int id or name' },
         project: { type: 'string', required: true, description: 'project id (int)' },
         config: {
           type: 'string',
-          description: 'override config path (default ~/.config/baton/session-S-N.json)',
+          description: 'override config path (default ~/.config/baton/session-<id>.json)',
         },
         env: {
           type: 'string',
-          description:
-            'override env injected into the spawned claude (KEY=VAL; repeatable; merged on top of saved session env)',
+          description: 'env injected into the spawned claude (KEY=VAL; CSV-multi or repeat flag)',
         },
         ...common,
       },
       run: async ({ args }) => {
         const cliClient = clientFor(args)
-        const s = await cliClient.sessions.getByCode(Number(args.project), args.code)
-        const cfgPath = args.config ?? defaultConfigPath(s.code)
+        const projectId = Number(args.project)
+        const handle = await resolveSession(cliClient, projectId, args.session)
+        const cfgPath = args.config ?? defaultConfigPath(handle.id)
         const cfg = loadConfig(cfgPath)
         const runEnv = parseEnvPairs(args.env as string | string[] | undefined)
         const worker = createWorkerClient(cfg.server, cfg.apiToken)
@@ -238,10 +265,11 @@ export const session = defineCommand({
         const stop = () => ac.abort()
         process.on('SIGINT', stop)
         process.on('SIGTERM', stop)
-        console.log(`[${cfg.sessionCode}] running (worktree: ${cfg.worktreePath})`)
-        if (runEnv) console.log(`[${cfg.sessionCode}] env keys: ${Object.keys(runEnv).join(', ')}`)
+        const tag = `#${cfg.sessionId} ${cfg.name}`
+        console.log(`[${tag}] running (worktree: ${cfg.worktreePath})`)
+        if (runEnv) console.log(`[${tag}] env keys: ${Object.keys(runEnv).join(', ')}`)
         await runDaemon(cfg, { client: cliClient, worker, env: runEnv }, ac.signal)
-        console.log(`[${cfg.sessionCode}] stopped`)
+        console.log(`[${tag}] stopped`)
       },
     }),
   },

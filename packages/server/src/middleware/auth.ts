@@ -13,7 +13,7 @@ export const bearerAuth = (store: Store): MiddlewareHandler<{ Variables: AuthVar
     const token = m?.[1]
     if (!token) return c.json({ error: 'unauthorized' }, 401)
     const session = await store.sessions.getByToken(token)
-    if (!session || session.state === 'closed') return c.json({ error: 'unauthorized' }, 401)
+    if (!session || session.closedAt) return c.json({ error: 'unauthorized' }, 401)
     c.set('session', session)
     await next()
   }

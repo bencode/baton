@@ -4,18 +4,21 @@
 
 import type { Code } from '@baton/shared'
 
-export type ItemKind = 'requirement' | 'task' | 'session'
+// Item kinds that travel as project-scoped codes in the URL.
+// In M2.6 only R-/T- carry codes (chat-referenced resources). Session
+// navigation uses its int id under /proj/<n>/session/<id>.
+export type ItemKind = 'requirement' | 'task'
 
 export type Route =
   | { kind: 'home' }
   | { kind: 'workspace'; workspaceId: number }
   | { kind: 'project'; projectId: number }
   | { kind: 'item'; projectId: number; code: Code; itemKind: ItemKind }
+  | { kind: 'session'; projectId: number; sessionId: number }
 
 const kindFromCode = (code: string): ItemKind | null => {
   if (code.startsWith('R-')) return 'requirement'
   if (code.startsWith('T-')) return 'task'
-  if (code.startsWith('S-')) return 'session'
   return null
 }
 
@@ -34,6 +37,12 @@ export const parseRoute = (pathname: string): Route => {
   if (seg[0] === 'proj') {
     const projectId = intSeg(seg[1])
     if (projectId === null) return { kind: 'home' }
+    // /proj/<p>/session/<sid>
+    if (seg[2] === 'session') {
+      const sessionId = intSeg(seg[3])
+      if (sessionId !== null) return { kind: 'session', projectId, sessionId }
+      return { kind: 'project', projectId }
+    }
     const codeSeg = seg[2]
     if (codeSeg) {
       const itemKind = kindFromCode(codeSeg)
@@ -48,9 +57,14 @@ const enc = encodeURIComponent
 export const workspacePath = (workspaceId: number): string => `/ws/${workspaceId}`
 export const projectPath = (projectId: number): string => `/proj/${projectId}`
 export const itemPath = (projectId: number, code: Code): string => `/proj/${projectId}/${enc(code)}`
+export const sessionPath = (projectId: number, sessionId: number): string =>
+  `/proj/${projectId}/session/${sessionId}`
 
-// Whether a path opens an item (and therefore becomes a tab).
-export const isItemRoute = (pathname: string): boolean => parseRoute(pathname).kind === 'item'
+// Whether a path opens a tab (item or session).
+export const isItemRoute = (pathname: string): boolean => {
+  const r = parseRoute(pathname)
+  return r.kind === 'item' || r.kind === 'session'
+}
 
 // The active project for a path (drives the left tree), if any.
 export const activeProjectId = (pathname: string): number | null => {

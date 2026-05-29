@@ -52,7 +52,7 @@ describe('server HTTP', () => {
     assert.equal(tasks[0]?.id, t.id)
   })
 
-  test('items lookup resolves R/T/S codes', async () => {
+  test('items lookup resolves R / T (sessions navigate by int id, not S-N)', async () => {
     const app = createApp(ctx.store)
     type WithId = { id: number }
     const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as WithId
@@ -60,15 +60,12 @@ describe('server HTTP', () => {
       await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
     ).json()) as WithId
     await postJson(app, '/requirements', { projectId: p.id, title: 'r' })
-    await postJson(app, '/sessions', { projectId: p.id, mode: 'worker', name: 'w1' })
     const reqLookup = (await (await app.request(`/projects/${p.id}/items/R-1`)).json()) as {
       kind: string
     }
     assert.equal(reqLookup.kind, 'requirement')
-    const sessLookup = (await (await app.request(`/projects/${p.id}/items/S-1`)).json()) as {
-      kind: string
-    }
-    assert.equal(sessLookup.kind, 'session')
+    // S- is no longer a recognised prefix (sessions don't carry codes)
+    assert.equal((await app.request(`/projects/${p.id}/items/S-1`)).status, 400)
     assert.equal((await app.request(`/projects/${p.id}/items/X-1`)).status, 400)
   })
 
@@ -92,7 +89,6 @@ describe('server HTTP', () => {
 
   const seedSession = async (app: ReturnType<typeof createApp>) => {
     type WithId = { id: number }
-    type WithCode = WithId & { code: string }
     const w = (await (await postJson(app, '/workspaces', { name: 'w' })).json()) as WithId
     const p = (await (
       await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
@@ -104,17 +100,22 @@ describe('server HTTP', () => {
         name: 'dogfood',
         claudeSessionId: 'aaaa-bbbb-cccc-dddd',
         worktreePath: '/tmp/wt',
+        machineId: 'mid-test',
+        hostname: 'h-test',
+        workerName: 'ben-laptop',
       })
-    ).json()) as WithCode & { apiToken: string; state: string }
+    ).json()) as WithId & { apiToken: string; alive: boolean; busy: boolean }
     return { projectId: p.id, session: s }
   }
 
-  test('session register: returns code S-N + apiToken + state=idle', async () => {
+  test('session register: returns int id + apiToken + view fields (alive/busy)', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
-    assert.equal(session.code, 'S-1')
-    assert.equal(session.state, 'idle')
+    assert.equal(typeof session.id, 'number')
     assert.equal(typeof session.apiToken, 'string')
+    assert.equal(session.busy, false)
+    // alive is false until a worker pings — none has, so machineId 'mid-test' isn't live yet
+    assert.equal(session.alive, false)
   })
 
   test('messages: POST /sessions/:id/messages records user_message + 409 on closed', async () => {
@@ -144,7 +145,7 @@ describe('server HTTP', () => {
     )
   })
 
-  test('worker events (bearer): turn_start marks message processed + state=busy; turn_complete → idle', async () => {
+  test('worker events (bearer): turn_start marks message processed; busy derived from event log', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
     const msgRes = await postJson(app, `/sessions/${session.id}/messages`, { text: 'work' })
@@ -158,15 +159,15 @@ describe('server HTTP', () => {
       401,
     )
 
-    // turn_start consumes the message + flips state.
+    // turn_start consumes the message → busy=true (derived).
     await postJson(
       app,
       '/sessions/me/events',
       { type: 'turn_start', payload: { messageId: msg.id } },
       auth,
     )
-    const busy = (await (await app.request(`/sessions/${session.id}`)).json()) as { state: string }
-    assert.equal(busy.state, 'busy')
+    const busy = (await (await app.request(`/sessions/${session.id}`)).json()) as { busy: boolean }
+    assert.equal(busy.busy, true)
 
     // Stream an SDK event.
     await postJson(
@@ -176,15 +177,15 @@ describe('server HTTP', () => {
       auth,
     )
 
-    // turn_complete returns to idle.
+    // turn_complete → busy back to false.
     await postJson(
       app,
       '/sessions/me/events',
       { type: 'turn_complete', payload: { exitCode: 0 } },
       auth,
     )
-    const idle = (await (await app.request(`/sessions/${session.id}`)).json()) as { state: string }
-    assert.equal(idle.state, 'idle')
+    const idle = (await (await app.request(`/sessions/${session.id}`)).json()) as { busy: boolean }
+    assert.equal(idle.busy, false)
 
     // Event log contains user + turn_start + sdk + turn_complete in order.
     const events = (await (await app.request(`/sessions/${session.id}/events`)).json()) as Array<{
@@ -194,6 +195,59 @@ describe('server HTTP', () => {
       events.map(e => e.type),
       ['user_message', 'turn_start', 'sdk_event', 'turn_complete'],
     )
+  })
+
+  test('worker register: creates fresh worker + alive=true after first ping', async () => {
+    const app = createApp(ctx.store)
+    type WithId = { id: number }
+    const w = (await (await postJson(app, '/workspaces', { name: 'w' })).json()) as WithId
+    const p = (await (
+      await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
+    ).json()) as WithId
+    const res = await postJson(app, '/workers', {
+      projectId: p.id,
+      machineId: 'mid-1',
+      name: 'ben-laptop',
+      hostname: 'bens-air.local',
+    })
+    assert.equal(res.status, 201)
+    const body = (await res.json()) as {
+      worker: { id: number; alive: boolean; machineId: string }
+      outcome: string
+    }
+    assert.equal(body.outcome, 'created')
+    assert.equal(body.worker.alive, true)
+    assert.equal(body.worker.machineId, 'mid-1')
+
+    // Listed under the project
+    const list = (await (await app.request(`/projects/${p.id}/workers`)).json()) as Array<{
+      id: number
+      alive: boolean
+    }>
+    assert.equal(list.length, 1)
+    assert.equal(list[0]?.alive, true)
+  })
+
+  test('worker register: name collision (different machineId) → 409', async () => {
+    const app = createApp(ctx.store)
+    type WithId = { id: number }
+    const w = (await (await postJson(app, '/workspaces', { name: 'w' })).json()) as WithId
+    const p = (await (
+      await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
+    ).json()) as WithId
+    await postJson(app, '/workers', {
+      projectId: p.id,
+      machineId: 'mid-1',
+      name: 'shared-name',
+      hostname: 'h-a',
+    })
+    const collide = await postJson(app, '/workers', {
+      projectId: p.id,
+      machineId: 'mid-2',
+      name: 'shared-name',
+      hostname: 'h-b',
+    })
+    assert.equal(collide.status, 409)
   })
 
   test('SSE: replays history then pushes new events as they arrive', async () => {

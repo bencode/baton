@@ -186,7 +186,7 @@ export const runDaemon = async (
   deps: RunnerDeps,
   signal: AbortSignal,
 ): Promise<void> => {
-  const log = deps.log ?? (m => console.log(`[${config.sessionCode}] ${m}`))
+  const log = deps.log ?? (m => console.log(`[#${config.sessionId} ${config.name}] ${m}`))
   const sp = deps.spawnImpl ?? (spawn as SpawnImpl)
   const ESCtor =
     deps.eventSourceImpl ?? (EventSource as unknown as new (u: string) => EventSourceLike)

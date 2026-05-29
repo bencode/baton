@@ -8,9 +8,9 @@ import type {
   SessionEvent,
   SessionEventType,
   SessionMode,
-  SessionState,
   Task,
   TaskStatus,
+  Worker,
   Workspace,
 } from '@baton/shared'
 import type {
@@ -19,6 +19,7 @@ import type {
   Session as DbSession,
   SessionEvent as DbSessionEvent,
   Task as DbTask,
+  Worker as DbWorker,
   Workspace as DbWorkspace,
 } from '@prisma/client'
 
@@ -69,14 +70,14 @@ export const toTask = (r: DbTask): Task => ({
 export const toSession = (r: DbSession): Session => ({
   id: r.id,
   projectId: r.projectId,
-  code: r.code,
   mode: r.mode as SessionMode,
   name: r.name,
-  state: r.state as SessionState,
   claudeSessionId: r.claudeSessionId ?? undefined,
   worktreePath: r.worktreePath ?? undefined,
+  machineId: r.machineId ?? undefined,
+  hostname: r.hostname ?? undefined,
+  workerName: r.workerName ?? undefined,
   startedAt: r.startedAt.getTime(),
-  heartbeatAt: r.heartbeatAt.getTime(),
   closedAt: r.closedAt?.getTime(),
 })
 
@@ -88,4 +89,14 @@ export const toSessionEvent = (r: DbSessionEvent): SessionEvent => ({
   payload: JSON.parse(r.payload),
   processedAt: r.processedAt?.getTime(),
   createdAt: r.createdAt.getTime(),
+})
+
+export const toWorker = (r: DbWorker): Worker => ({
+  id: r.id,
+  projectId: r.projectId,
+  machineId: r.machineId,
+  name: r.name,
+  hostname: r.hostname,
+  startedAt: r.startedAt.getTime(),
+  closedAt: r.closedAt?.getTime(),
 })

@@ -5,6 +5,7 @@ import {
   itemPath,
   parseRoute,
   projectPath,
+  sessionPath,
   workspacePath,
 } from './route'
 
@@ -32,14 +33,16 @@ test('parseRoute treats invalid ids / unknown code prefix as home/project', () =
   expect(parseRoute('/proj/1/X-9')).toEqual({ kind: 'project', projectId: 1 })
 })
 
-test('parseRoute recognises S- (session) item codes; A-/X- fall back to project', () => {
-  expect(parseRoute('/proj/1/S-2')).toEqual({
-    kind: 'item',
+test('parseRoute: sessions go through /proj/<p>/session/<sid> (int id), not S-N', () => {
+  expect(parseRoute('/proj/1/session/42')).toEqual({
+    kind: 'session',
     projectId: 1,
-    code: 'S-2',
-    itemKind: 'session',
+    sessionId: 42,
   })
-  // M2.5 removed assignments — A-N is no longer an item kind; falls back to project.
+  expect(sessionPath(1, 42)).toBe('/proj/1/session/42')
+  // S- prefix is no longer recognised — falls back to project.
+  expect(parseRoute('/proj/1/S-2')).toEqual({ kind: 'project', projectId: 1 })
+  // A-3 unchanged — assignments still gone from the URL surface.
   expect(parseRoute('/proj/1/A-3')).toEqual({ kind: 'project', projectId: 1 })
 })
 
@@ -55,9 +58,10 @@ test('path builders round-trip through parseRoute', () => {
   expect(itemPath(1, 'T-5')).toBe('/proj/1/T-5')
 })
 
-test('isItemRoute is true only for R-/T- coded paths', () => {
+test('isItemRoute is true for R-/T- and session paths (both open as tabs)', () => {
   expect(isItemRoute('/proj/1/T-1')).toBe(true)
   expect(isItemRoute('/proj/1/R-1')).toBe(true)
+  expect(isItemRoute('/proj/1/session/42')).toBe(true)
   expect(isItemRoute('/proj/1')).toBe(false)
   expect(isItemRoute('/')).toBe(false)
 })

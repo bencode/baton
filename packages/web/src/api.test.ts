@@ -91,11 +91,11 @@ test('sessions.sendMessage POSTs text to /sessions/:id/messages', async () => {
   expect(JSON.parse(init?.body as string)).toEqual({ text: 'hi' })
 })
 
-test('sessions.getByCode unwraps session items', async () => {
-  const item = { id: 1, code: 'S-1', name: 's', state: 'idle' }
-  const fetchMock = vi.fn<typeof fetch>(async () => res({ kind: 'session', item }))
+test('sessions.get fetches by int id (no more S-N codes)', async () => {
+  const item = { id: 42, name: 's', startedAt: 0 }
+  const fetchMock = vi.fn<typeof fetch>(async () => res(item))
   vi.stubGlobal('fetch', fetchMock)
-  const got = await createApi().sessions.getByCode(1, 'S-1')
+  const got = await createApi().sessions.get(42)
   expect(got).toEqual(item)
-  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/projects/1/items/S-1')
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/sessions/42')
 })

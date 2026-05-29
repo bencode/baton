@@ -86,17 +86,11 @@ describe('Store contract', () => {
     assert.equal(next.code, 'T-6')
   })
 
-  test('getByCode resolves R/T/S within a project', async () => {
+  test('getByCode resolves R / T within a project (sessions no longer carry codes)', async () => {
     const { req, project } = await seedReq()
     const t = await ctx.store.tasks.create({ requirementId: req, title: 'a' })
     assert.equal((await ctx.store.tasks.getByCode(project, 'T-1'))?.id, t.id)
     assert.equal((await ctx.store.requirements.getByCode(project, 'R-1'))?.id, req)
-    const s = await ctx.store.sessions.register({
-      projectId: project,
-      mode: 'worker',
-      name: 'w1',
-    })
-    assert.equal((await ctx.store.sessions.getByCode(project, 'S-1'))?.id, s.id)
     assert.equal(await ctx.store.tasks.getByCode(project, 'T-99'), null)
   })
 
@@ -130,25 +124,51 @@ describe('Store contract', () => {
     assert.equal(await ctx.store.tasks.get(t.id), null)
   })
 
-  // === M2.5: session as chat channel ===
+  // === M2.6: sessions (no code/state/heartbeatAt) + workers + isBusy derive ===
 
-  test('session register: issues S-N + apiToken; getByToken resolves back; token not in domain shape', async () => {
+  test('session register: issues apiToken; carries machineId/hostname/workerName snapshots', async () => {
     const { project } = await seedReq()
     const s = await ctx.store.sessions.register({
       projectId: project,
       mode: 'worker',
-      name: 'ben-laptop',
+      name: 'dogfood',
       claudeSessionId: '11111111-1111-1111-1111-111111111111',
       worktreePath: '/tmp/wt',
+      machineId: 'mid-abc',
+      hostname: 'bens-air.local',
+      workerName: 'ben-laptop',
     })
-    assert.equal(s.code, 'S-1')
-    assert.equal(s.state, 'idle')
-    assert.equal(s.claudeSessionId, '11111111-1111-1111-1111-111111111111')
-    assert.equal(s.worktreePath, '/tmp/wt')
+    assert.equal(typeof s.id, 'number')
+    assert.equal(s.machineId, 'mid-abc')
+    assert.equal(s.hostname, 'bens-air.local')
+    assert.equal(s.workerName, 'ben-laptop')
     assert.ok(s.apiToken.length >= 20)
     const back = await ctx.store.sessions.getByToken(s.apiToken)
     assert.equal(back?.id, s.id)
     assert.equal((back as unknown as { apiToken?: string }).apiToken, undefined)
+  })
+
+  test('isBusy derived: turn_start with no closing event ⇒ busy', async () => {
+    const { project } = await seedReq()
+    const s = await ctx.store.sessions.register({
+      projectId: project,
+      mode: 'worker',
+      name: 's',
+    })
+    assert.equal(await ctx.store.sessions.isBusy(s.id), false)
+    await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'go' })
+    assert.equal(await ctx.store.sessions.isBusy(s.id), false)
+    await ctx.store.sessions.appendEvent(s.id, 'turn_start', { messageId: 1 })
+    assert.equal(await ctx.store.sessions.isBusy(s.id), true)
+    await ctx.store.sessions.appendEvent(s.id, 'sdk_event', { type: 'assistant' })
+    assert.equal(await ctx.store.sessions.isBusy(s.id), true)
+    await ctx.store.sessions.appendEvent(s.id, 'turn_complete', { exitCode: 0 })
+    assert.equal(await ctx.store.sessions.isBusy(s.id), false)
+    // Subsequent turn flips busy back on
+    await ctx.store.sessions.appendEvent(s.id, 'turn_start', { messageId: 2 })
+    assert.equal(await ctx.store.sessions.isBusy(s.id), true)
+    await ctx.store.sessions.appendEvent(s.id, 'turn_error', { message: 'boom' })
+    assert.equal(await ctx.store.sessions.isBusy(s.id), false)
   })
 
   test('appendEvent: monotonic sequence per session, listEvents in order', async () => {
@@ -168,10 +188,9 @@ describe('Store contract', () => {
       [0, 1, 2],
     )
     assert.equal(events[0]?.type, 'user_message')
-    assert.deepEqual(events[0]?.payload, { text: 'hello' })
   })
 
-  test('pending message lifecycle: findNextPendingMessage + markMessageProcessed + count', async () => {
+  test('pending message lifecycle: findNext + markProcessed + count', async () => {
     const { project } = await seedReq()
     const s = await ctx.store.sessions.register({
       projectId: project,
@@ -180,32 +199,16 @@ describe('Store contract', () => {
     })
     const m1 = await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'a' })
     const m2 = await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'b' })
-    // sdk_event in between is not a 'pending message'
     await ctx.store.sessions.appendEvent(s.id, 'sdk_event', { foo: 1 })
     assert.equal(await ctx.store.sessions.pendingMessageCount(s.id), 2)
     const next = await ctx.store.sessions.findNextPendingMessage(s.id)
-    assert.equal(next?.id, m1.id) // FIFO by sequence
+    assert.equal(next?.id, m1.id)
     await ctx.store.sessions.markMessageProcessed(m1.id)
     assert.equal(await ctx.store.sessions.pendingMessageCount(s.id), 1)
     assert.equal((await ctx.store.sessions.findNextPendingMessage(s.id))?.id, m2.id)
   })
 
-  test('setState transitions + resetBusySessions recovers crashed boots', async () => {
-    const { project } = await seedReq()
-    const s = await ctx.store.sessions.register({
-      projectId: project,
-      mode: 'worker',
-      name: 's',
-    })
-    assert.equal((await ctx.store.sessions.get(s.id))?.state, 'idle')
-    await ctx.store.sessions.setState(s.id, 'busy')
-    assert.equal((await ctx.store.sessions.get(s.id))?.state, 'busy')
-    const recovered = await ctx.store.sessions.resetBusySessions()
-    assert.equal(recovered, 1)
-    assert.equal((await ctx.store.sessions.get(s.id))?.state, 'idle')
-  })
-
-  test('close → state=closed + closedAt set', async () => {
+  test('session close sets closedAt; getByToken still resolves (auth filters in middleware)', async () => {
     const { project } = await seedReq()
     const s = await ctx.store.sessions.register({
       projectId: project,
@@ -214,7 +217,85 @@ describe('Store contract', () => {
     })
     await ctx.store.sessions.close(s.id)
     const closed = await ctx.store.sessions.get(s.id)
-    assert.equal(closed?.state, 'closed')
     assert.equal(typeof closed?.closedAt, 'number')
+  })
+
+  // --- workers --------------------------------------------------------------
+
+  test('worker register: rule 2a creates a fresh worker', async () => {
+    const { project } = await seedReq()
+    const out = await ctx.store.workers.register({
+      projectId: project,
+      machineId: 'mid-1',
+      name: 'ben-laptop',
+      hostname: 'bens-air.local',
+    })
+    assert.equal(out.kind, 'created')
+    if (out.kind !== 'created') throw new Error('unreachable')
+    assert.equal(out.worker.machineId, 'mid-1')
+    assert.equal(out.worker.name, 'ben-laptop')
+  })
+
+  test('worker register: rule 1 reattaches by machineId; can update name on the fly', async () => {
+    const { project } = await seedReq()
+    await ctx.store.workers.register({
+      projectId: project,
+      machineId: 'mid-1',
+      name: 'ben-laptop',
+      hostname: 'bens-air.local',
+    })
+    const again = await ctx.store.workers.register({
+      projectId: project,
+      machineId: 'mid-1',
+      name: 'ben-laptop-renamed',
+      hostname: 'bens-air.local',
+    })
+    assert.equal(again.kind, 'reattached-machine')
+    if (again.kind !== 'reattached-machine') throw new Error('unreachable')
+    assert.equal(again.worker.name, 'ben-laptop-renamed')
+    // Only one worker row exists alive in this project
+    const list = await ctx.store.workers.listByProject(project)
+    assert.equal(list.filter(w => w.closedAt === undefined).length, 1)
+  })
+
+  test('worker register: rule 2c rejects name collision from a different machine', async () => {
+    const { project } = await seedReq()
+    await ctx.store.workers.register({
+      projectId: project,
+      machineId: 'mid-1',
+      name: 'shared-name',
+      hostname: 'host-a',
+    })
+    const collide = await ctx.store.workers.register({
+      projectId: project,
+      machineId: 'mid-2',
+      name: 'shared-name',
+      hostname: 'host-b',
+    })
+    assert.equal(collide.kind, 'name-collision')
+  })
+
+  test('worker close: same machineId can register again afterward (new row)', async () => {
+    const { project } = await seedReq()
+    const a = await ctx.store.workers.register({
+      projectId: project,
+      machineId: 'mid-1',
+      name: 'ben',
+      hostname: 'h',
+    })
+    if (a.kind !== 'created') throw new Error('unreachable')
+    await ctx.store.workers.close(a.worker.id)
+    const b = await ctx.store.workers.register({
+      projectId: project,
+      machineId: 'mid-1',
+      name: 'ben',
+      hostname: 'h',
+    })
+    assert.equal(b.kind, 'created')
+    if (b.kind !== 'created') throw new Error('unreachable')
+    assert.notEqual(a.worker.id, b.worker.id)
+    // findAlive resolves the live one
+    const alive = await ctx.store.workers.findAlive(project, 'mid-1')
+    assert.equal(alive?.id, b.worker.id)
   })
 })

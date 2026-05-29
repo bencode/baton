@@ -1,7 +1,10 @@
-import type { RequirementStatus, SessionState, TaskStatus } from '@baton/shared'
+import type { RequirementStatus, TaskStatus } from '@baton/shared'
 
 // Detail-view status label: ring-style pill with uppercase tracking — reads as
 // "tag/label", not "highlighted text". For dense rows use <StatusDot> instead.
+// Sessions used to feed a SessionState string here in M2.5; in M2.6 they're
+// expressed as derived alive/busy booleans, so this component only takes the
+// product/task vocabulary now.
 const STYLES: Record<string, string> = {
   active: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200/60',
   done: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/60',
@@ -12,12 +15,15 @@ const STYLES: Record<string, string> = {
   cancelled: 'bg-gray-50 text-gray-400 ring-1 ring-inset ring-gray-200',
   idle: 'bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-200',
   closed: 'bg-gray-100 text-gray-500 ring-1 ring-inset ring-gray-200',
+  offline: 'bg-gray-100 text-gray-500 ring-1 ring-inset ring-gray-200',
 }
 
 const LABELS: Record<string, string> = { in_progress: 'in progress' }
 
 type StatusBadgeProps = {
-  status: RequirementStatus | TaskStatus | SessionState
+  // Loose string union — session view code computes labels like 'busy' / 'idle'
+  // / 'closed' / 'offline' at the call site, free of a shared enum.
+  status: RequirementStatus | TaskStatus | 'idle' | 'busy' | 'closed' | 'offline'
 }
 
 export const StatusBadge = ({ status }: StatusBadgeProps) => (

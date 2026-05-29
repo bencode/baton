@@ -1,29 +1,26 @@
-import type { Code, Id } from '@baton/shared'
+import type { Id } from '@baton/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { StatusBadge } from '../../components/status-badge'
 import { type RenderItem, reduceEvents, type TurnEndSummary } from './event-render'
 import { useSessionStream } from './use-session-stream'
-import { useSessionByCode, useSessions } from './use-sessions'
+import { useSession, useSessions } from './use-sessions'
 
-type SessionDetailProps = { projectId: Id; code: Code }
+type SessionDetailProps = { projectId: Id; sessionId: Id }
 
-// Renders a Session as a chat: header chip with status / claude session id,
-// scrolling bubble + tool-block stream produced by reduceEvents(), and a
-// bottom message composer.
-export const SessionDetail = ({ projectId, code }: SessionDetailProps) => {
+// Render a Session as a chat. Looks up the session by int id; the list query
+// from `useSessions` re-polls so we can use its fresher copy when available.
+export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
   const api = useApi()
-  const { data: sessionShallow } = useSessionByCode(projectId, code)
+  const { data: sessionShallow } = useSession(sessionId)
   const { data: liveSessions } = useSessions(projectId)
-  const session = liveSessions?.find(s => s.id === sessionShallow?.id) ?? sessionShallow
+  const session = liveSessions?.find(s => s.id === sessionId) ?? sessionShallow
   const { events, status } = useSessionStream(session?.id ?? null)
   const items = useMemo(() => reduceEvents(events), [events])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
 
   // Auto-scroll the event list to the bottom whenever new items arrive.
-  // Crude v0 — always scrolls (doesn't respect user-scrolled-up). Good enough
-  // until the chat panel gets the bigger overhaul.
   const scrollRef = useRef<HTMLDivElement | null>(null)
   // biome-ignore lint/correctness/useExhaustiveDependencies: items.length is the intended trigger
   useEffect(() => {
@@ -45,7 +42,18 @@ export const SessionDetail = ({ projectId, code }: SessionDetailProps) => {
       setSending(false)
     }
   }
-  const disabled = session.state === 'closed'
+  // `alive` / `busy` only come on view-merged responses; bare records (like
+  // the cached useSession one) don't carry them. Treat closedAt as the only
+  // hard "no chat" signal.
+  const view = session as typeof session & { alive?: boolean; busy?: boolean }
+  const disabled = !!session.closedAt
+  const badgeStatus: 'idle' | 'busy' | 'closed' | 'offline' = session.closedAt
+    ? 'closed'
+    : view.alive === false
+      ? 'offline'
+      : view.busy
+        ? 'busy'
+        : 'idle'
 
   return (
     <div className="flex h-full flex-col">
@@ -55,13 +63,11 @@ export const SessionDetail = ({ projectId, code }: SessionDetailProps) => {
           <span aria-hidden="true" className="text-gray-300">
             ·
           </span>
-          <span className="font-mono normal-case tracking-normal text-gray-400">
-            {session.code}
-          </span>
+          <span className="font-mono normal-case tracking-normal text-gray-400">#{session.id}</span>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-semibold tracking-tight text-gray-900">{session.name}</h2>
-          <StatusBadge status={session.state} />
+          <StatusBadge status={badgeStatus} />
           <span className="text-xs text-gray-400">stream: {status}</span>
         </div>
         {session.worktreePath && (

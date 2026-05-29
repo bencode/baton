@@ -1,4 +1,4 @@
-import type { Code, Id, Session } from '@baton/shared'
+import type { Id, Session } from '@baton/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { useAsync } from '../../hooks/use-async'
@@ -49,12 +49,12 @@ export const useSessions = (
   return { data, loading, error }
 }
 
-export const useSessionByCode = (projectId: Id | null, code: Code | null) => {
+// Session lookup by int id (no more S- codes). Returns null while loading or
+// when sessionId is null.
+export const useSession = (sessionId: Id | null) => {
   const api = useApi()
-  const key = projectId !== null && code ? `${projectId}/${code}` : null
   return useAsync<Session | null>(
-    () =>
-      projectId !== null && code ? api.sessions.getByCode(projectId, code) : Promise.resolve(null),
-    key,
+    () => (sessionId !== null ? api.sessions.get(sessionId) : Promise.resolve(null)),
+    sessionId,
   )
 }

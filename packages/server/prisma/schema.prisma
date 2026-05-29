@@ -30,6 +30,7 @@ model Project {
   requirements Requirement[]
   tasks        Task[]
   sessions     Session[]
+  workers      Worker[]
   counters     CodeCounter[]
 
   @@unique([workspaceId, name])
@@ -49,7 +50,7 @@ model CodeCounter {
 model Requirement {
   id          Int      @id @default(autoincrement())
   projectId   Int
-  code        String   // 'R-1', 'R-2', ...
+  code        String // 'R-1', 'R-2', ...
   title       String
   description String?
   resources   String   @default("[]") // JSON ResourceRef[]
@@ -69,8 +70,8 @@ model Requirement {
 model Task {
   id            Int      @id @default(autoincrement())
   requirementId Int
-  projectId     Int      // denorm to enable DB-level (projectId, code) UNIQUE
-  code          String   // 'T-1', 'T-2', ...
+  projectId     Int // denorm to enable DB-level (projectId, code) UNIQUE
+  code          String // 'T-1', 'T-2', ...
   title         String
   spec          String?
   dependsOn     String   @default("[]") // JSON Id[] (int FK references)
@@ -90,28 +91,52 @@ model Task {
 // A Session models one Claude Code conversation. claudeSessionId is a UUID
 // baton generates at creation time; the server passes it as --session-id on
 // the first turn and --resume on subsequent turns. worktreePath is a git
-// worktree provisioned by the CLI at `baton session new`. state serialises
-// per-session turns: only one claude subprocess at a time.
+// worktree provisioned by the CLI at `baton session new`.
+//
+// `state` (idle/busy/closed) and `heartbeatAt` from M2.5 are gone — busy is
+// derived from SessionEvent log, alive from worker liveness via machineId.
+// `code` (S-N) is dropped: Session isn't chat-referenced like R-/T- are, so
+// int id + human name is enough. machineId/hostname/workerName are snapshots
+// (strings, no FK) that group sessions in the UI.
 model Session {
   id              Int       @id @default(autoincrement())
   projectId       Int
-  code            String // 'S-N'
   mode            String // 'worker' | 'skill'
   name            String
   apiToken        String    @unique
-  state           String    @default("idle") // 'idle' | 'busy' | 'closed'
   claudeSessionId String?   @unique
   worktreePath    String?
+  machineId       String?
+  hostname        String?
+  workerName      String?
   startedAt       DateTime  @default(now())
-  heartbeatAt     DateTime  @default(now())
   closedAt        DateTime?
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   events  SessionEvent[]
 
-  @@unique([projectId, code])
   @@index([projectId])
-  @@index([state])
+  @@index([machineId])
+}
+
+// A Worker is a (project × machine) registration. machineId is a UUID baton
+// lazily writes to ~/.local/share/baton/machine-id on the client. name is
+// the human handle. No code (W-N) and no apiToken — heartbeat is unauth in
+// v0 (single-team dev environment). Worker rows persist; alive/lastSeen
+// belong in memory.
+model Worker {
+  id        Int       @id @default(autoincrement())
+  projectId Int
+  machineId String
+  name      String
+  hostname  String
+  startedAt DateTime  @default(now())
+  closedAt  DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, machineId])
+  @@index([projectId, name])
 }
 
 // Append-only chat / SDK event log per session. processedAt only meaningful
