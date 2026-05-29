@@ -10,15 +10,20 @@ type WorkersPanelProps = {
   open: (id: string, title: string) => void
 }
 
-type SessionView = Session & { alive?: boolean; busy?: boolean }
+type SessionView = Session & { alive?: boolean; attached?: boolean; busy?: boolean }
 
+// 5-state ladder, ordered by priority. `attached` distinguishes 'this session
+// has a daemon pinging' from 'just the machine is up' — without it, sessions
+// whose daemon was killed look identical to ready ones and the user sends
+// into a queue with no one listening.
 const sessionDotStatus = (
   s: SessionView,
   workerAlive: boolean,
-): 'idle' | 'busy' | 'closed' | 'offline' => {
+): 'idle' | 'streaming' | 'detached' | 'closed' | 'offline' => {
   if (s.closedAt) return 'closed'
   if (!workerAlive) return 'offline'
-  if (s.busy) return 'busy'
+  if (!s.attached) return 'detached'
+  if (s.busy) return 'streaming'
   return 'idle'
 }
 

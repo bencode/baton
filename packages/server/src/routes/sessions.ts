@@ -14,7 +14,8 @@ export const registerSessionRoutes = (
   app: Hono<AppEnv>,
   store: Store,
   bus: EventBus,
-  liveness: LivenessTracker,
+  workerLiveness: LivenessTracker,
+  sessionLiveness: LivenessTracker,
 ): void => {
   const auth = bearerAuth(store)
 
@@ -58,17 +59,27 @@ export const registerSessionRoutes = (
       agentSessionId: body.agentSessionId,
       worktreePath: body.worktreePath,
     })
-    const view = await sessionWithView(reg, store, liveness)
+    const view = await sessionWithView(reg, store, workerLiveness, sessionLiveness)
     return c.json({ ...view, apiToken: reg.apiToken }, 201)
   })
   app.get('/sessions/:id', async c => {
     const s = await store.sessions.get(intParam(c.req.param('id')))
     if (!s) return c.json({ error: 'not found' }, 404)
-    return c.json(await sessionWithView(s, store, liveness))
+    return c.json(await sessionWithView(s, store, workerLiveness, sessionLiveness))
   })
   app.get('/sessions/:id/events', async c =>
     c.json(await store.sessions.listEvents(intParam(c.req.param('id')))),
   )
+
+  // Session-private (bearer). Daemon pings this every 30s alongside the
+  // worker-level /workers/heartbeat. Server uses it to distinguish 'machine
+  // online' from 'this specific session has a live daemon attached' so the
+  // UI can flag 'message will queue with no one to process' clearly.
+  app.post('/sessions/me/heartbeat', auth, async c => {
+    const session = c.get('session')
+    sessionLiveness.ping(String(session.id))
+    return c.json({ attached: true })
+  })
 
   // Worker-private (bearer). turn_start / turn_complete / turn_error don't
   // flip persistent state anymore — busy is derived from the event log.

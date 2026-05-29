@@ -6,14 +6,15 @@ import type { Store } from './store/types.ts'
 export type Server = { port: number; stop: () => Promise<void> }
 
 // Run the Hono app on Node via @hono/node-server; stop closes the server, then the Store.
-// `liveness` is optional — createApp() will instantiate its own if omitted (test convenience).
+// Both liveness trackers are optional — createApp() will instantiate its own if omitted.
 export const startServer = (opts: {
   store: Store
   port: number
-  liveness?: LivenessTracker
+  workerLiveness?: LivenessTracker
+  sessionLiveness?: LivenessTracker
 }): Promise<Server> =>
   new Promise(resolve => {
-    const app = createApp(opts.store, undefined, opts.liveness)
+    const app = createApp(opts.store, undefined, opts.workerLiveness, opts.sessionLiveness)
     const httpServer = serve({ fetch: app.fetch, port: opts.port }, info => {
       resolve({
         port: info.port,

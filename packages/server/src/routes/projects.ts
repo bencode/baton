@@ -7,7 +7,8 @@ import { type AppEnv, intParam, sessionWithView, workerWithView } from '../views
 export const registerProjectRoutes = (
   app: Hono<AppEnv>,
   store: Store,
-  liveness: LivenessTracker,
+  workerLiveness: LivenessTracker,
+  sessionLiveness: LivenessTracker,
 ): void => {
   app.post('/projects', async c => {
     const body = (await c.req.json()) as {
@@ -30,13 +31,15 @@ export const registerProjectRoutes = (
   app.get('/projects/:id/sessions', async c => {
     const id = intParam(c.req.param('id'))
     const list = await store.sessions.listByProject(id)
-    const merged = await Promise.all(list.map(s => sessionWithView(s, store, liveness)))
+    const merged = await Promise.all(
+      list.map(s => sessionWithView(s, store, workerLiveness, sessionLiveness)),
+    )
     return c.json(merged)
   })
   app.get('/projects/:id/workers', async c => {
     const id = intParam(c.req.param('id'))
     const list = await store.workers.listByProject(id)
-    return c.json(list.map(w => workerWithView(w, liveness)))
+    return c.json(list.map(w => workerWithView(w, workerLiveness)))
   })
   // Resolve an item by its project-scoped code (R-N / T-N only). Sessions and
   // workers don't carry human codes — navigate to them by int id.

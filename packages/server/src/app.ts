@@ -14,25 +14,26 @@ export type { AppEnv } from './views.ts'
 
 // HTTP surface, sliced by resource. Each routes/<X>.ts attaches its handlers
 // to the shared Hono app so route paths stay flat (no /v1 prefix gymnastics).
-//   - Workspace / Project / Requirement / Task: thin CRUD over Store (M1).
-//   - Worker: unauth register + heartbeat + close (machineId is the anchor).
-//   - Session: register + close (bearer for /sessions/me/*).
-//   - Chat protocol (M2.5):
-//       upward  ← POST /sessions/:id/messages   (UI / CLI, no auth)
-//               ← POST /sessions/me/events       (worker, bearer)
-//       downward → GET  /sessions/:id/stream     (SSE: replay + tail)
+//
+// Two independent in-memory liveness trackers:
+//   workerLiveness   — keyed by machineId; pinged by POST /workers/heartbeat
+//   sessionLiveness  — keyed by sessionId.toString(); pinged by POST
+//                      /sessions/me/heartbeat (bearer). Distinguishes 'machine
+//                      online but no daemon for this session' from 'machine
+//                      offline'. See packages/shared/src/domain/session.ts.
 export const createApp = (
   store: Store,
   bus: EventBus = createEventBus(),
-  liveness: LivenessTracker = createLiveness(),
+  workerLiveness: LivenessTracker = createLiveness(),
+  sessionLiveness: LivenessTracker = createLiveness(),
 ): Hono<AppEnv> => {
   const app = new Hono<AppEnv>()
   app.get('/health', c => c.json({ ok: true }))
   registerWorkspaceRoutes(app, store)
-  registerProjectRoutes(app, store, liveness)
+  registerProjectRoutes(app, store, workerLiveness, sessionLiveness)
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store)
-  registerWorkerRoutes(app, store, liveness)
-  registerSessionRoutes(app, store, bus, liveness)
+  registerWorkerRoutes(app, store, workerLiveness)
+  registerSessionRoutes(app, store, bus, workerLiveness, sessionLiveness)
   return app
 }

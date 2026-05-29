@@ -15,13 +15,15 @@ export type AppEnv = { Variables: AuthVars }
 export const sessionWithView = async (
   session: Session,
   store: Store,
-  liveness: LivenessTracker,
+  workerLiveness: LivenessTracker,
+  sessionLiveness: LivenessTracker,
 ): Promise<SessionView> => {
   const worker = await store.workers.get(session.workerId)
   return {
     ...session,
     worker: worker ?? unknownWorker(session.workerId, session.projectId),
-    alive: worker ? liveness.isAlive(worker.machineId) : false,
+    alive: worker ? workerLiveness.isAlive(worker.machineId) : false,
+    attached: sessionLiveness.isAlive(String(session.id)),
     busy: await store.sessions.isBusy(session.id),
   }
 }

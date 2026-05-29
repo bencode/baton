@@ -13,14 +13,40 @@ describe('server HTTP — sessions + chat protocol', () => {
     await ctx.cleanup()
   })
 
-  test('session register: returns int id + apiToken + view fields (alive/busy)', async () => {
+  test('session register: returns int id + apiToken + view fields (alive/attached/busy)', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
     assert.equal(typeof session.id, 'number')
     assert.equal(typeof session.apiToken, 'string')
     assert.equal(session.busy, false)
-    // alive is true: worker register seeds liveness with its first ping.
+    // alive is true: worker register seeds worker liveness with its first ping.
     assert.equal(session.alive, true)
+    // attached is false: no daemon has pinged /sessions/me/heartbeat yet.
+    assert.equal(session.attached, false)
+  })
+
+  test('attached flips to true after POST /sessions/me/heartbeat', async () => {
+    const app = createApp(ctx.store)
+    const { session } = await seedSession(app)
+    // Before heartbeat: attached=false.
+    let view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
+      attached: boolean
+    }
+    assert.equal(view.attached, false)
+    // Daemon pings session-level liveness.
+    const hb = await postJson(
+      app,
+      '/sessions/me/heartbeat',
+      {},
+      { authorization: `Bearer ${session.apiToken}` },
+    )
+    assert.equal(hb.status, 200)
+    assert.deepEqual(await hb.json(), { attached: true })
+    // After heartbeat: attached=true.
+    view = (await (await app.request(`/sessions/${session.id}`)).json()) as { attached: boolean }
+    assert.equal(view.attached, true)
+    // Unauthorized still rejected.
+    assert.equal((await postJson(app, '/sessions/me/heartbeat', {})).status, 401)
   })
 
   test('messages: POST /sessions/:id/messages records user_message + 409 on closed', async () => {

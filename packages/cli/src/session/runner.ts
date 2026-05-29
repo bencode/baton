@@ -53,14 +53,20 @@ const foldHistory = (history: SessionEvent[]): DaemonState => ({
 
 const startHeartbeat = (
   client: ApiClient,
+  worker: WorkerClient,
   machineId: string,
   log: (m: string) => void,
 ): NodeJS.Timeout => {
-  // Ping immediately so the server's in-memory liveness is seeded before the
-  // first interval fires 30s later — otherwise `baton send` right after
-  // `baton start` sees alive=false and refuses to stream.
+  // Two pings every tick: worker level (per-machine liveness) and session
+  // level (per-session 'attached' flag). Worker keeps machine alive in UI;
+  // session-level tells the UI 'this session has a daemon' vs 'machine is up
+  // but nobody's running this session'. Immediate ping seeds both so a `send`
+  // right after `start` doesn't see stale alive=false / attached=false.
   const ping = (): void => {
-    void client.workers.heartbeat(machineId).catch(e => log(`heartbeat failed: ${String(e)}`))
+    void client.workers
+      .heartbeat(machineId)
+      .catch(e => log(`worker heartbeat failed: ${String(e)}`))
+    void worker.heartbeat().catch(e => log(`session heartbeat failed: ${String(e)}`))
   }
   ping()
   return setInterval(ping, 30_000)
@@ -130,7 +136,7 @@ export const runDaemon = async (
     }
   }
 
-  const hb = startHeartbeat(deps.client, config.workerMachineId, log)
+  const hb = startHeartbeat(deps.client, deps.worker, config.workerMachineId, log)
   void drain()
   const es = subscribeStream(
     `${config.server}/sessions/${config.sessionId}/stream`,

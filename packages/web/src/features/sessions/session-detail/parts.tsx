@@ -4,17 +4,18 @@ import { StatusBadge } from '../../../components/status-badge'
 import type { RenderItem } from '../event-render'
 import { RenderItemView } from './render-item'
 
-export type BadgeStatus = 'idle' | 'busy' | 'closed' | 'offline'
+export type BadgeStatus = 'idle' | 'streaming' | 'detached' | 'closed' | 'offline'
 
-// `alive` / `busy` only come on view-merged responses; bare records (like the
-// cached useSession one) don't carry them. closedAt is the only hard "no chat"
-// signal.
+// `alive` / `attached` / `busy` only come on view-merged responses; bare
+// records (like the cached useSession one) don't carry them. closedAt is the
+// only hard "no chat" signal. See workers-panel.tsx for the parallel mapping.
 export const deriveBadgeStatus = (
-  session: Session & { alive?: boolean; busy?: boolean },
+  session: Session & { alive?: boolean; attached?: boolean; busy?: boolean },
 ): BadgeStatus => {
   if (session.closedAt) return 'closed'
   if (session.alive === false) return 'offline'
-  if (session.busy) return 'busy'
+  if (session.attached === false) return 'detached'
+  if (session.busy) return 'streaming'
   return 'idle'
 }
 

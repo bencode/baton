@@ -48,6 +48,11 @@ export const seedSession = async (app: ReturnType<typeof createApp>) => {
       agentSessionId: 'aaaa-bbbb-cccc-dddd',
       worktreePath: '/tmp/wt',
     })
-  ).json()) as WithId & { apiToken: string; alive: boolean; busy: boolean }
+  ).json()) as WithId & {
+    apiToken: string
+    alive: boolean
+    attached: boolean
+    busy: boolean
+  }
   return { projectId, workerId, session: s }
 }
