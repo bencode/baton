@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
 import { describe, test } from 'node:test'
 import type { WorkerClient } from '../client.ts'
-import type { SessionConfig } from './config.ts'
+import type { SessionConfig } from '../project-config.ts'
 import { runTurn } from './runner.ts'
 
 describe('runTurn', () => {

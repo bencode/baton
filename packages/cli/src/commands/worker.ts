@@ -4,13 +4,13 @@ import { defineCommand } from 'citty'
 import type { ApiClient, WorkerRegisterOutput } from '../client.ts'
 import { resolveBaseUrl } from '../config.ts'
 import { fmtWorker, renderList, renderOne, toJson } from '../output.ts'
-import { clientFor, common, resolveProjectId } from '../util.ts'
 import {
-  loadWorkerConfigOrNull,
-  saveWorkerConfig,
-  type WorkerConfig,
-  workerConfigPath,
-} from '../worker/config.ts'
+  loadProjectConfig,
+  projectConfigPath,
+  saveProjectConfig,
+  setWorker,
+} from '../project-config.ts'
+import { clientFor, common, resolveProjectId } from '../util.ts'
 import { machineIdPath, readOrCreateMachineId } from '../worker/machine-id.ts'
 
 // Resolve a worker positional arg: int id first, then name lookup.
@@ -37,12 +37,13 @@ export type WorkerRegisterRunInput = {
   machineId: string
 }
 
-// Pure handler: idempotent register + persist config locally. Returns the
-// outcome so the CLI run() can format human output; tests assert the path.
+// Pure handler: idempotent register + persist worker section into .baton.json.
+// If the file is missing, we seed it with {server, project} so this command
+// works for users who skipped `baton init`. Tests assert the configPath.
 export const registerWorker = async (
   client: ApiClient,
   input: WorkerRegisterRunInput,
-  resolvePath: (projectId: Id) => string = workerConfigPath,
+  cfgPath: string = projectConfigPath(),
 ): Promise<{ out: WorkerRegisterOutput; configPath: string }> => {
   const out = await client.workers.register({
     projectId: input.projectId,
@@ -50,16 +51,19 @@ export const registerWorker = async (
     name: input.name,
     hostname: input.hostname,
   })
-  const config: WorkerConfig = {
-    server: input.server,
-    projectId: input.projectId,
-    workerId: out.worker.id,
+  // Tolerate a missing .baton.json: seed it. (Init would normally have done
+  // this, but the worker section is the only thing we strictly need.)
+  try {
+    loadProjectConfig(cfgPath)
+  } catch {
+    saveProjectConfig(cfgPath, { server: input.server, project: input.projectId })
+  }
+  setWorker(cfgPath, {
+    id: out.worker.id,
     name: out.worker.name,
     machineId: out.worker.machineId,
-  }
-  const configPath = resolvePath(input.projectId)
-  saveWorkerConfig(configPath, config)
-  return { out, configPath }
+  })
+  return { out, configPath: cfgPath }
 }
 
 export const worker = defineCommand({
@@ -162,25 +166,28 @@ export const worker = defineCommand({
       },
     }),
     whoami: defineCommand({
-      meta: { name: 'whoami', description: 'show local worker config for a project' },
-      args: {
-        project: { type: 'string', description: 'project id (overrides .baton.json)' },
-        ...common,
-      },
+      meta: { name: 'whoami', description: 'show local worker config from .baton.json' },
+      args: { ...common },
       run: ({ args }) => {
-        const projectId = resolveProjectId(args)
-        const cfg = loadWorkerConfigOrNull(workerConfigPath(projectId))
-        if (!cfg) {
+        const cfg = (() => {
+          try {
+            return loadProjectConfig(projectConfigPath())
+          } catch {
+            return null
+          }
+        })()
+        const worker = cfg?.worker
+        if (!worker) {
           console.log('(no worker registered for this project — run `baton worker register`)')
           return
         }
         if (args.json) {
-          console.log(toJson(cfg))
+          console.log(toJson({ ...worker, server: cfg?.server, projectId: cfg?.project }))
           return
         }
-        console.log(`worker #${cfg.workerId} (${cfg.name})`)
-        console.log(`  machineId: ${cfg.machineId}`)
-        console.log(`  server:    ${cfg.server}`)
+        console.log(`worker #${worker.id} (${worker.name})`)
+        console.log(`  machineId: ${worker.machineId}`)
+        console.log(`  server:    ${cfg?.server}`)
       },
     }),
   },

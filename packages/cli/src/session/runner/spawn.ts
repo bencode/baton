@@ -1,7 +1,7 @@
 import type { ChildProcess, spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import type { WorkerClient } from '../../client.ts'
-import type { SessionConfig } from '../config.ts'
+import type { SessionConfig } from '../../project-config.ts'
 import {
   buildClaudeArgs,
   claudeBin,

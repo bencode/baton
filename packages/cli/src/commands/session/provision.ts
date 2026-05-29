@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import type { AgentKind, Id, SessionMode } from '@baton/shared'
 import type { ApiClient } from '../../client.ts'
-import { defaultConfigPath, type SessionConfig, saveConfig } from '../../session/config.ts'
+import {
+  addSession,
+  loadProjectConfig,
+  projectConfigPath,
+  type SessionConfig,
+  viewSession,
+} from '../../project-config.ts'
 import { createWorktree, removeWorktree } from '../../session/worktree.ts'
 import { slug } from './shared.ts'
 
@@ -33,30 +39,11 @@ type FsImpl = {
   removeWorktree: typeof removeWorktree
 }
 
-const buildConfig = (
-  input: SessionNewInput,
-  registered: { id: Id; apiToken: string },
-  agentSessionId: string,
-  worktreePath: string,
-): SessionConfig => ({
-  server: input.server,
-  apiToken: registered.apiToken,
-  sessionId: registered.id,
-  projectId: input.projectId,
-  workerId: input.workerId,
-  name: input.name,
-  mode: input.mode,
-  agentKind: input.agentKind,
-  agentSessionId,
-  worktreePath,
-  workerMachineId: input.workerMachineId,
-})
-
 export const newSession = async (
   client: ApiClient,
   input: SessionNewInput,
   fs: FsImpl = { createWorktree, removeWorktree },
-  resolvePath: (sessionId: Id) => string = defaultConfigPath,
+  cfgPath: string = projectConfigPath(),
 ): Promise<{ config: SessionConfig; path: string }> => {
   const agentSessionId = randomUUID()
   const provisional = join(input.worktreeDir, slug(`${input.name}-${agentSessionId.slice(0, 8)}`))
@@ -80,8 +67,14 @@ export const newSession = async (
       fs.removeWorktree(input.repo, provisional)
       throw err
     })
-  const config = buildConfig(input, registered, agentSessionId, provisional)
-  const path = resolvePath(registered.id)
-  saveConfig(path, config)
-  return { config, path }
+  addSession(cfgPath, registered.id, {
+    name: input.name,
+    apiToken: registered.apiToken,
+    mode: input.mode,
+    agentKind: input.agentKind,
+    agentSessionId,
+    worktreePath: provisional,
+  })
+  const config = viewSession(loadProjectConfig(cfgPath), registered.id)
+  return { config, path: cfgPath }
 }

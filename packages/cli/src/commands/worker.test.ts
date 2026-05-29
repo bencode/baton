@@ -22,7 +22,7 @@ describe('worker helpers', () => {
     }
   })
 
-  test('registerWorker: forwards inputs, saves worker config with returned id', async () => {
+  test('registerWorker: forwards inputs, patches worker section into .baton.json', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'baton-wc-'))
     try {
       let registeredWith: unknown = null
@@ -45,6 +45,7 @@ describe('worker helpers', () => {
           },
         },
       } as unknown as ApiClient
+      const cfgPath = join(dir, '.baton.json')
       const { out, configPath } = await registerWorker(
         c,
         {
@@ -54,10 +55,11 @@ describe('worker helpers', () => {
           hostname: 'bens-air.local',
           machineId: 'mid-abc',
         },
-        pid => join(dir, `worker-${pid}.json`),
+        cfgPath,
       )
       assert.equal(out.outcome, 'created')
       assert.equal(out.worker.id, 42)
+      assert.equal(configPath, cfgPath)
       assert.deepEqual(registeredWith, {
         projectId: 1,
         machineId: 'mid-abc',
@@ -65,9 +67,11 @@ describe('worker helpers', () => {
         hostname: 'bens-air.local',
       })
       const saved = JSON.parse(readFileSync(configPath, 'utf8'))
-      assert.equal(saved.workerId, 42)
-      assert.equal(saved.machineId, 'mid-abc')
-      assert.equal(saved.name, 'ben-laptop')
+      assert.equal(saved.server, 'http://localhost:3280')
+      assert.equal(saved.project, 1)
+      assert.equal(saved.worker.id, 42)
+      assert.equal(saved.worker.machineId, 'mid-abc')
+      assert.equal(saved.worker.name, 'ben-laptop')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

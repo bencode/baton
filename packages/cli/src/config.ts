@@ -1,13 +1,13 @@
-import { findProjectConfig } from './project-config.ts'
+import { loadProjectConfigOrNull, projectConfigPath } from './project-config.ts'
 
 // Resolve the baton server base url. Priority:
-//   --url flag  >  .baton.json (cwd upwards)  >  BATON_URL env  >  localhost default
+//   --url flag  >  .baton.json in cwd  >  BATON_URL env  >  localhost default
 export const resolveBaseUrl = (
   urlArg?: string,
   env: Record<string, string | undefined> = process.env,
 ): string => {
   if (urlArg) return urlArg
-  const found = findProjectConfig()
-  if (found?.config.server) return found.config.server
+  const cfg = loadProjectConfigOrNull(projectConfigPath())
+  if (cfg?.server) return cfg.server
   return env.BATON_URL ?? 'http://localhost:3280'
 }

@@ -19,3 +19,6 @@ bun.lockb
 
 # Claude Code runtime artifacts (per-session lockfile)
 .claude/scheduled_tasks.lock
+
+# baton local state (per-checkout: server URL, worker identity, session tokens)
+.baton.json

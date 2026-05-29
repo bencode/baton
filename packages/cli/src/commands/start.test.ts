@@ -4,69 +4,47 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { ApiClient } from '../client.ts'
-import { type SessionConfig, saveConfig } from '../session/config.ts'
-import { saveWorkerConfig, type WorkerConfig } from '../worker/config.ts'
+import { addSession, projectConfigPath, saveProjectConfig, setWorker } from '../project-config.ts'
 import { startSession } from './start.ts'
 
-// startSession touches the local filesystem (worker config, session config,
-// machine-id, worktree). We stage a per-test XDG_CONFIG_HOME/XDG_DATA_HOME so
-// it touches a sandboxed dir instead of the real ~/.config/baton.
-const sandbox = (): { root: string; restore: () => void } => {
-  const root = mkdtempSync(join(tmpdir(), 'baton-start-'))
-  const prev = {
-    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
-    XDG_DATA_HOME: process.env.XDG_DATA_HOME,
-    BATON_WORKTREE_DIR: process.env.BATON_WORKTREE_DIR,
-  }
-  process.env.XDG_CONFIG_HOME = join(root, 'config')
-  process.env.XDG_DATA_HOME = join(root, 'data')
-  process.env.BATON_WORKTREE_DIR = join(root, 'worktrees')
+// startSession walks .baton.json in cwd. We stage a tmp dir + chdir into it,
+// seed .baton.json (server / project / worker / optional sessions) before each
+// test, and restore cwd / .baton.json on the way out.
+const sandbox = (): { dir: string; cfgPath: string; restore: () => void } => {
+  const dir = mkdtempSync(join(tmpdir(), 'baton-start-'))
+  const prevCwd = process.cwd()
+  const prevWorktree = process.env.BATON_WORKTREE_DIR
+  process.chdir(dir)
+  process.env.BATON_WORKTREE_DIR = join(dir, 'worktrees')
   return {
-    root,
+    dir,
+    cfgPath: projectConfigPath(dir),
     restore: () => {
-      process.env.XDG_CONFIG_HOME = prev.XDG_CONFIG_HOME
-      process.env.XDG_DATA_HOME = prev.XDG_DATA_HOME
-      process.env.BATON_WORKTREE_DIR = prev.BATON_WORKTREE_DIR
-      rmSync(root, { recursive: true, force: true })
+      process.chdir(prevCwd)
+      process.env.BATON_WORKTREE_DIR = prevWorktree
+      rmSync(dir, { recursive: true, force: true })
     },
   }
 }
 
-const writeWorkerCfg = (projectId: number, workerId: number): void => {
-  const cfg: WorkerConfig = {
-    server: 'http://localhost:3280',
-    projectId,
-    workerId,
-    name: 'test-laptop',
-    machineId: 'mid-test',
-  }
-  saveWorkerConfig(
-    join(process.env.XDG_CONFIG_HOME as string, 'baton', `worker-${projectId}.json`),
-    cfg,
-  )
+const seedWorker = (cfgPath: string, projectId: number, workerId: number): void => {
+  saveProjectConfig(cfgPath, { server: 'http://localhost:3280', project: projectId })
+  setWorker(cfgPath, { id: workerId, name: 'test-laptop', machineId: 'mid-test' })
 }
 
 describe('startSession', () => {
-  test('attach: existing session owned by this machine, local config present', async () => {
+  test('attach: existing session owned by this machine, local entry present', async () => {
     const sb = sandbox()
     try {
-      writeWorkerCfg(1, 9)
-      // pre-write session config so attach can load it
-      const sessCfgPath = join(process.env.XDG_CONFIG_HOME as string, 'baton', 'session-42.json')
-      const sessCfg: SessionConfig = {
-        server: 'http://localhost:3280',
-        apiToken: 'tok-old',
-        sessionId: 42,
-        projectId: 1,
-        workerId: 9,
+      seedWorker(sb.cfgPath, 1, 9)
+      addSession(sb.cfgPath, 42, {
         name: 'dogfood',
+        apiToken: 'tok-old',
         mode: 'worker',
         agentKind: 'claude-code',
         agentSessionId: 'agent-uuid',
         worktreePath: '/tmp/wt-old',
-        workerMachineId: 'mid-test',
-      }
-      saveConfig(sessCfgPath, sessCfg)
+      })
 
       const c = {
         sessions: {
@@ -109,13 +87,13 @@ describe('startSession', () => {
   test('attach rejected: session belongs to a different worker', async () => {
     const sb = sandbox()
     try {
-      writeWorkerCfg(1, 9)
+      seedWorker(sb.cfgPath, 1, 9)
       const c = {
         sessions: {
           findByName: async () => ({
             id: 11,
             projectId: 1,
-            workerId: 77, // different worker
+            workerId: 77,
             mode: 'worker',
             name: 'other',
             agentKind: 'claude-code',
@@ -150,12 +128,9 @@ describe('startSession', () => {
   test('resume strict: no session by that name → throw, do not create', async () => {
     const sb = sandbox()
     try {
-      writeWorkerCfg(1, 9)
+      seedWorker(sb.cfgPath, 1, 9)
       const c = {
-        sessions: {
-          findByName: async () => null,
-          // register intentionally absent — if startSession tries to create, this throws
-        },
+        sessions: { findByName: async () => null },
       } as unknown as ApiClient
       await assert.rejects(
         startSession(
@@ -178,10 +153,10 @@ describe('startSession', () => {
     }
   })
 
-  test('attach rejected: session config not found locally', async () => {
+  test('attach rejected: session entry missing from local .baton.json', async () => {
     const sb = sandbox()
     try {
-      writeWorkerCfg(1, 9)
+      seedWorker(sb.cfgPath, 1, 9)
       const c = {
         sessions: {
           findByName: async () => ({
@@ -212,7 +187,7 @@ describe('startSession', () => {
           },
           () => {},
         ),
-        /config not found/,
+        /not in local \.baton\.json/,
       )
     } finally {
       sb.restore()

@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty'
 import { createWorkerClient } from '../../client.ts'
-import { defaultConfigPath, loadConfig } from '../../session/config.ts'
+import { loadProjectConfig, projectConfigPath, viewSession } from '../../project-config.ts'
 import { runDaemon } from '../../session/runner.ts'
 import { clientFor, common, resolveProjectId } from '../../util.ts'
 import { parseEnvPairs, resolveSession } from './shared.ts'
@@ -18,7 +18,7 @@ export const sessionStartCommand = defineCommand({
     project: { type: 'string', description: 'project id (overrides .baton.json)' },
     config: {
       type: 'string',
-      description: 'override config path (default ~/.config/baton/session-<id>.json)',
+      description: 'override .baton.json path (default: ./.baton.json)',
     },
     env: {
       type: 'string',
@@ -30,8 +30,8 @@ export const sessionStartCommand = defineCommand({
     const cliClient = clientFor(args)
     const projectId = resolveProjectId(args)
     const handle = await resolveSession(cliClient, projectId, args.session)
-    const cfgPath = args.config ?? defaultConfigPath(handle.id)
-    const cfg = loadConfig(cfgPath)
+    const cfgPath = args.config ?? projectConfigPath()
+    const cfg = viewSession(loadProjectConfig(cfgPath), handle.id)
     const runEnv = parseEnvPairs(args.env as string | string[] | undefined)
     const worker = createWorkerClient(cfg.server, cfg.apiToken)
     const ac = new AbortController()

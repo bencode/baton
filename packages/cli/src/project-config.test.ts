@@ -1,38 +1,80 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { findProjectConfig, PROJECT_CONFIG_NAME, saveProjectConfig } from './project-config.ts'
+import {
+  addSession,
+  findSessionId,
+  loadProjectConfig,
+  loadProjectConfigOrNull,
+  projectConfigPath,
+  removeSession,
+  saveProjectConfig,
+  setWorker,
+  viewSession,
+  viewWorker,
+} from './project-config.ts'
 
 describe('project-config', () => {
-  test('save + find round-trip; walks up from a nested directory', () => {
+  test('save + load round-trip', () => {
     const root = mkdtempSync(join(tmpdir(), 'baton-cfg-'))
     try {
-      const cfgPath = join(root, PROJECT_CONFIG_NAME)
+      const cfgPath = projectConfigPath(root)
       saveProjectConfig(cfgPath, {
         server: 'http://localhost:3280',
         workspace: 1,
         project: 7,
         name: 'baton',
       })
-      const deep = join(root, 'a', 'b', 'c')
-      mkdirSync(deep, { recursive: true })
-      const found = findProjectConfig(deep)
-      assert.ok(found)
-      assert.equal(found.path, cfgPath)
-      assert.equal(found.config.project, 7)
-      assert.equal(found.config.workspace, 1)
-      assert.equal(found.config.server, 'http://localhost:3280')
+      const cfg = loadProjectConfig(cfgPath)
+      assert.equal(cfg.project, 7)
+      assert.equal(cfg.workspace, 1)
+      assert.equal(cfg.server, 'http://localhost:3280')
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
   })
 
-  test('returns null when no .baton.json on the path', () => {
+  test('loadProjectConfigOrNull returns null when file missing', () => {
     const root = mkdtempSync(join(tmpdir(), 'baton-cfg-none-'))
     try {
-      assert.equal(findProjectConfig(root), null)
+      assert.equal(loadProjectConfigOrNull(projectConfigPath(root)), null)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  test('setWorker + addSession + view round-trip', () => {
+    const root = mkdtempSync(join(tmpdir(), 'baton-cfg-rmw-'))
+    try {
+      const p = projectConfigPath(root)
+      saveProjectConfig(p, { server: 'http://x', project: 1 })
+      setWorker(p, { id: 9, name: 'w', machineId: 'mid' })
+      addSession(p, 7, {
+        name: 'dogfood',
+        apiToken: 'tok',
+        mode: 'worker',
+        agentKind: 'claude-code',
+        agentSessionId: 'agent-uuid',
+        worktreePath: '/tmp/wt',
+      })
+      const cfg = loadProjectConfig(p)
+      const w = viewWorker(cfg)
+      assert.equal(w.workerId, 9)
+      assert.equal(w.machineId, 'mid')
+      const s = viewSession(cfg, 7)
+      assert.equal(s.apiToken, 'tok')
+      assert.equal(s.sessionId, 7)
+      assert.equal(s.workerId, 9)
+      assert.equal(s.workerMachineId, 'mid')
+      assert.equal(findSessionId(cfg, 'dogfood'), 7)
+      assert.equal(findSessionId(cfg, 7), 7)
+      assert.equal(findSessionId(cfg, 'nope'), null)
+
+      removeSession(p, 7)
+      const after = loadProjectConfig(p)
+      assert.equal(after.sessions?.['7'], undefined)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

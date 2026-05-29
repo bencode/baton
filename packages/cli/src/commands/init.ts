@@ -1,11 +1,15 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import * as readline from 'node:readline/promises'
 import type { Project, Workspace } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { createClient } from '../client.ts'
 import { resolveBaseUrl } from '../config.ts'
-import { PROJECT_CONFIG_NAME, type ProjectConfig, saveProjectConfig } from '../project-config.ts'
+import {
+  PROJECT_CONFIG_NAME,
+  type ProjectConfig,
+  projectConfigPath,
+  saveProjectConfig,
+} from '../project-config.ts'
 import { common } from '../util.ts'
 
 type WithIdName = { id: number; name: string }
@@ -32,7 +36,7 @@ const promptPick = async <T extends WithIdName>(label: string, items: T[]): Prom
 export const init = defineCommand({
   meta: {
     name: 'init',
-    description: `write ${PROJECT_CONFIG_NAME} in the current directory (commit it; team shares it)`,
+    description: `write ${PROJECT_CONFIG_NAME} in the current directory (local state, gitignored)`,
   },
   args: {
     workspace: { type: 'string', description: 'workspace id (skip prompt)' },
@@ -42,7 +46,7 @@ export const init = defineCommand({
   },
   run: async ({ args }) => {
     const server = resolveBaseUrl(args.url)
-    const cfgPath = join(process.cwd(), PROJECT_CONFIG_NAME)
+    const cfgPath = projectConfigPath()
     if (existsSync(cfgPath) && !args.force)
       throw new Error(`${PROJECT_CONFIG_NAME} already exists. use --force to overwrite.`)
     const c = createClient(server)

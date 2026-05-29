@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import type { SessionEvent } from '@baton/shared'
 import type { WorkerClient } from '../../client.ts'
-import type { SessionConfig } from '../config.ts'
+import type { SessionConfig } from '../../project-config.ts'
 import type { TailBuffer } from './log.ts'
 import { type SpawnImpl, spawnClaude } from './spawn.ts'
 import { streamSdkEvents } from './stream.ts'

@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import { hostname as osHostname } from 'node:os'
 import { basename } from 'node:path'
 import type { Id } from '@baton/shared'
@@ -6,10 +5,16 @@ import { defineCommand } from 'citty'
 import type { ApiClient } from '../client.ts'
 import { createWorkerClient } from '../client.ts'
 import { resolveBaseUrl } from '../config.ts'
-import { defaultConfigPath, loadConfig, type SessionConfig } from '../session/config.ts'
+import {
+  loadProjectConfig,
+  projectConfigPath,
+  type SessionConfig,
+  viewSession,
+  viewWorker,
+  type WorkerConfig,
+} from '../project-config.ts'
 import { runDaemon } from '../session/runner.ts'
 import { clientFor, common, resolveProjectId } from '../util.ts'
-import { loadWorkerConfigOrNull, type WorkerConfig, workerConfigPath } from '../worker/config.ts'
 import { readOrCreateMachineId } from '../worker/machine-id.ts'
 import { newSession } from './session/provision.ts'
 import { defaultWorktreeDir, parseEnvPairs } from './session/shared.ts'
@@ -39,48 +44,42 @@ const autoName = (cwd: string): string => {
 }
 
 // Ensure this machine is a registered worker for the project. Idempotent:
-// existing worker config short-circuits.
+// .baton.json#worker short-circuits when present.
 const ensureWorker = async (
   client: ApiClient,
   projectId: Id,
   server: string,
+  cfgPath: string,
   log: (m: string) => void,
 ): Promise<WorkerConfig> => {
-  const existing = loadWorkerConfigOrNull(workerConfigPath(projectId))
-  if (existing) return existing
+  const existing = (() => {
+    try {
+      return loadProjectConfig(cfgPath)
+    } catch {
+      return null
+    }
+  })()
+  if (existing?.worker) return viewWorker(existing)
   const hostname = osHostname()
   const machineId = readOrCreateMachineId()
-  const { out, configPath } = await registerWorker(client, {
-    projectId,
-    name: hostname,
-    server,
-    hostname,
-    machineId,
-  })
+  const { out } = await registerWorker(
+    client,
+    { projectId, name: hostname, server, hostname, machineId },
+    cfgPath,
+  )
   log(`registered worker #${out.worker.id} (${out.worker.name})`)
-  return loadConfigForWorker(configPath)
-}
-
-// Tiny wrapper so we can re-read the worker config we just wrote — same shape
-// as `loadWorkerConfig` from worker/config.ts, kept local to avoid a circular
-// re-export. Throws if the just-written file vanished (shouldn't happen).
-const loadConfigForWorker = (path: string): WorkerConfig => {
-  const cfg = loadWorkerConfigOrNull(path)
-  if (!cfg) throw new Error(`worker config write/read failed at ${path}`)
-  return cfg
+  return viewWorker(loadProjectConfig(cfgPath))
 }
 
 // Resolve a session by name into a runnable SessionConfig. Three outcomes:
-//   - exists + owned by this machine + local config present → load and return
-//   - exists but owned by another worker / no local config → throw
+//   - exists + owned by this machine + local entry present → return view
+//   - exists but owned by another worker / no local entry → throw
 //   - doesn't exist → caller decides (create or strict-fail)
-// No `closedAt` check — sessions don't have a closed state anymore (destroy
-// is the only end, and destroyed rows can't be findByName'd because they're
-// gone).
 const tryAttach = async (
   client: ApiClient,
   projectId: Id,
   workerCfg: WorkerConfig,
+  cfgPath: string,
   name: string,
 ): Promise<SessionConfig | null> => {
   const existing = await client.sessions.findByName(projectId, name)
@@ -89,12 +88,12 @@ const tryAttach = async (
     throw new Error(
       `session '${name}' belongs to worker #${existing.workerId}; cannot attach from this machine`,
     )
-  const cfgPath = defaultConfigPath(existing.id)
-  if (!existsSync(cfgPath))
+  const cfg = loadProjectConfig(cfgPath)
+  if (!cfg.sessions?.[String(existing.id)])
     throw new Error(
-      `session #${existing.id} config not found at ${cfgPath}; only the original creator can resume`,
+      `session #${existing.id} not in local .baton.json; only the original creator can resume`,
     )
-  return loadConfig(cfgPath)
+  return viewSession(cfg, existing.id)
 }
 
 // `baton start` end-to-end. Returns the resolved SessionConfig and a marker
@@ -103,10 +102,11 @@ export const startSession = async (
   client: ApiClient,
   input: StartInput,
   log: (m: string) => void = m => console.log(m),
+  cfgPath: string = projectConfigPath(),
 ): Promise<{ config: SessionConfig; created: boolean }> => {
-  const workerCfg = await ensureWorker(client, input.projectId, input.server, log)
+  const workerCfg = await ensureWorker(client, input.projectId, input.server, cfgPath, log)
   const name = input.name ?? autoName(input.repo ?? process.cwd())
-  const attached = await tryAttach(client, input.projectId, workerCfg, name)
+  const attached = await tryAttach(client, input.projectId, workerCfg, cfgPath, name)
   if (attached) {
     log(`attached to session #${attached.sessionId} (${name})`)
     return { config: attached, created: false }
@@ -116,19 +116,24 @@ export const startSession = async (
       `--resume failed: no session named '${name}' in project ${input.projectId}. ` +
         `omit --resume to create one.`,
     )
-  const { config } = await newSession(client, {
-    projectId: input.projectId,
-    workerId: workerCfg.workerId,
-    workerName: workerCfg.name,
-    workerMachineId: workerCfg.machineId,
-    name,
-    repo: input.repo ?? process.cwd(),
-    base: input.base,
-    worktreeDir: input.worktreeDir,
-    mode: 'worker',
-    agentKind: 'claude-code',
-    server: input.server,
-  })
+  const { config } = await newSession(
+    client,
+    {
+      projectId: input.projectId,
+      workerId: workerCfg.workerId,
+      workerName: workerCfg.name,
+      workerMachineId: workerCfg.machineId,
+      name,
+      repo: input.repo ?? process.cwd(),
+      base: input.base,
+      worktreeDir: input.worktreeDir,
+      mode: 'worker',
+      agentKind: 'claude-code',
+      server: input.server,
+    },
+    undefined,
+    cfgPath,
+  )
   log(`created session #${config.sessionId} (${name})`)
   log(`  worktree: ${config.worktreePath}`)
   return { config, created: true }

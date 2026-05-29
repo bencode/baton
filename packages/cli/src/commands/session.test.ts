@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -46,10 +46,23 @@ const baseInput = (worktreeDir: string, name: string): SessionNewInput => ({
   server: 'http://localhost:3280',
 })
 
+// Seed a .baton.json with the worker section newSession expects.
+const seedBatonJson = (dir: string): string => {
+  const p = join(dir, '.baton.json')
+  const cfg = {
+    server: 'http://localhost:3280',
+    project: 1,
+    worker: { id: 9, name: 'test-laptop', machineId: 'mid-test' },
+  }
+  writeFileSync(p, `${JSON.stringify(cfg, null, 2)}\n`, 'utf8')
+  return p
+}
+
 describe('newSession', () => {
-  test('provisions worktree + registers + saves config', async () => {
+  test('provisions worktree + registers + patches .baton.json sessions map', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'baton-session-'))
     try {
+      const cfgPath = seedBatonJson(dir)
       let registeredWith: unknown = null
       const c = {
         sessions: {
@@ -91,9 +104,8 @@ describe('newSession', () => {
         },
         removeWorktree: () => {},
       }
-      const { config, path } = await newSession(c, baseInput(dir, 'dogfood'), fakeFs, sid =>
-        join(dir, `cfg-${sid}.json`),
-      )
+      const { config, path } = await newSession(c, baseInput(dir, 'dogfood'), fakeFs, cfgPath)
+      assert.equal(path, cfgPath)
       assert.equal(config.sessionId, 7)
       assert.equal(config.apiToken, 'tok-deadbeef')
       assert.equal(config.workerId, 9)
@@ -102,11 +114,11 @@ describe('newSession', () => {
       assert.ok(createdAt)
       assert.equal((createdAt as { repo: string }).repo, '/tmp/source')
       assert.match((createdAt as { worktreePath: string }).worktreePath, /baton-session-/)
-      const saved = JSON.parse(readFileSync(path, 'utf8'))
-      assert.equal(saved.apiToken, 'tok-deadbeef')
-      assert.equal(saved.workerId, 9)
+      const saved = JSON.parse(readFileSync(cfgPath, 'utf8'))
+      assert.equal(saved.sessions['7'].apiToken, 'tok-deadbeef')
+      assert.equal(saved.sessions['7'].name, 'dogfood')
       assert.equal(
-        saved.agentSessionId,
+        saved.sessions['7'].agentSessionId,
         (registeredWith as { agentSessionId: string }).agentSessionId,
       )
     } finally {
@@ -115,24 +127,30 @@ describe('newSession', () => {
   })
 
   test('rolls back worktree when register fails', async () => {
-    let removed = false
-    const c = {
-      sessions: {
-        register: async () => {
-          throw new Error('boom')
+    const dir = mkdtempSync(join(tmpdir(), 'baton-session-roll-'))
+    try {
+      const cfgPath = seedBatonJson(dir)
+      let removed = false
+      const c = {
+        sessions: {
+          register: async () => {
+            throw new Error('boom')
+          },
         },
-      },
-    } as unknown as ApiClient
-    const fakeFs = {
-      createWorktree: () => {},
-      removeWorktree: () => {
-        removed = true
-      },
+      } as unknown as ApiClient
+      const fakeFs = {
+        createWorktree: () => {},
+        removeWorktree: () => {
+          removed = true
+        },
+      }
+      await assert.rejects(
+        newSession(c, baseInput('/tmp/wd', 'rolling-back'), fakeFs, cfgPath),
+        /boom/,
+      )
+      assert.equal(removed, true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
-    await assert.rejects(
-      newSession(c, baseInput('/tmp/wd', 'rolling-back'), fakeFs, () => '/tmp/never-written.json'),
-      /boom/,
-    )
-    assert.equal(removed, true)
   })
 })
