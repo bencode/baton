@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import type { SessionEvent } from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { ApiClient, WorkerClient } from '../client.ts'
@@ -102,6 +102,21 @@ const waitForAbort = (signal: AbortSignal): Promise<void> =>
     signal.addEventListener('abort', () => resolve(), { once: true })
   })
 
+// claude (and other interactive children) enable terminal modes via direct
+// /dev/tty access — DECCKM application cursor mode is the common offender,
+// which leaves up-arrow showing as ^[OA in the user's shell once we exit.
+// Shell out to `reset` on daemon shutdown — heavy-handed (clears screen),
+// but trivially correct: it's the canonical "I don't care what was set,
+// undo it all" command. No-op when stdout isn't a TTY (tests, redirection).
+const restoreTty = (): void => {
+  if (!process.stdout.isTTY) return
+  try {
+    spawnSync('reset', { stdio: 'inherit' })
+  } catch {
+    // best-effort; if reset isn't on PATH we leave the tty as-is
+  }
+}
+
 // Long-running loop: subscribe + drain. Single-flight per session via `busy`.
 export const runDaemon = async (
   config: SessionConfig,
@@ -151,4 +166,5 @@ export const runDaemon = async (
   await waitForAbort(signal)
   es.close()
   clearInterval(hb)
+  restoreTty()
 }
