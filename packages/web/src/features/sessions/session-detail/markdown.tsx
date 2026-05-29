@@ -16,8 +16,13 @@ export const Markdown = ({ text }: { text: string }) => (
       'prose-h2:text-base prose-h2:mt-2.5 prose-h2:mb-1',
       'prose-h3:text-sm prose-h3:mt-2 prose-h3:mb-0.5',
       'prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5',
-      'prose-pre:my-2 prose-pre:bg-gray-50 prose-pre:border prose-pre:border-gray-200 prose-pre:text-xs',
+      // prose's default pre is dark (bg-gray-900); override both bg AND text
+      // so the code is readable on the light bubble.
+      'prose-pre:my-2 prose-pre:bg-gray-50 prose-pre:text-gray-800',
+      'prose-pre:border prose-pre:border-gray-200 prose-pre:text-xs',
+      // inline code: drop prose's surrounding backticks (`code`)
       'prose-code:before:hidden prose-code:after:hidden',
+      'prose-code:bg-gray-100 prose-code:text-gray-800 prose-code:rounded prose-code:px-1 prose-code:py-0.5 prose-code:font-normal',
       'prose-blockquote:my-2 prose-blockquote:not-italic',
     ].join(' ')}
   >
