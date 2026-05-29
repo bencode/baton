@@ -35,18 +35,16 @@ export type RunnerDeps = {
 
 type DaemonState = {
   pendingQueue: SessionEvent[]
-  successfulTurns: number
+  firstSpawnDone: boolean
   seen: Set<number>
 }
 
 const foldHistory = (history: SessionEvent[]): DaemonState => ({
-  // Resume only after a turn that exited 0 — a failed first attempt leaves
-  // claude's session file uncreated, so the next turn must re-use --session-id.
-  successfulTurns: history.filter(e => {
-    if (e.type !== 'turn_complete') return false
-    const p = e.payload as { exitCode?: unknown } | null
-    return p?.exitCode === 0
-  }).length,
+  // Claude writes its on-disk session file the moment it's invoked with
+  // --session-id, regardless of exit code. So any prior turn_start means we
+  // MUST use --resume from here on — re-sending --session-id errors with
+  // "Session ID <uuid> is already in use" and the turn fails forever.
+  firstSpawnDone: history.some(e => e.type === 'turn_start'),
   pendingQueue: history.filter(e => e.type === 'user_message' && e.processedAt == null),
   seen: new Set(history.map(e => e.sequence)),
 })
@@ -140,10 +138,12 @@ export const runDaemon = async (
       while (state.pendingQueue.length > 0 && !signal.aborted) {
         const msg = state.pendingQueue.shift()
         if (!msg) break
-        const resuming = state.successfulTurns > 0
+        const resuming = state.firstSpawnDone
         log(`▶ msg #${msg.sequence} (${resuming ? 'resume' : 'first'})`)
         const code = await runTurn(config, deps.worker, msg, resuming, sp, log, deps.env)
-        if (code === 0) state.successfulTurns += 1
+        // Claude's session file exists after the first --session-id invocation
+        // even on non-zero exit — future turns must --resume.
+        state.firstSpawnDone = true
         log(`✔ msg #${msg.sequence}${code === 0 ? '' : ` (exit ${code})`}`)
       }
     } finally {
