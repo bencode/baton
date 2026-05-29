@@ -1,7 +1,8 @@
 import type { ChildProcess } from 'node:child_process'
-import type { SessionEvent } from '@baton/shared'
+import type { Attachment, SessionEvent } from '@baton/shared'
 import type { WorkerClient } from '../../client.ts'
 import type { SessionConfig } from '../../project-config.ts'
+import { augmentPrompt, type FetchImpl, materializeAttachments } from './attachments.ts'
 import type { TailBuffer } from './log.ts'
 import { type SpawnImpl, spawnClaude } from './spawn.ts'
 import { streamSdkEvents } from './stream.ts'
@@ -46,12 +47,33 @@ export const runTurn = async (
   spawnImpl: SpawnImpl,
   log: (m: string) => void = m => console.log(m),
   envOverlay?: Record<string, string>,
+  fetchImpl?: FetchImpl,
 ): Promise<number> => {
   await worker.emitEvent('turn_start', { messageId: msg.id })
-  const text = (msg.payload as { text?: unknown })?.text
-  if (typeof text !== 'string' || text.length === 0) {
-    await worker.emitEvent('turn_error', { message: 'user_message missing text' })
+  const payload = msg.payload as { text?: unknown; attachments?: Attachment[] }
+  const rawText = typeof payload?.text === 'string' ? payload.text : ''
+  const attachments = Array.isArray(payload?.attachments) ? payload.attachments : []
+  if (rawText.length === 0 && attachments.length === 0) {
+    await worker.emitEvent('turn_error', { message: 'user_message missing text and attachments' })
     return -1
+  }
+  // Pull attachments into the worktree first, then point the prompt at them.
+  let text = rawText
+  if (attachments.length > 0) {
+    try {
+      const relPaths = await materializeAttachments({
+        worktreePath: config.worktreePath,
+        serverBase: config.server,
+        attachments,
+        fetchImpl,
+      })
+      log(`[attach] downloaded ${relPaths.length} file(s) → ${config.worktreePath}/attachments`)
+      text = augmentPrompt(rawText, relPaths)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      await worker.emitEvent('turn_error', { message: `attachment download failed: ${message}` })
+      return -1
+    }
   }
   const result = await spawnClaude(config, worker, text, resuming, spawnImpl, log, envOverlay)
   if (!result) return -1

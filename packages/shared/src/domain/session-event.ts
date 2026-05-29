@@ -7,7 +7,8 @@ import type { Id } from './ids.ts'
 // dedupe against.
 //
 // type discriminator (kept loose; payload shape is owned by the producer):
-//   - user_message:  payload = { text: string; images?: string[] }
+//   - user_message:  payload = { text: string; attachments?: Attachment[]; images?: string[] }
+//                    (images is legacy base64; attachments is the canonical path)
 //   - turn_start:    payload = { messageId?: number }
 //   - sdk_event:     payload = a parsed line from `claude --output-format stream-json`
 //   - turn_complete: payload = { exitCode: number }

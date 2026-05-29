@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { describe, test } from 'node:test'
 import type { WorkerClient } from '../client.ts'
@@ -135,5 +138,76 @@ describe('runTurn', () => {
       calls.map(c => c.type),
       ['turn_start', 'turn_error'],
     )
+  })
+
+  test('attachments are downloaded into the worktree and cited in the prompt', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'baton-turn-'))
+    const cfg: SessionConfig = {
+      server: 'http://srv',
+      apiToken: 't',
+      sessionId: 1,
+      projectId: 1,
+      workerId: 9,
+      name: 'x',
+      mode: 'worker',
+      agentKind: 'claude-code',
+      agentSessionId: 'uuid',
+      worktreePath: wt,
+      workerMachineId: 'mid-test',
+    }
+    const worker = {
+      close: async () => {},
+      emitEvent: async () => ({}) as never,
+    } as unknown as WorkerClient
+    const fetchImpl = (async () => new Response('PNGDATA')) as unknown as typeof fetch
+
+    type FakeChild = EventEmitter & { stdout: Readable }
+    let promptArg = ''
+    const fakeSpawn = ((_cmd: string, args: ReadonlyArray<string>) => {
+      promptArg = args[args.length - 1] ?? ''
+      const child = new EventEmitter() as FakeChild
+      child.stdout = Readable.from([`${JSON.stringify({ type: 'result' })}\n`])
+      child.stdout.on('end', () => setImmediate(() => child.emit('exit', 0)))
+      return child as never
+    }) as unknown as never
+
+    try {
+      const code = await runTurn(
+        cfg,
+        worker,
+        {
+          id: 1,
+          sessionId: 1,
+          sequence: 0,
+          type: 'user_message',
+          payload: {
+            text: 'describe',
+            attachments: [
+              {
+                id: 'a',
+                sessionId: 1,
+                filename: 'shot.png',
+                contentType: 'image/png',
+                size: 7,
+                url: '/sessions/1/attachments/a',
+                createdAt: 0,
+              },
+            ],
+          },
+          createdAt: 0,
+        },
+        false,
+        fakeSpawn,
+        () => {},
+        undefined,
+        fetchImpl,
+      )
+      assert.equal(code, 0)
+      assert.match(promptArg, /attachments\/shot\.png/)
+      assert.ok(promptArg.includes('describe'))
+      assert.equal(readFileSync(join(wt, 'attachments/shot.png'), 'utf8'), 'PNGDATA')
+    } finally {
+      rmSync(wt, { recursive: true, force: true })
+    }
   })
 })

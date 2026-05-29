@@ -4,6 +4,7 @@ import { EventSource } from 'eventsource'
 import { resolveBaseUrl } from '../config.ts'
 import { renderEvent } from '../render-events.ts'
 import { clientFor, common, resolveProjectId } from '../util.ts'
+import { attachPaths, uploadAttachments } from './attach.ts'
 
 // Top-level `baton send` — post a message into a session AND stream the
 // daemon's reply to stdout. Exits when the turn completes/errors. The lower
@@ -13,11 +14,16 @@ export const send = defineCommand({
   meta: { name: 'send', description: 'post a message into a session and stream the reply' },
   args: {
     name: { type: 'string', required: true, description: 'session name' },
-    text: { type: 'positional', required: true, description: 'message text' },
+    text: { type: 'positional', required: false, description: 'message text' },
     project: { type: 'string', description: 'project id (overrides .baton.json)' },
-    'no-follow': {
+    attach: {
+      type: 'string',
+      description: 'file(s) to attach; repeat or comma-separate (e.g. --attach a.png,b.pdf)',
+    },
+    follow: {
       type: 'boolean',
-      description: "don't stream the reply, just post and exit",
+      default: true,
+      description: 'stream the reply until the turn ends (use --no-follow to just post and exit)',
     },
     ...common,
   },
@@ -32,10 +38,16 @@ export const send = defineCommand({
           `run \`baton start --name ${args.name}\` to create one.`,
       )
 
-    const ev = await c.sessions.sendMessage(found.id, args.text)
-    console.log(`→ sent (seq ${ev.sequence}) to ${args.name} (#${found.id})`)
+    const paths = attachPaths(args.attach)
+    const text = args.text ?? ''
+    if (text.length === 0 && paths.length === 0)
+      throw new Error('nothing to send: provide message text and/or --attach <file>')
+    const attachments = paths.length > 0 ? await uploadAttachments(c, found.id, paths) : undefined
+    const ev = await c.sessions.sendMessage(found.id, text, attachments)
+    const note = attachments ? ` +${attachments.length} attachment(s)` : ''
+    console.log(`→ sent (seq ${ev.sequence}) to ${args.name} (#${found.id})${note}`)
 
-    if (args['no-follow']) return
+    if (!args.follow) return
 
     // Skip subscribing if no daemon is processing this session — otherwise the
     // user sits waiting for events that never come. The daemon seeds liveness

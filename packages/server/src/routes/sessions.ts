@@ -1,6 +1,16 @@
-import type { AgentKind, Id, SessionEvent, SessionEventType, SessionMode } from '@baton/shared'
+import { createReadStream } from 'node:fs'
+import { Readable } from 'node:stream'
+import type {
+  AgentKind,
+  Attachment,
+  Id,
+  SessionEvent,
+  SessionEventType,
+  SessionMode,
+} from '@baton/shared'
 import type { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import type { AttachmentStore } from '../attachments.ts'
 import type { BusyTracker } from '../busy.ts'
 import type { EventBus } from '../event-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
@@ -45,6 +55,7 @@ export const registerSessionRoutes = (
   workerLiveness: LivenessTracker,
   sessionLiveness: LivenessTracker,
   busyTracker: BusyTracker,
+  attachments: AttachmentStore,
 ): void => {
   const auth = bearerAuth(store)
 
@@ -116,6 +127,7 @@ export const registerSessionRoutes = (
     sessionLiveness.forget(String(id))
     busyTracker.forget(id)
     sessionSeq.delete(id)
+    await attachments.forgetSession(id)
     return c.body(null, 204)
   })
 
@@ -144,19 +156,58 @@ export const registerSessionRoutes = (
     const sessionId = intParam(c.req.param('id'))
     const session = await store.sessions.get(sessionId)
     if (!session) return c.json({ error: 'not found' }, 404)
-    const body = (await c.req.json()) as { text?: string; images?: unknown }
+    const body = (await c.req.json()) as {
+      text?: string
+      images?: unknown
+      attachments?: unknown
+    }
     const text = typeof body.text === 'string' ? body.text : ''
     const images = Array.isArray(body.images)
       ? body.images.filter((i): i is string => typeof i === 'string')
       : []
-    if (text.length === 0 && images.length === 0)
-      return c.json({ error: 'text or images required' }, 400)
+    const atts = Array.isArray(body.attachments) ? (body.attachments as Attachment[]) : []
+    if (text.length === 0 && images.length === 0 && atts.length === 0)
+      return c.json({ error: 'text, images, or attachments required' }, 400)
     if (images.some(i => i.length > MAX_IMAGE_DATA_URL))
       return c.json({ error: 'image too large (max ~8MB)' }, 413)
-    const payload = images.length > 0 ? { text, images } : { text }
+    const payload = {
+      text,
+      ...(images.length > 0 ? { images } : {}),
+      ...(atts.length > 0 ? { attachments: atts } : {}),
+    }
     const ev = synthesize(sessionId, 'user_message', payload)
     bus.publish(sessionId, ev)
     return c.json(ev, 201)
+  })
+
+  // Upload a chat attachment (no auth in v0, like /messages). The raw request
+  // body IS the file — streamed straight to disk, no multipart parse, no size
+  // cap (the Agent decides what it can handle). filename rides a query param,
+  // the file's media type rides content-type. Returns the Attachment descriptor.
+  app.post('/sessions/:id/attachments', async c => {
+    const sessionId = intParam(c.req.param('id'))
+    const session = await store.sessions.get(sessionId)
+    if (!session) return c.json({ error: 'not found' }, 404)
+    const meta = await attachments.put(sessionId, {
+      filename: c.req.query('filename') || 'file',
+      contentType: c.req.header('content-type') || 'application/octet-stream',
+      body: c.req.raw.body,
+    })
+    return c.json(meta, 201)
+  })
+
+  // Download a stored attachment (no auth in v0). Streamed from disk so large
+  // files don't get buffered. Used by the Worker to fetch files into its
+  // worktree, and later by the web UI for preview.
+  app.get('/sessions/:id/attachments/:attId', async c => {
+    const sessionId = intParam(c.req.param('id'))
+    const found = await attachments.get(sessionId, c.req.param('attId'))
+    if (!found) return c.json({ error: 'not found' }, 404)
+    c.header('content-type', found.meta.contentType)
+    c.header('content-length', String(found.meta.size))
+    c.header('content-disposition', `inline; filename="${found.meta.filename}"`)
+    const web = Readable.toWeb(createReadStream(found.path)) as ReadableStream<Uint8Array>
+    return c.body(web)
   })
 
   // Live tail. No history replay — events aren't persisted server-side. A

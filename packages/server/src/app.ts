@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { type AttachmentStore, createAttachmentStore, defaultAttachmentDir } from './attachments.ts'
 import { type BusyTracker, createBusy } from './busy.ts'
 import { createEventBus, type EventBus } from './event-bus.ts'
 import { createLiveness, type LivenessTracker } from './liveness.ts'
@@ -32,6 +33,7 @@ export const createApp = (
   workerLiveness: LivenessTracker = createLiveness(),
   sessionLiveness: LivenessTracker = createLiveness(),
   busyTracker: BusyTracker = createBusy(),
+  attachments: AttachmentStore = createAttachmentStore(defaultAttachmentDir()),
 ): Hono<AppEnv> => {
   const app = new Hono<AppEnv>()
   app.get('/health', c => c.json({ ok: true }))
@@ -40,6 +42,6 @@ export const createApp = (
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store)
   registerWorkerRoutes(app, store, workerLiveness)
-  registerSessionRoutes(app, store, bus, workerLiveness, sessionLiveness, busyTracker)
+  registerSessionRoutes(app, store, bus, workerLiveness, sessionLiveness, busyTracker, attachments)
   return app
 }
