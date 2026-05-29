@@ -3,8 +3,11 @@ import { toJson } from '../../output.ts'
 import { clientFor, common } from '../../util.ts'
 import { resolveSession } from './shared.ts'
 
-export const sessionSayCommand = defineCommand({
-  meta: { name: 'say', description: 'send a chat message into a session (by int id or name)' },
+// Primary user-side communication channel: send one chat message into a
+// running session's stream. The daemon's drain loop picks it up and runs a
+// turn. Equivalent to typing in the web UI's composer.
+export const sessionChatCommand = defineCommand({
+  meta: { name: 'chat', description: 'send a chat message into a session (by int id or name)' },
   args: {
     session: { type: 'positional', required: true, description: 'session int id or name' },
     text: { type: 'positional', required: true, description: 'message text' },
