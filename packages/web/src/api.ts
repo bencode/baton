@@ -9,6 +9,7 @@ import type {
   SessionEvent,
   Task,
   TaskStatus,
+  WorkerView,
   Workspace,
 } from '@baton/shared'
 
@@ -82,6 +83,10 @@ export type Api = {
     listEvents(id: Id): Promise<SessionEvent[]>
     sendMessage(id: Id, text: string): Promise<SessionEvent>
   }
+  workers: {
+    listByProject(projectId: Id): Promise<WorkerView[]>
+    get(id: Id): Promise<WorkerView>
+  }
 }
 
 export const createApi = (base: string = API_BASE): Api => {
@@ -137,6 +142,10 @@ export const createApi = (base: string = API_BASE): Api => {
       listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
       sendMessage: (id, text) =>
         request(u(`/sessions/${id}/messages`), { method: 'POST', body: { text } }),
+    },
+    workers: {
+      listByProject: projectId => request(u(`/projects/${projectId}/workers`), { method: 'GET' }),
+      get: id => request(u(`/workers/${id}`), { method: 'GET' }),
     },
   }
 }

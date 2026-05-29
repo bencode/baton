@@ -53,6 +53,7 @@ const fakeApi = () =>
     requirements: { listByProject: vi.fn(async () => [login]) },
     tasks: { listByRequirement: vi.fn(async () => tasks) },
     sessions: { listByProject: vi.fn(async () => []) },
+    workers: { listByProject: vi.fn(async () => []) },
   }) as unknown as Api
 
 test('LeftPanel renders the requirement tree (deps + ready) and opens a task on click', async () => {
