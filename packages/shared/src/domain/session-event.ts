@@ -1,14 +1,18 @@
 import type { Id } from './ids.ts'
 
-// Append-only chat / SDK event log per session.
+// Ephemeral chat / SDK event. As of 2026 these are no longer persisted on
+// the server — the server synthesizes id/sequence/createdAt at publish time
+// for SSE delivery; the browser keeps its own copy in IndexedDB. Sequence
+// numbers reset on server restart, harmless because there's no replay to
+// dedupe against.
+//
 // type discriminator (kept loose; payload shape is owned by the producer):
-//   - user_message:  payload = { text: string; images?: string[] }  — images are data URLs
-//   - turn_start:    payload = { messageId: number }  — worker claims the next user_message
+//   - user_message:  payload = { text: string; images?: string[] }
+//   - turn_start:    payload = { messageId?: number }
 //   - sdk_event:     payload = a parsed line from `claude --output-format stream-json`
 //   - turn_complete: payload = { exitCode: number }
 //   - turn_error:    payload = { message: string }
 //   - system:        payload = arbitrary control metadata
-// processedAt only meaningful for user_message: null until the spawning turn ends.
 export type SessionEventType =
   | 'user_message'
   | 'turn_start'
@@ -23,6 +27,8 @@ export type SessionEvent = {
   sequence: number
   type: SessionEventType
   payload: unknown
+  // Kept on the type for wire compat — never set under the new model. Was
+  // the old 'daemon claimed this user_message' handshake.
   processedAt?: number
   createdAt: number
 }

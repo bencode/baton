@@ -18,14 +18,4 @@ export const nextCode = async (tx: TxClient, projectId: number, kind: Kind): Pro
   return `${PREFIX[kind]}-${c.next - 1}`
 }
 
-// Per-session monotonic sequence: next int after the current max (or 0 when empty).
-export const nextSequence = async (tx: TxClient, sessionId: number): Promise<number> => {
-  const top = await tx.sessionEvent.findFirst({
-    where: { sessionId },
-    orderBy: { sequence: 'desc' },
-    select: { sequence: true },
-  })
-  return (top?.sequence ?? -1) + 1
-}
-
 export const issueToken = (): string => randomBytes(32).toString('base64url')

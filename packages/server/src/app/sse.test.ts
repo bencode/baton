@@ -13,7 +13,7 @@ describe('server HTTP — SSE chat stream', () => {
     await ctx.cleanup()
   })
 
-  test('replays history then pushes new events as they arrive', async () => {
+  test('pushes new events as they arrive (no history replay — events live on the client)', async () => {
     const server = await startServer({ store: ctx.store, port: 0 })
     try {
       const base = `http://localhost:${server.port}`
@@ -44,7 +44,9 @@ describe('server HTTP — SSE chat stream', () => {
           worktreePath: '/tmp/wt',
         })
       ).json()) as WithId & { apiToken: string }
-      await post(`/sessions/${s.id}/messages`, { text: 'first' })
+      // A pre-connect message is dropped — there's no longer any server-side
+      // history to replay; clients keep their own transcript in IndexedDB.
+      await post(`/sessions/${s.id}/messages`, { text: 'pre' })
 
       const controller = new AbortController()
       const res = await fetch(`${base}/sessions/${s.id}/stream`, {
@@ -72,14 +74,13 @@ describe('server HTTP — SSE chat stream', () => {
         }
         return buf
       }
-      // Replay carries the first user_message.
-      let chunk = await readUntil(1, 1500)
-      assert.match(chunk, /"text":"first"/)
 
       // New live event arrives.
       await post(`/sessions/${s.id}/messages`, { text: 'live' })
-      chunk = await readUntil(2, 1500)
+      const chunk = await readUntil(1, 1500)
       assert.match(chunk, /"text":"live"/)
+      // Pre-connect message must NOT appear.
+      assert.doesNotMatch(chunk, /"text":"pre"/)
 
       controller.abort()
       await reader.cancel().catch(() => {})

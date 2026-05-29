@@ -1,4 +1,5 @@
 import type { Id, Session, SessionView, Worker } from '@baton/shared'
+import type { BusyTracker } from './busy.ts'
 import type { LivenessTracker } from './liveness.ts'
 import type { AuthVars } from './middleware/auth.ts'
 import type { Store } from './store/types.ts'
@@ -17,21 +18,22 @@ export const sessionWithView = async (
   store: Store,
   workerLiveness: LivenessTracker,
   sessionLiveness: LivenessTracker,
+  busyTracker: BusyTracker,
 ): Promise<SessionView> => {
   const worker = await store.workers.get(session.workerId)
   // busy semantically = "a daemon is currently running a turn". Requires both:
-  //   1. timeline has an unresolved turn_start (work was started)
+  //   1. busyTracker has been toggled true by an unresolved turn_start
   //   2. session-level heartbeat is alive (daemon is still around to finish)
-  // Either being false → busy=false. This kills the sticky-yellow bug class
-  // (SIGKILL / crash / partition leave orphan turn_start in the log; the
-  // liveness AND auto-resets UI within the 90s heartbeat window).
+  // Either being false → busy=false. SIGKILL / crash / partition all collapse
+  // via attached → false within the 90s heartbeat window; busyTracker itself
+  // is reset when the daemon properly emits turn_complete / turn_error.
   const attached = sessionLiveness.isAlive(String(session.id))
   return {
     ...session,
     worker: worker ?? unknownWorker(session.workerId, session.projectId),
     alive: worker ? workerLiveness.isAlive(worker.machineId) : false,
     attached,
-    busy: attached && (await store.sessions.isBusy(session.id)),
+    busy: attached && busyTracker.read(session.id),
   }
 }
 

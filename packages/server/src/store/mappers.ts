@@ -6,8 +6,6 @@ import type {
   RequirementStatus,
   ResourceRef,
   Session,
-  SessionEvent,
-  SessionEventType,
   SessionMode,
   Task,
   TaskStatus,
@@ -18,7 +16,6 @@ import type {
   Project as DbProject,
   Requirement as DbRequirement,
   Session as DbSession,
-  SessionEvent as DbSessionEvent,
   Task as DbTask,
   Worker as DbWorker,
   Workspace as DbWorkspace,
@@ -78,16 +75,6 @@ export const toSession = (r: DbSession): Session => ({
   worktreePath: r.worktreePath,
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),
-})
-
-export const toSessionEvent = (r: DbSessionEvent): SessionEvent => ({
-  id: r.id,
-  sessionId: r.sessionId,
-  sequence: r.sequence,
-  type: r.type as SessionEventType,
-  payload: JSON.parse(r.payload),
-  processedAt: r.processedAt?.getTime(),
-  createdAt: r.createdAt.getTime(),
 })
 
 export const toWorker = (r: DbWorker): Worker => ({

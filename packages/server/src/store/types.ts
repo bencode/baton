@@ -7,8 +7,6 @@ import type {
   RequirementStatus,
   ResourceRef,
   Session,
-  SessionEvent,
-  SessionEventType,
   SessionMode,
   Task,
   TaskStatus,
@@ -113,15 +111,10 @@ export type Store = {
     get(id: Id): Promise<Session | null>
     getByToken(token: string): Promise<Session | null>
     listByProject(projectId: Id): Promise<Session[]>
-    // DELETE the row (cascade SessionEvent). Irreversible.
+    // DELETE the row. Irreversible. Session events live in browser IndexedDB
+    // and are not touched here — by design, the local store is the user's
+    // data, not ours to wipe.
     destroy(id: Id): Promise<void>
-    appendEvent(sessionId: Id, type: SessionEventType, payload: unknown): Promise<SessionEvent>
-    listEvents(sessionId: Id): Promise<SessionEvent[]>
-    findNextPendingMessage(sessionId: Id): Promise<SessionEvent | null>
-    markMessageProcessed(eventId: Id): Promise<void>
-    pendingMessageCount(sessionId: Id): Promise<number>
-    // Busy is derived: latest turn_start with no trailing turn_complete/_error.
-    isBusy(sessionId: Id): Promise<boolean>
   }
   workers: {
     // Idempotent register following the rule 1 / 2a / 2b / 2c algorithm.
@@ -129,7 +122,7 @@ export type Store = {
     get(id: Id): Promise<Worker | null>
     findByMachine(projectId: Id, machineId: string): Promise<Worker | null>
     listByProject(projectId: Id): Promise<Worker[]>
-    // DELETE the row (cascade Session + SessionEvent). Irreversible.
+    // DELETE the row (cascade Session). Irreversible.
     destroy(id: Id): Promise<void>
   }
   getRequirementWithTasks(id: Id): Promise<RequirementWithTasks | null>

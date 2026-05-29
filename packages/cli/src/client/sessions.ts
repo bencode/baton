@@ -17,7 +17,6 @@ export type SessionsClient = {
   listByProject(projectId: Id): Promise<Session[]>
   get(id: Id): Promise<Session>
   findByName(projectId: Id, name: string): Promise<Session | null>
-  listEvents(id: Id): Promise<SessionEvent[]>
   sendMessage(id: Id, text: string): Promise<SessionEvent>
   destroy(id: Id): Promise<void>
 }
@@ -34,7 +33,6 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
       const matches = all.filter(s => s.name === name)
       return matches.length === 0 ? null : (matches[matches.length - 1] ?? null)
     },
-    listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
     sendMessage: (id, text) =>
       request(u(`/sessions/${id}/messages`), { method: 'POST', body: { text } }),
     destroy: async id => {

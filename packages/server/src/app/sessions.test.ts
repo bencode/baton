@@ -28,12 +28,10 @@ describe('server HTTP — sessions + chat protocol', () => {
   test('attached flips to true after POST /sessions/me/heartbeat', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
-    // Before heartbeat: attached=false.
     let view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
       attached: boolean
     }
     assert.equal(view.attached, false)
-    // Daemon pings session-level liveness.
     const hb = await postJson(
       app,
       '/sessions/me/heartbeat',
@@ -42,14 +40,12 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
     assert.equal(hb.status, 200)
     assert.deepEqual(await hb.json(), { attached: true })
-    // After heartbeat: attached=true.
     view = (await (await app.request(`/sessions/${session.id}`)).json()) as { attached: boolean }
     assert.equal(view.attached, true)
-    // Unauthorized still rejected.
     assert.equal((await postJson(app, '/sessions/me/heartbeat', {})).status, 401)
   })
 
-  test('messages: POST /sessions/:id/messages records user_message; 404 after destroy', async () => {
+  test('messages: POST /sessions/:id/messages synthesizes ephemeral user_message', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
     const res = await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
@@ -59,13 +55,13 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(ev.sequence, 0)
     assert.equal(ev.payload.text, 'hi')
 
-    // 400 on empty text
+    // 400 on empty text + images
     assert.equal(
       (await postJson(app, `/sessions/${session.id}/messages`, { text: '' })).status,
       400,
     )
 
-    // destroy session → next message gets 404 (row is gone)
+    // destroy session → next message gets 404
     await app.request(`/sessions/${session.id}`, { method: 'DELETE' })
     assert.equal(
       (await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })).status,
@@ -78,20 +74,17 @@ describe('server HTTP — sessions + chat protocol', () => {
     const { session } = await seedSession(app)
     const img = 'data:image/png;base64,AAAA'
 
-    // images-only (no text) records a user_message carrying the images.
     const res = await postJson(app, `/sessions/${session.id}/messages`, { text: '', images: [img] })
     assert.equal(res.status, 201)
     const ev = (await res.json()) as { type: string; payload: { text: string; images: string[] } }
     assert.equal(ev.type, 'user_message')
     assert.deepEqual(ev.payload.images, [img])
 
-    // neither text nor images → 400
     assert.equal(
       (await postJson(app, `/sessions/${session.id}/messages`, { images: [] })).status,
       400,
     )
 
-    // oversized image → 413
     const huge = `data:image/png;base64,${'A'.repeat(8_000_001)}`
     assert.equal(
       (await postJson(app, `/sessions/${session.id}/messages`, { images: [huge] })).status,
@@ -99,12 +92,13 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
   })
 
-  test('worker events (bearer): turn_start marks message processed; busy derived from event log', async () => {
+  test('busy is driven by busyTracker via turn_start/turn_complete events', async () => {
+    // Events are not persisted server-side anymore. busy comes from busyTracker,
+    // which is toggled on turn_start (true) and turn_complete/error (false).
+    // Still requires attached=true so a SIGKILL'd daemon (heartbeat stops) falls
+    // back to busy=false within the 90s liveness window.
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
-    const msgRes = await postJson(app, `/sessions/${session.id}/messages`, { text: 'work' })
-    const msg = (await msgRes.json()) as { id: number }
-
     const auth = { authorization: `Bearer ${session.apiToken}` }
 
     // Unauthorized rejected.
@@ -113,29 +107,22 @@ describe('server HTTP — sessions + chat protocol', () => {
       401,
     )
 
-    // Real daemons heartbeat first — required for busy derivation to register
-    // (busy = open turn_start AND attached).
+    // Heartbeat first (real daemon order). Without it attached=false → busy=false.
     await postJson(app, '/sessions/me/heartbeat', {}, auth)
 
-    // turn_start consumes the message → busy=true (derived).
-    await postJson(
-      app,
-      '/sessions/me/events',
-      { type: 'turn_start', payload: { messageId: msg.id } },
-      auth,
-    )
+    // turn_start → busy=true.
+    await postJson(app, '/sessions/me/events', { type: 'turn_start', payload: {} }, auth)
     const busy = (await (await app.request(`/sessions/${session.id}`)).json()) as { busy: boolean }
     assert.equal(busy.busy, true)
 
-    // Stream an SDK event.
-    await postJson(
-      app,
-      '/sessions/me/events',
-      { type: 'sdk_event', payload: { type: 'assistant', text: 'thinking' } },
-      auth,
-    )
+    // sdk_event in between does not change busy.
+    await postJson(app, '/sessions/me/events', { type: 'sdk_event', payload: {} }, auth)
+    const stillBusy = (await (await app.request(`/sessions/${session.id}`)).json()) as {
+      busy: boolean
+    }
+    assert.equal(stillBusy.busy, true)
 
-    // turn_complete → busy back to false.
+    // turn_complete → busy=false.
     await postJson(
       app,
       '/sessions/me/events',
@@ -144,38 +131,20 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
     const idle = (await (await app.request(`/sessions/${session.id}`)).json()) as { busy: boolean }
     assert.equal(idle.busy, false)
-
-    // Event log contains user + turn_start + sdk + turn_complete in order.
-    const events = (await (await app.request(`/sessions/${session.id}/events`)).json()) as Array<{
-      type: string
-    }>
-    assert.deepEqual(
-      events.map(e => e.type),
-      ['user_message', 'turn_start', 'sdk_event', 'turn_complete'],
-    )
   })
 
   test('busy=false when daemon never heartbeated (orphan turn_start, sticky-yellow fix)', async () => {
-    // Simulates the SIGKILL / crash class: daemon emitted turn_start, then
-    // died before sending a closer. With the timeline-only derivation the
-    // session would have been stuck busy=true forever. The fix ANDs busy
-    // with sessionLiveness — no heartbeat → busy=false regardless of timeline.
+    // Daemon emitted turn_start without ever sending the session heartbeat:
+    // attached=false → busy collapses to false regardless of busyTracker.
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
     const auth = { authorization: `Bearer ${session.apiToken}` }
-    // Skip /sessions/me/heartbeat. Post turn_start anyway (bearer-auth works
-    // even on un-heartbeated sessions — it's the apiToken that gates).
-    await postJson(
-      app,
-      '/sessions/me/events',
-      { type: 'turn_start', payload: { messageId: 999 } },
-      auth,
-    )
+    await postJson(app, '/sessions/me/events', { type: 'turn_start', payload: {} }, auth)
     const view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
       attached: boolean
       busy: boolean
     }
     assert.equal(view.attached, false)
-    assert.equal(view.busy, false, 'orphan turn_start without daemon must not register as busy')
+    assert.equal(view.busy, false)
   })
 })

@@ -1,4 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process'
+import { readdirSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SessionEvent } from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { ApiClient, WorkerClient } from '../client.ts'
@@ -17,37 +20,40 @@ export type EventSourceLike = {
   close(): void
 }
 
-// Open-coded for tests: pass a mock EventSource ctor + a mock spawn.
 export type RunnerDeps = {
   client: ApiClient
   worker: WorkerClient
-  // Env vars merged on top of process.env when spawning claude. Set at
-  // `session run` time so proxy / mirror configs are runtime concerns, not
-  // baked into the session record.
   env?: Record<string, string>
   spawnImpl?: SpawnImpl
-  // Default uses the eventsource package; tests pass a fake constructor.
-  eventSourceImpl?: new (
-    url: string,
-  ) => EventSourceLike
+  eventSourceImpl?: new (url: string) => EventSourceLike
   log?: (msg: string) => void
 }
 
 type DaemonState = {
-  pendingQueue: SessionEvent[]
   firstSpawnDone: boolean
   seen: Set<number>
 }
 
-const foldHistory = (history: SessionEvent[]): DaemonState => ({
-  // Claude writes its on-disk session file the moment it's invoked with
-  // --session-id, regardless of exit code. So any prior turn_start means we
-  // MUST use --resume from here on — re-sending --session-id errors with
-  // "Session ID <uuid> is already in use" and the turn fails forever.
-  firstSpawnDone: history.some(e => e.type === 'turn_start'),
-  pendingQueue: history.filter(e => e.type === 'user_message' && e.processedAt == null),
-  seen: new Set(history.map(e => e.sequence)),
-})
+// claude writes a session file on first `--session-id` invocation. Its on-disk
+// layout is `~/.claude/projects/<flattened-cwd>/<agentSessionId>.jsonl`. We
+// don't reproduce the cwd-flattening (it has edge cases); instead, walk every
+// project dir and match by file name. Cheap — handful of dirs typically.
+const claudeSessionFileExists = (agentSessionId: string): boolean => {
+  const root = join(homedir(), '.claude', 'projects')
+  try {
+    for (const dir of readdirSync(root)) {
+      const candidate = join(root, dir, `${agentSessionId}.jsonl`)
+      try {
+        if (statSync(candidate).isFile()) return true
+      } catch {
+        // not a file or doesn't exist; keep looking
+      }
+    }
+  } catch {
+    // ~/.claude/projects missing — fresh machine, first run
+  }
+  return false
+}
 
 const startHeartbeat = (
   client: ApiClient,
@@ -55,10 +61,10 @@ const startHeartbeat = (
   machineId: string,
   log: (m: string) => void,
 ): NodeJS.Timeout => {
-  // Two pings every tick: worker level (per-machine liveness) and session
-  // level (per-session 'attached' flag). Worker keeps machine alive in UI;
-  // session-level tells the UI 'this session has a daemon' vs 'machine is up
-  // but nobody's running this session'. Immediate ping seeds both so a `send`
+  // Two pings every tick: worker-level (per-machine liveness) and
+  // session-level (per-session 'attached' flag). Worker keeps the machine
+  // alive in UI; session-level distinguishes 'machine up but no daemon for
+  // this session' from 'machine down'. Immediate ping seeds both so a `send`
   // right after `start` doesn't see stale alive=false / attached=false.
   const ping = (): void => {
     void client.workers
@@ -70,8 +76,9 @@ const startHeartbeat = (
   return setInterval(ping, 30_000)
 }
 
-// Build the SSE subscription wrapper. Each unseen `user_message` not yet
-// processed is forwarded to `onUserMessage`; seen sequences are deduped here.
+// Build the SSE subscription wrapper. Each unseen `user_message` is forwarded
+// to `onUserMessage`; seen sequences are deduped here (per-connection only —
+// the server doesn't replay history anymore).
 const subscribeStream = (
   url: string,
   ESCtor: new (u: string) => EventSourceLike,
@@ -85,7 +92,7 @@ const subscribeStream = (
       const ev = JSON.parse(e.data) as SessionEvent
       if (seen.has(ev.sequence)) return
       seen.add(ev.sequence)
-      if (ev.type === 'user_message' && ev.processedAt == null) onUserMessage(ev)
+      if (ev.type === 'user_message') onUserMessage(ev)
     } catch {
       // skip malformed payloads
     }
@@ -115,7 +122,10 @@ const restoreTty = (): void => {
   }
 }
 
-// Long-running loop: subscribe + drain. Single-flight per session via `busy`.
+// Long-running loop: subscribe + drain. Server no longer persists events, so
+// daemon state isn't recovered from a server query — `firstSpawnDone` reads
+// the filesystem (claude's own session file) and the message queue starts
+// empty. Messages sent while the daemon is offline are dropped by design.
 export const runDaemon = async (
   config: SessionConfig,
   deps: RunnerDeps,
@@ -129,14 +139,18 @@ export const runDaemon = async (
   log(`bin: ${claudeBin()}  cwd: ${config.worktreePath}`)
   log(`runtime env keys: ${maskedEnvKeys(deps.env)}`)
 
-  const state = foldHistory(await deps.client.sessions.listEvents(config.sessionId))
+  const state: DaemonState = {
+    firstSpawnDone: claudeSessionFileExists(config.agentSessionId),
+    seen: new Set(),
+  }
+  const pendingQueue: SessionEvent[] = []
   let busy = false
   const drain = async (): Promise<void> => {
     if (busy) return
     busy = true
     try {
-      while (state.pendingQueue.length > 0 && !signal.aborted) {
-        const msg = state.pendingQueue.shift()
+      while (pendingQueue.length > 0 && !signal.aborted) {
+        const msg = pendingQueue.shift()
         if (!msg) break
         const resuming = state.firstSpawnDone
         log(`▶ msg #${msg.sequence} (${resuming ? 'resume' : 'first'})`)
@@ -152,14 +166,13 @@ export const runDaemon = async (
   }
 
   const hb = startHeartbeat(deps.client, deps.worker, config.workerMachineId, log)
-  void drain()
   const es = subscribeStream(
     `${config.server}/sessions/${config.sessionId}/stream`,
     ESCtor,
     state.seen,
     log,
     ev => {
-      state.pendingQueue.push(ev)
+      pendingQueue.push(ev)
       void drain()
     },
   )

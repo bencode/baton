@@ -133,7 +133,7 @@ export const worker = defineCommand({
     destroy: defineCommand({
       meta: {
         name: 'destroy',
-        description: 'permanently delete a worker, its sessions, and event logs (irreversible)',
+        description: 'permanently delete a worker and its sessions (irreversible)',
       },
       args: {
         worker: { type: 'positional', required: true, description: 'worker int id or name' },
@@ -148,20 +148,16 @@ export const worker = defineCommand({
         const sessions = (await c.sessions.listByProject(projectId)).filter(
           s => s.workerId === handle.id,
         )
-        const events = (await Promise.all(sessions.map(s => c.sessions.listEvents(s.id)))).reduce(
-          (sum, list) => sum + list.length,
-          0,
-        )
         if (!args.confirm) {
           console.log(`[dry-run] would destroy worker ${handle.name} (#${handle.id}):`)
           console.log(`  - ${sessions.length} session(s) cascade-deleted`)
-          console.log(`  - ${events} event(s) cascade-deleted`)
+          console.log('  - browser-local event history: NOT touched')
           console.log('re-run with --confirm to proceed.')
           return
         }
         await c.workers.destroy(handle.id)
         console.log(
-          `destroyed worker ${handle.name} (#${handle.id}); ${sessions.length} session(s), ${events} event(s) gone`,
+          `destroyed worker ${handle.name} (#${handle.id}); ${sessions.length} session(s) gone`,
         )
       },
     }),
