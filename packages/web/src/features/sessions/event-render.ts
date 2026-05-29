@@ -20,6 +20,13 @@ export type RenderItem =
     }
   | { kind: 'turn-end'; result?: TurnEndSummary; key: string }
   | { kind: 'turn-error'; message: string; key: string }
+  | {
+      kind: 'rate-limit'
+      rateLimitType?: string
+      status?: string
+      resetsAt?: number
+      key: string
+    }
   | { kind: 'raw'; payload: unknown; key: string }
 
 export type TurnEndSummary = {
@@ -186,6 +193,18 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
         numTurns: typeof p.num_turns === 'number' ? p.num_turns : undefined,
         totalCostUsd: typeof p.total_cost_usd === 'number' ? p.total_cost_usd : undefined,
       }
+      continue
+    }
+
+    if (t === 'rate_limit_event') {
+      const info = isRecord(p.rate_limit_info) ? p.rate_limit_info : null
+      items.push({
+        kind: 'rate-limit',
+        rateLimitType: info ? str(info.rateLimitType) : undefined,
+        status: info ? str(info.status) : undefined,
+        resetsAt: info && typeof info.resetsAt === 'number' ? info.resetsAt : undefined,
+        key,
+      })
       continue
     }
 

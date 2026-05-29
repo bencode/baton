@@ -18,6 +18,14 @@ export const RenderItemView = ({ item }: { item: RenderItem }) => {
     )
   if (item.kind === 'turn-end') return <TurnEnd result={item.result} />
   if (item.kind === 'turn-error') return <TurnErrorRow message={item.message} />
+  if (item.kind === 'rate-limit')
+    return (
+      <RateLimitNotice
+        rateLimitType={item.rateLimitType}
+        status={item.status}
+        resetsAt={item.resetsAt}
+      />
+    )
   return <RawBlock payload={item.payload} />
 }
 
@@ -72,6 +80,47 @@ const TurnErrorRow = ({ message }: { message: string }) => (
     </div>
   </div>
 )
+
+// Map common claude rate-limit window names to short forms; fall back to the
+// raw `foo_bar` → `foo-bar` if unrecognized.
+const formatLimitType = (t: string): string => {
+  const map: Record<string, string> = { one_hour: '1h', five_hour: '5h', daily: '24h' }
+  return map[t] ?? t.replace(/_/g, '-')
+}
+
+// resetsAt is unix-seconds. Future → relative ('resets in 2h 13m'); past →
+// absolute local time ('reset at 18:30').
+const formatResets = (resetsAtSec: number): string => {
+  const now = Date.now() / 1000
+  const delta = resetsAtSec - now
+  if (delta <= 0) {
+    const d = new Date(resetsAtSec * 1000)
+    return `reset at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  }
+  const h = Math.floor(delta / 3600)
+  const m = Math.floor((delta % 3600) / 60)
+  return h > 0 ? `resets in ${h}h ${m}m` : `resets in ${m}m`
+}
+
+const RateLimitNotice = ({
+  rateLimitType,
+  status,
+  resetsAt,
+}: {
+  rateLimitType?: string
+  status?: string
+  resetsAt?: number
+}) => {
+  const bad = status === 'rejected' || status === 'denied'
+  return (
+    <div className="flex items-center justify-center gap-2 text-[11px] text-gray-400">
+      <span>rate limit</span>
+      {rateLimitType && <span>· {formatLimitType(rateLimitType)}</span>}
+      {status && <span className={bad ? 'text-red-600' : ''}>· {status}</span>}
+      {resetsAt !== undefined && <span>· {formatResets(resetsAt)}</span>}
+    </div>
+  )
+}
 
 const RawBlock = ({ payload }: { payload: unknown }) => (
   <pre className="overflow-x-auto rounded border border-gray-100 bg-white p-2 font-mono text-[11px] whitespace-pre-wrap break-words text-gray-500">
