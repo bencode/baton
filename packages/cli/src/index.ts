@@ -1,4 +1,5 @@
 import { defineCommand, runMain } from 'citty'
+import { init } from './commands/init.ts'
 import { project } from './commands/project.ts'
 import { requirement } from './commands/requirement.ts'
 import { session } from './commands/session.ts'
@@ -11,7 +12,7 @@ const main = defineCommand({
     name: 'baton',
     description: 'baton — manage workspaces / projects / requirements / tasks / sessions / workers',
   },
-  subCommands: { workspace, project, requirement, task, session, worker },
+  subCommands: { init, workspace, project, requirement, task, session, worker },
 })
 
 runMain(main)

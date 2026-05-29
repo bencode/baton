@@ -2,14 +2,14 @@ import { defineCommand } from 'citty'
 import { createWorkerClient } from '../../client.ts'
 import { defaultConfigPath, loadConfig } from '../../session/config.ts'
 import { removeWorktree } from '../../session/worktree.ts'
-import { clientFor, common } from '../../util.ts'
+import { clientFor, common, resolveProjectId } from '../../util.ts'
 import { resolveSession } from './shared.ts'
 
 export const sessionCloseCommand = defineCommand({
   meta: { name: 'close', description: 'close a session (optionally remove its worktree)' },
   args: {
     session: { type: 'positional', required: true, description: 'session int id or name' },
-    project: { type: 'string', required: true, description: 'project id (int)' },
+    project: { type: 'string', description: 'project id (overrides .baton.json)' },
     'rm-worktree': { type: 'boolean', description: 'also remove the git worktree' },
     repo: { type: 'string', description: 'source repo path (required with --rm-worktree)' },
     config: {
@@ -20,7 +20,7 @@ export const sessionCloseCommand = defineCommand({
   },
   run: async ({ args }) => {
     const cliClient = clientFor(args)
-    const projectId = Number(args.project)
+    const projectId = resolveProjectId(args)
     const s = await resolveSession(cliClient, projectId, args.session)
     const cfgPath = args.config ?? defaultConfigPath(s.id)
     const cfg = loadConfig(cfgPath)

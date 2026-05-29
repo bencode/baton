@@ -6,7 +6,7 @@ import type { ApiClient } from '../../client.ts'
 import { resolveBaseUrl } from '../../config.ts'
 import { defaultConfigPath, type SessionConfig, saveConfig } from '../../session/config.ts'
 import { createWorktree, removeWorktree } from '../../session/worktree.ts'
-import { clientFor, common } from '../../util.ts'
+import { clientFor, common, resolveProjectId } from '../../util.ts'
 import { loadWorkerConfigOrNull, workerConfigPath } from '../../worker/config.ts'
 import { defaultWorktreeDir, slug } from './shared.ts'
 
@@ -88,7 +88,7 @@ export const newSession = async (
 export const sessionNewCommand = defineCommand({
   meta: { name: 'new', description: 'create a new session with its own git worktree' },
   args: {
-    project: { type: 'string', required: true, description: 'project id (int)' },
+    project: { type: 'string', description: 'project id (overrides .baton.json)' },
     name: { type: 'string', required: true, description: 'human-friendly session name' },
     repo: { type: 'string', required: true, description: 'path to the source git repo' },
     base: { type: 'string', description: 'base branch / ref (default: main)' },
@@ -99,7 +99,7 @@ export const sessionNewCommand = defineCommand({
   run: async ({ args }) => {
     const server = resolveBaseUrl(args.url)
     const c = clientFor(args)
-    const projectId = Number(args.project)
+    const projectId = resolveProjectId(args)
     // Session must be hosted by a registered worker on this machine — no worker
     // config, no session. The session's agent state file (claude-code's
     // ~/.claude/projects/<agentSessionId>.jsonl) is physically pinned to this

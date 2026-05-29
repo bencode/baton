@@ -2,7 +2,7 @@ import type { Id, TaskStatus } from '@baton/shared'
 import { defineCommand } from 'citty'
 import type { ApiClient } from '../client.ts'
 import { fmtTask, removed, renderList, renderOne } from '../output.ts'
-import { clientFor, common, splitCsv } from '../util.ts'
+import { clientFor, common, resolveProjectId, splitCsv } from '../util.ts'
 
 export const createTask = (
   c: ApiClient,
@@ -35,14 +35,14 @@ export const task = defineCommand({
       args: {
         title: { type: 'positional', required: true },
         requirement: { type: 'string', required: true, description: 'requirement code (R-N)' },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         spec: { type: 'string', description: 'short instruction' },
         deps: { type: 'string', description: 'comma-separated dependency task codes (T-N,T-N)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const projectId = Number(args.project)
+        const projectId = resolveProjectId(args)
         const requirementId = await resolveReqByCode(c, projectId, args.requirement)
         const depCodes = splitCsv(args.deps) ?? []
         const dependsOn = await Promise.all(
@@ -66,12 +66,12 @@ export const task = defineCommand({
       meta: { name: 'ls', description: 'list tasks in a requirement' },
       args: {
         requirement: { type: 'string', required: true, description: 'requirement code (R-N)' },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const reqId = await resolveReqByCode(c, Number(args.project), args.requirement)
+        const reqId = await resolveReqByCode(c, resolveProjectId(args), args.requirement)
         console.log(await listTasks(c, reqId, Boolean(args.json)))
       },
     }),
@@ -79,12 +79,12 @@ export const task = defineCommand({
       meta: { name: 'get', description: 'get a task by code (T-N)' },
       args: {
         code: { type: 'positional', required: true },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const id = await resolveTaskByCode(c, Number(args.project), args.code)
+        const id = await resolveTaskByCode(c, resolveProjectId(args), args.code)
         console.log(await getTask(c, id, Boolean(args.json)))
       },
     }),
@@ -96,12 +96,12 @@ export const task = defineCommand({
       args: {
         code: { type: 'positional', required: true, description: 'task code (T-N)' },
         status: { type: 'positional', required: true },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const id = await resolveTaskByCode(c, Number(args.project), args.code)
+        const id = await resolveTaskByCode(c, resolveProjectId(args), args.code)
         console.log(await setTaskStatus(c, id, args.status as TaskStatus, Boolean(args.json)))
       },
     }),
@@ -109,12 +109,12 @@ export const task = defineCommand({
       meta: { name: 'rm', description: 'delete a task by code' },
       args: {
         code: { type: 'positional', required: true },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const id = await resolveTaskByCode(c, Number(args.project), args.code)
+        const id = await resolveTaskByCode(c, resolveProjectId(args), args.code)
         console.log(await removeTask(c, id, args.code, Boolean(args.json)))
       },
     }),

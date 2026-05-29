@@ -4,7 +4,7 @@ import { defineCommand } from 'citty'
 import type { ApiClient, WorkerRegisterOutput } from '../client.ts'
 import { resolveBaseUrl } from '../config.ts'
 import { fmtWorker, renderList, renderOne, toJson } from '../output.ts'
-import { clientFor, common } from '../util.ts'
+import { clientFor, common, resolveProjectId } from '../util.ts'
 import {
   loadWorkerConfigOrNull,
   saveWorkerConfig,
@@ -71,7 +71,7 @@ export const worker = defineCommand({
         description: 'register this machine as a worker for a project (idempotent)',
       },
       args: {
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         name: { type: 'string', description: 'worker display name (default: hostname)' },
         ...common,
       },
@@ -82,7 +82,7 @@ export const worker = defineCommand({
         const machineId = readOrCreateMachineId()
         const name = args.name ?? hostname
         const { out, configPath } = await registerWorker(c, {
-          projectId: Number(args.project),
+          projectId: resolveProjectId(args),
           name,
           server,
           hostname,
@@ -102,12 +102,12 @@ export const worker = defineCommand({
     ls: defineCommand({
       meta: { name: 'ls', description: 'list workers in a project' },
       args: {
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const ws = await c.workers.listByProject(Number(args.project))
+        const ws = await c.workers.listByProject(resolveProjectId(args))
         console.log(renderList(ws, fmtWorker, Boolean(args.json)))
       },
     }),
@@ -115,12 +115,12 @@ export const worker = defineCommand({
       meta: { name: 'get', description: 'get a worker by int id or name' },
       args: {
         worker: { type: 'positional', required: true, description: 'worker int id or name' },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const projectId = Number(args.project)
+        const projectId = resolveProjectId(args)
         const handle = await resolveWorker(c, projectId, args.worker)
         const w = await c.workers.get(handle.id)
         console.log(renderOne(w, fmtWorker, Boolean(args.json)))
@@ -130,12 +130,12 @@ export const worker = defineCommand({
       meta: { name: 'close', description: 'close a worker (its sessions go offline next tick)' },
       args: {
         worker: { type: 'positional', required: true, description: 'worker int id or name' },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const projectId = Number(args.project)
+        const projectId = resolveProjectId(args)
         const handle = await resolveWorker(c, projectId, args.worker)
         await c.workers.close(handle.id)
         console.log(`closed worker ${handle.name} (#${handle.id})`)
@@ -144,11 +144,11 @@ export const worker = defineCommand({
     whoami: defineCommand({
       meta: { name: 'whoami', description: 'show local worker config for a project' },
       args: {
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: ({ args }) => {
-        const projectId = Number(args.project)
+        const projectId = resolveProjectId(args)
         const cfg = loadWorkerConfigOrNull(workerConfigPath(projectId))
         if (!cfg) {
           console.log('(no worker registered for this project — run `baton worker register`)')

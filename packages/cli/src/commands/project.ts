@@ -2,7 +2,7 @@ import type { Id } from '@baton/shared'
 import { defineCommand } from 'citty'
 import type { ApiClient } from '../client.ts'
 import { fmtProject, removed, renderList, renderOne } from '../output.ts'
-import { clientFor, common } from '../util.ts'
+import { clientFor, common, resolveWorkspaceId } from '../util.ts'
 
 export const createProject = (
   c: ApiClient,
@@ -23,14 +23,14 @@ export const project = defineCommand({
       meta: { name: 'create', description: 'create a project' },
       args: {
         name: { type: 'positional', required: true },
-        workspace: { type: 'string', required: true, description: 'workspace id' },
+        workspace: { type: 'string', description: 'workspace id (overrides .baton.json)' },
         desc: { type: 'string', description: 'description' },
         ...common,
       },
       run: async ({ args }) => {
         const out = await createProject(
           clientFor(args),
-          { workspaceId: Number(args.workspace), name: args.name, description: args.desc },
+          { workspaceId: resolveWorkspaceId(args), name: args.name, description: args.desc },
           Boolean(args.json),
         )
         console.log(out)
@@ -39,11 +39,11 @@ export const project = defineCommand({
     ls: defineCommand({
       meta: { name: 'ls', description: 'list projects in a workspace' },
       args: {
-        workspace: { type: 'string', required: true, description: 'workspace id' },
+        workspace: { type: 'string', description: 'workspace id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
-        console.log(await listProjects(clientFor(args), Number(args.workspace), Boolean(args.json)))
+        console.log(await listProjects(clientFor(args), resolveWorkspaceId(args), Boolean(args.json)))
       },
     }),
     get: defineCommand({

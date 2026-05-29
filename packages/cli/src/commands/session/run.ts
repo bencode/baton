@@ -2,7 +2,7 @@ import { defineCommand } from 'citty'
 import { createWorkerClient } from '../../client.ts'
 import { defaultConfigPath, loadConfig } from '../../session/config.ts'
 import { runDaemon } from '../../session/runner.ts'
-import { clientFor, common } from '../../util.ts'
+import { clientFor, common, resolveProjectId } from '../../util.ts'
 import { parseEnvPairs, resolveSession } from './shared.ts'
 
 export const sessionRunCommand = defineCommand({
@@ -12,7 +12,7 @@ export const sessionRunCommand = defineCommand({
   },
   args: {
     session: { type: 'positional', required: true, description: 'session int id or name' },
-    project: { type: 'string', required: true, description: 'project id (int)' },
+    project: { type: 'string', description: 'project id (overrides .baton.json)' },
     config: {
       type: 'string',
       description: 'override config path (default ~/.config/baton/session-<id>.json)',
@@ -25,7 +25,7 @@ export const sessionRunCommand = defineCommand({
   },
   run: async ({ args }) => {
     const cliClient = clientFor(args)
-    const projectId = Number(args.project)
+    const projectId = resolveProjectId(args)
     const handle = await resolveSession(cliClient, projectId, args.session)
     const cfgPath = args.config ?? defaultConfigPath(handle.id)
     const cfg = loadConfig(cfgPath)

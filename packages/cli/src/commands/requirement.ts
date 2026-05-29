@@ -2,7 +2,7 @@ import type { Id, RequirementStatus } from '@baton/shared'
 import { defineCommand } from 'citty'
 import type { ApiClient } from '../client.ts'
 import { fmtRequirement, removed, renderList, renderOne } from '../output.ts'
-import { clientFor, common } from '../util.ts'
+import { clientFor, common, resolveProjectId } from '../util.ts'
 
 export const createRequirement = (
   c: ApiClient,
@@ -38,7 +38,7 @@ export const requirement = defineCommand({
       meta: { name: 'create', description: 'create a requirement' },
       args: {
         title: { type: 'positional', required: true },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         desc: { type: 'string', description: 'description' },
         ...common,
       },
@@ -47,7 +47,7 @@ export const requirement = defineCommand({
           await createRequirement(
             clientFor(args),
             {
-              projectId: Number(args.project),
+              projectId: resolveProjectId(args),
               title: args.title,
               description: args.desc,
             },
@@ -59,12 +59,12 @@ export const requirement = defineCommand({
     ls: defineCommand({
       meta: { name: 'ls', description: 'list requirements in a project' },
       args: {
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         console.log(
-          await listRequirements(clientFor(args), Number(args.project), Boolean(args.json)),
+          await listRequirements(clientFor(args), resolveProjectId(args), Boolean(args.json)),
         )
       },
     }),
@@ -72,12 +72,12 @@ export const requirement = defineCommand({
       meta: { name: 'get', description: 'get a requirement by code (R-N)' },
       args: {
         code: { type: 'positional', required: true, description: 'requirement code, e.g. R-1' },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const id = await resolveByCode(c, Number(args.project), args.code)
+        const id = await resolveByCode(c, resolveProjectId(args), args.code)
         console.log(await getRequirement(c, id, Boolean(args.json)))
       },
     }),
@@ -86,12 +86,12 @@ export const requirement = defineCommand({
       args: {
         code: { type: 'positional', required: true, description: 'requirement code (R-N)' },
         status: { type: 'positional', required: true },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const id = await resolveByCode(c, Number(args.project), args.code)
+        const id = await resolveByCode(c, resolveProjectId(args), args.code)
         console.log(
           await setRequirementStatus(c, id, args.status as RequirementStatus, Boolean(args.json)),
         )
@@ -101,12 +101,12 @@ export const requirement = defineCommand({
       meta: { name: 'rm', description: 'delete a requirement by code' },
       args: {
         code: { type: 'positional', required: true },
-        project: { type: 'string', required: true, description: 'project id (int)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
-        const id = await resolveByCode(c, Number(args.project), args.code)
+        const id = await resolveByCode(c, resolveProjectId(args), args.code)
         console.log(await removeRequirement(c, id, args.code, Boolean(args.json)))
       },
     }),
