@@ -29,8 +29,8 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
     get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
     findByName: async (projectId, name) => {
       const all = await request<Session[]>(u(`/projects/${projectId}/sessions`), { method: 'GET' })
-      // Latest (highest id) match wins when there are stale duplicates.
-      const matches = all.filter(s => s.name === name && !s.closedAt)
+      // Latest (highest id) match wins when multiple share a name.
+      const matches = all.filter(s => s.name === name)
       return matches.length === 0 ? null : (matches[matches.length - 1] ?? null)
     },
     listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),

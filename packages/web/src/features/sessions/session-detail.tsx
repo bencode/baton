@@ -45,10 +45,10 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
     }
   }
 
-  const badgeStatus = deriveBadgeStatus(
-    session as typeof session & { alive?: boolean; busy?: boolean },
-  )
-  const disabled = !!session.closedAt
+  const badgeStatus = deriveBadgeStatus(session as typeof session & { busy?: boolean })
+  // Sessions don't have a persistent closed state anymore (destroy = DELETE);
+  // a row that exists is always sendable.
+  const disabled = false
 
   return (
     <div className="flex h-full flex-col">

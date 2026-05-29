@@ -72,7 +72,7 @@ describe('newSession', () => {
               agentKind: input.agentKind,
               agentSessionId: input.agentSessionId,
               worktreePath: input.worktreePath,
-              startedAt: 0,
+              createdAt: 0,
               updatedAt: 0,
               apiToken: 'tok-deadbeef',
             }

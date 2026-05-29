@@ -28,15 +28,15 @@ export const sessionWithView = async (
   }
 }
 
-// Fallback when worker row vanished (shouldn't happen given FK Restrict, but
-// defensive — surfaces as offline rather than 500).
+// Fallback when worker row vanished (shouldn't happen given FK Cascade kept
+// in sync, but defensive — surfaces as offline rather than 500).
 const unknownWorker = (workerId: Id, projectId: Id): Worker => ({
   id: workerId,
   projectId,
   machineId: '',
   name: '(missing)',
   hostname: '',
-  startedAt: 0,
+  createdAt: 0,
 })
 
 export const workerWithView = (

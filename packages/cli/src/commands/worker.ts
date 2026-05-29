@@ -126,19 +126,39 @@ export const worker = defineCommand({
         console.log(renderOne(w, fmtWorker, Boolean(args.json)))
       },
     }),
-    close: defineCommand({
-      meta: { name: 'close', description: 'close a worker (its sessions go offline next tick)' },
+    destroy: defineCommand({
+      meta: {
+        name: 'destroy',
+        description: 'permanently delete a worker, its sessions, and event logs (irreversible)',
+      },
       args: {
         worker: { type: 'positional', required: true, description: 'worker int id or name' },
         project: { type: 'string', description: 'project id (overrides .baton.json)' },
+        confirm: { type: 'boolean', description: 'actually perform the deletion' },
         ...common,
       },
       run: async ({ args }) => {
         const c = clientFor(args)
         const projectId = resolveProjectId(args)
         const handle = await resolveWorker(c, projectId, args.worker)
-        await c.workers.close(handle.id)
-        console.log(`closed worker ${handle.name} (#${handle.id})`)
+        const sessions = (await c.sessions.listByProject(projectId)).filter(
+          s => s.workerId === handle.id,
+        )
+        const events = (await Promise.all(sessions.map(s => c.sessions.listEvents(s.id)))).reduce(
+          (sum, list) => sum + list.length,
+          0,
+        )
+        if (!args.confirm) {
+          console.log(`[dry-run] would destroy worker ${handle.name} (#${handle.id}):`)
+          console.log(`  - ${sessions.length} session(s) cascade-deleted`)
+          console.log(`  - ${events} event(s) cascade-deleted`)
+          console.log('re-run with --confirm to proceed.')
+          return
+        }
+        await c.workers.destroy(handle.id)
+        console.log(
+          `destroyed worker ${handle.name} (#${handle.id}); ${sessions.length} session(s), ${events} event(s) gone`,
+        )
       },
     }),
     whoami: defineCommand({

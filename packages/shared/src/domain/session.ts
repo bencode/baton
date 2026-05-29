@@ -9,9 +9,10 @@ import type { Worker } from './worker.ts'
 // `mode` is the collaboration dimension ('worker' | 'skill') and is orthogonal
 // to `agentKind` (the agent flavour: 'claude-code' v0; 'codex' later).
 //
-// `state` is NOT a persisted column. UI uses the derived `SessionView` returned
-// by the server, which includes `alive` (worker liveness via worker.machineId)
-// + `busy` (derived from the SessionEvent log).
+// Lifecycle is intentionally minimal — the row exists or doesn't. Destroyed
+// sessions are physically DELETEd (cascade to SessionEvent); there's no
+// soft-delete / closedAt. Daemon attach state (`attached`) and turn activity
+// (`busy`) are runtime signals on SessionView, not session state.
 export type SessionMode = 'worker' | 'skill'
 export type AgentKind = 'claude-code'
 
@@ -24,8 +25,7 @@ export type Session = {
   agentKind: AgentKind
   agentSessionId: string
   worktreePath: string
-  startedAt: number
-  closedAt?: number
+  createdAt: number
   updatedAt: number
 }
 
@@ -33,11 +33,10 @@ export type Session = {
 // inlined so the client can render worker.name/hostname without a 2nd request.
 //
 //   alive    — the worker (= machine) is reachable (liveness ping in last 90s)
-//   attached — THIS session has a daemon process pinging /sessions/me/heartbeat
-//              (alive without attached = machine is up but no one is running
-//              this session's daemon; messages would just queue)
-//   busy     — session is currently processing a turn (turn_start with no
-//              trailing turn_complete / turn_error in the event log)
+//   attached — THIS session has a daemon process pinging /sessions/me/heartbeat.
+//              Diagnostic only — UI doesn't render this as a session state.
+//   busy     — currently processing a turn (turn_start with no trailing close
+//              event). Treated as a transient event in UI (pulse), not state.
 export type SessionView = Session & {
   alive: boolean
   attached: boolean

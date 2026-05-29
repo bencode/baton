@@ -5,7 +5,9 @@ import type { Store } from '../store/types.ts'
 // Variables a bearer-authenticated route handler can read via c.get('session').
 export type AuthVars = { session: Session }
 
-// Resolves the bearer token to a Session and rejects if missing / closed.
+// Resolves the bearer token to a Session and rejects if missing. Sessions
+// don't have a closed state anymore (destroy = DELETE), so token-not-found
+// is the sole failure mode.
 // Mounted on /sessions/me/*.
 export const bearerAuth = (store: Store): MiddlewareHandler<{ Variables: AuthVars }> => {
   return async (c, next) => {
@@ -13,7 +15,7 @@ export const bearerAuth = (store: Store): MiddlewareHandler<{ Variables: AuthVar
     const token = m?.[1]
     if (!token) return c.json({ error: 'unauthorized' }, 401)
     const session = await store.sessions.getByToken(token)
-    if (!session || session.closedAt) return c.json({ error: 'unauthorized' }, 401)
+    if (!session) return c.json({ error: 'unauthorized' }, 401)
     c.set('session', session)
     await next()
   }

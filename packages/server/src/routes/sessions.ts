@@ -45,11 +45,11 @@ export const registerSessionRoutes = (
         },
         400,
       )
-    // Validate worker exists, belongs to this project, and is alive.
+    // Validate worker exists + belongs to this project. (No closed check —
+    // workers don't have a closed state; destroy = DELETE.)
     const worker = await store.workers.get(body.workerId)
     if (!worker || worker.projectId !== body.projectId)
       return c.json({ error: 'worker not found in project' }, 404)
-    if (worker.closedAt) return c.json({ error: 'worker is closed' }, 409)
     const reg = await store.sessions.register({
       projectId: body.projectId,
       workerId: body.workerId,
@@ -81,11 +81,11 @@ export const registerSessionRoutes = (
     return c.json({ attached: true })
   })
 
-  // Worker-private (bearer). turn_start / turn_complete / turn_error don't
-  // flip persistent state anymore — busy is derived from the event log.
-  app.post('/sessions/me/close', auth, async c => {
+  // Session DELETE (bearer). Drops the row; SessionEvent rows cascade.
+  // Irreversible — only the daemon (which holds the apiToken) can call this.
+  app.delete('/sessions/me', auth, async c => {
     const session = c.get('session')
-    await store.sessions.close(session.id)
+    await store.sessions.destroy(session.id)
     return c.body(null, 204)
   })
   app.post('/sessions/me/events', auth, async c => {
@@ -107,7 +107,6 @@ export const registerSessionRoutes = (
     const sessionId = intParam(c.req.param('id'))
     const session = await store.sessions.get(sessionId)
     if (!session) return c.json({ error: 'not found' }, 404)
-    if (session.closedAt) return c.json({ error: 'session closed' }, 409)
     const body = (await c.req.json()) as { text?: string; images?: unknown }
     const text = typeof body.text === 'string' ? body.text : ''
     const images = Array.isArray(body.images)

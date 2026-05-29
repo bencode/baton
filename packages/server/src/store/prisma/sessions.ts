@@ -32,11 +32,8 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
     (await prisma.session.findMany({ where: { projectId }, orderBy: { id: 'asc' } })).map(
       toSession,
     ),
-  close: async id => {
-    await prisma.session.update({
-      where: { id },
-      data: { closedAt: new Date() },
-    })
+  destroy: async id => {
+    await prisma.session.delete({ where: { id } })
   },
   appendEvent: async (sessionId, type, payload) =>
     prisma.$transaction(async tx => {

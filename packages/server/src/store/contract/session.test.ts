@@ -109,7 +109,7 @@ describe('Store contract — sessions', () => {
     assert.equal((await ctx.store.sessions.findNextPendingMessage(s.id))?.id, m2.id)
   })
 
-  test('session close sets closedAt; getByToken still resolves (auth filters in middleware)', async () => {
+  test('session destroy: row + events disappear (cascade)', async () => {
     const { project } = await seedReq(ctx)
     const workerId = await seedWorker(ctx, project)
     const s = await ctx.store.sessions.register({
@@ -121,8 +121,10 @@ describe('Store contract — sessions', () => {
       agentSessionId: 'a-4',
       worktreePath: '/tmp/wt',
     })
-    await ctx.store.sessions.close(s.id)
-    const closed = await ctx.store.sessions.get(s.id)
-    assert.equal(typeof closed?.closedAt, 'number')
+    await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'hi' })
+    assert.equal((await ctx.store.sessions.listEvents(s.id)).length, 1)
+    await ctx.store.sessions.destroy(s.id)
+    assert.equal(await ctx.store.sessions.get(s.id), null)
+    assert.equal((await ctx.store.sessions.listEvents(s.id)).length, 0)
   })
 })

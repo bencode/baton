@@ -31,7 +31,6 @@ export const send = defineCommand({
         `no session named '${args.name}' in project ${projectId}. ` +
           `run \`baton start --name ${args.name}\` to create one.`,
       )
-    if (found.closedAt) throw new Error(`session '${args.name}' is closed`)
 
     const ev = await c.sessions.sendMessage(found.id, args.text)
     console.log(`→ sent (seq ${ev.sequence}) to ${args.name} (#${found.id})`)

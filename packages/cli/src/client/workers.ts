@@ -16,7 +16,7 @@ export type WorkersClient = {
   get(id: Id): Promise<WorkerView>
   findByName(projectId: Id, name: string): Promise<WorkerView | null>
   heartbeat(machineId: string): Promise<{ alive: boolean }>
-  close(id: Id): Promise<void>
+  destroy(id: Id): Promise<void>
 }
 
 export const workersClient = (baseUrl: string): WorkersClient => {
@@ -29,13 +29,13 @@ export const workersClient = (baseUrl: string): WorkersClient => {
       const all = await request<WorkerView[]>(u(`/projects/${projectId}/workers`), {
         method: 'GET',
       })
-      const matches = all.filter(w => w.name === name && !w.closedAt)
+      const matches = all.filter(w => w.name === name)
       return matches.length === 0 ? null : (matches[matches.length - 1] ?? null)
     },
     heartbeat: machineId =>
       request(u('/workers/heartbeat'), { method: 'POST', body: { machineId } }),
-    close: async id => {
-      await request(u(`/workers/${id}/close`), { method: 'POST' })
+    destroy: async id => {
+      await request(u(`/workers/${id}`), { method: 'DELETE' })
     },
   }
 }

@@ -76,8 +76,7 @@ export const toSession = (r: DbSession): Session => ({
   agentKind: r.agentKind as AgentKind,
   agentSessionId: r.agentSessionId,
   worktreePath: r.worktreePath,
-  startedAt: r.startedAt.getTime(),
-  closedAt: r.closedAt?.getTime(),
+  createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),
 })
 
@@ -97,6 +96,5 @@ export const toWorker = (r: DbWorker): Worker => ({
   machineId: r.machineId,
   name: r.name,
   hostname: r.hostname,
-  startedAt: r.startedAt.getTime(),
-  closedAt: r.closedAt?.getTime(),
+  createdAt: r.createdAt.getTime(),
 })

@@ -49,7 +49,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal((await postJson(app, '/sessions/me/heartbeat', {})).status, 401)
   })
 
-  test('messages: POST /sessions/:id/messages records user_message + 409 on closed', async () => {
+  test('messages: POST /sessions/:id/messages records user_message; 404 after destroy', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
     const res = await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
@@ -65,14 +65,14 @@ describe('server HTTP — sessions + chat protocol', () => {
       400,
     )
 
-    // close session → next message gets 409
-    await app.request(`/sessions/me/close`, {
-      method: 'POST',
+    // destroy session → next message gets 404 (row is gone)
+    await app.request(`/sessions/me`, {
+      method: 'DELETE',
       headers: { authorization: `Bearer ${session.apiToken}` },
     })
     assert.equal(
       (await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })).status,
-      409,
+      404,
     )
   })
 

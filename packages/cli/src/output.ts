@@ -6,14 +6,10 @@ export const fmtWorkspace = (w: Workspace): string => `${w.id}  ${w.name}`
 export const fmtProject = (p: Project): string => `${p.id}  ${p.name}`
 export const fmtRequirement = (r: Requirement): string => `${r.code}  [${r.status}]  ${r.title}`
 export const fmtTask = (t: Task): string => `${t.code}  [${t.status}]  ${t.title}`
-export const fmtSession = (s: Session): string => {
-  const closed = s.closedAt ? '  [closed]' : ''
-  const wt = s.worktreePath ? `  ${s.worktreePath}` : ''
-  return `${s.id}  ${s.name}${closed}${wt}`
-}
+export const fmtSession = (s: Session): string => `${s.id}  ${s.name}  ${s.worktreePath}`
 export const fmtWorker = (w: Worker & { alive?: boolean }): string => {
-  const closed = w.closedAt ? '  [closed]' : w.alive === false ? '  [offline]' : ''
-  return `${w.id}  ${w.name}  ${w.hostname}${closed}`
+  const offline = w.alive === false ? '  [offline]' : ''
+  return `${w.id}  ${w.name}  ${w.hostname}${offline}`
 }
 
 export const renderOne = <T>(item: T, fmt: (x: T) => string, json: boolean): string =>

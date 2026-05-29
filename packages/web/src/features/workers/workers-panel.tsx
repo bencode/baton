@@ -1,6 +1,5 @@
 import type { Id, Session, WorkerView } from '@baton/shared'
 import { sessionPath } from '../../app/route'
-import { StateChip } from '../../components/state-chip'
 import { useSessions } from '../sessions/use-sessions'
 import { useWorkers } from './use-workers'
 
@@ -11,22 +10,10 @@ type WorkersPanelProps = {
 }
 
 type SessionView = Session & { alive?: boolean; attached?: boolean; busy?: boolean }
-type SessionStatus = 'idle' | 'streaming' | 'detached' | 'closed' | 'offline'
-
-// 5-state ladder, ordered by priority. `attached` distinguishes 'this session
-// has a daemon pinging' from 'just the machine is up' — without it, sessions
-// whose daemon was killed look identical to ready ones and the user sends
-// into a queue with no one listening.
-const sessionStatus = (s: SessionView, workerAlive: boolean): SessionStatus => {
-  if (s.closedAt) return 'closed'
-  if (!workerAlive) return 'offline'
-  if (!s.attached) return 'detached'
-  if (s.busy) return 'streaming'
-  return 'idle'
-}
 
 // Worker grouping by FK: Session.workerId === Worker.id. Schema guarantees
-// every session has a worker (M2.6.1 FK Restrict), so there's no orphan bucket.
+// every session has a worker (M2.6.1 FK Cascade). Destroyed sessions are
+// physically gone — they don't appear in the list at all.
 const groupByWorker = (
   workers: WorkerView[],
   sessions: SessionView[],
@@ -59,13 +46,11 @@ export const WorkersPanel = ({ projectId, activeId, open }: WorkersPanelProps) =
   )
 }
 
-// Layout principle (per design review):
-//   - LEFT column = structure (name, hierarchy). No status glyphs that look
-//     like list bullets.
-//   - RIGHT column = state. Status chips / pulse / text show up only when
-//     non-default; idle ⇒ clean.
-// Worker rows keep a tiny presence dot before the name — visually distinct
-// from the (now bullet-free) session rows, so the hierarchy reads instantly.
+// Display principle (M2.9):
+//   - Session has no state field. UI doesn't invent any.
+//   - LEFT = pure structure (name only).
+//   - RIGHT = transient events (busy = pulse). Default state = nothing rendered.
+//   - Worker offline propagates to its session group via dim styling.
 
 type WorkerGroupProps = {
   worker: WorkerView
@@ -88,7 +73,6 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
         {worker.hostname !== worker.name && (
           <span className="font-mono text-[10px] text-gray-400">{worker.hostname}</span>
         )}
-        {!alive && <span className="ml-auto text-[10px] text-gray-400">offline</span>}
       </div>
       {sessions.length === 0 ? (
         <p className="px-3 text-[11px] text-gray-400">no sessions</p>
@@ -97,7 +81,6 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
           <SessionRow
             key={s.id}
             session={s}
-            status={sessionStatus(s, alive)}
             path={sessionPath(projectId, s.id)}
             active={activeId === sessionPath(projectId, s.id)}
             dim={dim}
@@ -111,14 +94,13 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
 
 type SessionRowProps = {
   session: SessionView
-  status: SessionStatus
   path: string
   active: boolean
   dim: boolean
   open: (id: string, title: string) => void
 }
 
-const SessionRow = ({ session, status, path, active, dim, open }: SessionRowProps) => (
+const SessionRow = ({ session, path, active, dim, open }: SessionRowProps) => (
   <button
     type="button"
     onClick={() => open(path, session.name)}
@@ -126,29 +108,26 @@ const SessionRow = ({ session, status, path, active, dim, open }: SessionRowProp
       active ? 'bg-blue-50 text-blue-900' : 'text-gray-700 hover:bg-gray-100/70'
     } ${dim ? 'opacity-60' : ''}`}
   >
-    <span className={`truncate ${status === 'closed' ? 'line-through opacity-60' : ''}`}>
-      {session.name}
-    </span>
-    <SessionStateChip status={status} />
+    <span className="truncate">{session.name}</span>
+    {session.busy && (
+      <span
+        role="img"
+        aria-label="streaming"
+        className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-500"
+      />
+    )}
   </button>
 )
 
-// Tiny presence dot for the worker header. Solid emerald = online; solid gray
-// = offline. Same role as Slack's avatar dot — pure "here-or-not", not a
-// session state.
-const PresenceDot = ({ online }: { online: boolean }) => (
-  <span
-    role="img"
-    aria-label={online ? 'online' : 'offline'}
-    className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-emerald-500' : 'bg-gray-300'}`}
-  />
-)
-
-// Right-column status indicator — shares the project-wide StateChip vocabulary
-// (pulse for in-motion states, muted text for inactive states). idle renders
-// nothing: absence of a chip IS "ready", the calm baseline.
-const SessionStateChip = ({ status }: { status: SessionStatus }) => {
-  if (status === 'idle') return <StateChip kind="none" />
-  if (status === 'streaming') return <StateChip kind="pulse" label="streaming" />
-  return <StateChip kind="text" label={status} tone="muted" />
-}
+// Worker presence dot. Solid emerald (online) vs hollow outline (offline) —
+// shape difference (not just color) reads even at 8px.
+const PresenceDot = ({ online }: { online: boolean }) =>
+  online ? (
+    <span role="img" aria-label="online" className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+  ) : (
+    <span
+      role="img"
+      aria-label="offline"
+      className="h-2 w-2 shrink-0 rounded-full border border-gray-400 bg-transparent"
+    />
+  )

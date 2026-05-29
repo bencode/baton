@@ -1,24 +1,22 @@
 import { defineCommand } from 'citty'
-import { sessionCloseCommand } from './session/close.ts'
+import { sessionDestroyCommand } from './session/destroy.ts'
 import { sessionGetCommand } from './session/get.ts'
 import { sessionLsCommand } from './session/ls.ts'
-import { sessionNewCommand } from './session/new.ts'
-import { sessionRunCommand } from './session/run.ts'
 import { sessionSendCommand } from './session/send.ts'
+import { sessionStartCommand } from './session/start.ts'
 
-export type { SessionNewInput } from './session/new.ts'
+export type { SessionNewInput } from './session/provision.ts'
 // Re-exported for cli tests (imported directly by feature test files).
-export { newSession } from './session/new.ts'
+export { newSession } from './session/provision.ts'
 export { parseEnvPairs } from './session/shared.ts'
 
 export const session = defineCommand({
-  meta: { name: 'session', description: 'create / inspect / send / run agent sessions' },
+  meta: { name: 'session', description: 'start / inspect / send / destroy agent sessions' },
   subCommands: {
-    new: sessionNewCommand,
+    start: sessionStartCommand,
     send: sessionSendCommand,
-    close: sessionCloseCommand,
+    destroy: sessionDestroyCommand,
     ls: sessionLsCommand,
     get: sessionGetCommand,
-    run: sessionRunCommand,
   },
 })

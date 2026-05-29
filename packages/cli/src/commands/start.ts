@@ -11,7 +11,7 @@ import { runDaemon } from '../session/runner.ts'
 import { clientFor, common, resolveProjectId } from '../util.ts'
 import { loadWorkerConfigOrNull, type WorkerConfig, workerConfigPath } from '../worker/config.ts'
 import { readOrCreateMachineId } from '../worker/machine-id.ts'
-import { newSession } from './session/new.ts'
+import { newSession } from './session/provision.ts'
 import { defaultWorktreeDir, parseEnvPairs } from './session/shared.ts'
 import { registerWorker } from './worker.ts'
 
@@ -72,8 +72,11 @@ const loadConfigForWorker = (path: string): WorkerConfig => {
 
 // Resolve a session by name into a runnable SessionConfig. Three outcomes:
 //   - exists + owned by this machine + local config present → load and return
-//   - exists but owned by another worker / closed / no local config → throw
+//   - exists but owned by another worker / no local config → throw
 //   - doesn't exist → caller decides (create or strict-fail)
+// No `closedAt` check — sessions don't have a closed state anymore (destroy
+// is the only end, and destroyed rows can't be findByName'd because they're
+// gone).
 const tryAttach = async (
   client: ApiClient,
   projectId: Id,
@@ -82,7 +85,6 @@ const tryAttach = async (
 ): Promise<SessionConfig | null> => {
   const existing = await client.sessions.findByName(projectId, name)
   if (!existing) return null
-  if (existing.closedAt) throw new Error(`session '${name}' is closed; pick another name`)
   if (existing.workerId !== workerCfg.workerId)
     throw new Error(
       `session '${name}' belongs to worker #${existing.workerId}; cannot attach from this machine`,

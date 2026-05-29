@@ -92,7 +92,7 @@ test('sessions.sendMessage POSTs text to /sessions/:id/messages', async () => {
 })
 
 test('sessions.get fetches by int id (no more S-N codes)', async () => {
-  const item = { id: 42, name: 's', startedAt: 0 }
+  const item = { id: 42, name: 's', createdAt: 0 }
   const fetchMock = vi.fn<typeof fetch>(async () => res(item))
   vi.stubGlobal('fetch', fetchMock)
   const got = await createApi().sessions.get(42)

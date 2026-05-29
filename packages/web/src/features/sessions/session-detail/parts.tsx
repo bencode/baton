@@ -4,20 +4,13 @@ import { StatusBadge } from '../../../components/status-badge'
 import type { RenderItem } from '../event-render'
 import { RenderItemView } from './render-item'
 
-export type BadgeStatus = 'idle' | 'streaming' | 'detached' | 'closed' | 'offline'
+// Session has no persistent state field (M2.9). Header badge only fires for
+// the one transient signal worth a label: streaming. Worker-level offline /
+// detached are diagnostic, not session states.
+export type BadgeStatus = 'idle' | 'streaming'
 
-// `alive` / `attached` / `busy` only come on view-merged responses; bare
-// records (like the cached useSession one) don't carry them. closedAt is the
-// only hard "no chat" signal. See workers-panel.tsx for the parallel mapping.
-export const deriveBadgeStatus = (
-  session: Session & { alive?: boolean; attached?: boolean; busy?: boolean },
-): BadgeStatus => {
-  if (session.closedAt) return 'closed'
-  if (session.alive === false) return 'offline'
-  if (session.attached === false) return 'detached'
-  if (session.busy) return 'streaming'
-  return 'idle'
-}
+export const deriveBadgeStatus = (session: Session & { busy?: boolean }): BadgeStatus =>
+  session.busy ? 'streaming' : 'idle'
 
 type HeaderProps = { session: Session; badgeStatus: BadgeStatus; streamStatus: string }
 export const SessionHeader = ({ session, badgeStatus, streamStatus }: HeaderProps) => (

@@ -34,10 +34,11 @@ export type ApiClient = {
 }
 
 // Session-private client: bearer-authed write endpoints used by the
-// long-running `baton session run` daemon to emit events / heartbeat / close.
+// long-running `baton session start` daemon to emit events / heartbeat /
+// destroy.
 export type WorkerClient = {
   heartbeat(): Promise<{ attached: boolean }>
-  close(): Promise<void>
+  destroy(): Promise<void>
   emitEvent(type: SessionEventType, payload: unknown): Promise<SessionEvent>
 }
 
@@ -55,7 +56,7 @@ export const createWorkerClient = (baseUrl: string, apiToken: string): WorkerCli
   const auth = { authorization: `Bearer ${apiToken}` }
   return {
     heartbeat: () => request(u('/sessions/me/heartbeat'), { method: 'POST', headers: auth }),
-    close: () => request(u('/sessions/me/close'), { method: 'POST', headers: auth }),
+    destroy: () => request(u('/sessions/me'), { method: 'DELETE', headers: auth }),
     emitEvent: (type, payload) =>
       request(u('/sessions/me/events'), {
         method: 'POST',

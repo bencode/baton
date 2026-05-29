@@ -37,7 +37,7 @@ describe('worker helpers', () => {
                 machineId: (input as { machineId: string }).machineId,
                 name: (input as { name: string }).name,
                 hostname: (input as { hostname: string }).hostname,
-                startedAt: 0,
+                createdAt: 0,
                 alive: true,
               },
               outcome: 'created',

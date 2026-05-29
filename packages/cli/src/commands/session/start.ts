@@ -5,10 +5,13 @@ import { runDaemon } from '../../session/runner.ts'
 import { clientFor, common, resolveProjectId } from '../../util.ts'
 import { parseEnvPairs, resolveSession } from './shared.ts'
 
-export const sessionRunCommand = defineCommand({
+// Primitive form of the top-level `baton start`: attach a daemon to an
+// already-registered session. Doesn't create worker / session if missing —
+// use `baton start --name X` for that. Same protocol (heartbeat + SSE + drain).
+export const sessionStartCommand = defineCommand({
   meta: {
-    name: 'run',
-    description: 'subscribe to a session and run claude turns as messages arrive',
+    name: 'start',
+    description: 'attach a daemon to an existing session and run agent turns',
   },
   args: {
     session: { type: 'positional', required: true, description: 'session int id or name' },
@@ -19,7 +22,7 @@ export const sessionRunCommand = defineCommand({
     },
     env: {
       type: 'string',
-      description: 'env injected into the spawned claude (KEY=VAL; CSV-multi or repeat flag)',
+      description: 'env injected into the spawned agent (KEY=VAL; CSV-multi or repeat flag)',
     },
     ...common,
   },

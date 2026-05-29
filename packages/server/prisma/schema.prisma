@@ -102,19 +102,18 @@ model Task {
 model Session {
   id             Int       @id @default(autoincrement())
   projectId      Int
-  workerId       Int // FK → Worker(id). onDelete Restrict: must close sessions before worker.
+  workerId       Int // FK → Worker(id). onDelete Cascade: destroy worker takes its sessions with it.
   mode           String /// 'worker' | 'skill' (collaboration dimension; orthogonal to agent kind)
   name           String
   apiToken       String    @unique
   agentKind      String /// 'claude-code' (v0). Future: 'codex' | …
   agentSessionId String // claude-code: UUID; codex: TBD. Unique per agentKind.
   worktreePath   String // local cwd on the worker; non-movable like agent state.
-  startedAt      DateTime  @default(now())
-  closedAt       DateTime?
+  createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Restrict)
+  worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)
   events  SessionEvent[]
 
   @@unique([agentKind, agentSessionId])
@@ -128,22 +127,20 @@ model Session {
 // v0 (single-team dev environment). Worker rows persist; alive/lastSeen
 // belong in memory.
 model Worker {
-  id        Int       @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   projectId Int
   machineId String
   name      String
   hostname  String
-  startedAt DateTime  @default(now())
-  closedAt  DateTime?
+  createdAt DateTime @default(now())
 
   project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sessions Session[]
 
-  // Note: "alive uniqueness" on (projectId, machineId) and (projectId, name)
-  // is enforced via partial UNIQUE indexes added in the migration SQL
-  // (Prisma 7 can't express WHERE closedAt IS NULL in schema syntax yet).
-  @@index([projectId, machineId])
-  @@index([projectId, name])
+  // No more closedAt: destroy = DELETE row. (projectId, machineId) and
+  // (projectId, name) are unconditionally unique now.
+  @@unique([projectId, machineId])
+  @@unique([projectId, name])
 }
 
 // Append-only chat / SDK event log per session. processedAt only meaningful
