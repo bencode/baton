@@ -48,7 +48,7 @@ const UserBubble = ({ text, images }: { text: string; images?: string[] }) => (
 
 const AssistantBubble = ({ text }: { text: string }) => (
   <div className="flex justify-start">
-    <div className="max-w-prose rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
+    <div className="max-w-4xl rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
       <Markdown text={text} />
     </div>
   </div>
