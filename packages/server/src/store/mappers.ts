@@ -1,4 +1,5 @@
 import type {
+  AgentKind,
   Id,
   Project,
   Requirement,
@@ -70,15 +71,15 @@ export const toTask = (r: DbTask): Task => ({
 export const toSession = (r: DbSession): Session => ({
   id: r.id,
   projectId: r.projectId,
+  workerId: r.workerId,
   mode: r.mode as SessionMode,
   name: r.name,
-  claudeSessionId: r.claudeSessionId ?? undefined,
-  worktreePath: r.worktreePath ?? undefined,
-  machineId: r.machineId ?? undefined,
-  hostname: r.hostname ?? undefined,
-  workerName: r.workerName ?? undefined,
+  agentKind: r.agentKind as AgentKind,
+  agentSessionId: r.agentSessionId,
+  worktreePath: r.worktreePath,
   startedAt: r.startedAt.getTime(),
   closedAt: r.closedAt?.getTime(),
+  updatedAt: r.updatedAt.getTime(),
 })
 
 export const toSessionEvent = (r: DbSessionEvent): SessionEvent => ({

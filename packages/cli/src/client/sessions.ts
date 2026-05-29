@@ -1,15 +1,14 @@
-import type { Id, Session, SessionEvent, SessionMode } from '@baton/shared'
+import type { AgentKind, Id, Session, SessionEvent, SessionMode } from '@baton/shared'
 import { request } from './request.ts'
 
 export type SessionRegisterInput = {
   projectId: Id
+  workerId: Id
   mode: SessionMode
   name: string
-  claudeSessionId?: string
-  worktreePath?: string
-  machineId?: string
-  hostname?: string
-  workerName?: string
+  agentKind: AgentKind
+  agentSessionId: string
+  worktreePath: string
 }
 export type SessionRegistered = Session & { apiToken: string }
 

@@ -9,14 +9,13 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
     const s = await prisma.session.create({
       data: {
         projectId: input.projectId,
+        workerId: input.workerId,
         mode: input.mode,
         name: input.name,
         apiToken,
-        claudeSessionId: input.claudeSessionId,
+        agentKind: input.agentKind,
+        agentSessionId: input.agentSessionId,
         worktreePath: input.worktreePath,
-        machineId: input.machineId,
-        hostname: input.hostname,
-        workerName: input.workerName,
       },
     })
     return { ...toSession(s), apiToken }

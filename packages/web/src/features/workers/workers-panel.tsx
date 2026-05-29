@@ -22,40 +22,29 @@ const sessionDotStatus = (
   return 'idle'
 }
 
-// Worker grouping: sessions whose machineId matches a worker land under it;
-// sessions with no machineId (legacy / pre-M2.6) collect under "(no worker)".
-const groupByMachine = (
+// Worker grouping by FK: Session.workerId === Worker.id. Schema guarantees
+// every session has a worker (M2.6.1 FK Restrict), so there's no orphan bucket.
+const groupByWorker = (
   workers: WorkerView[],
   sessions: SessionView[],
-): { worker: WorkerView | null; sessions: SessionView[] }[] => {
-  const buckets = new Map<string | null, SessionView[]>()
-  for (const w of workers) buckets.set(w.machineId, [])
-  buckets.set(null, [])
-  for (const s of sessions) {
-    const key = s.machineId && buckets.has(s.machineId) ? s.machineId : null
-    buckets.get(key)?.push(s)
-  }
-  const rows: { worker: WorkerView | null; sessions: SessionView[] }[] = workers.map(w => ({
-    worker: w,
-    sessions: buckets.get(w.machineId) ?? [],
-  }))
-  const orphans = buckets.get(null) ?? []
-  if (orphans.length > 0) rows.push({ worker: null, sessions: orphans })
-  return rows
+): { worker: WorkerView; sessions: SessionView[] }[] => {
+  const buckets = new Map<Id, SessionView[]>()
+  for (const w of workers) buckets.set(w.id, [])
+  for (const s of sessions) buckets.get(s.workerId)?.push(s)
+  return workers.map(w => ({ worker: w, sessions: buckets.get(w.id) ?? [] }))
 }
 
 export const WorkersPanel = ({ projectId, activeId, open }: WorkersPanelProps) => {
   const { data: workers } = useWorkers(projectId)
   const { data: sessions } = useSessions(projectId)
   if (!workers || !sessions) return <p className="px-2 text-sm text-gray-400">loading…</p>
-  if (workers.length === 0 && sessions.length === 0)
-    return <p className="px-2 text-sm text-gray-400">No workers yet.</p>
-  const groups = groupByMachine(workers, sessions as SessionView[])
+  if (workers.length === 0) return <p className="px-2 text-sm text-gray-400">No workers yet.</p>
+  const groups = groupByWorker(workers, sessions as SessionView[])
   return (
     <div className="flex flex-col gap-3">
       {groups.map(g => (
         <WorkerGroup
-          key={g.worker?.machineId ?? '__orphans__'}
+          key={g.worker.id}
           worker={g.worker}
           sessions={g.sessions}
           projectId={projectId}
@@ -68,7 +57,7 @@ export const WorkersPanel = ({ projectId, activeId, open }: WorkersPanelProps) =
 }
 
 type WorkerGroupProps = {
-  worker: WorkerView | null
+  worker: WorkerView
   sessions: SessionView[]
   projectId: Id
   activeId: string
@@ -76,19 +65,17 @@ type WorkerGroupProps = {
 }
 
 const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGroupProps) => {
-  const alive = worker?.alive ?? false
-  const dim = !alive && worker !== null
+  const alive = worker.alive
+  const dim = !alive
   return (
     <div className="flex flex-col gap-1">
       <div
         className={`flex items-center gap-2 px-1 text-xs ${dim ? 'text-gray-400' : 'text-gray-600'}`}
       >
         <StatusDot status={alive ? 'idle' : 'offline'} />
-        <span className="font-semibold tracking-wide uppercase">
-          {worker ? worker.name : '(no worker)'}
-        </span>
-        {worker && <span className="font-mono text-[10px] text-gray-400">{worker.hostname}</span>}
-        {!alive && worker && <span className="text-[10px] text-gray-400">offline</span>}
+        <span className="font-semibold tracking-wide uppercase">{worker.name}</span>
+        <span className="font-mono text-[10px] text-gray-400">{worker.hostname}</span>
+        {!alive && <span className="text-[10px] text-gray-400">offline</span>}
       </div>
       {sessions.length === 0 ? (
         <p className="px-3 text-[11px] text-gray-400">no sessions</p>

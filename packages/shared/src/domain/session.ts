@@ -1,32 +1,38 @@
 import type { Id } from './ids.ts'
+import type { Worker } from './worker.ts'
 
-// A Session is one Claude Code conversation. claudeSessionId is a UUID baton
-// generates at creation time and passes to the CLI as --session-id (first
-// turn) / --resume (subsequent turns). worktreePath is provisioned by the
-// CLI at `baton session new`.
+// A Session is one agent conversation pinned to a specific Worker (= machine)
+// and to that machine's agent session file. The pinning is non-movable:
+// resuming requires the agent's local state file (claude-code:
+// `~/.claude/projects/<agentSessionId>.jsonl`; codex: TBD).
 //
-// `machineId` / `hostname` / `workerName` are snapshot strings — they
-// describe the machine that hosted the daemon at creation time. UI groups
-// sessions by these snapshots; there is intentionally no Worker FK.
+// `mode` is the collaboration dimension ('worker' | 'skill') and is orthogonal
+// to `agentKind` (the agent flavour: 'claude-code' v0; 'codex' later).
 //
-// `state` is NOT a persisted column anymore. UI uses the derived
-// `SessionView` returned by the server, which includes `alive` (from worker
-// liveness via machineId) + `busy` (derived from the SessionEvent log).
+// `state` is NOT a persisted column. UI uses the derived `SessionView` returned
+// by the server, which includes `alive` (worker liveness via worker.machineId)
+// + `busy` (derived from the SessionEvent log).
 export type SessionMode = 'worker' | 'skill'
+export type AgentKind = 'claude-code'
 
 export type Session = {
   id: Id
   projectId: Id
+  workerId: Id
   mode: SessionMode
   name: string
-  claudeSessionId?: string
-  worktreePath?: string
-  machineId?: string
-  hostname?: string
-  workerName?: string
+  agentKind: AgentKind
+  agentSessionId: string
+  worktreePath: string
   startedAt: number
   closedAt?: number
+  updatedAt: number
 }
 
-// What the server actually returns for read endpoints — record + runtime view.
-export type SessionView = Session & { alive: boolean; busy: boolean }
+// Server read endpoints return record + runtime view. The worker object is
+// inlined so the client can render worker.name/hostname without a 2nd request.
+export type SessionView = Session & {
+  alive: boolean
+  busy: boolean
+  worker: Worker
+}

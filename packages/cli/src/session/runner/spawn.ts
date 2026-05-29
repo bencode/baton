@@ -32,7 +32,7 @@ export const spawnClaude = async (
 ): Promise<SpawnResult | null> => {
   const childEnv: NodeJS.ProcessEnv = envOverlay ? { ...process.env, ...envOverlay } : process.env
   const bin = claudeBin()
-  const args = buildClaudeArgs(config.claudeSessionId, text, resuming)
+  const args = buildClaudeArgs(config.agentSessionId, text, resuming)
   log(`[spawn] ${bin} ${args.slice(0, -1).join(' ')} -- "${previewText(text)}"`)
   log(`[spawn] cwd: ${config.worktreePath}`)
   log(`[spawn] runtime env keys: ${maskedEnvKeys(envOverlay)}`)

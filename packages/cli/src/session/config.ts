@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import type { Id, SessionMode } from '@baton/shared'
+import type { AgentKind, Id, SessionMode } from '@baton/shared'
 
 // Persisted session identity: enough to reconnect / dogfood. One file per
 // registered session at ${XDG_CONFIG_HOME ?? ~/.config}/baton/session-<id>.json
@@ -13,15 +13,15 @@ export type SessionConfig = {
   apiToken: string
   sessionId: Id
   projectId: Id
+  workerId: Id
   name: string
   mode: SessionMode
-  claudeSessionId: string
+  agentKind: AgentKind
+  agentSessionId: string
   worktreePath: string
-  // M2.6: machineId carried in the session config so the daemon can heartbeat
-  // /workers/heartbeat without re-reading the machine-id file each tick.
-  // Optional because legacy session configs (pre-M2.6) don't have it.
-  machineId?: string
-  workerName?: string
+  // Cached from worker config so the daemon can heartbeat /workers/heartbeat
+  // without re-reading the worker config each tick.
+  workerMachineId: string
 }
 
 const configDir = (env: NodeJS.ProcessEnv = process.env): string =>

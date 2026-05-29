@@ -39,7 +39,7 @@ model Project {
 
 model CodeCounter {
   projectId Int
-  kind      String // 'requirement' | 'task' | 'session' | 'assignment' (open-ended; created on demand)
+  kind      String // 'requirement' | 'task' — Session no longer has a code (int id only)
   next      Int    @default(1)
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -88,35 +88,39 @@ model Task {
   @@index([status])
 }
 
-// A Session models one Claude Code conversation. claudeSessionId is a UUID
-// baton generates at creation time; the server passes it as --session-id on
-// the first turn and --resume on subsequent turns. worktreePath is a git
-// worktree provisioned by the CLI at `baton session new`.
+// A Session models one agent conversation, physically pinned to a Worker
+// (= a specific machine) and to that machine's agent session file. The pinning
+// is non-movable: `claude --resume <agentSessionId>` only works on the worker
+// where the agent session file was first created (~/.claude/projects/...).
+//
+// agentKind is the agent flavour (currently 'claude-code'; 'codex' etc. later);
+// agentSessionId is the agent's own session reference (a UUID for claude-code).
 //
 // `state` (idle/busy/closed) and `heartbeatAt` from M2.5 are gone — busy is
-// derived from SessionEvent log, alive from worker liveness via machineId.
-// `code` (S-N) is dropped: Session isn't chat-referenced like R-/T- are, so
-// int id + human name is enough. machineId/hostname/workerName are snapshots
-// (strings, no FK) that group sessions in the UI.
+// derived from SessionEvent log, alive from worker liveness. `code` (S-N) is
+// dropped: Session isn't chat-referenced like R-/T- are, so int id + name is
+// enough.
 model Session {
-  id              Int       @id @default(autoincrement())
-  projectId       Int
-  mode            String // 'worker' | 'skill'
-  name            String
-  apiToken        String    @unique
-  claudeSessionId String?   @unique
-  worktreePath    String?
-  machineId       String?
-  hostname        String?
-  workerName      String?
-  startedAt       DateTime  @default(now())
-  closedAt        DateTime?
+  id             Int       @id @default(autoincrement())
+  projectId      Int
+  workerId       Int // FK → Worker(id). onDelete Restrict: must close sessions before worker.
+  mode           String /// 'worker' | 'skill' (collaboration dimension; orthogonal to agent kind)
+  name           String
+  apiToken       String    @unique
+  agentKind      String /// 'claude-code' (v0). Future: 'codex' | …
+  agentSessionId String // claude-code: UUID; codex: TBD. Unique per agentKind.
+  worktreePath   String // local cwd on the worker; non-movable like agent state.
+  startedAt      DateTime  @default(now())
+  closedAt       DateTime?
+  updatedAt      DateTime  @updatedAt
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Restrict)
   events  SessionEvent[]
 
+  @@unique([agentKind, agentSessionId])
   @@index([projectId])
-  @@index([machineId])
+  @@index([workerId])
 }
 
 // A Worker is a (project × machine) registration. machineId is a UUID baton
@@ -133,20 +137,23 @@ model Worker {
   startedAt DateTime  @default(now())
   closedAt  DateTime?
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sessions Session[]
 
+  // Note: "alive uniqueness" on (projectId, machineId) and (projectId, name)
+  // is enforced via partial UNIQUE indexes added in the migration SQL
+  // (Prisma 7 can't express WHERE closedAt IS NULL in schema syntax yet).
   @@index([projectId, machineId])
   @@index([projectId, name])
 }
 
 // Append-only chat / SDK event log per session. processedAt only meaningful
 // for type='user_message': null until the spawning turn finishes.
-// type ∈ 'user_message' | 'sdk_event' | 'turn_complete' | 'turn_error' | 'system'.
 model SessionEvent {
   id          Int       @id @default(autoincrement())
   sessionId   Int
   sequence    Int
-  type        String
+  type        String /// 'user_message' | 'sdk_event' | 'turn_start' | 'turn_complete' | 'turn_error' | 'system'
   payload     String // JSON
   processedAt DateTime?
   createdAt   DateTime  @default(now())

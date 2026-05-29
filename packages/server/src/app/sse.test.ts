@@ -25,8 +25,24 @@ describe('server HTTP — SSE chat stream', () => {
         })
       const w = (await (await post('/workspaces', { name: 'w' })).json()) as WithId
       const p = (await (await post('/projects', { workspaceId: w.id, name: 'p' })).json()) as WithId
+      const workerReg = (await (
+        await post('/workers', {
+          projectId: p.id,
+          machineId: 'mid-sse',
+          name: 'sse-worker',
+          hostname: 'h-sse',
+        })
+      ).json()) as { worker: WithId }
       const s = (await (
-        await post('/sessions', { projectId: p.id, mode: 'worker', name: 'sse-test' })
+        await post('/sessions', {
+          projectId: p.id,
+          workerId: workerReg.worker.id,
+          mode: 'worker',
+          name: 'sse-test',
+          agentKind: 'claude-code',
+          agentSessionId: 'sse-uuid',
+          worktreePath: '/tmp/wt',
+        })
       ).json()) as WithId & { apiToken: string }
       await post(`/sessions/${s.id}/messages`, { text: 'first' })
 

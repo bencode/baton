@@ -53,11 +53,10 @@ const foldHistory = (history: SessionEvent[]): DaemonState => ({
 
 const startHeartbeat = (
   client: ApiClient,
-  machineId: string | undefined,
+  machineId: string,
   log: (m: string) => void,
 ): NodeJS.Timeout =>
   setInterval(() => {
-    if (!machineId) return
     client.workers.heartbeat(machineId).catch(e => log(`heartbeat failed: ${String(e)}`))
   }, 30_000)
 
@@ -125,7 +124,7 @@ export const runDaemon = async (
     }
   }
 
-  const hb = startHeartbeat(deps.client, config.machineId, log)
+  const hb = startHeartbeat(deps.client, config.workerMachineId, log)
   void drain()
   const es = subscribeStream(
     `${config.server}/sessions/${config.sessionId}/stream`,

@@ -19,8 +19,8 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(typeof session.id, 'number')
     assert.equal(typeof session.apiToken, 'string')
     assert.equal(session.busy, false)
-    // alive is false until a worker pings — none has, so machineId 'mid-test' isn't live yet
-    assert.equal(session.alive, false)
+    // alive is true: worker register seeds liveness with its first ping.
+    assert.equal(session.alive, true)
   })
 
   test('messages: POST /sessions/:id/messages records user_message + 409 on closed', async () => {

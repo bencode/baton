@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, test } from 'node:test'
-import { type ContractCtx, newCtx, seedReq } from './helpers.ts'
+import { type ContractCtx, newCtx, seedReq, seedWorker } from './helpers.ts'
 
 describe('Store contract — sessions', () => {
   let ctx: ContractCtx
@@ -11,22 +11,23 @@ describe('Store contract — sessions', () => {
     await ctx.cleanup()
   })
 
-  test('session register: issues apiToken; carries machineId/hostname/workerName snapshots', async () => {
+  test('session register: requires workerId FK + carries agentKind/agentSessionId', async () => {
     const { project } = await seedReq(ctx)
+    const workerId = await seedWorker(ctx, project)
     const s = await ctx.store.sessions.register({
       projectId: project,
+      workerId,
       mode: 'worker',
       name: 'dogfood',
-      claudeSessionId: '11111111-1111-1111-1111-111111111111',
+      agentKind: 'claude-code',
+      agentSessionId: '11111111-1111-1111-1111-111111111111',
       worktreePath: '/tmp/wt',
-      machineId: 'mid-abc',
-      hostname: 'bens-air.local',
-      workerName: 'ben-laptop',
     })
     assert.equal(typeof s.id, 'number')
-    assert.equal(s.machineId, 'mid-abc')
-    assert.equal(s.hostname, 'bens-air.local')
-    assert.equal(s.workerName, 'ben-laptop')
+    assert.equal(s.workerId, workerId)
+    assert.equal(s.agentKind, 'claude-code')
+    assert.equal(s.agentSessionId, '11111111-1111-1111-1111-111111111111')
+    assert.equal(s.worktreePath, '/tmp/wt')
     assert.ok(s.apiToken.length >= 20)
     const back = await ctx.store.sessions.getByToken(s.apiToken)
     assert.equal(back?.id, s.id)
@@ -35,10 +36,15 @@ describe('Store contract — sessions', () => {
 
   test('isBusy derived: turn_start with no closing event ⇒ busy', async () => {
     const { project } = await seedReq(ctx)
+    const workerId = await seedWorker(ctx, project)
     const s = await ctx.store.sessions.register({
       projectId: project,
+      workerId,
       mode: 'worker',
       name: 's',
+      agentKind: 'claude-code',
+      agentSessionId: 'a-1',
+      worktreePath: '/tmp/wt',
     })
     assert.equal(await ctx.store.sessions.isBusy(s.id), false)
     await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'go' })
@@ -58,10 +64,15 @@ describe('Store contract — sessions', () => {
 
   test('appendEvent: monotonic sequence per session, listEvents in order', async () => {
     const { project } = await seedReq(ctx)
+    const workerId = await seedWorker(ctx, project)
     const s = await ctx.store.sessions.register({
       projectId: project,
+      workerId,
       mode: 'worker',
       name: 's',
+      agentKind: 'claude-code',
+      agentSessionId: 'a-2',
+      worktreePath: '/tmp/wt',
     })
     await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'hello' })
     await ctx.store.sessions.appendEvent(s.id, 'sdk_event', { type: 'assistant' })
@@ -77,10 +88,15 @@ describe('Store contract — sessions', () => {
 
   test('pending message lifecycle: findNext + markProcessed + count', async () => {
     const { project } = await seedReq(ctx)
+    const workerId = await seedWorker(ctx, project)
     const s = await ctx.store.sessions.register({
       projectId: project,
+      workerId,
       mode: 'worker',
       name: 's',
+      agentKind: 'claude-code',
+      agentSessionId: 'a-3',
+      worktreePath: '/tmp/wt',
     })
     const m1 = await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'a' })
     const m2 = await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'b' })
@@ -95,10 +111,15 @@ describe('Store contract — sessions', () => {
 
   test('session close sets closedAt; getByToken still resolves (auth filters in middleware)', async () => {
     const { project } = await seedReq(ctx)
+    const workerId = await seedWorker(ctx, project)
     const s = await ctx.store.sessions.register({
       projectId: project,
+      workerId,
       mode: 'worker',
       name: 's',
+      agentKind: 'claude-code',
+      agentSessionId: 'a-4',
+      worktreePath: '/tmp/wt',
     })
     await ctx.store.sessions.close(s.id)
     const closed = await ctx.store.sessions.get(s.id)

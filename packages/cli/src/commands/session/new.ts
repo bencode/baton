@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { hostname as osHostname } from 'node:os'
 import { join } from 'node:path'
-import type { Id, SessionMode } from '@baton/shared'
+import type { AgentKind, Id, SessionMode } from '@baton/shared'
 import { defineCommand } from 'citty'
 import type { ApiClient } from '../../client.ts'
 import { resolveBaseUrl } from '../../config.ts'
@@ -13,16 +12,16 @@ import { defaultWorktreeDir, slug } from './shared.ts'
 
 export type SessionNewInput = {
   projectId: Id
+  workerId: Id
+  workerName: string
+  workerMachineId: string
   name: string
   repo: string
   base: string
   worktreeDir: string
   mode: SessionMode
+  agentKind: AgentKind
   server: string
-  // Snapshot fields filled when a local worker config exists.
-  machineId?: string
-  hostname?: string
-  workerName?: string
 }
 
 type FsImpl = {
@@ -33,54 +32,54 @@ type FsImpl = {
 const buildConfig = (
   input: SessionNewInput,
   registered: { id: Id; apiToken: string },
-  claudeSessionId: string,
+  agentSessionId: string,
   worktreePath: string,
 ): SessionConfig => ({
   server: input.server,
   apiToken: registered.apiToken,
   sessionId: registered.id,
   projectId: input.projectId,
+  workerId: input.workerId,
   name: input.name,
   mode: input.mode,
-  claudeSessionId,
+  agentKind: input.agentKind,
+  agentSessionId,
   worktreePath,
-  ...(input.machineId ? { machineId: input.machineId } : {}),
-  ...(input.workerName ? { workerName: input.workerName } : {}),
+  workerMachineId: input.workerMachineId,
 })
 
-// Provision a Session end-to-end: claudeSessionId UUID we generate, git worktree
-// added off the source repo, then POST to baton with both. On worktree failure
-// nothing is sent; on POST failure the worktree is rolled back.
+// Provision a Session end-to-end: agent session UUID + git worktree + POST to
+// baton. On worktree failure nothing is sent; on POST failure the worktree is
+// rolled back.
 export const newSession = async (
   client: ApiClient,
   input: SessionNewInput,
   fs: FsImpl = { createWorktree, removeWorktree },
   resolvePath: (sessionId: Id) => string = defaultConfigPath,
 ): Promise<{ config: SessionConfig; path: string }> => {
-  const claudeSessionId = randomUUID()
-  const provisional = join(input.worktreeDir, slug(`${input.name}-${claudeSessionId.slice(0, 8)}`))
+  const agentSessionId = randomUUID()
+  const provisional = join(input.worktreeDir, slug(`${input.name}-${agentSessionId.slice(0, 8)}`))
   fs.createWorktree({
     repo: input.repo,
     worktreePath: provisional,
-    sessionCode: claudeSessionId.slice(0, 8),
+    sessionCode: agentSessionId.slice(0, 8),
     base: input.base,
   })
   const registered = await client.sessions
     .register({
       projectId: input.projectId,
+      workerId: input.workerId,
       mode: input.mode,
       name: input.name,
-      claudeSessionId,
+      agentKind: input.agentKind,
+      agentSessionId,
       worktreePath: provisional,
-      machineId: input.machineId,
-      hostname: input.hostname,
-      workerName: input.workerName,
     })
     .catch(err => {
       fs.removeWorktree(input.repo, provisional)
       throw err
     })
-  const config = buildConfig(input, registered, claudeSessionId, provisional)
+  const config = buildConfig(input, registered, agentSessionId, provisional)
   const path = resolvePath(registered.id)
   saveConfig(path, config)
   return { config, path }
@@ -101,30 +100,35 @@ export const sessionNewCommand = defineCommand({
     const server = resolveBaseUrl(args.url)
     const c = clientFor(args)
     const projectId = Number(args.project)
-    // Snapshot identity from the local worker config when one exists for
-    // this project. Daemon will heartbeat /workers/heartbeat with this
-    // machineId, so a missing worker config means alive will stay false
-    // until the user runs `baton worker register`.
+    // Session must be hosted by a registered worker on this machine — no worker
+    // config, no session. The session's agent state file (claude-code's
+    // ~/.claude/projects/<agentSessionId>.jsonl) is physically pinned to this
+    // worker, so we refuse to register an orphan.
     const wc = loadWorkerConfigOrNull(workerConfigPath(projectId))
+    if (!wc)
+      throw new Error(
+        `no worker registered for project ${projectId} on this machine. ` +
+          'run `baton worker register --project ' +
+          projectId +
+          '` first.',
+      )
     const { config, path } = await newSession(c, {
       projectId,
+      workerId: wc.workerId,
+      workerName: wc.name,
+      workerMachineId: wc.machineId,
       name: args.name,
       repo: args.repo,
       base: args.base ?? 'main',
       worktreeDir: args['worktree-dir'] ?? defaultWorktreeDir(),
       mode: (args.mode as SessionMode) ?? 'worker',
+      agentKind: 'claude-code',
       server,
-      hostname: osHostname(),
-      ...(wc ? { machineId: wc.machineId, workerName: wc.name } : {}),
     })
     console.log(`created session #${config.sessionId} (${config.name})`)
+    console.log(`  worker:          ${wc.name} (#${wc.workerId})`)
+    console.log(`  agent:           ${config.agentKind}  session ${config.agentSessionId}`)
     console.log(`  worktree:        ${config.worktreePath}`)
-    console.log(`  claudeSessionId: ${config.claudeSessionId}`)
-    if (wc) console.log(`  worker:          ${wc.name} (${wc.machineId.slice(0, 8)}…)`)
-    else
-      console.log(
-        '  worker:          (none — run `baton worker register` so this session shows alive)',
-      )
     console.log(`  token saved to:  ${path}`)
   },
 })

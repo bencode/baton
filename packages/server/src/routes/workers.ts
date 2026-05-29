@@ -64,6 +64,19 @@ export const registerWorkerRoutes = (
     const id = intParam(c.req.param('id'))
     const w = await store.workers.get(id)
     if (!w) return c.json({ error: 'not found' }, 404)
+    // Application-layer mirror of the FK Restrict semantic: refuse close while
+    // active sessions are still attached. (The FK only protects against actual
+    // DELETE; close() is a soft-delete via UPDATE so we enforce it here.)
+    const sessions = await store.sessions.listByProject(w.projectId)
+    const active = sessions.filter(s => s.workerId === id && !s.closedAt)
+    if (active.length > 0)
+      return c.json(
+        {
+          error: `worker ${id} has ${active.length} active session(s); close them first`,
+          activeSessions: active.map(s => ({ id: s.id, name: s.name })),
+        },
+        409,
+      )
     await store.workers.close(id)
     liveness.forget(w.machineId)
     return c.body(null, 204)

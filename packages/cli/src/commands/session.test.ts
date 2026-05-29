@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { ApiClient } from '../client.ts'
-import { newSession, parseEnvPairs } from './session.ts'
+import { newSession, parseEnvPairs, type SessionNewInput } from './session.ts'
 
 describe('parseEnvPairs', () => {
   test('single KEY=VAL', () => {
@@ -30,6 +30,22 @@ describe('parseEnvPairs', () => {
   })
 })
 
+// Common test input — M2.6.1 requires workerId + agentKind + agentSessionId
+// snapshot fields.
+const baseInput = (worktreeDir: string, name: string): SessionNewInput => ({
+  projectId: 1,
+  workerId: 9,
+  workerName: 'test-laptop',
+  workerMachineId: 'mid-test',
+  name,
+  repo: '/tmp/source',
+  base: 'main',
+  worktreeDir,
+  mode: 'worker',
+  agentKind: 'claude-code',
+  server: 'http://localhost:3280',
+})
+
 describe('newSession', () => {
   test('provisions worktree + registers + saves config', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'baton-session-'))
@@ -39,20 +55,25 @@ describe('newSession', () => {
         sessions: {
           register: async (input: {
             projectId: number
+            workerId: number
             mode: string
             name: string
-            claudeSessionId?: string
-            worktreePath?: string
+            agentKind: string
+            agentSessionId: string
+            worktreePath: string
           }) => {
             registeredWith = input
             return {
               id: 7,
               projectId: input.projectId,
+              workerId: input.workerId,
               mode: input.mode,
               name: input.name,
-              claudeSessionId: input.claudeSessionId,
+              agentKind: input.agentKind,
+              agentSessionId: input.agentSessionId,
               worktreePath: input.worktreePath,
               startedAt: 0,
+              updatedAt: 0,
               apiToken: 'tok-deadbeef',
             }
           },
@@ -70,30 +91,23 @@ describe('newSession', () => {
         },
         removeWorktree: () => {},
       }
-      const { config, path } = await newSession(
-        c,
-        {
-          projectId: 1,
-          name: 'dogfood',
-          repo: '/tmp/source',
-          base: 'main',
-          worktreeDir: dir,
-          mode: 'worker',
-          server: 'http://localhost:3280',
-        },
-        fakeFs,
-        sid => join(dir, `cfg-${sid}.json`),
+      const { config, path } = await newSession(c, baseInput(dir, 'dogfood'), fakeFs, sid =>
+        join(dir, `cfg-${sid}.json`),
       )
       assert.equal(config.sessionId, 7)
       assert.equal(config.apiToken, 'tok-deadbeef')
+      assert.equal(config.workerId, 9)
+      assert.equal(config.agentKind, 'claude-code')
+      assert.equal(config.workerMachineId, 'mid-test')
       assert.ok(createdAt)
       assert.equal((createdAt as { repo: string }).repo, '/tmp/source')
       assert.match((createdAt as { worktreePath: string }).worktreePath, /baton-session-/)
       const saved = JSON.parse(readFileSync(path, 'utf8'))
       assert.equal(saved.apiToken, 'tok-deadbeef')
+      assert.equal(saved.workerId, 9)
       assert.equal(
-        saved.claudeSessionId,
-        (registeredWith as { claudeSessionId: string }).claudeSessionId,
+        saved.agentSessionId,
+        (registeredWith as { agentSessionId: string }).agentSessionId,
       )
     } finally {
       rmSync(dir, { recursive: true, force: true })
@@ -116,20 +130,7 @@ describe('newSession', () => {
       },
     }
     await assert.rejects(
-      newSession(
-        c,
-        {
-          projectId: 1,
-          name: 'rolling-back',
-          repo: '/tmp/source',
-          base: 'main',
-          worktreeDir: '/tmp/wd',
-          mode: 'worker',
-          server: 'http://localhost:3280',
-        },
-        fakeFs,
-        () => '/tmp/never-written.json',
-      ),
+      newSession(c, baseInput('/tmp/wd', 'rolling-back'), fakeFs, () => '/tmp/never-written.json'),
       /boom/,
     )
     assert.equal(removed, true)

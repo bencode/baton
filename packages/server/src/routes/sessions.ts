@@ -1,4 +1,4 @@
-import type { Id, SessionEvent, SessionEventType, SessionMode } from '@baton/shared'
+import type { AgentKind, Id, SessionEvent, SessionEventType, SessionMode } from '@baton/shared'
 import type { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import type { EventBus } from '../event-bus.ts'
@@ -18,35 +18,42 @@ export const registerSessionRoutes = (
   app.post('/sessions', async c => {
     const body = (await c.req.json()) as {
       projectId?: Id
+      workerId?: Id
       mode?: SessionMode
       name?: string
-      claudeSessionId?: string
+      agentKind?: AgentKind
+      agentSessionId?: string
       worktreePath?: string
-      machineId?: string
-      hostname?: string
-      workerName?: string
     }
-    if (!body.projectId || !body.name || !body.mode)
-      return c.json({ error: 'projectId, name, mode required' }, 400)
-    const {
-      projectId,
-      mode,
-      name,
-      claudeSessionId,
-      worktreePath,
-      machineId,
-      hostname,
-      workerName,
-    } = body
+    if (
+      !body.projectId ||
+      !body.workerId ||
+      !body.name ||
+      !body.mode ||
+      !body.agentKind ||
+      !body.agentSessionId ||
+      !body.worktreePath
+    )
+      return c.json(
+        {
+          error:
+            'projectId, workerId, name, mode, agentKind, agentSessionId, worktreePath required',
+        },
+        400,
+      )
+    // Validate worker exists, belongs to this project, and is alive.
+    const worker = await store.workers.get(body.workerId)
+    if (!worker || worker.projectId !== body.projectId)
+      return c.json({ error: 'worker not found in project' }, 404)
+    if (worker.closedAt) return c.json({ error: 'worker is closed' }, 409)
     const reg = await store.sessions.register({
-      projectId,
-      mode,
-      name,
-      claudeSessionId,
-      worktreePath,
-      machineId,
-      hostname,
-      workerName,
+      projectId: body.projectId,
+      workerId: body.workerId,
+      mode: body.mode,
+      name: body.name,
+      agentKind: body.agentKind,
+      agentSessionId: body.agentSessionId,
+      worktreePath: body.worktreePath,
     })
     const view = await sessionWithView(reg, store, liveness)
     return c.json({ ...view, apiToken: reg.apiToken }, 201)

@@ -13,10 +13,13 @@ describe('runTurn', () => {
       apiToken: 'tok',
       sessionId: 1,
       projectId: 1,
+      workerId: 9,
       name: 'dogfood',
       mode: 'worker',
-      claudeSessionId: '00000000-0000-0000-0000-000000000001',
+      agentKind: 'claude-code',
+      agentSessionId: '00000000-0000-0000-0000-000000000001',
       worktreePath: '/tmp/wt',
+      workerMachineId: 'mid-test',
     }
     const calls: Array<{ type: string; payload: unknown }> = []
     const worker = {
@@ -99,10 +102,13 @@ describe('runTurn', () => {
       apiToken: 't',
       sessionId: 1,
       projectId: 1,
+      workerId: 9,
       name: 'x',
       mode: 'worker',
-      claudeSessionId: 'uuid',
+      agentKind: 'claude-code',
+      agentSessionId: 'uuid',
       worktreePath: '/tmp/wt',
+      workerMachineId: 'mid-test',
     }
     const calls: Array<{ type: string }> = []
     const worker = {

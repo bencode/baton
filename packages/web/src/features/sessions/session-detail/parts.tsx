@@ -33,12 +33,10 @@ export const SessionHeader = ({ session, badgeStatus, streamStatus }: HeaderProp
       <StatusBadge status={badgeStatus} />
       <span className="text-xs text-gray-400">stream: {streamStatus}</span>
     </div>
-    {session.worktreePath && (
-      <p className="font-mono text-xs text-gray-500">cwd: {session.worktreePath}</p>
-    )}
-    {session.claudeSessionId && (
-      <p className="font-mono text-xs text-gray-500">claude session: {session.claudeSessionId}</p>
-    )}
+    <p className="font-mono text-xs text-gray-500">cwd: {session.worktreePath}</p>
+    <p className="font-mono text-xs text-gray-500">
+      {session.agentKind} session: {session.agentSessionId}
+    </p>
   </div>
 )
 
