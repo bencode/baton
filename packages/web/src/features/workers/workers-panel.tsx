@@ -73,8 +73,10 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
         className={`flex items-center gap-2 px-1 text-xs ${dim ? 'text-gray-400' : 'text-gray-600'}`}
       >
         <StatusDot status={alive ? 'idle' : 'offline'} />
-        <span className="font-semibold tracking-wide uppercase">{worker.name}</span>
-        <span className="font-mono text-[10px] text-gray-400">{worker.hostname}</span>
+        <span className="font-semibold tracking-wide">{worker.name}</span>
+        {worker.hostname !== worker.name && (
+          <span className="font-mono text-[10px] text-gray-400">{worker.hostname}</span>
+        )}
         {!alive && <span className="text-[10px] text-gray-400">offline</span>}
       </div>
       {sessions.length === 0 ? (
@@ -93,7 +95,6 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
               } ${dim ? 'opacity-60' : ''}`}
             >
               <StatusDot status={sessionDotStatus(s, alive)} />
-              <span className="shrink-0 font-mono text-xs text-gray-400">#{s.id}</span>
               <span className="truncate">{s.name}</span>
             </button>
           )
