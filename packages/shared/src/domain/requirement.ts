@@ -21,7 +21,6 @@ export type Requirement = {
   title: string
   description?: string
   resources: ResourceRef[]
-  tags: string[]
   status: RequirementStatus // stored, not derived
   createdAt: number
   updatedAt: number

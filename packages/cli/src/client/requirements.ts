@@ -7,7 +7,6 @@ export type RequirementInput = {
   title: string
   description?: string
   resources?: ResourceRef[]
-  tags?: string[]
 }
 
 export type RequirementClient = {

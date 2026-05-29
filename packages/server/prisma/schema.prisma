@@ -54,7 +54,6 @@ model Requirement {
   title       String
   description String?
   resources   String   @default("[]") // JSON ResourceRef[]
-  tags        String   @default("[]") // JSON string[]
   status      String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

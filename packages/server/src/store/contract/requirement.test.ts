@@ -18,7 +18,6 @@ describe('Store contract — requirements', () => {
       projectId: p.id,
       title: 'login',
       resources: [{ kind: 'doc', uri: 'docs/login.md', label: 'spec' }],
-      tags: ['auth', 'p0'],
     })
     assert.equal(r1.code, 'R-1')
     assert.equal(r1.status, 'active')
@@ -26,7 +25,6 @@ describe('Store contract — requirements', () => {
     assert.equal(r2.code, 'R-2')
     const got = await ctx.store.requirements.get(r1.id)
     assert.deepEqual(got?.resources, [{ kind: 'doc', uri: 'docs/login.md', label: 'spec' }])
-    assert.deepEqual(got?.tags, ['auth', 'p0'])
   })
 
   test('requirement.update advances product-dimension status', async () => {

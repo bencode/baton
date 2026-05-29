@@ -39,7 +39,6 @@ describe('output', () => {
       code: 'R-1',
       title: 'login',
       resources: [],
-      tags: [],
       status: 'active',
       createdAt: 0,
       updatedAt: 0,

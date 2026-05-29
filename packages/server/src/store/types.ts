@@ -25,14 +25,12 @@ export type RequirementCreate = {
   title: string
   description?: string
   resources?: ResourceRef[]
-  tags?: string[]
   status?: RequirementStatus
 }
 export type RequirementPatch = Partial<{
   title: string
   description: string
   resources: ResourceRef[]
-  tags: string[]
   status: RequirementStatus
 }>
 export type TaskCreate = {

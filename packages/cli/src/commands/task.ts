@@ -6,7 +6,7 @@ import { clientFor, common, splitCsv } from '../util.ts'
 
 export const createTask = (
   c: ApiClient,
-  input: { requirementId: Id; title: string; spec?: string; requires?: string[]; dependsOn?: Id[] },
+  input: { requirementId: Id; title: string; spec?: string; dependsOn?: Id[] },
   json: boolean,
 ): Promise<string> => c.tasks.create(input).then(t => renderOne(t, fmtTask, json))
 export const listTasks = (c: ApiClient, requirementId: Id, json: boolean): Promise<string> =>
@@ -37,7 +37,6 @@ export const task = defineCommand({
         requirement: { type: 'string', required: true, description: 'requirement code (R-N)' },
         project: { type: 'string', required: true, description: 'project id (int)' },
         spec: { type: 'string', description: 'short instruction' },
-        requires: { type: 'string', description: 'comma-separated capability tags' },
         deps: { type: 'string', description: 'comma-separated dependency task codes (T-N,T-N)' },
         ...common,
       },
@@ -56,7 +55,6 @@ export const task = defineCommand({
               requirementId,
               title: args.title,
               spec: args.spec,
-              requires: splitCsv(args.requires),
               dependsOn: dependsOn.length ? dependsOn : undefined,
             },
             Boolean(args.json),

@@ -47,7 +47,6 @@ export const toRequirement = (r: DbRequirement): Requirement => ({
   title: r.title,
   description: r.description ?? undefined,
   resources: parseJson<ResourceRef[]>(r.resources),
-  tags: parseJson<string[]>(r.tags),
   status: r.status as RequirementStatus,
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),

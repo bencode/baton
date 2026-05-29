@@ -16,7 +16,6 @@ const login: Requirement = {
   code: 'R-1',
   title: 'User login',
   resources: [],
-  tags: [],
   status: 'active',
   createdAt: 0,
   updatedAt: 0,

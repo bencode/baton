@@ -2,11 +2,11 @@ import type { Id, RequirementStatus } from '@baton/shared'
 import { defineCommand } from 'citty'
 import type { ApiClient } from '../client.ts'
 import { fmtRequirement, removed, renderList, renderOne } from '../output.ts'
-import { clientFor, common, splitCsv } from '../util.ts'
+import { clientFor, common } from '../util.ts'
 
 export const createRequirement = (
   c: ApiClient,
-  input: { projectId: Id; title: string; description?: string; tags?: string[] },
+  input: { projectId: Id; title: string; description?: string },
   json: boolean,
 ): Promise<string> => c.requirements.create(input).then(r => renderOne(r, fmtRequirement, json))
 export const listRequirements = (c: ApiClient, projectId: Id, json: boolean): Promise<string> =>
@@ -40,7 +40,6 @@ export const requirement = defineCommand({
         title: { type: 'positional', required: true },
         project: { type: 'string', required: true, description: 'project id (int)' },
         desc: { type: 'string', description: 'description' },
-        tags: { type: 'string', description: 'comma-separated tags' },
         ...common,
       },
       run: async ({ args }) => {
@@ -51,7 +50,6 @@ export const requirement = defineCommand({
               projectId: Number(args.project),
               title: args.title,
               description: args.desc,
-              tags: splitCsv(args.tags),
             },
             Boolean(args.json),
           ),

@@ -22,18 +22,6 @@ export const RequirementDetail = ({ projectId, code }: RequirementDetailProps) =
         <StatusBadge status={req.status} />
       </div>
       {req.description && <p className="text-sm text-gray-600">{req.description}</p>}
-      {req.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {req.tags.map(tag => (
-            <span
-              key={tag}
-              className="rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

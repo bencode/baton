@@ -34,7 +34,6 @@ const v01 = await store.requirements.create({
   title: 'v0.1 迭代',
   description:
     'v0.1 = 协同维度管理闭环：CLI 与 Web UI 都能对 Workspace/Project/Requirement/Task 做 CRUD 与状态推进。M2 执行（worker/session）归 v0.2。',
-  tags: ['v0.1', 'mvp'],
   resources: [
     { kind: 'doc', uri: 'docs/plans/00-overview.md', label: '总体概念对齐' },
     { kind: 'doc', uri: 'docs/plans/03-web-ui.md', label: 'Web UI 方案' },

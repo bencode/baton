@@ -40,7 +40,6 @@ describe('command handlers (fake client)', () => {
             code: 'R-1',
             title: 't',
             resources: [],
-            tags: [],
             status,
             createdAt: 0,
             updatedAt: 0,

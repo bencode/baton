@@ -10,14 +10,13 @@ export const registerRequirementRoutes = (app: Hono<AppEnv>, store: Store): void
       title?: string
       description?: string
       resources?: ResourceRef[]
-      tags?: string[]
       status?: RequirementStatus
     }
     if (!body.projectId || !body.title)
       return c.json({ error: 'projectId and title required' }, 400)
-    const { projectId, title, description, resources, tags, status } = body
+    const { projectId, title, description, resources, status } = body
     return c.json(
-      await store.requirements.create({ projectId, title, description, resources, tags, status }),
+      await store.requirements.create({ projectId, title, description, resources, status }),
       201,
     )
   })
