@@ -40,7 +40,7 @@ export const EventStream = ({ items, scrollRef }: EventStreamProps) => (
     {items.length === 0 ? (
       <p className="text-sm text-gray-400">no events yet — say something below.</p>
     ) : (
-      <div className="mx-auto flex max-w-3xl flex-col gap-3">
+      <div className="mx-auto flex max-w-5xl flex-col gap-3">
         {items.map(item => (
           <RenderItemView key={item.key} item={item} />
         ))}
@@ -66,7 +66,7 @@ const fileToDataUrl = (file: File): Promise<string> =>
   })
 
 const ThumbStrip = ({ images, onRemove }: { images: string[]; onRemove: (i: number) => void }) => (
-  <div className="mx-auto mb-2 flex max-w-3xl flex-wrap gap-2">
+  <div className="mx-auto mb-2 flex max-w-5xl flex-wrap gap-2">
     {images.map((src, i) => (
       <div key={src.slice(0, 64)} className="relative">
         {/* biome-ignore lint/a11y/useAltText: pasted screenshot preview */}
@@ -116,7 +116,7 @@ export const Composer = ({
       {images.length > 0 && (
         <ThumbStrip images={images} onRemove={i => setImages(images.filter((_, j) => j !== i))} />
       )}
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         <textarea
           value={draft}
           onChange={e => setDraft(e.target.value)}
