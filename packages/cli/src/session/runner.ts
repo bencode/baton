@@ -229,8 +229,14 @@ export const runDaemon = async (
     }
   }
 
+  // Heartbeat targets the worker layer now: /workers/heartbeat { machineId }.
+  // Session-level alive is derived (worker alive ⇒ its sessions alive).
+  // Legacy session configs without machineId fall back to a no-op tick.
   const hb = setInterval(() => {
-    deps.worker.heartbeat().catch(e => log(`heartbeat failed: ${String(e)}`))
+    if (!config.machineId) return
+    deps.client.workers
+      .heartbeat(config.machineId)
+      .catch(e => log(`heartbeat failed: ${String(e)}`))
   }, 30_000)
 
   // Kick off any history-pending messages before subscribing.

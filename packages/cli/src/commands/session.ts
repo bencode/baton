@@ -10,6 +10,7 @@ import { defaultConfigPath, loadConfig, type SessionConfig, saveConfig } from '.
 import { runDaemon } from '../session/runner.ts'
 import { createWorktree, removeWorktree } from '../session/worktree.ts'
 import { clientFor, common } from '../util.ts'
+import { loadWorkerConfigOrNull, workerConfigPath } from '../worker/config.ts'
 
 const defaultWorktreeDir = (env: NodeJS.ProcessEnv = process.env): string =>
   env.BATON_WORKTREE_DIR ??
@@ -122,6 +123,8 @@ export const newSession = async (
     mode: input.mode,
     claudeSessionId,
     worktreePath: provisional,
+    ...(input.machineId ? { machineId: input.machineId } : {}),
+    ...(input.workerName ? { workerName: input.workerName } : {}),
   }
   const path = resolvePath(registered.id)
   saveConfig(path, config)
@@ -145,21 +148,31 @@ export const session = defineCommand({
       run: async ({ args }) => {
         const server = resolveBaseUrl(args.url)
         const c = clientFor(args)
+        const projectId = Number(args.project)
+        // Snapshot identity from the local worker config when one exists for
+        // this project. Daemon will heartbeat /workers/heartbeat with this
+        // machineId, so a missing worker config means alive will stay false
+        // until the user runs `baton worker register`.
+        const wc = loadWorkerConfigOrNull(workerConfigPath(projectId))
         const { config, path } = await newSession(c, {
-          projectId: Number(args.project),
+          projectId,
           name: args.name,
           repo: args.repo,
           base: args.base ?? 'main',
           worktreeDir: args['worktree-dir'] ?? defaultWorktreeDir(),
           mode: (args.mode as SessionMode) ?? 'worker',
           server,
-          // Snapshot fields filled in C1 from local-only sources; C2 will
-          // route them through worker config + machine-id file.
           hostname: osHostname(),
+          ...(wc ? { machineId: wc.machineId, workerName: wc.name } : {}),
         })
         console.log(`created session #${config.sessionId} (${config.name})`)
         console.log(`  worktree:        ${config.worktreePath}`)
         console.log(`  claudeSessionId: ${config.claudeSessionId}`)
+        if (wc) console.log(`  worker:          ${wc.name} (${wc.machineId.slice(0, 8)}…)`)
+        else
+          console.log(
+            '  worker:          (none — run `baton worker register` so this session shows alive)',
+          )
         console.log(`  token saved to:  ${path}`)
       },
     }),

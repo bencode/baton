@@ -11,6 +11,8 @@ import type {
   SessionMode,
   Task,
   TaskStatus,
+  Worker,
+  WorkerView,
   Workspace,
 } from '@baton/shared'
 
@@ -55,6 +57,14 @@ export type SessionRegisterInput = {
   workerName?: string
 }
 export type SessionRegistered = Session & { apiToken: string }
+export type WorkerRegisterInput = {
+  projectId: Id
+  machineId: string
+  name: string
+  hostname: string
+}
+export type WorkerRegisterOutcome = 'created' | 'reattached-machine' | 'claimed-legacy'
+export type WorkerRegisterOutput = { worker: WorkerView; outcome: WorkerRegisterOutcome }
 
 // Public HTTP client (UI / CLI / observability tools).
 export type ApiClient = {
@@ -94,12 +104,19 @@ export type ApiClient = {
     listEvents(id: Id): Promise<SessionEvent[]>
     sendMessage(id: Id, text: string): Promise<SessionEvent>
   }
+  workers: {
+    register(input: WorkerRegisterInput): Promise<WorkerRegisterOutput>
+    listByProject(projectId: Id): Promise<WorkerView[]>
+    get(id: Id): Promise<WorkerView>
+    findByName(projectId: Id, name: string): Promise<WorkerView | null>
+    heartbeat(machineId: string): Promise<{ alive: boolean }>
+    close(id: Id): Promise<void>
+  }
 }
 
-// Worker-private client: bearer-authed write endpoints. Mostly used by the
-// long-running `baton session run` daemon (commit 2).
+// Session-private client: bearer-authed write endpoints used by the
+// long-running `baton session run` daemon to emit events / close.
 export type WorkerClient = {
-  heartbeat(): Promise<Session>
   close(): Promise<void>
   emitEvent(type: SessionEventType, payload: unknown): Promise<SessionEvent>
 }
@@ -170,6 +187,23 @@ export const createClient = (baseUrl: string): ApiClient => {
       sendMessage: (id, text) =>
         request(u(`/sessions/${id}/messages`), { method: 'POST', body: { text } }),
     },
+    workers: {
+      register: input => request(u('/workers'), { method: 'POST', body: input }),
+      listByProject: projectId => request(u(`/projects/${projectId}/workers`), { method: 'GET' }),
+      get: id => request(u(`/workers/${id}`), { method: 'GET' }),
+      findByName: async (projectId, name) => {
+        const all = await request<WorkerView[]>(u(`/projects/${projectId}/workers`), {
+          method: 'GET',
+        })
+        const matches = all.filter(w => w.name === name && !w.closedAt)
+        return matches.length === 0 ? null : (matches[matches.length - 1] ?? null)
+      },
+      heartbeat: machineId =>
+        request(u('/workers/heartbeat'), { method: 'POST', body: { machineId } }),
+      close: async id => {
+        await request(u(`/workers/${id}/close`), { method: 'POST' })
+      },
+    },
   }
 }
 
@@ -177,8 +211,6 @@ export const createWorkerClient = (baseUrl: string, apiToken: string): WorkerCli
   const u = (p: string): string => `${baseUrl}${p}`
   const auth = { authorization: `Bearer ${apiToken}` }
   return {
-    heartbeat: () =>
-      request(u('/sessions/me/heartbeat'), { method: 'POST', body: {}, headers: auth }),
     close: () => request(u('/sessions/me/close'), { method: 'POST', headers: auth }),
     emitEvent: (type, payload) =>
       request(u('/sessions/me/events'), {

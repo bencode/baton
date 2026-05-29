@@ -17,6 +17,11 @@ export type SessionConfig = {
   mode: SessionMode
   claudeSessionId: string
   worktreePath: string
+  // M2.6: machineId carried in the session config so the daemon can heartbeat
+  // /workers/heartbeat without re-reading the machine-id file each tick.
+  // Optional because legacy session configs (pre-M2.6) don't have it.
+  machineId?: string
+  workerName?: string
 }
 
 const configDir = (env: NodeJS.ProcessEnv = process.env): string =>

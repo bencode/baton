@@ -1,4 +1,4 @@
-import type { Project, Requirement, Session, Task, Workspace } from '@baton/shared'
+import type { Project, Requirement, Session, Task, Worker, Workspace } from '@baton/shared'
 
 export const toJson = (data: unknown): string => JSON.stringify(data, null, 2)
 
@@ -10,6 +10,10 @@ export const fmtSession = (s: Session): string => {
   const closed = s.closedAt ? '  [closed]' : ''
   const wt = s.worktreePath ? `  ${s.worktreePath}` : ''
   return `${s.id}  ${s.name}${closed}${wt}`
+}
+export const fmtWorker = (w: Worker & { alive?: boolean }): string => {
+  const closed = w.closedAt ? '  [closed]' : w.alive === false ? '  [offline]' : ''
+  return `${w.id}  ${w.name}  ${w.hostname}${closed}`
 }
 
 export const renderOne = <T>(item: T, fmt: (x: T) => string, json: boolean): string =>
