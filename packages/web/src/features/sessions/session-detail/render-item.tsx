@@ -1,4 +1,5 @@
 import type { RenderItem, TurnEndSummary } from '../event-render'
+import { Markdown } from './markdown'
 import { ToolBlock } from './tool-block'
 
 export const RenderItemView = ({ item }: { item: RenderItem }) => {
@@ -47,8 +48,8 @@ const UserBubble = ({ text, images }: { text: string; images?: string[] }) => (
 
 const AssistantBubble = ({ text }: { text: string }) => (
   <div className="flex justify-start">
-    <div className="max-w-prose rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm whitespace-pre-wrap text-gray-800 shadow-sm">
-      {text}
+    <div className="max-w-prose rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
+      <Markdown text={text} />
     </div>
   </div>
 )

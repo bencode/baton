@@ -92,6 +92,11 @@ type ComposerProps = {
   disabled: boolean
   onSend: () => void
 }
+
+// Keyboard-only send (⌘/Ctrl-Enter). No Send button — Cmd-Enter is already
+// the natural Claude Code / chat convention. The `sending` flag is held in
+// state so a second Cmd-Enter while the first request is in-flight is
+// silently dropped (no UI lock; placeholder gains a tiny `sending…` hint).
 export const Composer = ({
   draft,
   setDraft,
@@ -100,42 +105,40 @@ export const Composer = ({
   sending,
   disabled,
   onSend,
-}: ComposerProps) => (
-  <div className="shrink-0 border-t border-gray-200 bg-white p-3">
-    {images.length > 0 && (
-      <ThumbStrip images={images} onRemove={i => setImages(images.filter((_, j) => j !== i))} />
-    )}
-    <div className="mx-auto flex max-w-3xl items-end gap-2">
-      <textarea
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onPaste={e => {
-          const files = extractImageFiles(e.clipboardData.items)
-          if (files.length === 0) return
-          e.preventDefault()
-          void Promise.all(files.map(fileToDataUrl)).then(urls => setImages([...images, ...urls]))
-        }}
-        onKeyDown={e => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+}: ComposerProps) => {
+  const placeholder = disabled
+    ? 'session closed'
+    : sending
+      ? '⌘/Ctrl-Enter to send · sending…'
+      : '⌘/Ctrl-Enter to send · paste to attach images'
+  return (
+    <div className="shrink-0 border-t border-gray-200 bg-white p-3">
+      {images.length > 0 && (
+        <ThumbStrip images={images} onRemove={i => setImages(images.filter((_, j) => j !== i))} />
+      )}
+      <div className="mx-auto max-w-3xl">
+        <textarea
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onPaste={e => {
+            const files = extractImageFiles(e.clipboardData.items)
+            if (files.length === 0) return
             e.preventDefault()
-            onSend()
-          }
-        }}
-        disabled={disabled}
-        placeholder={
-          disabled ? 'session closed' : 'Message (⌘/Ctrl-Enter to send, paste to attach images)'
-        }
-        className="min-h-[44px] flex-1 resize-y rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
-        rows={2}
-      />
-      <button
-        type="button"
-        onClick={onSend}
-        disabled={disabled || sending || (draft.trim().length === 0 && images.length === 0)}
-        className="rounded-md border border-blue-500 bg-blue-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-300"
-      >
-        Send
-      </button>
+            void Promise.all(files.map(fileToDataUrl)).then(urls => setImages([...images, ...urls]))
+          }}
+          onKeyDown={e => {
+            if (sending) return
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              onSend()
+            }
+          }}
+          disabled={disabled}
+          placeholder={placeholder}
+          className="min-h-[44px] w-full resize-y rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
+          rows={2}
+        />
+      </div>
     </div>
-  </div>
-)
+  )
+}

@@ -31,5 +31,8 @@
       "trailingCommas": "all",
       "arrowParentheses": "asNeeded"
     }
+  },
+  "css": {
+    "parser": { "tailwindDirectives": true }
   }
 }
