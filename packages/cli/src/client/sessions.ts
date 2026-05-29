@@ -19,6 +19,7 @@ export type SessionsClient = {
   findByName(projectId: Id, name: string): Promise<Session | null>
   listEvents(id: Id): Promise<SessionEvent[]>
   sendMessage(id: Id, text: string): Promise<SessionEvent>
+  destroy(id: Id): Promise<void>
 }
 
 export const sessionsClient = (baseUrl: string): SessionsClient => {
@@ -36,5 +37,8 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
     listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
     sendMessage: (id, text) =>
       request(u(`/sessions/${id}/messages`), { method: 'POST', body: { text } }),
+    destroy: async id => {
+      await request(u(`/sessions/${id}`), { method: 'DELETE' })
+    },
   }
 }

@@ -66,10 +66,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
 
     // destroy session → next message gets 404 (row is gone)
-    await app.request(`/sessions/me`, {
-      method: 'DELETE',
-      headers: { authorization: `Bearer ${session.apiToken}` },
-    })
+    await app.request(`/sessions/${session.id}`, { method: 'DELETE' })
     assert.equal(
       (await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })).status,
       404,

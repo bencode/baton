@@ -81,11 +81,17 @@ export const registerSessionRoutes = (
     return c.json({ attached: true })
   })
 
-  // Session DELETE (bearer). Drops the row; SessionEvent rows cascade.
-  // Irreversible — only the daemon (which holds the apiToken) can call this.
-  app.delete('/sessions/me', auth, async c => {
-    const session = c.get('session')
-    await store.sessions.destroy(session.id)
+  // Session DELETE (no auth, v0). Drops the row; SessionEvent rows cascade.
+  // Consistent with DELETE /workers/:id — admin-level operation gated by the
+  // CLI's --confirm flag, not by bearer auth. (Bearer would block destroying
+  // sessions whose local config / token file is gone — common case after
+  // disk cleanups.)
+  app.delete('/sessions/:id', async c => {
+    const id = intParam(c.req.param('id'))
+    const s = await store.sessions.get(id)
+    if (!s) return c.json({ error: 'not found' }, 404)
+    await store.sessions.destroy(id)
+    sessionLiveness.forget(String(id))
     return c.body(null, 204)
   })
   app.post('/sessions/me/events', auth, async c => {

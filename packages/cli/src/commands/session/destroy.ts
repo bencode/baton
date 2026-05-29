@@ -1,6 +1,5 @@
 import { existsSync, rmSync } from 'node:fs'
 import { defineCommand } from 'citty'
-import { createWorkerClient } from '../../client.ts'
 import { defaultConfigPath, loadConfig } from '../../session/config.ts'
 import { removeWorktree } from '../../session/worktree.ts'
 import { clientFor, common, resolveProjectId } from '../../util.ts'
@@ -10,9 +9,11 @@ import { resolveSession } from './shared.ts'
 // physical worktree + agent state file (claude .jsonl) are NOT touched by
 // default; pass --rm-worktree to remove the worktree as well.
 //
-// Default behaviour requires --confirm. Without it, we print a dry-run
-// summary so the user can see what will go away before re-running with the
-// flag.
+// Implementation: server route is DELETE /sessions/:id (no auth, v0 — gated
+// by the CLI's --confirm flag). Local session config file is best-effort
+// cleaned up. --rm-worktree needs --repo because we need to know which
+// upstream the worktree was branched off (git worktree remove only works
+// when invoked from the source repo).
 export const sessionDestroyCommand = defineCommand({
   meta: {
     name: 'destroy',
@@ -34,28 +35,33 @@ export const sessionDestroyCommand = defineCommand({
     ...common,
   },
   run: async ({ args }) => {
-    const cliClient = clientFor(args)
+    const c = clientFor(args)
     const projectId = resolveProjectId(args)
-    const s = await resolveSession(cliClient, projectId, args.session)
-    const events = await cliClient.sessions.listEvents(s.id)
+    const s = await resolveSession(c, projectId, args.session)
+    const events = await c.sessions.listEvents(s.id)
     const cfgPath = args.config ?? defaultConfigPath(s.id)
+    const cfgPresent = existsSync(cfgPath)
 
     if (!args.confirm) {
       console.log(`[dry-run] would destroy session ${s.name} (#${s.id}):`)
       console.log(`  - ${events.length} event(s) cascade-deleted`)
-      console.log(`  - local session config: ${cfgPath}`)
+      console.log(`  - local session config: ${cfgPath}${cfgPresent ? '' : ' (not present)'}`)
       if (args['rm-worktree']) console.log('  - git worktree (--rm-worktree)')
       console.log('re-run with --confirm to proceed.')
       return
     }
 
-    const cfg = loadConfig(cfgPath)
-    const w = createWorkerClient(cfg.server, cfg.apiToken)
-    await w.destroy()
-    if (existsSync(cfgPath)) rmSync(cfgPath, { force: true })
+    // Worktree path comes from the local config if we have it; otherwise we
+    // fetch the row to learn the stable DB field.
+    const worktreePath = cfgPresent
+      ? loadConfig(cfgPath).worktreePath
+      : (await c.sessions.get(s.id)).worktreePath
+
+    await c.sessions.destroy(s.id)
+    if (cfgPresent) rmSync(cfgPath, { force: true })
     if (args['rm-worktree']) {
       if (!args.repo) throw new Error('--repo is required together with --rm-worktree')
-      removeWorktree(args.repo, cfg.worktreePath)
+      removeWorktree(args.repo, worktreePath)
     }
     console.log(`destroyed ${s.name} (#${s.id}); ${events.length} event(s) gone`)
   },
