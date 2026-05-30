@@ -1,12 +1,13 @@
 import type {
+  Attachment,
   Code,
   Id,
   Project,
   Requirement,
   RequirementStatus,
   ResourceRef,
-  Session,
   SessionEvent,
+  SessionView,
   Task,
   TaskStatus,
   WorkerView,
@@ -15,6 +16,9 @@ import type {
 
 // Dev: '/api' is proxied to the server (prefix stripped). Prod base decided when server hosts the UI.
 export const API_BASE = '/api'
+
+// Browser-resolvable src for an attachment's bytes (img preview / download link).
+export const attachmentSrc = (a: Attachment): string => `${API_BASE}${a.url}`
 
 type ReqInit = { method: string; body?: unknown }
 
@@ -77,9 +81,12 @@ export type Api = {
     remove(id: Id): Promise<void>
   }
   sessions: {
-    listByProject(projectId: Id): Promise<Session[]>
-    get(id: Id): Promise<Session>
-    sendMessage(id: Id, text: string, images?: string[]): Promise<SessionEvent>
+    // Read endpoints return the runtime view (alive/attached/busy) so the UI can
+    // surface worker/daemon connectivity, not just the bare Session record.
+    listByProject(projectId: Id): Promise<SessionView[]>
+    get(id: Id): Promise<SessionView>
+    sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
+    uploadAttachment(id: Id, file: File): Promise<Attachment>
   }
   workers: {
     listByProject(projectId: Id): Promise<WorkerView[]>
@@ -137,11 +144,25 @@ export const createApi = (base: string = API_BASE): Api => {
     sessions: {
       listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
       get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
-      sendMessage: (id, text, images) =>
+      sendMessage: (id, text, attachments) =>
         request(u(`/sessions/${id}/messages`), {
           method: 'POST',
-          body: images && images.length > 0 ? { text, images } : { text },
+          body: attachments && attachments.length > 0 ? { text, attachments } : { text },
         }),
+      // Raw-body upload (the JSON `request` helper can't carry binary): the File
+      // streams as the request body, filename on the query, media type on the header.
+      uploadAttachment: async (id, file) => {
+        const url = u(
+          `/sessions/${id}/attachments?filename=${encodeURIComponent(file.name || 'file')}`,
+        )
+        const r = await fetch(url, {
+          method: 'POST',
+          body: file,
+          headers: { 'content-type': file.type || 'application/octet-stream' },
+        })
+        if (!r.ok) throw new Error(`POST ${url} → ${r.status}: ${await r.text()}`)
+        return (await r.json()) as Attachment
+      },
     },
     workers: {
       listByProject: projectId => request(u(`/projects/${projectId}/workers`), { method: 'GET' }),

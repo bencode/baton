@@ -1,4 +1,4 @@
-import type { Id, Session } from '@baton/shared'
+import type { Id, SessionView } from '@baton/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { useAsync } from '../../hooks/use-async'
@@ -8,9 +8,9 @@ import { useAsync } from '../../hooks/use-async'
 export const useSessions = (
   projectId: Id | null,
   pollMs = 2000,
-): { data: Session[] | null; loading: boolean; error: Error | null } => {
+): { data: SessionView[] | null; loading: boolean; error: Error | null } => {
   const api = useApi()
-  const [data, setData] = useState<Session[] | null>(null)
+  const [data, setData] = useState<SessionView[] | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
   const alive = useRef(true)
@@ -53,7 +53,7 @@ export const useSessions = (
 // when sessionId is null.
 export const useSession = (sessionId: Id | null) => {
   const api = useApi()
-  return useAsync<Session | null>(
+  return useAsync<SessionView | null>(
     () => (sessionId !== null ? api.sessions.get(sessionId) : Promise.resolve(null)),
     sessionId,
   )

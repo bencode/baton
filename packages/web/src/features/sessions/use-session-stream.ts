@@ -1,7 +1,7 @@
 import type { Id, SessionEvent } from '@baton/shared'
 import { useEffect, useState } from 'react'
 import { API_BASE } from '../../api'
-import { appendEvent, loadEvents } from './local-store'
+import { appendEvent, loadEvents, type StoredEvent } from './local-store'
 
 // EventSource subscription to /api/sessions/:id/stream paired with an
 // IndexedDB-backed local transcript.
@@ -15,12 +15,12 @@ import { appendEvent, loadEvents } from './local-store'
 // shared IndexedDB. Late tabs will see whatever the earliest tab persisted
 // the next time they mount; live updates are per-tab via SSE.
 export type StreamState = {
-  events: SessionEvent[]
+  events: StoredEvent[]
   status: 'connecting' | 'open' | 'closed' | 'error'
 }
 
 export const useSessionStream = (sessionId: Id | null): StreamState => {
-  const [events, setEvents] = useState<SessionEvent[]>([])
+  const [events, setEvents] = useState<StoredEvent[]>([])
   const [status, setStatus] = useState<StreamState['status']>('connecting')
 
   useEffect(() => {
@@ -36,9 +36,16 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     // Hydrate from local store first so the user sees yesterday's chat before
     // SSE opens. If IndexedDB is unavailable (private browsing on some
     // browsers, quota issues) we silently fall back to a live-only view.
+    // Merge rather than replace: a live event can arrive during this async read
+    // (e.g. opening a session with a turn already running) — keep any live-only
+    // events instead of clobbering them, deduped by clientId.
     void loadEvents(sessionId)
       .then(local => {
-        if (!cancelled) setEvents(local)
+        if (cancelled) return
+        setEvents(prev => {
+          const seen = new Set(local.map(e => e.clientId))
+          return [...local, ...prev.filter(e => !seen.has(e.clientId))]
+        })
       })
       .catch(() => {})
 
@@ -47,11 +54,13 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     es.onmessage = e => {
       try {
         const parsed = JSON.parse(e.data) as SessionEvent
-        setEvents(prev => {
-          if (prev.some(p => p.sequence === parsed.sequence)) return prev
-          return [...prev, parsed]
-        })
-        void appendEvent(sessionId, parsed).catch(() => {})
+        // Stamp the one identity the client can trust. The server's id/sequence
+        // reset to 0 on restart, so we mint a stable clientId here, at the
+        // single receive point, and key dedup/ordering/React off it. The same
+        // object goes to both in-memory state and IndexedDB so they agree.
+        const stored: StoredEvent = { ...parsed, clientId: crypto.randomUUID() }
+        setEvents(prev => [...prev, stored])
+        void appendEvent(sessionId, stored).catch(() => {})
       } catch {
         // ignore malformed payloads
       }

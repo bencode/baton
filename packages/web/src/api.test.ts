@@ -99,3 +99,44 @@ test('sessions.get fetches by int id (no more S-N codes)', async () => {
   expect(got).toEqual(item)
   expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/sessions/42')
 })
+
+test('sessions.sendMessage includes attachments in the body', async () => {
+  const att = {
+    id: 'a1',
+    sessionId: 7,
+    filename: 'x.png',
+    contentType: 'image/png',
+    size: 4,
+    url: '/sessions/7/attachments/a1',
+    createdAt: 0,
+  }
+  const fetchMock = vi.fn<typeof fetch>(async () => res({ id: 1 }, 201))
+  vi.stubGlobal('fetch', fetchMock)
+  await createApi().sessions.sendMessage(7, 'look', [att])
+  expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+    text: 'look',
+    attachments: [att],
+  })
+})
+
+test('sessions.uploadAttachment POSTs the file as raw body with filename query', async () => {
+  const att = {
+    id: 'a1',
+    sessionId: 7,
+    filename: 'note.txt',
+    contentType: 'text/plain',
+    size: 3,
+    url: '/sessions/7/attachments/a1',
+    createdAt: 0,
+  }
+  const fetchMock = vi.fn<typeof fetch>(async () => res(att, 201))
+  vi.stubGlobal('fetch', fetchMock)
+  const file = new File(['abc'], 'note.txt', { type: 'text/plain' })
+  const out = await createApi().sessions.uploadAttachment(7, file)
+  expect(out).toEqual(att)
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/sessions/7/attachments?filename=note.txt')
+  const init = fetchMock.mock.calls[0]?.[1]
+  expect(init?.method).toBe('POST')
+  expect(init?.body).toBe(file)
+  expect((init?.headers as Record<string, string>)['content-type']).toBe('text/plain')
+})

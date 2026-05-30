@@ -1,15 +1,17 @@
-import type { SessionEvent, SessionEventType } from '@baton/shared'
+import type { SessionEventType } from '@baton/shared'
 import { describe, expect, test } from 'vitest'
 import { reduceEvents } from './event-render'
+import type { StoredEvent } from './local-store'
 
 let seq = 0
-const ev = (type: SessionEventType, payload: unknown): SessionEvent => ({
+const ev = (type: SessionEventType, payload: unknown): StoredEvent => ({
   id: ++seq,
   sessionId: 1,
   sequence: seq,
   type,
   payload,
   createdAt: 0,
+  clientId: `c${seq}`,
 })
 
 describe('reduceEvents', () => {
@@ -18,6 +20,21 @@ describe('reduceEvents', () => {
     const out = reduceEvents([ev('user_message', { text: 'hello' })])
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({ kind: 'user-bubble', text: 'hello' })
+  })
+
+  test('user_message carries attachments through to the bubble', () => {
+    seq = 0
+    const att = {
+      id: 'a1',
+      sessionId: 1,
+      filename: 'shot.png',
+      contentType: 'image/png',
+      size: 7,
+      url: '/sessions/1/attachments/a1',
+      createdAt: 0,
+    }
+    const out = reduceEvents([ev('user_message', { text: 'look', attachments: [att] })])
+    expect(out[0]).toMatchObject({ kind: 'user-bubble', text: 'look', attachments: [att] })
   })
 
   test('sdk_event system → one system-header; subsequent system events suppressed', () => {

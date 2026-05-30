@@ -1,12 +1,16 @@
+import type { Attachment } from '@baton/shared'
 import { useState } from 'react'
+import { attachmentSrc } from '../../../api'
 import type { RateLimitInfo, RenderItem, TurnEndSummary } from '../event-render'
+import { FileChip, isImage } from './attachment-view'
 import { Markdown } from './markdown'
 import { ToolBlock } from './tool-block'
 
 export const RenderItemView = ({ item }: { item: RenderItem }) => {
   if (item.kind === 'system-header')
     return <SystemHeader model={item.model} sessionId={item.sessionId} />
-  if (item.kind === 'user-bubble') return <UserBubble text={item.text} images={item.images} />
+  if (item.kind === 'user-bubble')
+    return <UserBubble text={item.text} images={item.images} attachments={item.attachments} />
   if (item.kind === 'assistant-text') return <AssistantBubble text={item.text} />
   if (item.kind === 'tool-block')
     return (
@@ -48,7 +52,15 @@ const SystemHeader = ({ model, sessionId }: { model?: string; sessionId?: string
   </div>
 )
 
-const UserBubble = ({ text, images }: { text: string; images?: string[] }) => (
+const UserBubble = ({
+  text,
+  images,
+  attachments,
+}: {
+  text: string
+  images?: string[]
+  attachments?: Attachment[]
+}) => (
   <div className="rounded-md bg-gray-50 px-3 py-2">
     <span className="mr-2 font-mono text-xs text-gray-500 select-none">you›</span>
     <span className="text-sm whitespace-pre-wrap text-gray-800">{text}</span>
@@ -64,11 +76,27 @@ const UserBubble = ({ text, images }: { text: string; images?: string[] }) => (
         ))}
       </div>
     )}
+    {attachments && attachments.length > 0 && (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {attachments.map(att =>
+          isImage(att) ? (
+            // biome-ignore lint/a11y/useAltText: uploaded image, filename is the closest caption
+            <img
+              key={att.id}
+              src={attachmentSrc(att)}
+              className="max-h-80 max-w-full rounded border border-gray-200"
+            />
+          ) : (
+            <FileChip key={att.id} att={att} download />
+          ),
+        )}
+      </div>
+    )}
   </div>
 )
 
 const AssistantBubble = ({ text }: { text: string }) => (
-  <div className="max-w-prose text-sm text-gray-800">
+  <div className="text-sm text-gray-800">
     <Markdown text={text} />
   </div>
 )

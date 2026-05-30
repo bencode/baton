@@ -1,13 +1,20 @@
-import type { SessionEvent } from '@baton/shared'
+import type { Attachment } from '@baton/shared'
+import type { StoredEvent } from './local-store'
 
-// Pure reducer turning baton SessionEvent[] (raw, sequence-ordered) into a
-// list of RenderItems UI can dispatch over. Tries to read Claude stream-json
-// payloads loosely (the SDK's shape evolves); unknown shapes fall through to
-// a `raw` item so nothing is silently dropped.
+// Pure reducer turning stored session events (arrival-ordered, each carrying a
+// stable clientId) into a list of RenderItems UI can dispatch over. Tries to
+// read Claude stream-json payloads loosely (the SDK's shape evolves); unknown
+// shapes fall through to a `raw` item so nothing is silently dropped.
 
 export type RenderItem =
   | { kind: 'system-header'; model?: string; sessionId?: string; key: string }
-  | { kind: 'user-bubble'; text: string; images?: string[]; key: string }
+  | {
+      kind: 'user-bubble'
+      text: string
+      images?: string[]
+      attachments?: Attachment[]
+      key: string
+    }
   | { kind: 'assistant-text'; text: string; key: string }
   | {
       kind: 'tool-block'
@@ -89,7 +96,7 @@ const formatToolResult = (raw: unknown): { text: string; isError: boolean } => {
 
 // --- reducer -----------------------------------------------------------------
 
-export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
+export const reduceEvents = (events: StoredEvent[]): RenderItem[] => {
   const items: RenderItem[] = []
   const pendingTools = new Map<string, Extract<RenderItem, { kind: 'tool-block' }>>()
   let pendingResult: TurnEndSummary | undefined
@@ -98,14 +105,20 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
   let systemEmitted = false
 
   for (const e of events) {
-    const key = `${e.sessionId}-${e.sequence}`
+    // clientId is the client-minted stable identity (see local-store): unique
+    // across server restarts, unlike the server's resettable sequence/id.
+    const key = e.clientId
     if (e.type === 'user_message') {
       const text = isRecord(e.payload) && typeof e.payload.text === 'string' ? e.payload.text : ''
       const images =
         isRecord(e.payload) && Array.isArray(e.payload.images)
           ? e.payload.images.filter((i): i is string => typeof i === 'string')
           : undefined
-      items.push({ kind: 'user-bubble', text, images, key })
+      const attachments =
+        isRecord(e.payload) && Array.isArray(e.payload.attachments)
+          ? (e.payload.attachments as Attachment[])
+          : undefined
+      items.push({ kind: 'user-bubble', text, images, attachments, key })
       continue
     }
     if (e.type === 'turn_start') continue

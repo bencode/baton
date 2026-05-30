@@ -7,14 +7,16 @@ import type { Id, SessionEvent } from '@baton/shared'
 //
 // Single database, single object store keyed by an auto-incrementing local id,
 // indexed by sessionId for fast per-session retrieval. The wire SessionEvent
-// shape is stored verbatim so callers can pass through without translation.
+// shape is stored verbatim, plus a client-minted `clientId` — the only stable
+// identity the client can trust (the server's `id`/`sequence` reset to 0 on
+// every restart), used for dedup, ordering, and React keys.
 
 const DB_NAME = 'baton-session-events'
 const DB_VERSION = 1
 const STORE = 'events'
 const INDEX = 'bySession'
 
-type StoredEvent = SessionEvent
+export type StoredEvent = SessionEvent & { clientId: string }
 
 // Open (or upgrade) the database. Resolved instance cached for the page.
 let dbPromise: Promise<IDBDatabase> | null = null
@@ -41,15 +43,27 @@ const promisify = <T>(req: IDBRequest<T>): Promise<T> =>
     req.onerror = () => reject(req.error)
   })
 
-export const loadEvents = async (sessionId: Id): Promise<SessionEvent[]> => {
+export const loadEvents = async (sessionId: Id): Promise<StoredEvent[]> => {
   const db = await open()
   const tx = db.transaction(STORE, 'readonly')
   const index = tx.objectStore(STORE).index(INDEX)
-  const list = await promisify(index.getAll(IDBKeyRange.only(sessionId)))
-  return (list as StoredEvent[]).slice().sort((a, b) => a.sequence - b.sequence)
+  // getAll on the bySession index returns records in primary-key (autoIncrement)
+  // order for a single sessionId — i.e. insertion order, which is the order
+  // events arrived. We deliberately do NOT sort by `sequence`: that counter
+  // resets to 0 on every server restart, so sorting by it interleaves events
+  // from different runs. Arrival order is the true chronology.
+  const list = (await promisify(index.getAll(IDBKeyRange.only(sessionId)))) as Array<
+    SessionEvent & { clientId?: string }
+  >
+  // Backfill records persisted before clientId existed: a deterministic
+  // per-load id, unique within the list and never colliding with a UUID. Not
+  // re-persisted — purely to give legacy history stable keys for this render.
+  return list.map((e, i) =>
+    e.clientId ? (e as StoredEvent) : { ...e, clientId: `legacy-${sessionId}-${i}` },
+  )
 }
 
-export const appendEvent = async (sessionId: Id, ev: SessionEvent): Promise<void> => {
+export const appendEvent = async (sessionId: Id, ev: StoredEvent): Promise<void> => {
   const db = await open()
   const tx = db.transaction(STORE, 'readwrite')
   tx.objectStore(STORE).add({ ...ev, sessionId })
