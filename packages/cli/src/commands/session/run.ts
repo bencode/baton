@@ -19,6 +19,8 @@ export const sessionRunCommand = defineCommand({
     if (!server || !workerToken || !machineId)
       throw new Error('`session run` must be spawned by the worker daemon (missing BATON_* env)')
     const sessionId = Number(args.session)
+    if (!Number.isInteger(sessionId) || sessionId <= 0)
+      throw new Error(`invalid session id: ${args.session}`)
     const client = createClient(server)
     const s = await client.sessions.get(sessionId)
     if (!s.agentSessionId || !s.worktreePath)

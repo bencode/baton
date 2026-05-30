@@ -7,7 +7,7 @@ import { EventSource } from 'eventsource'
 import type { ApiClient } from '../client.ts'
 import { defaultWorktreeDir, slug } from '../commands/session/shared.ts'
 import type { WorkerConfig } from '../project-config.ts'
-import { createWorktree } from '../session/worktree.ts'
+import { createWorktree, removeWorktree, repoHeadBranch } from '../session/worktree.ts'
 
 // The persistent, lightweight worker process. It owns no Claude state itself —
 // it listens on the server→worker command stream and supervises one child
@@ -27,7 +27,9 @@ export const runWorkerDaemon = async (
 ): Promise<void> => {
   const repo = process.cwd()
   const worktreeDir = defaultWorktreeDir()
-  const children = new Map<Id, ChildProcess>()
+  // Track the worktree path alongside the child so we can git-remove it on
+  // delete — by then the server row is gone, so we can't re-fetch it.
+  const children = new Map<Id, { child: ChildProcess; worktreePath: string }>()
   const log = (m: string): void => console.log(`[worker #${cfg.workerId} ${cfg.name}] ${m}`)
 
   const ping = (): void => {
@@ -50,7 +52,7 @@ export const runWorkerDaemon = async (
 
   // Spawn the session child, handing it the worker credentials via env so it can
   // authenticate session writes with the worker token.
-  const spawnChild = (sessionId: Id): void => {
+  const spawnChild = (sessionId: Id, worktreePath: string): void => {
     if (children.has(sessionId)) return
     const child = spawn(process.execPath, [binPath(), 'session', 'run', String(sessionId)], {
       detached: true,
@@ -62,7 +64,8 @@ export const runWorkerDaemon = async (
         BATON_WORKER_MACHINE_ID: cfg.machineId,
       },
     })
-    children.set(sessionId, child)
+    children.set(sessionId, { child, worktreePath })
+    log(`spawned session #${sessionId} (${worktreePath})`)
     child.on('exit', code => {
       children.delete(sessionId)
       log(`session #${sessionId} child exited (code=${code ?? -1})`)
@@ -75,23 +78,29 @@ export const runWorkerDaemon = async (
   const onCreate = async (sessionId: Id, name: string): Promise<void> => {
     if (children.has(sessionId)) return log(`session #${sessionId} already running`)
     const session = await client.sessions.get(sessionId)
-    if (!session.agentSessionId || !session.worktreePath) {
+    let worktreePath = session.worktreePath
+    if (!session.agentSessionId || !worktreePath) {
       const agentSessionId = randomUUID()
-      const worktreePath = join(worktreeDir, slug(`${name}-${agentSessionId.slice(0, 8)}`))
-      createWorktree({ repo, worktreePath, sessionCode: agentSessionId.slice(0, 8), base: 'main' })
+      worktreePath = join(worktreeDir, slug(`${name}-${agentSessionId.slice(0, 8)}`))
+      createWorktree({
+        repo,
+        worktreePath,
+        sessionCode: agentSessionId.slice(0, 8),
+        base: repoHeadBranch(repo),
+      })
       await client.sessions.materialize(sessionId, { agentSessionId, worktreePath }, cfg.apiToken)
       log(`materialized session #${sessionId} → ${worktreePath}`)
     }
-    spawnChild(sessionId)
-    log(`spawned session #${sessionId} (${name})`)
+    spawnChild(sessionId, worktreePath)
   }
 
   const onDelete = (sessionId: Id): void => {
-    const child = children.get(sessionId)
-    if (!child) return
-    killChild(child)
+    const entry = children.get(sessionId)
+    if (!entry) return
+    killChild(entry.child)
     children.delete(sessionId)
-    log(`stopped session #${sessionId}`)
+    removeWorktree(repo, entry.worktreePath)
+    log(`stopped session #${sessionId} (removed worktree)`)
   }
 
   const es = new EventSource(`${cfg.server}/workers/me/stream`, {
@@ -123,5 +132,5 @@ export const runWorkerDaemon = async (
   })
   es.close()
   clearInterval(hb)
-  for (const child of children.values()) killChild(child)
+  for (const { child } of children.values()) killChild(child)
 }

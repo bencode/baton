@@ -6,7 +6,8 @@ export const fmtWorkspace = (w: Workspace): string => `${w.id}  ${w.name}`
 export const fmtProject = (p: Project): string => `${p.id}  ${p.name}`
 export const fmtRequirement = (r: Requirement): string => `${r.code}  [${r.status}]  ${r.title}`
 export const fmtTask = (t: Task): string => `${t.code}  [${t.status}]  ${t.title}`
-export const fmtSession = (s: Session): string => `${s.id}  ${s.name}  ${s.worktreePath}`
+export const fmtSession = (s: Session): string =>
+  `${s.id}  ${s.name}  ${s.worktreePath ?? '(pending)'}`
 export const fmtWorker = (w: Worker & { alive?: boolean }): string => {
   const offline = w.alive === false ? '  [offline]' : ''
   return `${w.id}  ${w.name}  ${w.hostname}${offline}`

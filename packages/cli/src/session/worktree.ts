@@ -25,6 +25,17 @@ export const createWorktree = (input: {
   }
 }
 
+// The repo's currently checked-out branch — the base a new worktree forks from.
+// Falls back to 'main' on detached HEAD / non-git / any failure.
+export const repoHeadBranch = (repo: string): string => {
+  const r = spawnSync('git', ['-C', repo, 'symbolic-ref', '--short', 'HEAD'], {
+    stdio: 'pipe',
+    encoding: 'utf8',
+  })
+  const branch = r.status === 0 ? r.stdout.trim() : ''
+  return branch || 'main'
+}
+
 // Best-effort removal. Won't throw on missing/unclean state.
 export const removeWorktree = (repo: string, worktreePath: string): void => {
   if (!existsSync(worktreePath)) return
