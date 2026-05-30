@@ -18,3 +18,10 @@ export type Worker = {
 
 // Server merges DB row + in-memory liveness when serving over HTTP.
 export type WorkerView = Worker & { alive: boolean }
+
+// Commands the server pushes to a Worker over its SSE command stream
+// (GET /workers/me/stream). The Worker is a persistent listener that
+// materializes/tears down Session child processes in response.
+export type WorkerCommand =
+  | { cmd: 'session.create'; sessionId: Id; name: string }
+  | { cmd: 'session.delete'; sessionId: Id }

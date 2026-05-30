@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { type AttachmentStore, createAttachmentStore, defaultAttachmentDir } from './attachments.ts'
 import { type BusyTracker, createBusy } from './busy.ts'
+import { type CommandBus, createCommandBus } from './command-bus.ts'
 import { createEventBus, type EventBus } from './event-bus.ts'
 import { createLiveness, type LivenessTracker } from './liveness.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
@@ -34,6 +35,7 @@ export const createApp = (
   sessionLiveness: LivenessTracker = createLiveness(),
   busyTracker: BusyTracker = createBusy(),
   attachments: AttachmentStore = createAttachmentStore(defaultAttachmentDir()),
+  commands: CommandBus = createCommandBus(),
 ): Hono<AppEnv> => {
   const app = new Hono<AppEnv>()
   app.get('/health', c => c.json({ ok: true }))
@@ -41,7 +43,16 @@ export const createApp = (
   registerProjectRoutes(app, store, workerLiveness, sessionLiveness, busyTracker)
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store)
-  registerWorkerRoutes(app, store, workerLiveness)
-  registerSessionRoutes(app, store, bus, workerLiveness, sessionLiveness, busyTracker, attachments)
+  registerWorkerRoutes(app, store, workerLiveness, commands)
+  registerSessionRoutes(
+    app,
+    store,
+    bus,
+    workerLiveness,
+    sessionLiveness,
+    busyTracker,
+    attachments,
+    commands,
+  )
   return app
 }

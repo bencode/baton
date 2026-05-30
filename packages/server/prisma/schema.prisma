@@ -99,16 +99,20 @@ model Task {
 // derived from SessionEvent log, alive from worker liveness. `code` (S-N) is
 // dropped: Session isn't chat-referenced like R-/T- are, so int id + name is
 // enough.
+// Sessions are created remotely (projectId/workerId/name only); the owning
+// Worker materializes them — minting agentSessionId + git worktree — and PATCHes
+// those in. So agentSessionId/worktreePath are nullable until materialized. No
+// per-session apiToken anymore: the Worker authenticates all session writes with
+// its own token (it created every session).
 model Session {
   id             Int       @id @default(autoincrement())
   projectId      Int
   workerId       Int // FK → Worker(id). onDelete Cascade: destroy worker takes its sessions with it.
   mode           String /// 'worker' | 'skill' (collaboration dimension; orthogonal to agent kind)
   name           String
-  apiToken       String    @unique
   agentKind      String /// 'claude-code' (v0). Future: 'codex' | …
-  agentSessionId String // claude-code: UUID; codex: TBD. Unique per agentKind.
-  worktreePath   String // local cwd on the worker; non-movable like agent state.
+  agentSessionId String? // claude-code: UUID; null until the Worker materializes.
+  worktreePath   String? // local cwd on the worker; null until the Worker materializes.
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -122,8 +126,9 @@ model Session {
 
 // A Worker is a (project × machine) registration. machineId is a UUID baton
 // lazily writes to ~/.local/share/baton/machine-id on the client. name is
-// the human handle. No code (W-N) and no apiToken — heartbeat is unauth in
-// v0 (single-team dev environment). Worker rows persist; alive/lastSeen
+// the human handle. apiToken (issued once at register) authenticates the
+// persistent worker daemon: its command stream subscription and all session
+// writes on behalf of the sessions it owns. Worker rows persist; alive/lastSeen
 // belong in memory.
 model Worker {
   id        Int      @id @default(autoincrement())
@@ -131,6 +136,7 @@ model Worker {
   machineId String
   name      String
   hostname  String
+  apiToken  String   @unique
   createdAt DateTime @default(now())
 
   project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)

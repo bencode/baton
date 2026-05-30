@@ -62,8 +62,8 @@ export const toTask = (r: DbTask): Task => ({
   updatedAt: r.updatedAt.getTime(),
 })
 
-// apiToken intentionally NOT in the domain shape — register selects it
-// separately when issuing the token; subsequent reads never re-expose it.
+// agentSessionId/worktreePath are null until the owning Worker materializes
+// the session. apiToken lives only on Worker now (not Session).
 export const toSession = (r: DbSession): Session => ({
   id: r.id,
   projectId: r.projectId,

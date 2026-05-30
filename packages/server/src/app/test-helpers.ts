@@ -16,11 +16,11 @@ export const postJson = (
     headers: { 'content-type': 'application/json', ...headers },
   })
 
-// Seed workspace → project → worker (registered + alive). Returns the ids so
-// tests can register sessions against this worker.
+// Seed workspace → project → worker (registered + alive). Returns the ids plus
+// the worker apiToken so tests can act as the worker (create/materialize/events).
 export const seedWorker = async (
   app: ReturnType<typeof createApp>,
-): Promise<{ projectId: number; workerId: number }> => {
+): Promise<{ projectId: number; workerId: number; workerToken: string }> => {
   const w = (await (await postJson(app, '/workspaces', { name: 'w' })).json()) as WithId
   const p = (await (
     await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
@@ -32,27 +32,20 @@ export const seedWorker = async (
       name: 'test-worker',
       hostname: 'h-test',
     })
-  ).json()) as { worker: WithId }
-  return { projectId: p.id, workerId: reg.worker.id }
+  ).json()) as { worker: WithId; apiToken: string }
+  return { projectId: p.id, workerId: reg.worker.id, workerToken: reg.apiToken }
 }
 
+// Create a session (metadata only — agentSessionId/worktreePath stay null until
+// a worker materializes via PATCH).
 export const seedSession = async (app: ReturnType<typeof createApp>) => {
-  const { projectId, workerId } = await seedWorker(app)
+  const { projectId, workerId, workerToken } = await seedWorker(app)
   const s = (await (
-    await postJson(app, '/sessions', {
-      projectId,
-      workerId,
-      mode: 'worker',
-      name: 'dogfood',
-      agentKind: 'claude-code',
-      agentSessionId: 'aaaa-bbbb-cccc-dddd',
-      worktreePath: '/tmp/wt',
-    })
+    await postJson(app, '/sessions', { projectId, workerId, name: 'dogfood' })
   ).json()) as WithId & {
-    apiToken: string
     alive: boolean
     attached: boolean
     busy: boolean
   }
-  return { projectId, workerId, session: s }
+  return { projectId, workerId, workerToken, session: s }
 }

@@ -13,36 +13,47 @@ describe('server HTTP — sessions + chat protocol', () => {
     await ctx.cleanup()
   })
 
-  test('session register: returns int id + apiToken + view fields (alive/attached/busy)', async () => {
+  test('session create: returns int id + view fields; agentSessionId/worktreePath null', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
     assert.equal(typeof session.id, 'number')
-    assert.equal(typeof session.apiToken, 'string')
     assert.equal(session.busy, false)
     // alive is true: worker register seeds worker liveness with its first ping.
     assert.equal(session.alive, true)
-    // attached is false: no daemon has pinged /sessions/me/heartbeat yet.
+    // attached is false: no child daemon has pinged /sessions/:id/heartbeat yet.
     assert.equal(session.attached, false)
+    const full = (await (await app.request(`/sessions/${session.id}`)).json()) as {
+      agentSessionId: string | null
+      worktreePath: string | null
+    }
+    assert.equal(full.agentSessionId, null)
+    assert.equal(full.worktreePath, null)
   })
 
-  test('attached flips to true after POST /sessions/me/heartbeat', async () => {
+  test('materialize + heartbeat (worker-bearer): PATCH fills fields, attached flips', async () => {
     const app = createApp(ctx.store)
-    const { session } = await seedSession(app)
-    let view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
-      attached: boolean
-    }
-    assert.equal(view.attached, false)
-    const hb = await postJson(
-      app,
-      '/sessions/me/heartbeat',
-      {},
-      { authorization: `Bearer ${session.apiToken}` },
-    )
+    const { session, workerToken } = await seedSession(app)
+    const auth = { authorization: `Bearer ${workerToken}` }
+
+    const patched = await app.request(`/sessions/${session.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ agentSessionId: 'uuid-1', worktreePath: '/tmp/wt' }),
+      headers: { 'content-type': 'application/json', ...auth },
+    })
+    assert.equal(patched.status, 200)
+    const pv = (await patched.json()) as { agentSessionId: string; worktreePath: string }
+    assert.equal(pv.agentSessionId, 'uuid-1')
+    assert.equal(pv.worktreePath, '/tmp/wt')
+
+    const hb = await postJson(app, `/sessions/${session.id}/heartbeat`, {}, auth)
     assert.equal(hb.status, 200)
     assert.deepEqual(await hb.json(), { attached: true })
-    view = (await (await app.request(`/sessions/${session.id}`)).json()) as { attached: boolean }
+    const view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
+      attached: boolean
+    }
     assert.equal(view.attached, true)
-    assert.equal((await postJson(app, '/sessions/me/heartbeat', {})).status, 401)
+    // unauthenticated heartbeat rejected
+    assert.equal((await postJson(app, `/sessions/${session.id}/heartbeat`, {})).status, 401)
   })
 
   test('messages: POST /sessions/:id/messages synthesizes ephemeral user_message', async () => {
@@ -98,25 +109,26 @@ describe('server HTTP — sessions + chat protocol', () => {
     // Still requires attached=true so a SIGKILL'd daemon (heartbeat stops) falls
     // back to busy=false within the 90s liveness window.
     const app = createApp(ctx.store)
-    const { session } = await seedSession(app)
-    const auth = { authorization: `Bearer ${session.apiToken}` }
+    const { session, workerToken } = await seedSession(app)
+    const auth = { authorization: `Bearer ${workerToken}` }
 
     // Unauthorized rejected.
     assert.equal(
-      (await postJson(app, '/sessions/me/events', { type: 'sdk_event', payload: {} })).status,
+      (await postJson(app, `/sessions/${session.id}/events`, { type: 'sdk_event', payload: {} }))
+        .status,
       401,
     )
 
     // Heartbeat first (real daemon order). Without it attached=false → busy=false.
-    await postJson(app, '/sessions/me/heartbeat', {}, auth)
+    await postJson(app, `/sessions/${session.id}/heartbeat`, {}, auth)
 
     // turn_start → busy=true.
-    await postJson(app, '/sessions/me/events', { type: 'turn_start', payload: {} }, auth)
+    await postJson(app, `/sessions/${session.id}/events`, { type: 'turn_start', payload: {} }, auth)
     const busy = (await (await app.request(`/sessions/${session.id}`)).json()) as { busy: boolean }
     assert.equal(busy.busy, true)
 
     // sdk_event in between does not change busy.
-    await postJson(app, '/sessions/me/events', { type: 'sdk_event', payload: {} }, auth)
+    await postJson(app, `/sessions/${session.id}/events`, { type: 'sdk_event', payload: {} }, auth)
     const stillBusy = (await (await app.request(`/sessions/${session.id}`)).json()) as {
       busy: boolean
     }
@@ -125,7 +137,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     // turn_complete → busy=false.
     await postJson(
       app,
-      '/sessions/me/events',
+      `/sessions/${session.id}/events`,
       { type: 'turn_complete', payload: { exitCode: 0 } },
       auth,
     )
@@ -137,9 +149,9 @@ describe('server HTTP — sessions + chat protocol', () => {
     // Daemon emitted turn_start without ever sending the session heartbeat:
     // attached=false → busy collapses to false regardless of busyTracker.
     const app = createApp(ctx.store)
-    const { session } = await seedSession(app)
-    const auth = { authorization: `Bearer ${session.apiToken}` }
-    await postJson(app, '/sessions/me/events', { type: 'turn_start', payload: {} }, auth)
+    const { session, workerToken } = await seedSession(app)
+    const auth = { authorization: `Bearer ${workerToken}` }
+    await postJson(app, `/sessions/${session.id}/events`, { type: 'turn_start', payload: {} }, auth)
     const view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
       attached: boolean
       busy: boolean

@@ -16,6 +16,10 @@ import type { Worker } from './worker.ts'
 export type SessionMode = 'worker' | 'skill'
 export type AgentKind = 'claude-code'
 
+// `agentSessionId` and `worktreePath` are null between creation and
+// materialization: a session row is created remotely (just project/worker/name),
+// then the owning Worker mints the agent session id + git worktree and fills
+// them in. Both are non-null once the Worker has materialized the session.
 export type Session = {
   id: Id
   projectId: Id
@@ -23,8 +27,8 @@ export type Session = {
   mode: SessionMode
   name: string
   agentKind: AgentKind
-  agentSessionId: string
-  worktreePath: string
+  agentSessionId: string | null
+  worktreePath: string | null
   createdAt: number
   updatedAt: number
 }

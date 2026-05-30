@@ -13,7 +13,7 @@ describe('runTurn', () => {
   test('posts turn_start + N sdk_event + turn_complete; flags first vs resume', async () => {
     const cfg: SessionConfig = {
       server: 'http://localhost:3280',
-      apiToken: 'tok',
+      workerToken: 'tok',
       sessionId: 1,
       projectId: 1,
       workerId: 9,
@@ -102,7 +102,7 @@ describe('runTurn', () => {
   test('empty text → turn_error, no spawn', async () => {
     const cfg: SessionConfig = {
       server: 's',
-      apiToken: 't',
+      workerToken: 't',
       sessionId: 1,
       projectId: 1,
       workerId: 9,
@@ -144,7 +144,7 @@ describe('runTurn', () => {
     const wt = mkdtempSync(join(tmpdir(), 'baton-turn-'))
     const cfg: SessionConfig = {
       server: 'http://srv',
-      apiToken: 't',
+      workerToken: 't',
       sessionId: 1,
       projectId: 1,
       workerId: 9,

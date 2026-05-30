@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { toWorker } from '../mappers.ts'
 import type { Store } from '../types.ts'
+import { issueToken } from './codec.ts'
 
 export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
   // Identity-recovery algorithm (simplified for M2.9 — no more closedAt filter):
@@ -22,7 +23,7 @@ export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
                 data: { name: input.name, hostname: input.hostname },
               })
             : byMachine
-        return { kind: 'reattached-machine', worker: toWorker(updated) }
+        return { kind: 'reattached-machine', worker: toWorker(updated), apiToken: updated.apiToken }
       }
       const byName = await tx.worker.findFirst({
         where: { projectId: input.projectId, name: input.name },
@@ -34,21 +35,26 @@ export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
             machineId: input.machineId,
             name: input.name,
             hostname: input.hostname,
+            apiToken: issueToken(),
           },
         })
-        return { kind: 'created', worker: toWorker(created) }
+        return { kind: 'created', worker: toWorker(created), apiToken: created.apiToken }
       }
       if (byName.machineId === '') {
         const claimed = await tx.worker.update({
           where: { id: byName.id },
           data: { machineId: input.machineId, hostname: input.hostname },
         })
-        return { kind: 'claimed-legacy', worker: toWorker(claimed) }
+        return { kind: 'claimed-legacy', worker: toWorker(claimed), apiToken: claimed.apiToken }
       }
       return { kind: 'name-collision', existing: toWorker(byName) }
     }),
   get: async id => {
     const r = await prisma.worker.findUnique({ where: { id } })
+    return r ? toWorker(r) : null
+  },
+  getByToken: async token => {
+    const r = await prisma.worker.findUnique({ where: { apiToken: token } })
     return r ? toWorker(r) : null
   },
   findByMachine: async (projectId, machineId) => {

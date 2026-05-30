@@ -11,10 +11,7 @@ import { type WorkspaceClient, workspaceClient } from './client/workspaces.ts'
 // (commands, tests) can keep importing from '../client.ts'.
 export type { ProjectInput } from './client/projects.ts'
 export type { RequirementInput } from './client/requirements.ts'
-export type {
-  SessionRegistered,
-  SessionRegisterInput,
-} from './client/sessions.ts'
+export type { SessionCreateInput } from './client/sessions.ts'
 export type { TaskInput } from './client/tasks.ts'
 export type {
   WorkerRegisterInput,
@@ -33,12 +30,10 @@ export type ApiClient = {
   workers: WorkersClient
 }
 
-// Session-private client: bearer-authed write endpoints used by the
-// long-running `baton session start` daemon to emit events / heartbeat /
-// destroy.
+// Per-session write client used by a session child process: authenticates with
+// the WORKER token and targets /sessions/:id/* (the worker owns the session).
 export type WorkerClient = {
   heartbeat(): Promise<{ attached: boolean }>
-  destroy(): Promise<void>
   emitEvent(type: SessionEventType, payload: unknown): Promise<SessionEvent>
 }
 
@@ -51,14 +46,18 @@ export const createClient = (baseUrl: string): ApiClient => ({
   workers: workersClient(baseUrl),
 })
 
-export const createWorkerClient = (baseUrl: string, apiToken: string): WorkerClient => {
+export const createWorkerClient = (
+  baseUrl: string,
+  workerToken: string,
+  sessionId: number,
+): WorkerClient => {
   const u = (p: string): string => `${baseUrl}${p}`
-  const auth = { authorization: `Bearer ${apiToken}` }
+  const auth = { authorization: `Bearer ${workerToken}` }
   return {
-    heartbeat: () => request(u('/sessions/me/heartbeat'), { method: 'POST', headers: auth }),
-    destroy: () => request(u('/sessions/me'), { method: 'DELETE', headers: auth }),
+    heartbeat: () =>
+      request(u(`/sessions/${sessionId}/heartbeat`), { method: 'POST', headers: auth }),
     emitEvent: (type, payload) =>
-      request(u('/sessions/me/events'), {
+      request(u(`/sessions/${sessionId}/events`), {
         method: 'POST',
         body: { type, payload },
         headers: auth,

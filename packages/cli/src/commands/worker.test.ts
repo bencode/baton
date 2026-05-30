@@ -40,6 +40,7 @@ describe('worker helpers', () => {
                 createdAt: 0,
                 alive: true,
               },
+              apiToken: 'wtok-test',
               outcome: 'created',
             }
           },

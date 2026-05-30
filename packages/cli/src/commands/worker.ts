@@ -1,7 +1,7 @@
 import { hostname as osHostname } from 'node:os'
 import type { Id } from '@baton/shared'
 import { defineCommand } from 'citty'
-import type { ApiClient, WorkerRegisterOutput } from '../client.ts'
+import { type ApiClient, createClient, type WorkerRegisterOutput } from '../client.ts'
 import { resolveBaseUrl } from '../config.ts'
 import { fmtWorker, renderList, renderOne, toJson } from '../output.ts'
 import {
@@ -9,8 +9,10 @@ import {
   projectConfigPath,
   saveProjectConfig,
   setWorker,
+  viewWorker,
 } from '../project-config.ts'
 import { clientFor, common, resolveProjectId } from '../util.ts'
+import { runWorkerDaemon } from '../worker/daemon.ts'
 import { machineIdPath, readOrCreateMachineId } from '../worker/machine-id.ts'
 
 // Resolve a worker positional arg: int id first, then name lookup.
@@ -62,6 +64,7 @@ export const registerWorker = async (
     id: out.worker.id,
     name: out.worker.name,
     machineId: out.worker.machineId,
+    apiToken: out.apiToken,
   })
   return { out, configPath: cfgPath }
 }
@@ -101,6 +104,23 @@ export const worker = defineCommand({
         console.log(`  machineId:      ${out.worker.machineId}`)
         console.log(`  machineId file: ${machineIdPath()}`)
         console.log(`  config saved:   ${configPath}`)
+      },
+    }),
+    run: defineCommand({
+      meta: {
+        name: 'run',
+        description:
+          'run the persistent worker daemon (listens for session create/delete commands)',
+      },
+      args: { ...common },
+      run: async () => {
+        const cfg = viewWorker(loadProjectConfig(projectConfigPath()))
+        const client = createClient(cfg.server)
+        const ac = new AbortController()
+        const stop = (): void => ac.abort()
+        process.on('SIGINT', stop)
+        process.on('SIGTERM', stop)
+        await runWorkerDaemon(cfg, client, ac.signal)
       },
     }),
     ls: defineCommand({

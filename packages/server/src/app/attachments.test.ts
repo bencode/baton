@@ -49,6 +49,49 @@ describe('server HTTP — attachments', () => {
     assert.equal(await dl.text(), 'hello-file')
   })
 
+  test('non-ASCII filename downloads without throwing (RFC 5987 content-disposition)', async () => {
+    const app = createApp(ctx.store)
+    const { session } = await seedSession(app)
+    const name = '杭州方案.txt'
+    const up = await app.request(
+      `/sessions/${session.id}/attachments?filename=${encodeURIComponent(name)}`,
+      {
+        method: 'POST',
+        body: new TextEncoder().encode('hi'),
+        headers: { 'content-type': 'text/plain' },
+      },
+    )
+    const meta = (await up.json()) as Attachment
+    assert.equal(meta.filename, name)
+    const dl = await app.request(meta.url)
+    assert.equal(dl.status, 200)
+    assert.equal(await dl.text(), 'hi')
+    const cd = dl.headers.get('content-disposition') ?? ''
+    assert.match(cd, /filename\*=UTF-8''/)
+    assert.ok(cd.includes(encodeURIComponent(name)))
+  })
+
+  test("filename* percent-encodes RFC 5987 non-attr chars ('()*)", async () => {
+    const app = createApp(ctx.store)
+    const { session } = await seedSession(app)
+    const name = "it's (v2)*.pdf"
+    const up = await app.request(
+      `/sessions/${session.id}/attachments?filename=${encodeURIComponent(name)}`,
+      {
+        method: 'POST',
+        body: new TextEncoder().encode('x'),
+        headers: { 'content-type': 'application/pdf' },
+      },
+    )
+    const meta = (await up.json()) as Attachment
+    const dl = await app.request(meta.url)
+    const cd = dl.headers.get('content-disposition') ?? ''
+    const ext = cd.split("filename*=UTF-8''")[1] ?? ''
+    // none of ' ( ) * survive literally in the ext-value
+    assert.doesNotMatch(ext, /['()*]/)
+    assert.ok(ext.includes('%27') && ext.includes('%28') && ext.includes('%2A'))
+  })
+
   test('upload to missing session → 404; unknown attachment → 404', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)

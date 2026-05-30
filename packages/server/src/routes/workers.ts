@@ -1,6 +1,9 @@
-import type { Id } from '@baton/shared'
+import type { Id, WorkerCommand } from '@baton/shared'
 import type { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
+import type { CommandBus } from '../command-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
+import { workerBearerAuth } from '../middleware/auth.ts'
 import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam, workerWithView } from '../views.ts'
 
@@ -8,7 +11,9 @@ export const registerWorkerRoutes = (
   app: Hono<AppEnv>,
   store: Store,
   liveness: LivenessTracker,
+  commands: CommandBus,
 ): void => {
+  const auth = workerBearerAuth(store)
   // Idempotent register (machineId-anchored). See store.workers.register
   // for the rule 1 / 2a / 2b / 2c algorithm.
   app.post('/workers', async c => {
@@ -42,7 +47,54 @@ export const registerWorkerRoutes = (
     }
     // First ping seeds liveness so the worker shows alive immediately.
     liveness.ping(out.worker.machineId)
-    return c.json({ worker: workerWithView(out.worker, liveness), outcome: out.kind }, 201)
+    // apiToken returned on every successful (re)register so the daemon can
+    // re-read it after losing local state.
+    return c.json(
+      { worker: workerWithView(out.worker, liveness), apiToken: out.apiToken, outcome: out.kind },
+      201,
+    )
+  })
+
+  // Worker command stream (worker-bearer). The persistent worker daemon
+  // subscribes here and receives session.create / session.delete commands.
+  // Like the session stream, this is live-only — no replay.
+  app.get('/workers/me/stream', auth, async c => {
+    const worker = c.get('worker')
+    const signal = c.req.raw.signal
+    return streamSSE(c, async stream => {
+      let resolve = (): void => {}
+      const pending: WorkerCommand[] = []
+      const wake = () => {
+        const r = resolve
+        resolve = () => {}
+        r()
+      }
+      const unsub = commands.subscribe(worker.id, cmd => {
+        pending.push(cmd)
+        wake()
+      })
+      signal.addEventListener('abort', wake)
+      const keepalive = setInterval(() => {
+        if (signal.aborted) return
+        stream.write(': keepalive\n\n').catch(() => {})
+      }, 30_000)
+      try {
+        while (!signal.aborted) {
+          while (pending.length > 0 && !signal.aborted) {
+            const cmd = pending.shift()
+            if (cmd) await stream.writeSSE({ data: JSON.stringify(cmd) })
+          }
+          if (signal.aborted) break
+          await new Promise<void>(r => {
+            resolve = r
+          })
+        }
+      } finally {
+        clearInterval(keepalive)
+        unsub()
+        signal.removeEventListener('abort', wake)
+      }
+    })
   })
 
   app.get('/workers/:id', async c => {

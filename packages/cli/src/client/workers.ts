@@ -8,7 +8,11 @@ export type WorkerRegisterInput = {
   hostname: string
 }
 export type WorkerRegisterOutcome = 'created' | 'reattached-machine' | 'claimed-legacy'
-export type WorkerRegisterOutput = { worker: WorkerView; outcome: WorkerRegisterOutcome }
+export type WorkerRegisterOutput = {
+  worker: WorkerView
+  apiToken: string
+  outcome: WorkerRegisterOutcome
+}
 
 export type WorkersClient = {
   register(input: WorkerRegisterInput): Promise<WorkerRegisterOutput>

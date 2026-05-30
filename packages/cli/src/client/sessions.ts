@@ -1,19 +1,24 @@
 import type { AgentKind, Attachment, Id, Session, SessionEvent, SessionMode } from '@baton/shared'
 import { request } from './request.ts'
 
-export type SessionRegisterInput = {
+// Create a session (collaboration metadata only). agentSessionId/worktreePath
+// are filled later by the owning worker via `materialize`. Returns the session
+// view (no token — the worker authenticates with its own apiToken).
+export type SessionCreateInput = {
   projectId: Id
   workerId: Id
-  mode: SessionMode
   name: string
-  agentKind: AgentKind
-  agentSessionId: string
-  worktreePath: string
+  mode?: SessionMode
+  agentKind?: AgentKind
 }
-export type SessionRegistered = Session & { apiToken: string }
 
 export type SessionsClient = {
-  register(input: SessionRegisterInput): Promise<SessionRegistered>
+  create(input: SessionCreateInput): Promise<Session>
+  materialize(
+    id: Id,
+    input: { agentSessionId: string; worktreePath: string },
+    workerToken: string,
+  ): Promise<Session>
   listByProject(projectId: Id): Promise<Session[]>
   get(id: Id): Promise<Session>
   findByName(projectId: Id, name: string): Promise<Session | null>
@@ -28,7 +33,13 @@ export type SessionsClient = {
 export const sessionsClient = (baseUrl: string): SessionsClient => {
   const u = (p: string): string => `${baseUrl}${p}`
   return {
-    register: input => request(u('/sessions'), { method: 'POST', body: input }),
+    create: input => request(u('/sessions'), { method: 'POST', body: input }),
+    materialize: (id, input, workerToken) =>
+      request(u(`/sessions/${id}`), {
+        method: 'PATCH',
+        body: input,
+        headers: { authorization: `Bearer ${workerToken}` },
+      }),
     listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
     get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
     findByName: async (projectId, name) => {

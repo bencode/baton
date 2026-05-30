@@ -12,9 +12,10 @@ import type { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import type { AttachmentStore } from '../attachments.ts'
 import type { BusyTracker } from '../busy.ts'
+import type { CommandBus } from '../command-bus.ts'
 import type { EventBus } from '../event-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
-import { bearerAuth } from '../middleware/auth.ts'
+import { workerBearerAuth } from '../middleware/auth.ts'
 import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam, sessionWithView } from '../views.ts'
 
@@ -22,6 +23,20 @@ import { type AppEnv, intParam, sessionWithView } from '../views.ts'
 // stream. We don't persist them anymore (browser does), but a runaway paste
 // still hurts everyone subscribed to the live stream.
 const MAX_IMAGE_DATA_URL = 8_000_000
+
+// RFC 5987 ext-value: encodeURIComponent leaves ' ( ) * literal, but those are
+// not attr-chars, so a strict parser can mis-read them (the apostrophe is the
+// field delimiter). Percent-encode them too.
+const rfc5987 = (s: string): string =>
+  encodeURIComponent(s).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+
+// HTTP header values are latin1 (ByteString) — a non-ASCII filename (e.g. a
+// Chinese name) throws when set. ASCII-fold the legacy `filename=` fallback and
+// carry the real UTF-8 name in RFC 5987 `filename*`.
+const contentDisposition = (filename: string): string => {
+  const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, "'")
+  return `inline; filename="${ascii}"; filename*=UTF-8''${rfc5987(filename)}`
+}
 
 // Ephemeral event identity. Session events are no longer persisted server-side
 // (the browser stores them per-session in IndexedDB). To keep the SSE wire
@@ -56,9 +71,14 @@ export const registerSessionRoutes = (
   sessionLiveness: LivenessTracker,
   busyTracker: BusyTracker,
   attachments: AttachmentStore,
+  commands: CommandBus,
 ): void => {
-  const auth = bearerAuth(store)
+  const auth = workerBearerAuth(store)
 
+  // Create a session row (collaboration metadata only) and push a session.create
+  // command to the owning worker, which materializes (worktree + agentSessionId)
+  // and spawns the session child process. No agentSessionId/worktreePath here —
+  // those are worker-assigned. Remote-friendly: the caller needs no local machine.
   app.post('/sessions', async c => {
     const body = (await c.req.json()) as {
       projectId?: Id
@@ -66,39 +86,26 @@ export const registerSessionRoutes = (
       mode?: SessionMode
       name?: string
       agentKind?: AgentKind
-      agentSessionId?: string
-      worktreePath?: string
     }
-    if (
-      !body.projectId ||
-      !body.workerId ||
-      !body.name ||
-      !body.mode ||
-      !body.agentKind ||
-      !body.agentSessionId ||
-      !body.worktreePath
-    )
-      return c.json(
-        {
-          error:
-            'projectId, workerId, name, mode, agentKind, agentSessionId, worktreePath required',
-        },
-        400,
-      )
+    if (!body.projectId || !body.workerId || !body.name)
+      return c.json({ error: 'projectId, workerId, name required' }, 400)
     const worker = await store.workers.get(body.workerId)
     if (!worker || worker.projectId !== body.projectId)
       return c.json({ error: 'worker not found in project' }, 404)
-    const reg = await store.sessions.register({
+    const session = await store.sessions.create({
       projectId: body.projectId,
       workerId: body.workerId,
-      mode: body.mode,
+      mode: body.mode ?? 'worker',
       name: body.name,
-      agentKind: body.agentKind,
-      agentSessionId: body.agentSessionId,
-      worktreePath: body.worktreePath,
+      agentKind: body.agentKind ?? 'claude-code',
     })
-    const view = await sessionWithView(reg, store, workerLiveness, sessionLiveness, busyTracker)
-    return c.json({ ...view, apiToken: reg.apiToken }, 201)
+    commands.publish(worker.id, {
+      cmd: 'session.create',
+      sessionId: session.id,
+      name: session.name,
+    })
+    const view = await sessionWithView(session, store, workerLiveness, sessionLiveness, busyTracker)
+    return c.json(view, 201)
   })
 
   app.get('/sessions/:id', async c => {
@@ -107,22 +114,43 @@ export const registerSessionRoutes = (
     return c.json(await sessionWithView(s, store, workerLiveness, sessionLiveness, busyTracker))
   })
 
-  // Session-private (bearer). Daemon pings this every 30s alongside the
-  // worker-level /workers/heartbeat. Server uses it to distinguish 'machine
-  // online' from 'this specific session has a live daemon attached'.
-  app.post('/sessions/me/heartbeat', auth, async c => {
-    const session = c.get('session')
-    sessionLiveness.ping(String(session.id))
+  // Worker fills in the agent session id + worktree it materialized (worker-bearer,
+  // must own the session).
+  app.patch('/sessions/:id', auth, async c => {
+    const id = intParam(c.req.param('id'))
+    const s = await store.sessions.get(id)
+    if (!s) return c.json({ error: 'not found' }, 404)
+    if (s.workerId !== c.get('worker').id) return c.json({ error: 'forbidden' }, 403)
+    const body = (await c.req.json()) as { agentSessionId?: string; worktreePath?: string }
+    if (!body.agentSessionId || !body.worktreePath)
+      return c.json({ error: 'agentSessionId, worktreePath required' }, 400)
+    const updated = await store.sessions.materialize(id, {
+      agentSessionId: body.agentSessionId,
+      worktreePath: body.worktreePath,
+    })
+    return c.json(
+      await sessionWithView(updated, store, workerLiveness, sessionLiveness, busyTracker),
+    )
+  })
+
+  // Session-level liveness ping (worker-bearer, must own session). Distinguishes
+  // 'machine online' from 'this session has a live child daemon attached'.
+  app.post('/sessions/:id/heartbeat', auth, async c => {
+    const id = intParam(c.req.param('id'))
+    const s = await store.sessions.get(id)
+    if (!s) return c.json({ error: 'not found' }, 404)
+    if (s.workerId !== c.get('worker').id) return c.json({ error: 'forbidden' }, 403)
+    sessionLiveness.ping(String(id))
     return c.json({ attached: true })
   })
 
-  // Session DELETE (no auth, v0). Drops the row. Browser-side events for this
-  // session keep living in IndexedDB until the user clears them — by design,
-  // since the local store is the user's own data, not ours to wipe.
+  // Session DELETE (no auth, v0). Tell the owning worker to tear down its child,
+  // then drop the row. Browser-side events live in IndexedDB — not ours to wipe.
   app.delete('/sessions/:id', async c => {
     const id = intParam(c.req.param('id'))
     const s = await store.sessions.get(id)
     if (!s) return c.json({ error: 'not found' }, 404)
+    commands.publish(s.workerId, { cmd: 'session.delete', sessionId: id })
     await store.sessions.destroy(id)
     sessionLiveness.forget(String(id))
     busyTracker.forget(id)
@@ -131,20 +159,21 @@ export const registerSessionRoutes = (
     return c.body(null, 204)
   })
 
-  // Daemon-emitted events (bearer). Server doesn't persist; it synthesizes
-  // an ephemeral envelope and publishes to the bus so subscribed browsers /
-  // CLIs receive it live. turn_start / turn_complete / turn_error also toggle
-  // busyTracker — the source of truth for the UI busy pulse now that there's
-  // no DB timeline to derive from.
-  app.post('/sessions/me/events', auth, async c => {
-    const session = c.get('session')
+  // Session child emits events (worker-bearer, must own session). Server doesn't
+  // persist; it synthesizes an ephemeral envelope and publishes to the bus so
+  // subscribed browsers / CLIs receive it live. turn_start / turn_complete /
+  // turn_error also toggle busyTracker — the UI busy-pulse source of truth.
+  app.post('/sessions/:id/events', auth, async c => {
+    const id = intParam(c.req.param('id'))
+    const s = await store.sessions.get(id)
+    if (!s) return c.json({ error: 'not found' }, 404)
+    if (s.workerId !== c.get('worker').id) return c.json({ error: 'forbidden' }, 403)
     const body = (await c.req.json()) as { type?: SessionEventType; payload?: unknown }
     if (!body.type) return c.json({ error: 'type required' }, 400)
-    if (body.type === 'turn_start') busyTracker.set(session.id, true)
-    else if (body.type === 'turn_complete' || body.type === 'turn_error')
-      busyTracker.set(session.id, false)
-    const ev = synthesize(session.id, body.type, body.payload ?? null)
-    bus.publish(session.id, ev)
+    if (body.type === 'turn_start') busyTracker.set(id, true)
+    else if (body.type === 'turn_complete' || body.type === 'turn_error') busyTracker.set(id, false)
+    const ev = synthesize(id, body.type, body.payload ?? null)
+    bus.publish(id, ev)
     return c.json(ev, 201)
   })
 
@@ -205,7 +234,7 @@ export const registerSessionRoutes = (
     if (!found) return c.json({ error: 'not found' }, 404)
     c.header('content-type', found.meta.contentType)
     c.header('content-length', String(found.meta.size))
-    c.header('content-disposition', `inline; filename="${found.meta.filename}"`)
+    c.header('content-disposition', contentDisposition(found.meta.filename))
     const web = Readable.toWeb(createReadStream(found.path)) as ReadableStream<Uint8Array>
     return c.body(web)
   })
