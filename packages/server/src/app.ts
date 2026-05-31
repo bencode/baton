@@ -6,6 +6,7 @@ import { createEventBus, type EventBus } from './event-bus.ts'
 import { createLiveness, type LivenessTracker } from './liveness.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
 import { registerRequirementRoutes } from './routes/requirements.ts'
+import { registerSessionAttachmentRoutes } from './routes/session-attachments.ts'
 import { registerSessionRoutes } from './routes/sessions.ts'
 import { registerTaskRoutes } from './routes/tasks.ts'
 import { registerWorkerRoutes } from './routes/workers.ts'
@@ -53,5 +54,6 @@ export const createApp = (
     attachments,
     commands,
   )
+  registerSessionAttachmentRoutes(app, store, attachments)
   return app
 }

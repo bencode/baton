@@ -1,13 +1,4 @@
-import { createReadStream } from 'node:fs'
-import { Readable } from 'node:stream'
-import type {
-  AgentKind,
-  Attachment,
-  Id,
-  SessionEvent,
-  SessionEventType,
-  SessionMode,
-} from '@baton/shared'
+import type { AgentKind, Attachment, Id, SessionEventType, SessionMode } from '@baton/shared'
 import type { Context, Hono } from 'hono'
 import type { AttachmentStore } from '../attachments.ts'
 import type { BusyTracker } from '../busy.ts'
@@ -15,6 +6,7 @@ import type { CommandBus } from '../command-bus.ts'
 import type { EventBus } from '../event-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
+import { forgetSessionSeq, synthesize } from '../session-events.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
@@ -24,45 +16,6 @@ import { type AppEnv, intParam, sessionWithView } from '../views.ts'
 // stream. We don't persist them anymore (browser does), but a runaway paste
 // still hurts everyone subscribed to the live stream.
 const MAX_IMAGE_DATA_URL = 8_000_000
-
-// RFC 5987 ext-value: encodeURIComponent leaves ' ( ) * literal, but those are
-// not attr-chars, so a strict parser can mis-read them (the apostrophe is the
-// field delimiter). Percent-encode them too.
-const rfc5987 = (s: string): string =>
-  encodeURIComponent(s).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
-
-// HTTP header values are latin1 (ByteString) — a non-ASCII filename (e.g. a
-// Chinese name) throws when set. ASCII-fold the legacy `filename=` fallback and
-// carry the real UTF-8 name in RFC 5987 `filename*`.
-const contentDisposition = (filename: string): string => {
-  const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, "'")
-  return `inline; filename="${ascii}"; filename*=UTF-8''${rfc5987(filename)}`
-}
-
-// Ephemeral event identity. Session events are no longer persisted server-side
-// (the browser stores them per-session in IndexedDB). To keep the SSE wire
-// format identical for clients, we synthesize `id`, `sequence`, and `createdAt`
-// in memory at publish time.
-//
-// Sequence counters are per-(server-lifetime × session). On server restart
-// they reset to 0 — harmless because there's no history replay to dedupe
-// against; SSE clients only dedupe within a single connection.
-let nextEphemeralId = 1
-const sessionSeq = new Map<Id, number>()
-const nextSeq = (sessionId: Id): number => {
-  const cur = (sessionSeq.get(sessionId) ?? -1) + 1
-  sessionSeq.set(sessionId, cur)
-  return cur
-}
-
-const synthesize = (sessionId: Id, type: SessionEventType, payload: unknown): SessionEvent => ({
-  id: nextEphemeralId++,
-  sessionId,
-  sequence: nextSeq(sessionId),
-  type,
-  payload,
-  createdAt: Date.now(),
-})
 
 export const registerSessionRoutes = (
   app: Hono<AppEnv>,
@@ -176,7 +129,7 @@ export const registerSessionRoutes = (
     await store.sessions.destroy(id)
     runtime.forget(id)
     busyTracker.forget(id)
-    sessionSeq.delete(id)
+    forgetSessionSeq(id)
     await attachments.forgetSession(id)
     return c.body(null, 204)
   })
@@ -232,36 +185,6 @@ export const registerSessionRoutes = (
     const ev = synthesize(sessionId, 'user_message', payload)
     bus.publish(sessionId, ev)
     return c.json(ev, 201)
-  })
-
-  // Upload a chat attachment (no auth in v0, like /messages). The raw request
-  // body IS the file — streamed straight to disk, no multipart parse, no size
-  // cap (the Agent decides what it can handle). filename rides a query param,
-  // the file's media type rides content-type. Returns the Attachment descriptor.
-  app.post('/sessions/:id/attachments', async c => {
-    const sessionId = intParam(c.req.param('id'))
-    const session = await store.sessions.get(sessionId)
-    if (!session) return c.json({ error: 'not found' }, 404)
-    const meta = await attachments.put(sessionId, {
-      filename: c.req.query('filename') || 'file',
-      contentType: c.req.header('content-type') || 'application/octet-stream',
-      body: c.req.raw.body,
-    })
-    return c.json(meta, 201)
-  })
-
-  // Download a stored attachment (no auth in v0). Streamed from disk so large
-  // files don't get buffered. Used by the Worker to fetch files into its
-  // worktree, and later by the web UI for preview.
-  app.get('/sessions/:id/attachments/:attId', async c => {
-    const sessionId = intParam(c.req.param('id'))
-    const found = await attachments.get(sessionId, c.req.param('attId'))
-    if (!found) return c.json({ error: 'not found' }, 404)
-    c.header('content-type', found.meta.contentType)
-    c.header('content-length', String(found.meta.size))
-    c.header('content-disposition', contentDisposition(found.meta.filename))
-    const web = Readable.toWeb(createReadStream(found.path)) as ReadableStream<Uint8Array>
-    return c.body(web)
   })
 
   // Live tail. No history replay — events aren't persisted server-side. A
