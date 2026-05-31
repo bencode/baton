@@ -22,3 +22,6 @@ bun.lockb
 
 # baton local state (per-checkout: server URL, worker identity, session tokens)
 .baton.json
+
+# Local drafts (design notes / plans) — kept out of the repo
+docs/
