@@ -59,6 +59,9 @@ type ComposerProps = {
   uploading: boolean
   uploadError: string | null
   sending: boolean
+  active: boolean
+  sendError: string | null
+  onResume: () => void
   onSend: () => void
 }
 
@@ -76,12 +79,15 @@ export const Composer = ({
   uploading,
   uploadError,
   sending,
+  active,
+  sendError,
+  onResume,
   onSend,
 }: ComposerProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [dragging, setDragging] = useState(false)
   const busy = sending || uploading
-  const canSend = !busy && (draft.trim().length > 0 || attachments.length > 0)
+  const canSend = active && !busy && (draft.trim().length > 0 || attachments.length > 0)
   return (
     <div className="shrink-0 border-t border-gray-200 bg-white p-3">
       {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone is the whole card */}
@@ -96,12 +102,13 @@ export const Composer = ({
           setDragging(false)
           onAddFiles(Array.from(e.dataTransfer.files))
         }}
-        className={`mx-auto max-w-5xl rounded-xl border bg-white px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'}`}
+        className={`mx-auto max-w-5xl rounded-xl border px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'} ${active ? 'bg-white' : 'bg-gray-50'}`}
       >
         {attachments.length > 0 && (
           <AttachmentStrip attachments={attachments} onRemove={onRemoveAttachment} />
         )}
         {uploadError && <p className="mb-2 text-xs text-red-600">{uploadError}</p>}
+        {sendError && <p className="mb-2 text-xs text-red-600">{sendError}</p>}
         <textarea
           value={draft}
           onChange={e => setDraft(e.target.value)}
@@ -117,16 +124,22 @@ export const Composer = ({
               if (canSend) onSend()
             }
           }}
-          placeholder="message… (⌘/Ctrl-Enter to send · 📎/drag/paste to attach)"
-          className="w-full resize-none border-0 bg-transparent px-1 text-sm text-gray-800 focus:outline-none focus:ring-0"
+          disabled={!active}
+          placeholder={
+            active
+              ? 'message… (⌘/Ctrl-Enter to send · 📎/drag/paste to attach)'
+              : 'session inactive — resume to send'
+          }
+          className="w-full resize-none border-0 bg-transparent px-1 text-sm text-gray-800 focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
           rows={2}
         />
         <div className="mt-1.5 flex items-center">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
+            disabled={!active}
             aria-label="attach files"
-            className="text-gray-400 transition-colors hover:text-gray-700"
+            className="text-gray-400 transition-colors hover:text-gray-700 disabled:opacity-40"
           >
             <PaperclipIcon />
           </button>
@@ -140,15 +153,25 @@ export const Composer = ({
               e.target.value = ''
             }}
           />
-          <button
-            type="button"
-            onClick={onSend}
-            disabled={!canSend}
-            aria-label={busy ? 'sending' : 'send message'}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400"
-          >
-            {busy ? <Spinner /> : <SendIcon />}
-          </button>
+          {active ? (
+            <button
+              type="button"
+              onClick={onSend}
+              disabled={!canSend}
+              aria-label={busy ? 'sending' : 'send message'}
+              className="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400"
+            >
+              {busy ? <Spinner /> : <SendIcon />}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onResume}
+              className="ml-auto rounded-md border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
+            >
+              ▸ resume session
+            </button>
+          )}
         </div>
       </div>
     </div>

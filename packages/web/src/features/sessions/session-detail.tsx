@@ -33,6 +33,7 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
 
   // Auto-scroll the event list to the bottom whenever new items arrive.
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -75,18 +76,30 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
     const text = draft.trim()
     if (!text && attachments.length === 0) return
     setSending(true)
+    setSendError(null)
     try {
       await api.sessions.sendMessage(sessionId, text, attachments)
       setDraft('')
       setAttachments([])
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      // 409 = session not active (worker child not running). Surface, don't swallow.
+      setSendError(msg.includes('409') ? '会话未激活 — 先 resume 再发送' : '发送失败，请重试')
     } finally {
       setSending(false)
     }
   }
 
+  // Lifecycle control: the 2s session poll refreshes `attached` after these land.
+  const resume = () => {
+    setSendError(null)
+    void api.sessions.resume(sessionId).catch(() => {})
+  }
+  const stop = () => void api.sessions.stop(sessionId).catch(() => {})
+
   return (
     <div className="flex h-full flex-col">
-      <SessionHeader session={session} streamStatus={status} />
+      <SessionHeader session={session} active={session.attached} onStop={stop} />
       <ConnectionBanner streamStatus={status} alive={session.alive} attached={session.attached} />
       <EventStream items={items} scrollRef={scrollRef} />
       <Composer
@@ -98,6 +111,9 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
         uploading={uploading}
         uploadError={uploadError}
         sending={sending}
+        active={session.attached}
+        sendError={sendError}
+        onResume={resume}
         onSend={() => void send()}
       />
     </div>

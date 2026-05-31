@@ -5,10 +5,13 @@ import { useState } from 'react'
 // surface stays a quiet reading area. Diagnostic info (cwd, full agent UUID)
 // is folded behind a single ⓘ toggle so they don't dominate every refresh.
 //
-// Session has no persistent state field (M2.9). No chip, no badge — we did
-// it for a reason. The dot color reads stream liveness off `streamStatus`
-// without needing extra props.
-type HeaderProps = { session: Session; streamStatus: string }
+// `active` reflects whether the worker has a live child for this session
+// (instant via SessionView.attached); browser-SSE health lives in the banner.
+type HeaderProps = {
+  session: Session
+  active: boolean
+  onStop: () => void
+}
 
 const truncateUuid = (id: string): string => {
   if (id.length <= 12) return id
@@ -34,17 +37,8 @@ const CopyButton = ({ text }: { text: string }) => {
   )
 }
 
-export const SessionHeader = ({ session, streamStatus }: HeaderProps) => {
+export const SessionHeader = ({ session, active, onStop }: HeaderProps) => {
   const [open, setOpen] = useState(false)
-  // Stream liveness color: emerald=live, amber=connecting, red=error, else gray.
-  const streamDot =
-    streamStatus === 'open'
-      ? 'bg-emerald-500'
-      : streamStatus === 'connecting'
-        ? 'bg-amber-400'
-        : streamStatus === 'error'
-          ? 'bg-red-500'
-          : 'bg-gray-300'
   return (
     <div className="shrink-0 border-b border-gray-200 bg-white px-6 py-3">
       <div className="flex items-center gap-3 text-sm">
@@ -63,14 +57,25 @@ export const SessionHeader = ({ session, streamStatus }: HeaderProps) => {
         <span aria-hidden className="text-gray-300">
           ·
         </span>
-        <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-          <span className={`h-1.5 w-1.5 rounded-full ${streamDot}`} />
-          stream {streamStatus}
+        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-gray-300'}`}
+          />
+          {active ? 'active' : 'inactive'}
         </span>
+        {active && (
+          <button
+            type="button"
+            onClick={onStop}
+            className="rounded border border-gray-200 px-1.5 text-xs text-gray-500 transition-colors hover:border-amber-300 hover:text-amber-600"
+          >
+            stop
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setOpen(o => !o)}
-          className="ml-auto text-xs text-gray-400 transition-colors hover:text-gray-700"
+          className="text-xs text-gray-400 transition-colors hover:text-gray-700"
           aria-label={open ? 'hide details' : 'show details'}
         >
           {open ? '▾' : 'ⓘ'}
