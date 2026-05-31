@@ -17,7 +17,7 @@ export const prismaTasks = (prisma: PrismaClient): Store['tasks'] => ({
           projectId: parent.projectId,
           code,
           title: input.title,
-          spec: input.spec,
+          body: input.body,
           dependsOn: JSON.stringify(input.dependsOn ?? []),
           status: input.status ?? 'todo',
         },
@@ -40,7 +40,7 @@ export const prismaTasks = (prisma: PrismaClient): Store['tasks'] => ({
         where: { id },
         data: {
           title: patch.title,
-          spec: patch.spec,
+          body: patch.body,
           dependsOn: patch.dependsOn ? JSON.stringify(patch.dependsOn) : undefined,
           status: patch.status,
         },

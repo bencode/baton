@@ -9,6 +9,7 @@ import type {
   SessionEvent,
   SessionView,
   Task,
+  TaskComment,
   TaskStatus,
   WorkerView,
   Workspace,
@@ -40,12 +41,13 @@ export type RequirementInput = {
   projectId: Id
   title: string
   description?: string
+  body?: string
   resources?: ResourceRef[]
 }
 export type TaskInput = {
   requirementId: Id
   title: string
-  spec?: string
+  body?: string
   dependsOn?: Id[]
 }
 
@@ -79,6 +81,8 @@ export type Api = {
     getByCode(projectId: Id, code: Code): Promise<Task>
     setStatus(id: Id, status: TaskStatus): Promise<Task>
     remove(id: Id): Promise<void>
+    listComments(id: Id): Promise<TaskComment[]>
+    addComment(id: Id, body: string, workerId?: Id): Promise<TaskComment>
   }
   sessions: {
     // Read endpoints return the runtime view (alive/attached/busy) so the UI can
@@ -93,6 +97,8 @@ export type Api = {
     rename(id: Id, name: string): Promise<SessionView>
     // Ask the worker to auto-title this session (no-op unless still unnamed).
     autotitle(id: Id): Promise<SessionView>
+    // Delete the session (worker tears down its child + worktree; row dropped).
+    remove(id: Id): Promise<void>
     sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
     uploadAttachment(id: Id, file: File): Promise<Attachment>
   }
@@ -148,6 +154,9 @@ export const createApi = (base: string = API_BASE): Api => {
         (await fetchItemByCode(projectId, code, 'task')) as Task,
       setStatus: (id, status) => request(u(`/tasks/${id}`), { method: 'PATCH', body: { status } }),
       remove: id => request(u(`/tasks/${id}`), { method: 'DELETE' }),
+      listComments: id => request(u(`/tasks/${id}/comments`), { method: 'GET' }),
+      addComment: (id, body, workerId) =>
+        request(u(`/tasks/${id}/comments`), { method: 'POST', body: { body, workerId } }),
     },
     sessions: {
       listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
@@ -158,6 +167,7 @@ export const createApi = (base: string = API_BASE): Api => {
       rename: (id, name) =>
         request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
       autotitle: id => request(u(`/sessions/${id}/autotitle`), { method: 'POST' }),
+      remove: id => request(u(`/sessions/${id}`), { method: 'DELETE' }),
       sendMessage: (id, text, attachments) =>
         request(u(`/sessions/${id}/messages`), {
           method: 'POST',

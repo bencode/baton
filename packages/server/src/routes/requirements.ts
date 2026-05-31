@@ -5,18 +5,19 @@ import { type AppEnv, intParam } from '../views.ts'
 
 export const registerRequirementRoutes = (app: Hono<AppEnv>, store: Store): void => {
   app.post('/requirements', async c => {
-    const body = (await c.req.json()) as {
+    const reqBody = (await c.req.json()) as {
       projectId?: Id
       title?: string
       description?: string
+      body?: string
       resources?: ResourceRef[]
       status?: RequirementStatus
     }
-    if (!body.projectId || !body.title)
+    if (!reqBody.projectId || !reqBody.title)
       return c.json({ error: 'projectId and title required' }, 400)
-    const { projectId, title, description, resources, status } = body
+    const { projectId, title, description, body, resources, status } = reqBody
     return c.json(
-      await store.requirements.create({ projectId, title, description, resources, status }),
+      await store.requirements.create({ projectId, title, description, body, resources, status }),
       201,
     )
   })

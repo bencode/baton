@@ -39,6 +39,43 @@ describe('server HTTP — core', () => {
     assert.equal(tasks[0]?.id, t.id)
   })
 
+  test('task comments: append-only over HTTP, ordered, with worker attribution', async () => {
+    const app = createApp(ctx.store)
+    const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as WithId
+    const p = (await (
+      await postJson(app, '/projects', { workspaceId: w.id, name: 'p' })
+    ).json()) as WithId
+    const r = (await (
+      await postJson(app, '/requirements', { projectId: p.id, title: 'login' })
+    ).json()) as WithId
+    const t = (await (
+      await postJson(app, '/tasks', { requirementId: r.id, title: 'impl' })
+    ).json()) as WithId
+
+    assert.equal((await postJson(app, `/tasks/${t.id}/comments`, { body: 'human note' })).status, 201)
+    const second = await postJson(app, `/tasks/${t.id}/comments`, {
+      body: 'agent hand-off',
+      workerId: 42,
+    })
+    assert.equal(second.status, 201)
+
+    const list = (await (await app.request(`/tasks/${t.id}/comments`)).json()) as {
+      body: string
+      workerId?: number
+    }[]
+    assert.deepEqual(
+      list.map(x => x.body),
+      ['human note', 'agent hand-off'],
+    )
+    assert.equal(list[0]?.workerId, undefined)
+    assert.equal(list[1]?.workerId, 42)
+
+    // missing body → 400; comment on a missing task → 404
+    assert.equal((await postJson(app, `/tasks/${t.id}/comments`, {})).status, 400)
+    assert.equal((await postJson(app, '/tasks/999/comments', { body: 'x' })).status, 404)
+    assert.equal((await app.request('/tasks/999/comments')).status, 404)
+  })
+
   test('items lookup resolves R / T (sessions navigate by int id, not S-N)', async () => {
     const app = createApp(ctx.store)
     const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as WithId

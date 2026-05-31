@@ -20,6 +20,7 @@ export type Requirement = {
   code: Code // 'R-1', 'R-2', ... — project-scoped human reference
   title: string
   description?: string
+  body?: string // detailed content (Markdown); rendered with the shared Markdown component
   resources: ResourceRef[]
   status: RequirementStatus // stored, not derived
   createdAt: number

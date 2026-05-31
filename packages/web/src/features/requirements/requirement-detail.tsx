@@ -1,4 +1,5 @@
 import type { Code, Id } from '@baton/shared'
+import { Markdown } from '../../components/markdown'
 import { StatusBadge } from '../../components/status-badge'
 import { useRequirementByCode } from './use-requirements'
 
@@ -22,6 +23,7 @@ export const RequirementDetail = ({ projectId, code }: RequirementDetailProps) =
         <StatusBadge status={req.status} />
       </div>
       {req.description && <p className="text-sm text-gray-600">{req.description}</p>}
+      {req.body && <Markdown text={req.body} />}
     </div>
   )
 }

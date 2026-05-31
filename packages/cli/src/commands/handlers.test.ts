@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import type { ApiClient } from '../client.ts'
 import { setRequirementStatus } from './requirement.ts'
-import { createTask } from './task.ts'
+import { addTaskComment, createTask, listTaskComments } from './task.ts'
 import { createWorkspace, removeWorkspace } from './workspace.ts'
 
 describe('command handlers (fake client)', () => {
@@ -75,5 +75,33 @@ describe('command handlers (fake client)', () => {
     const out = await createTask(c, { requirementId: 1, title: 'impl', dependsOn: [2] }, false)
     assert.deepEqual(input, { requirementId: 1, title: 'impl', dependsOn: [2] })
     assert.match(out, /T-1.*\[todo\].*impl/)
+  })
+
+  test('addTaskComment forwards (taskId, body, workerId) and renders attribution', async () => {
+    let got: [number, string, number | undefined] | null = null
+    const c = {
+      tasks: {
+        addComment: async (id: number, body: string, workerId?: number) => {
+          got = [id, body, workerId]
+          return { id: 5, taskId: id, body, workerId, createdAt: 0 }
+        },
+      },
+    } as unknown as ApiClient
+    const out = await addTaskComment(c, 7, 'hand-off', 3, false)
+    assert.deepEqual(got, [7, 'hand-off', 3])
+    assert.equal(out, 'worker#3  hand-off')
+  })
+
+  test('listTaskComments renders comments in order, human author as "you"', async () => {
+    const c = {
+      tasks: {
+        listComments: async (id: number) => [
+          { id: 1, taskId: id, body: 'human note', createdAt: 0 },
+          { id: 2, taskId: id, body: 'agent note', workerId: 3, createdAt: 0 },
+        ],
+      },
+    } as unknown as ApiClient
+    const out = await listTaskComments(c, 7, false)
+    assert.equal(out, 'you  human note\nworker#3  agent note')
   })
 })

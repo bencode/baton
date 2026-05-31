@@ -3,6 +3,7 @@ import { toRequirement, toTask } from './mappers.ts'
 import { prismaProjects } from './prisma/projects.ts'
 import { prismaRequirements } from './prisma/requirements.ts'
 import { prismaSessions } from './prisma/sessions.ts'
+import { prismaTaskComments } from './prisma/task-comments.ts'
 import { prismaTasks } from './prisma/tasks.ts'
 import { prismaWorkers } from './prisma/workers.ts'
 import { prismaWorkspaces } from './prisma/workspaces.ts'
@@ -16,6 +17,7 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
   projects: prismaProjects(prisma),
   requirements: prismaRequirements(prisma),
   tasks: prismaTasks(prisma),
+  taskComments: prismaTaskComments(prisma),
   sessions: prismaSessions(prisma),
   workers: prismaWorkers(prisma),
   getRequirementWithTasks: async id => {

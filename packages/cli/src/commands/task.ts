@@ -1,12 +1,12 @@
 import type { Id, TaskStatus } from '@baton/shared'
 import { defineCommand } from 'citty'
 import type { ApiClient } from '../client.ts'
-import { fmtTask, removed, renderList, renderOne } from '../output.ts'
+import { fmtComment, fmtTask, removed, renderList, renderOne } from '../output.ts'
 import { clientFor, common, resolveProjectId, splitCsv } from '../util.ts'
 
 export const createTask = (
   c: ApiClient,
-  input: { requirementId: Id; title: string; spec?: string; dependsOn?: Id[] },
+  input: { requirementId: Id; title: string; body?: string; dependsOn?: Id[] },
   json: boolean,
 ): Promise<string> => c.tasks.create(input).then(t => renderOne(t, fmtTask, json))
 export const listTasks = (c: ApiClient, requirementId: Id, json: boolean): Promise<string> =>
@@ -21,6 +21,16 @@ export const setTaskStatus = (
 ): Promise<string> => c.tasks.setStatus(id, status).then(t => renderOne(t, fmtTask, json))
 export const removeTask = (c: ApiClient, id: Id, label: string, json: boolean): Promise<string> =>
   c.tasks.remove(id).then(() => removed('task', label, json))
+export const addTaskComment = (
+  c: ApiClient,
+  taskId: Id,
+  body: string,
+  workerId: Id | undefined,
+  json: boolean,
+): Promise<string> =>
+  c.tasks.addComment(taskId, body, workerId).then(x => renderOne(x, fmtComment, json))
+export const listTaskComments = (c: ApiClient, taskId: Id, json: boolean): Promise<string> =>
+  c.tasks.listComments(taskId).then(xs => renderList(xs, fmtComment, json))
 
 const resolveReqByCode = async (c: ApiClient, projectId: Id, code: string): Promise<Id> =>
   (await c.requirements.getByCode(projectId, code)).id
@@ -36,7 +46,7 @@ export const task = defineCommand({
         title: { type: 'positional', required: true },
         requirement: { type: 'string', required: true, description: 'requirement code (R-N)' },
         project: { type: 'string', description: 'project id (overrides .baton.json)' },
-        spec: { type: 'string', description: 'short instruction' },
+        body: { type: 'string', description: 'task body (markdown)' },
         deps: { type: 'string', description: 'comma-separated dependency task codes (T-N,T-N)' },
         ...common,
       },
@@ -54,7 +64,7 @@ export const task = defineCommand({
             {
               requirementId,
               title: args.title,
-              spec: args.spec,
+              body: args.body,
               dependsOn: dependsOn.length ? dependsOn : undefined,
             },
             Boolean(args.json),
@@ -116,6 +126,40 @@ export const task = defineCommand({
         const c = clientFor(args)
         const id = await resolveTaskByCode(c, resolveProjectId(args), args.code)
         console.log(await removeTask(c, id, args.code, Boolean(args.json)))
+      },
+    }),
+    comment: defineCommand({
+      meta: { name: 'comment', description: 'append-only task comments' },
+      subCommands: {
+        add: defineCommand({
+          meta: { name: 'add', description: 'add a comment to a task' },
+          args: {
+            code: { type: 'positional', required: true, description: 'task code (T-N)' },
+            body: { type: 'positional', required: true, description: 'comment text (markdown)' },
+            worker: { type: 'string', description: 'attribute to a worker id (omit = human)' },
+            project: { type: 'string', description: 'project id (overrides .baton.json)' },
+            ...common,
+          },
+          run: async ({ args }) => {
+            const c = clientFor(args)
+            const id = await resolveTaskByCode(c, resolveProjectId(args), args.code)
+            const workerId = args.worker ? Number(args.worker) : undefined
+            console.log(await addTaskComment(c, id, args.body, workerId, Boolean(args.json)))
+          },
+        }),
+        ls: defineCommand({
+          meta: { name: 'ls', description: 'list a task’s comments in order' },
+          args: {
+            code: { type: 'positional', required: true, description: 'task code (T-N)' },
+            project: { type: 'string', description: 'project id (overrides .baton.json)' },
+            ...common,
+          },
+          run: async ({ args }) => {
+            const c = clientFor(args)
+            const id = await resolveTaskByCode(c, resolveProjectId(args), args.code)
+            console.log(await listTaskComments(c, id, Boolean(args.json)))
+          },
+        }),
       },
     }),
   },

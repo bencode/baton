@@ -27,6 +27,19 @@ describe('Store contract — requirements', () => {
     assert.deepEqual(got?.resources, [{ kind: 'doc', uri: 'docs/login.md', label: 'spec' }])
   })
 
+  test('requirement: markdown body round-trips on create and update', async () => {
+    const w = await ctx.store.workspaces.create({ name: 'w' })
+    const p = await ctx.store.projects.create({ workspaceId: w.id, name: 'p' })
+    const r = await ctx.store.requirements.create({
+      projectId: p.id,
+      title: 'x',
+      body: '## goal\n- a\n- b',
+    })
+    assert.equal((await ctx.store.requirements.get(r.id))?.body, '## goal\n- a\n- b')
+    const updated = await ctx.store.requirements.update(r.id, { body: '# changed' })
+    assert.equal(updated.body, '# changed')
+  })
+
   test('requirement.update advances product-dimension status', async () => {
     const w = await ctx.store.workspaces.create({ name: 'w' })
     const p = await ctx.store.projects.create({ workspaceId: w.id, name: 'p' })

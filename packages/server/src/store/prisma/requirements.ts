@@ -13,6 +13,7 @@ export const prismaRequirements = (prisma: PrismaClient): Store['requirements'] 
           code,
           title: input.title,
           description: input.description,
+          body: input.body,
           resources: JSON.stringify(input.resources ?? []),
           status: input.status ?? 'active',
         },
@@ -38,6 +39,7 @@ export const prismaRequirements = (prisma: PrismaClient): Store['requirements'] 
         data: {
           title: patch.title,
           description: patch.description,
+          body: patch.body,
           resources: patch.resources ? JSON.stringify(patch.resources) : undefined,
           status: patch.status,
         },

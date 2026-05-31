@@ -9,6 +9,7 @@ import type {
   Session,
   SessionMode,
   Task,
+  TaskComment,
   TaskStatus,
   Worker,
   Workspace,
@@ -22,28 +23,32 @@ export type RequirementCreate = {
   projectId: Id
   title: string
   description?: string
+  body?: string
   resources?: ResourceRef[]
   status?: RequirementStatus
 }
 export type RequirementPatch = Partial<{
   title: string
   description: string
+  body: string
   resources: ResourceRef[]
   status: RequirementStatus
 }>
 export type TaskCreate = {
   requirementId: Id
   title: string
-  spec?: string
+  body?: string
   dependsOn?: Id[]
   status?: TaskStatus
 }
 export type TaskPatch = Partial<{
   title: string
-  spec: string
+  body: string
   dependsOn: Id[]
   status: TaskStatus
 }>
+// Comments are append-only — created one at a time, never updated. No patch type.
+export type TaskCommentCreate = { taskId: Id; body: string; workerId?: Id }
 
 export type RequirementWithTasks = { requirement: Requirement; tasks: Task[] }
 
@@ -108,6 +113,12 @@ export type Store = {
     listByRequirement(requirementId: Id): Promise<Task[]>
     update(id: Id, patch: TaskPatch): Promise<Task>
     delete(id: Id): Promise<void>
+  }
+  // Append-only collaboration log on a Task. Create = single INSERT; list in
+  // insertion order. No update/delete (cascades away with its Task).
+  taskComments: {
+    create(input: TaskCommentCreate): Promise<TaskComment>
+    listByTask(taskId: Id): Promise<TaskComment[]>
   }
   sessions: {
     create(input: SessionCreate): Promise<Session>

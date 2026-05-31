@@ -12,9 +12,21 @@ export type Task = {
   projectId: Id
   code: Code // 'T-1', 'T-2', ...
   title: string
-  spec?: string // short instruction; full spec lives in the repo, referenced via Requirement.resources
+  body?: string // detailed task content (Markdown); rendered with the shared Markdown component
   dependsOn: Id[] // prerequisite task ids (int FKs); presentation layers translate to codes
   status: TaskStatus
   createdAt: number
   updatedAt: number
+}
+
+// Append-only comment on a Task: the collaboration record (progress, hand-off
+// notes) and the cold-start memory a resuming worker reads. Text + git
+// references only — file payloads travel over chat/Send, never on a Task.
+// workerId undefined = a human author; set = the worker/agent that wrote it.
+export type TaskComment = {
+  id: Id
+  taskId: Id
+  body: string
+  workerId?: Id
+  createdAt: number
 }

@@ -6,7 +6,7 @@ import { clientFor, common, resolveProjectId } from '../util.ts'
 
 export const createRequirement = (
   c: ApiClient,
-  input: { projectId: Id; title: string; description?: string },
+  input: { projectId: Id; title: string; description?: string; body?: string },
   json: boolean,
 ): Promise<string> => c.requirements.create(input).then(r => renderOne(r, fmtRequirement, json))
 export const listRequirements = (c: ApiClient, projectId: Id, json: boolean): Promise<string> =>
@@ -40,6 +40,7 @@ export const requirement = defineCommand({
         title: { type: 'positional', required: true },
         project: { type: 'string', description: 'project id (overrides .baton.json)' },
         desc: { type: 'string', description: 'description' },
+        body: { type: 'string', description: 'requirement body (markdown)' },
         ...common,
       },
       run: async ({ args }) => {
@@ -50,6 +51,7 @@ export const requirement = defineCommand({
               projectId: resolveProjectId(args),
               title: args.title,
               description: args.desc,
+              body: args.body,
             },
             Boolean(args.json),
           ),

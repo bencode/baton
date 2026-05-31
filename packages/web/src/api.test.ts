@@ -56,6 +56,26 @@ test('tasks.getByCode rejects when server returns wrong kind', async () => {
   await expect(createApi().tasks.getByCode(1, 'R-1')).rejects.toThrow(/expected task/)
 })
 
+test('tasks.listComments GETs /api/tasks/:id/comments', async () => {
+  const comments = [{ id: 1, taskId: 7, body: 'note', createdAt: 0 }]
+  const fetchMock = vi.fn<typeof fetch>(async () => res(comments))
+  vi.stubGlobal('fetch', fetchMock)
+  expect(await createApi().tasks.listComments(7)).toEqual(comments)
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/tasks/7/comments')
+  expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('GET')
+})
+
+test('tasks.addComment POSTs { body, workerId } to /api/tasks/:id/comments', async () => {
+  const created = { id: 2, taskId: 7, body: 'hand-off', workerId: 3, createdAt: 0 }
+  const fetchMock = vi.fn<typeof fetch>(async () => res(created, 201))
+  vi.stubGlobal('fetch', fetchMock)
+  expect(await createApi().tasks.addComment(7, 'hand-off', 3)).toEqual(created)
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/tasks/7/comments')
+  const init = fetchMock.mock.calls[0]?.[1]
+  expect(init?.method).toBe('POST')
+  expect(JSON.parse(init?.body as string)).toEqual({ body: 'hand-off', workerId: 3 })
+})
+
 test('remove handles 204 (no throw)', async () => {
   const fetchMock = vi.fn<typeof fetch>(async () => res(null, 204))
   vi.stubGlobal('fetch', fetchMock)

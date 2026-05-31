@@ -28,6 +28,18 @@ describe('Store contract — tasks', () => {
     assert.deepEqual(gotB?.dependsOn, [a.id])
   })
 
+  test('task: markdown body round-trips on create and update', async () => {
+    const { req } = await seedReq(ctx)
+    const t = await ctx.store.tasks.create({
+      requirementId: req,
+      title: 'a',
+      body: '## detail\n- one',
+    })
+    assert.equal((await ctx.store.tasks.get(t.id))?.body, '## detail\n- one')
+    const updated = await ctx.store.tasks.update(t.id, { body: '# changed' })
+    assert.equal(updated.body, '# changed')
+  })
+
   test('counter never recycles after delete', async () => {
     const { req } = await seedReq(ctx)
     const ids: number[] = []

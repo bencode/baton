@@ -53,6 +53,7 @@ model Requirement {
   code        String // 'R-1', 'R-2', ...
   title       String
   description String?
+  body        String? // detailed content (Markdown)
   resources   String   @default("[]") // JSON ResourceRef[]
   status      String
   createdAt   DateTime @default(now())
@@ -72,19 +73,39 @@ model Task {
   projectId     Int // denorm to enable DB-level (projectId, code) UNIQUE
   code          String // 'T-1', 'T-2', ...
   title         String
-  spec          String?
+  body          String? // detailed task content (Markdown)
   dependsOn     String   @default("[]") // JSON Id[] (int FK references)
   status        String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement   @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  comments    TaskComment[]
 
   @@unique([projectId, code])
   @@index([requirementId])
   @@index([projectId])
   @@index([status])
+}
+
+// Append-only comment log on a Task — the collaboration substrate (progress,
+// next steps, hand-off notes). A child table, not a JSON column on Task: a
+// comment is append semantics (single INSERT, immutable, naturally ordered),
+// not the replace semantics of a value field like dependsOn. workerId is a
+// soft attribution hint (no FK): null = a human via the UI, set = the
+// worker/agent that wrote it. File payloads never live here — they travel over
+// chat/Send; Task carries only text + git references.
+model TaskComment {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  body      String
+  workerId  Int?
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
 }
 
 // A Session models one agent conversation, physically pinned to a Worker

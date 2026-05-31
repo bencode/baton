@@ -1,9 +1,9 @@
 import type { Attachment } from '@baton/shared'
 import { useState } from 'react'
 import { attachmentSrc } from '../../../api'
+import { Markdown } from '../../../components/markdown'
 import type { RateLimitInfo, RenderItem, TurnEndSummary } from '../event-render'
 import { FileChip, isImage } from './attachment-view'
-import { Markdown } from './markdown'
 import { ToolBlock } from './tool-block'
 
 export const RenderItemView = ({ item }: { item: RenderItem }) => {

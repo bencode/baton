@@ -44,7 +44,7 @@ export const createApp = (
   registerWorkspaceRoutes(app, store)
   registerProjectRoutes(app, store, workerLiveness, runtime, busyTracker, projects)
   registerRequirementRoutes(app, store)
-  registerTaskRoutes(app, store)
+  registerTaskRoutes(app, store, projects)
   registerWorkerRoutes(app, store, workerLiveness, commands, runtime, projects)
   registerSessionRoutes(
     app,

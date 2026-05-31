@@ -8,6 +8,7 @@ import type {
   Session,
   SessionMode,
   Task,
+  TaskComment,
   TaskStatus,
   Worker,
   Workspace,
@@ -17,6 +18,7 @@ import type {
   Requirement as DbRequirement,
   Session as DbSession,
   Task as DbTask,
+  TaskComment as DbTaskComment,
   Worker as DbWorker,
   Workspace as DbWorkspace,
 } from '@prisma/client'
@@ -43,6 +45,7 @@ export const toRequirement = (r: DbRequirement): Requirement => ({
   code: r.code,
   title: r.title,
   description: r.description ?? undefined,
+  body: r.body ?? undefined,
   resources: parseJson<ResourceRef[]>(r.resources),
   status: r.status as RequirementStatus,
   createdAt: r.createdAt.getTime(),
@@ -55,11 +58,19 @@ export const toTask = (r: DbTask): Task => ({
   projectId: r.projectId,
   code: r.code,
   title: r.title,
-  spec: r.spec ?? undefined,
+  body: r.body ?? undefined,
   dependsOn: parseJson<Id[]>(r.dependsOn),
   status: r.status as TaskStatus,
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),
+})
+
+export const toTaskComment = (r: DbTaskComment): TaskComment => ({
+  id: r.id,
+  taskId: r.taskId,
+  body: r.body,
+  workerId: r.workerId ?? undefined,
+  createdAt: r.createdAt.getTime(),
 })
 
 // agentSessionId/worktreePath are null until the owning Worker materializes

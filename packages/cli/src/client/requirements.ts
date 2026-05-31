@@ -6,6 +6,7 @@ export type RequirementInput = {
   projectId: Id
   title: string
   description?: string
+  body?: string
   resources?: ResourceRef[]
 }
 

@@ -1,4 +1,12 @@
-import type { Project, Requirement, SessionView, Task, WorkerView, Workspace } from '@baton/shared'
+import type {
+  Project,
+  Requirement,
+  SessionView,
+  Task,
+  TaskComment,
+  WorkerView,
+  Workspace,
+} from '@baton/shared'
 
 export const toJson = (data: unknown): string => JSON.stringify(data, null, 2)
 
@@ -6,6 +14,8 @@ export const fmtWorkspace = (w: Workspace): string => `${w.id}  ${w.name}`
 export const fmtProject = (p: Project): string => `${p.id}  ${p.name}`
 export const fmtRequirement = (r: Requirement): string => `${r.code}  [${r.status}]  ${r.title}`
 export const fmtTask = (t: Task): string => `${t.code}  [${t.status}]  ${t.title}`
+export const fmtComment = (c: TaskComment): string =>
+  `${c.workerId !== undefined ? `worker#${c.workerId}` : 'you'}  ${c.body}`
 export const fmtSession = (s: SessionView): string =>
   `${s.id}  ${s.name}  ${s.attached ? '[active]' : '[inactive]'}  ${s.worktreePath ?? '(pending)'}`
 export const fmtWorker = (w: WorkerView): string => {
