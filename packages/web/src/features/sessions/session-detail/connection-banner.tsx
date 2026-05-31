@@ -7,11 +7,11 @@ type ConnectionBannerProps = { streamStatus: string; alive: boolean; attached: b
 
 export const ConnectionBanner = ({ streamStatus, alive, attached }: ConnectionBannerProps) => {
   const msg = !alive
-    ? 'Worker 离线 — 消息会在它重新上线后才被处理'
+    ? 'Worker offline — messages will be processed once it reconnects'
     : !attached
-      ? '会话未连接到 Worker — 发送的消息暂时不会被处理'
+      ? 'Session not attached to its worker — messages won’t be processed yet'
       : streamStatus === 'error'
-        ? '实时连接中断，正在重连… 期间的新消息可能不会即时显示'
+        ? 'Live connection lost, reconnecting… new messages may not appear immediately'
         : null
   if (!msg) return null
   return (

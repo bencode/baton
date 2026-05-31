@@ -62,7 +62,7 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
       const ok = results.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []))
       if (ok.length > 0) setAttachments(prev => [...prev, ...ok])
       const failed = results.length - ok.length
-      if (failed > 0) setUploadError(`${failed} 个文件上传失败`)
+      if (failed > 0) setUploadError(`${failed} file(s) failed to upload`)
     } finally {
       setUploading(false)
     }
@@ -84,7 +84,7 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       // 409 = session not active (worker child not running). Surface, don't swallow.
-      setSendError(msg.includes('409') ? '会话未激活 — 先 resume 再发送' : '发送失败，请重试')
+      setSendError(msg.includes('409') ? 'Session not active — resume it to send' : 'Send failed — try again')
     } finally {
       setSending(false)
     }
