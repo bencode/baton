@@ -11,6 +11,7 @@ type HeaderProps = {
   session: Session
   active: boolean
   onStop: () => void
+  onResume: () => void
 }
 
 const truncateUuid = (id: string): string => {
@@ -37,7 +38,7 @@ const CopyButton = ({ text }: { text: string }) => {
   )
 }
 
-export const SessionHeader = ({ session, active, onStop }: HeaderProps) => {
+export const SessionHeader = ({ session, active, onStop, onResume }: HeaderProps) => {
   const [open, setOpen] = useState(false)
   return (
     <div className="shrink-0 border-b border-gray-200 bg-white px-6 py-3">
@@ -63,13 +64,21 @@ export const SessionHeader = ({ session, active, onStop }: HeaderProps) => {
           />
           {active ? 'active' : 'inactive'}
         </span>
-        {active && (
+        {active ? (
           <button
             type="button"
             onClick={onStop}
             className="rounded border border-gray-200 px-1.5 text-xs text-gray-500 transition-colors hover:border-amber-300 hover:text-amber-600"
           >
             stop
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onResume}
+            className="rounded border border-emerald-300 px-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+          >
+            resume
           </button>
         )}
         <button

@@ -61,7 +61,6 @@ type ComposerProps = {
   sending: boolean
   active: boolean
   sendError: string | null
-  onResume: () => void
   onSend: () => void
 }
 
@@ -81,7 +80,6 @@ export const Composer = ({
   sending,
   active,
   sendError,
-  onResume,
   onSend,
 }: ComposerProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -153,25 +151,15 @@ export const Composer = ({
               e.target.value = ''
             }}
           />
-          {active ? (
-            <button
-              type="button"
-              onClick={onSend}
-              disabled={!canSend}
-              aria-label={busy ? 'sending' : 'send message'}
-              className="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400"
-            >
-              {busy ? <Spinner /> : <SendIcon />}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onResume}
-              className="ml-auto rounded-md border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
-            >
-              ▸ resume session
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={!canSend}
+            aria-label={busy ? 'sending' : 'send message'}
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400"
+          >
+            {busy ? <Spinner /> : <SendIcon />}
+          </button>
         </div>
       </div>
     </div>

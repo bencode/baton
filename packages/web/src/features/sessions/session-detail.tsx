@@ -84,7 +84,9 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       // 409 = session not active (worker child not running). Surface, don't swallow.
-      setSendError(msg.includes('409') ? 'Session not active — resume it to send' : 'Send failed — try again')
+      setSendError(
+        msg.includes('409') ? 'Session not active — resume it to send' : 'Send failed — try again',
+      )
     } finally {
       setSending(false)
     }
@@ -99,7 +101,7 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
 
   return (
     <div className="flex h-full flex-col">
-      <SessionHeader session={session} active={session.attached} onStop={stop} />
+      <SessionHeader session={session} active={session.attached} onStop={stop} onResume={resume} />
       <ConnectionBanner streamStatus={status} alive={session.alive} attached={session.attached} />
       <EventStream items={items} scrollRef={scrollRef} />
       <Composer
@@ -113,7 +115,6 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
         sending={sending}
         active={session.attached}
         sendError={sendError}
-        onResume={resume}
         onSend={() => void send()}
       />
     </div>
