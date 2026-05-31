@@ -2,19 +2,24 @@ import type { Id, SessionView } from '@baton/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { useAsync } from '../../hooks/use-async'
+import { useProjectRevision } from '../projects/use-project-revision'
 
-// Poll sessions in this project; refresh every `pollMs`. Errors surface as
-// `error` and keep last-known data so transient blips don't blank the panel.
+// Sessions in this project, kept fresh by the project stream: a `sessions`
+// signal triggers an immediate refetch, and a slow poll backstops a dropped
+// stream. Errors surface as `error` and keep last-known data so transient blips
+// don't blank the panel.
 export const useSessions = (
   projectId: Id | null,
-  pollMs = 2000,
+  pollMs = 15000,
 ): { data: SessionView[] | null; loading: boolean; error: Error | null } => {
   const api = useApi()
+  const rev = useProjectRevision(projectId, 'sessions')
   const [data, setData] = useState<SessionView[] | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
   const alive = useRef(true)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev is a refetch trigger, not read in the body
   useEffect(() => {
     alive.current = true
     if (projectId === null) {
@@ -45,7 +50,8 @@ export const useSessions = (
       alive.current = false
       clearInterval(t)
     }
-  }, [api, projectId, pollMs])
+    // `rev` bumps on a project `sessions` signal → re-run the effect → refetch.
+  }, [api, projectId, pollMs, rev])
   return { data, loading, error }
 }
 

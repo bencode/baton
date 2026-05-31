@@ -12,6 +12,55 @@ type HeaderProps = {
   active: boolean
   onStop: () => void
   onResume: () => void
+  onRename: (name: string) => void
+}
+
+// Click the name to rename inline: Enter/blur commits, Esc cancels. A no-op
+// commit (blank or unchanged) just closes the editor. The new name propagates
+// back through the live session view (project stream), so we don't echo locally.
+const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) => void }) => {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+  if (!editing)
+    return (
+      <button
+        type="button"
+        title="rename"
+        onClick={() => {
+          setDraft(name)
+          setEditing(true)
+        }}
+        className="font-semibold tracking-tight text-gray-900 decoration-dotted hover:underline"
+      >
+        {name}
+      </button>
+    )
+  const commit = () => {
+    const next = draft.trim()
+    setEditing(false)
+    if (next && next !== name) onRename(next)
+  }
+  return (
+    <input
+      // biome-ignore lint/a11y/noAutofocus: rename editor opens on explicit user click
+      autoFocus
+      aria-label="session name"
+      value={draft}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={e => e.target.select()}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          setEditing(false)
+        }
+      }}
+      className="w-48 rounded border border-gray-300 px-1 text-sm font-semibold text-gray-900 focus:border-blue-400 focus:outline-none"
+    />
+  )
 }
 
 const truncateUuid = (id: string): string => {
@@ -38,12 +87,12 @@ const CopyButton = ({ text }: { text: string }) => {
   )
 }
 
-export const SessionHeader = ({ session, active, onStop, onResume }: HeaderProps) => {
+export const SessionHeader = ({ session, active, onStop, onResume, onRename }: HeaderProps) => {
   const [open, setOpen] = useState(false)
   return (
     <div className="shrink-0 border-b border-gray-200 bg-white px-6 py-3">
       <div className="flex items-center gap-3 text-sm">
-        <span className="font-semibold tracking-tight text-gray-900">{session.name}</span>
+        <SessionName name={session.name} onRename={onRename} />
         <span aria-hidden className="text-gray-300">
           ·
         </span>

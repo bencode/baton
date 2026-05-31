@@ -1,18 +1,22 @@
 import type { Id, WorkerView } from '@baton/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
+import { useProjectRevision } from '../projects/use-project-revision'
 
-// Poll workers in this project. Same shape as useSessions — server-side alive
-// flips quickly when a daemon stops heartbeating, so 2s cadence is fine.
+// Workers in this project, kept fresh by the project stream (a `workers` signal
+// fires on register / daemon connect-disconnect / delete), with a slow poll
+// backstop. Same shape as useSessions.
 export const useWorkers = (
   projectId: Id | null,
-  pollMs = 2000,
+  pollMs = 15000,
 ): { data: WorkerView[] | null; loading: boolean; error: Error | null } => {
   const api = useApi()
+  const rev = useProjectRevision(projectId, 'workers')
   const [data, setData] = useState<WorkerView[] | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
   const alive = useRef(true)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev is a refetch trigger, not read in the body
   useEffect(() => {
     alive.current = true
     if (projectId === null) {
@@ -43,6 +47,7 @@ export const useWorkers = (
       alive.current = false
       clearInterval(t)
     }
-  }, [api, projectId, pollMs])
+    // `rev` bumps on a project `workers` signal → re-run the effect → refetch.
+  }, [api, projectId, pollMs, rev])
   return { data, loading, error }
 }

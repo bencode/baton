@@ -44,6 +44,18 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
     el.scrollTop = el.scrollHeight
   }, [items.length])
 
+  // Auto-title trigger: once the first turn completes on a still-unnamed session,
+  // ask the worker to title it (it reads its own transcript). Fire once per
+  // session id; the server no-ops if the name is no longer a placeholder.
+  const titledForRef = useRef<Id | null>(null)
+  useEffect(() => {
+    if (!session || titledForRef.current === sessionId) return
+    if (!/^session-\d+$/.test(session.name)) return
+    if (!events.some(e => e.type === 'turn_complete')) return
+    titledForRef.current = sessionId
+    void api.sessions.autotitle(sessionId).catch(() => {})
+  }, [events, session, sessionId, api])
+
   if (!session) return <div className="p-6 text-sm text-gray-400">loading…</div>
 
   // Upload the batch concurrently; append every success and surface a count of
@@ -98,10 +110,18 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
     void api.sessions.resume(sessionId).catch(() => {})
   }
   const stop = () => void api.sessions.stop(sessionId).catch(() => {})
+  // Rename propagates back via the project stream (rail/tab/header all refetch).
+  const rename = (name: string) => void api.sessions.rename(sessionId, name).catch(() => {})
 
   return (
     <div className="flex h-full flex-col">
-      <SessionHeader session={session} active={session.attached} onStop={stop} onResume={resume} />
+      <SessionHeader
+        session={session}
+        active={session.attached}
+        onStop={stop}
+        onResume={resume}
+        onRename={rename}
+      />
       <ConnectionBanner streamStatus={status} alive={session.alive} attached={session.attached} />
       <EventStream items={items} scrollRef={scrollRef} />
       <Composer

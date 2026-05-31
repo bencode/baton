@@ -89,6 +89,10 @@ export type Api = {
     // Lifecycle control: resume (re-spawn the child) / stop (kill it, keep the row).
     resume(id: Id): Promise<SessionView>
     stop(id: Id): Promise<SessionView>
+    // Human rename — locks the name against auto-title.
+    rename(id: Id, name: string): Promise<SessionView>
+    // Ask the worker to auto-title this session (no-op unless still unnamed).
+    autotitle(id: Id): Promise<SessionView>
     sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
     uploadAttachment(id: Id, file: File): Promise<Attachment>
   }
@@ -151,6 +155,9 @@ export const createApi = (base: string = API_BASE): Api => {
       create: input => request(u('/sessions'), { method: 'POST', body: input }),
       resume: id => request(u(`/sessions/${id}/resume`), { method: 'POST' }),
       stop: id => request(u(`/sessions/${id}/stop`), { method: 'POST' }),
+      rename: (id, name) =>
+        request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
+      autotitle: id => request(u(`/sessions/${id}/autotitle`), { method: 'POST' }),
       sendMessage: (id, text, attachments) =>
         request(u(`/sessions/${id}/messages`), {
           method: 'POST',
