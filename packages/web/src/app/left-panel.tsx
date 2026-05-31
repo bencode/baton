@@ -10,9 +10,10 @@ type LeftPanelProps = {
   projectId: Id | null
   activeId: string
   open: (id: string, title: string) => void
+  close: (id: string) => void
 }
 
-export const LeftPanel = ({ workspaceId, projectId, activeId, open }: LeftPanelProps) => {
+export const LeftPanel = ({ workspaceId, projectId, activeId, open, close }: LeftPanelProps) => {
   const { data: requirements, loading } = useRequirements(projectId)
   const collapsed = usePersistedSet('baton.req.collapsed')
   return (
@@ -47,7 +48,7 @@ export const LeftPanel = ({ workspaceId, projectId, activeId, open }: LeftPanelP
           <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
             Workers
           </h2>
-          <WorkersPanel projectId={projectId} activeId={activeId} open={open} />
+          <WorkersPanel projectId={projectId} activeId={activeId} open={open} close={close} />
         </section>
       )}
     </div>

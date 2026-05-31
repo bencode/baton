@@ -128,6 +128,7 @@ export const Shell = () => {
             projectId={routeProjectId}
             activeId={activeId}
             open={open}
+            close={close}
           />
         </Panel>
         <Separator className="w-px bg-gray-200 transition-colors hover:bg-gray-300" />

@@ -19,6 +19,7 @@ type WorkersPanelProps = {
   projectId: Id
   activeId: string
   open: (id: string, title: string) => void
+  close: (id: string) => void
 }
 
 // Worker grouping by FK: Session.workerId === Worker.id. Schema guarantees
@@ -34,7 +35,7 @@ const groupByWorker = (
   return workers.map(w => ({ worker: w, sessions: buckets.get(w.id) ?? [] }))
 }
 
-export const WorkersPanel = ({ projectId, activeId, open }: WorkersPanelProps) => {
+export const WorkersPanel = ({ projectId, activeId, open, close }: WorkersPanelProps) => {
   const { data: workers } = useWorkers(projectId)
   const { data: sessions } = useSessions(projectId)
   if (!workers || !sessions) return <p className="px-2 text-sm text-gray-400">loading…</p>
@@ -50,6 +51,7 @@ export const WorkersPanel = ({ projectId, activeId, open }: WorkersPanelProps) =
           projectId={projectId}
           activeId={activeId}
           open={open}
+          close={close}
         />
       ))}
     </div>
@@ -67,9 +69,10 @@ type WorkerGroupProps = {
   projectId: Id
   activeId: string
   open: (id: string, title: string) => void
+  close: (id: string) => void
 }
 
-const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGroupProps) => {
+const WorkerGroup = ({ worker, sessions, projectId, activeId, open, close }: WorkerGroupProps) => {
   const api = useApi()
   const [expanded, setExpanded] = useState(false)
   const alive = worker.alive
@@ -107,16 +110,26 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
           </button>
         )}
       </div>
-      {visible.map(s => (
-        <SessionRow
-          key={s.id}
-          session={s}
-          path={sessionPath(projectId, s.id)}
-          active={activeId === sessionPath(projectId, s.id)}
-          dim={dim}
-          open={open}
-        />
-      ))}
+      {visible.map(s => {
+        const path = sessionPath(projectId, s.id)
+        return (
+          <SessionRow
+            key={s.id}
+            session={s}
+            path={path}
+            active={activeId === path}
+            dim={dim}
+            open={open}
+            // Delete: the project stream drops the row; also close its tab if open.
+            onDelete={() => {
+              void api.sessions
+                .remove(s.id)
+                .then(() => close(path))
+                .catch(() => {})
+            }}
+          />
+        )
+      })}
       {(hidden > 0 || expanded) && ordered.length > VISIBLE_BUDGET && (
         <button
           type="button"
@@ -130,26 +143,88 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
   )
 }
 
+// Monochrome trash glyph (styles via currentColor, unlike a colored emoji).
+const TrashIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    className="h-3.5 w-3.5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.4"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M2.5 4h11M6 4V2.5h4V4M4.5 4l.6 9h5.8l.6-9" />
+  </svg>
+)
+
 type SessionRowProps = {
   session: SessionView
   path: string
   active: boolean
   dim: boolean
   open: (id: string, title: string) => void
+  onDelete: () => void
 }
 
-const SessionRow = ({ session, path, active, dim, open }: SessionRowProps) => (
-  <button
-    type="button"
-    onClick={() => open(path, session.name)}
-    className={`flex w-full items-center gap-2 rounded-md py-1 pr-1.5 pl-3 text-left text-sm transition-colors duration-150 ${
-      active ? 'bg-blue-50 text-blue-900' : 'text-gray-700 hover:bg-gray-100/70'
-    } ${dim ? 'opacity-60' : ''}`}
-  >
-    <SessionDot session={session} />
-    <span className="truncate">{session.name}</span>
-  </button>
-)
+// Whole row opens the session; a hover-revealed trash flips into an inline
+// two-step confirm (✓ / ✗) so deletion never rides a single misclick. Open and
+// delete are sibling buttons (no nested <button>).
+const SessionRow = ({ session, path, active, dim, open, onDelete }: SessionRowProps) => {
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <div
+      className={`group relative flex items-center rounded-md text-sm transition-colors duration-150 ${
+        active ? 'bg-blue-50 text-blue-900' : 'text-gray-700 hover:bg-gray-100/70'
+      } ${dim ? 'opacity-60' : ''}`}
+    >
+      <button
+        type="button"
+        onClick={() => open(path, session.name)}
+        className="flex min-w-0 flex-1 items-center gap-2 py-1 pl-3 text-left"
+      >
+        <SessionDot session={session} />
+        <span className="truncate">{session.name}</span>
+      </button>
+      {confirming ? (
+        <span className="flex shrink-0 items-center gap-1.5 px-1.5 text-xs">
+          <button
+            type="button"
+            aria-label="confirm delete"
+            title="delete"
+            onClick={() => {
+              setConfirming(false)
+              onDelete()
+            }}
+            className="text-red-500 transition-colors hover:text-red-700"
+          >
+            ✓
+          </button>
+          <button
+            type="button"
+            aria-label="cancel delete"
+            title="cancel"
+            onClick={() => setConfirming(false)}
+            className="text-gray-400 transition-colors hover:text-gray-700"
+          >
+            ✗
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          aria-label="delete session"
+          title="delete session"
+          onClick={() => setConfirming(true)}
+          className="shrink-0 px-1.5 text-gray-300 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+        >
+          <TrashIcon />
+        </button>
+      )}
+    </div>
+  )
+}
 
 // Session liveness at a glance: busy = amber pulse, active (worker child up) =
 // solid emerald, inactive = hollow outline (shape difference reads at 6px).

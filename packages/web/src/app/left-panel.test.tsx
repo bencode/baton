@@ -60,7 +60,7 @@ test('LeftPanel renders the requirement tree (deps + ready) and opens a task on 
   render(
     <ApiContext.Provider value={fakeApi()}>
       <MemoryRouter>
-        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={open} />
+        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={open} close={vi.fn()} />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
@@ -79,11 +79,52 @@ test('LeftPanel renders the requirement tree (deps + ready) and opens a task on 
   expect(open).toHaveBeenCalledWith('/proj/1/T-2', 'Implement')
 })
 
+test('rail session row: trash → inline confirm → removes session and closes its tab', async () => {
+  const remove = vi.fn(async () => undefined)
+  const close = vi.fn()
+  const worker = { id: 1, projectId: 1, name: 'w', hostname: 'h', alive: true }
+  const session = {
+    id: 7,
+    projectId: 1,
+    workerId: 1,
+    name: 'dogfood',
+    busy: false,
+    attached: false,
+  }
+  const api = {
+    projects: { listByWorkspace: vi.fn(async () => [project]), get: vi.fn(async () => project) },
+    requirements: { listByProject: vi.fn(async () => []) },
+    tasks: { listByRequirement: vi.fn(async () => []) },
+    sessions: { listByProject: vi.fn(async () => [session]), remove },
+    workers: { listByProject: vi.fn(async () => [worker]) },
+  } as unknown as Api
+  render(
+    <ApiContext.Provider value={api}>
+      <MemoryRouter>
+        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={vi.fn()} close={close} />
+      </MemoryRouter>
+    </ApiContext.Provider>,
+  )
+  // Trash is two-step: first click reveals the confirm, not a deletion.
+  fireEvent.click(await screen.findByLabelText('delete session'))
+  expect(remove).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByLabelText('confirm delete'))
+  expect(remove).toHaveBeenCalledWith(7)
+  // The tab close happens after the remove promise resolves.
+  await vi.waitFor(() => expect(close).toHaveBeenCalledWith('/proj/1/session/7'))
+})
+
 test('chevron toggles aria-expanded and the tasks region aria-hidden', async () => {
   const { container } = render(
     <ApiContext.Provider value={fakeApi()}>
       <MemoryRouter>
-        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={vi.fn()} />
+        <LeftPanel
+          workspaceId={1}
+          projectId={1}
+          activeId="/proj/1"
+          open={vi.fn()}
+          close={vi.fn()}
+        />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
