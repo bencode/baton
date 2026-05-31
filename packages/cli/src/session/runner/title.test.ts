@@ -41,15 +41,17 @@ describe('generateTitle', () => {
   test('uses claude stdout when present', async () => {
     const t = await generateTitle({
       worktreePath: '/tmp',
-      firstUserText: 'curl health',
+      userText: 'curl health',
+      assistantText: 'I will hit /health and report the status.',
       spawnImpl: fakeSpawn('  Curl Health Check  '),
     })
     assert.equal(t, 'Curl Health Check')
   })
-  test('falls back to the heuristic when claude emits nothing', async () => {
+  test('falls back to the heuristic (from user text) when claude emits nothing', async () => {
     const t = await generateTitle({
       worktreePath: '/tmp',
-      firstUserText: 'curl the health endpoint now please',
+      userText: 'curl the health endpoint now please',
+      assistantText: 'sure',
       spawnImpl: fakeSpawn(''),
     })
     assert.equal(t, 'curl the health endpoint now please'.split(' ').slice(0, 5).join(' '))

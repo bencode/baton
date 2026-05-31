@@ -29,8 +29,11 @@ export type SessionsClient = {
   ): Promise<Session>
   // Worker reports its child up/down (worker-bearer). Drives `attached`.
   setStatus(id: Id, active: boolean, workerToken: string): Promise<Session>
+  // Worker auto-title (worker-bearer): server applies it only if unlocked.
+  setName(id: Id, name: string, workerToken: string): Promise<Session>
   resume(id: Id): Promise<SessionView>
   stop(id: Id): Promise<SessionView>
+  rename(id: Id, name: string): Promise<SessionView>
   listByProject(projectId: Id): Promise<SessionView[]>
   get(id: Id): Promise<SessionView>
   findByName(projectId: Id, name: string): Promise<Session | null>
@@ -58,8 +61,15 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
         body: { active },
         headers: { authorization: `Bearer ${workerToken}` },
       }),
+    setName: (id, name, workerToken) =>
+      request(u(`/sessions/${id}`), {
+        method: 'PATCH',
+        body: { name },
+        headers: { authorization: `Bearer ${workerToken}` },
+      }),
     resume: id => request(u(`/sessions/${id}/resume`), { method: 'POST' }),
     stop: id => request(u(`/sessions/${id}/stop`), { method: 'POST' }),
+    rename: (id, name) => request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
     listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
     get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
     findByName: async (projectId, name) => {

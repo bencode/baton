@@ -31,3 +31,7 @@ export type WorkerCommand =
   // worktreePath carried so the worker can remove it even if it isn't currently
   // tracking a child for this session (e.g. delete after a worker restart).
   | { cmd: 'session.delete'; sessionId: Id; worktreePath: string | null }
+  // Auto-title (frontend-triggered after the first turn): the worker reads the
+  // session's own transcript for context and generates a short name. Carries the
+  // ids it needs to locate the transcript + run the throwaway claude call.
+  | { cmd: 'session.title'; sessionId: Id; agentSessionId: string; worktreePath: string }

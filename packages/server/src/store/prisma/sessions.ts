@@ -10,6 +10,9 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
         workerId: input.workerId,
         mode: input.mode,
         name: input.name,
+        // An explicitly-named session is locked from birth — never auto-retitled.
+        // Nameless creates pass '' here (placeholder set after, unlocked).
+        nameLocked: input.name.trim().length > 0,
         agentKind: input.agentKind,
       },
     })
@@ -22,9 +25,22 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
     })
     return toSession(s)
   },
+  // Human rename: sets the name AND locks it (wins over any later auto-title).
   rename: async (id, name) => {
-    const s = await prisma.session.update({ where: { id }, data: { name } })
+    const s = await prisma.session.update({ where: { id }, data: { name, nameLocked: true } })
     return toSession(s)
+  },
+  // Non-locking set, guarded: applies only while the name is unlocked. Used for
+  // the `session-<id>` placeholder and the worker's auto-title. Returns the
+  // updated session, or null when a human has already locked the name.
+  autoTitle: async (id, name) => {
+    const { count } = await prisma.session.updateMany({
+      where: { id, nameLocked: false },
+      data: { name },
+    })
+    if (count === 0) return null
+    const s = await prisma.session.findUnique({ where: { id } })
+    return s ? toSession(s) : null
   },
   get: async id => {
     const r = await prisma.session.findUnique({ where: { id } })

@@ -1,9 +1,13 @@
 import { claudeBin } from './log.ts'
 import type { SpawnImpl } from './spawn.ts'
 
-// Auto-title a fresh session from its first user message. We ask claude for a
-// short title in a throwaway `--print` call (no session id, plain text out), and
-// fall back to a heuristic from the message if that fails or returns junk.
+// Auto-title a fresh session from its first exchange (user ask + assistant
+// reply). We ask claude for a short title in a throwaway `--print` call (no
+// session id, plain text out), and fall back to a heuristic from the user
+// message if that fails or returns junk.
+
+// Keep each side of the exchange bounded so the title prompt stays small.
+const clip = (s: string, max: number): string => (s.length > max ? s.slice(0, max) : s)
 
 // Trim model output down to a clean, short title: one line, no quotes/labels,
 // capped. Exported for unit tests.
@@ -29,11 +33,18 @@ const TITLE_TIMEOUT_MS = 30_000
 // return a sanitized title — or the heuristic fallback. Never throws.
 export const generateTitle = async (input: {
   worktreePath: string
-  firstUserText: string
+  userText: string
+  assistantText: string
   spawnImpl: SpawnImpl
 }): Promise<string> => {
-  const { worktreePath, firstUserText, spawnImpl } = input
-  const prompt = `Reply with ONLY a 2-5 word title (no quotes, no punctuation) for a coding session that begins with this request:\n${firstUserText}`
+  const { worktreePath, userText, assistantText, spawnImpl } = input
+  const exchange = [
+    `User: ${clip(userText, 800)}`,
+    assistantText ? `Assistant: ${clip(assistantText, 800)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+  const prompt = `Reply with ONLY a 2-5 word title (no quotes, no punctuation) summarizing this coding session:\n${exchange}`
   const out = await new Promise<string>(resolve => {
     let buf = ''
     let done = false
@@ -73,5 +84,5 @@ export const generateTitle = async (input: {
       finish('')
     })
   })
-  return sanitizeTitle(out) || heuristicTitle(firstUserText)
+  return sanitizeTitle(out) || heuristicTitle(userText)
 }

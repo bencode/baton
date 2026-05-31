@@ -3,6 +3,7 @@ import type { Hono } from 'hono'
 import type { CommandBus } from '../command-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
+import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
@@ -14,6 +15,7 @@ export const registerWorkerRoutes = (
   liveness: LivenessTracker,
   commands: CommandBus,
   runtime: SessionRuntime,
+  projects: ProjectBus,
 ): void => {
   const auth = workerBearerAuth(store)
   // Idempotent register (machineId-anchored). See store.workers.register
@@ -49,6 +51,7 @@ export const registerWorkerRoutes = (
     }
     // First ping seeds liveness so the worker shows alive immediately.
     liveness.ping(out.worker.machineId)
+    projects.publish(out.worker.projectId, { resource: 'workers' })
     // apiToken returned on every successful (re)register so the daemon can
     // re-read it after losing local state.
     return c.json(
@@ -63,10 +66,18 @@ export const registerWorkerRoutes = (
   // sessions flip inactive immediately (its child processes died with it).
   app.get('/workers/me/stream', auth, c => {
     const worker = c.get('worker')
+    // Daemon online: presence changed → refetch workers.
+    projects.publish(worker.projectId, { resource: 'workers' })
     return streamBus(
       c,
       push => commands.subscribe(worker.id, push),
-      () => runtime.forgetWorker(worker.id),
+      () => {
+        // Daemon offline: its sessions flip inactive (forgetWorker) and its
+        // presence drops — refetch both.
+        runtime.forgetWorker(worker.id)
+        projects.publish(worker.projectId, { resource: 'workers' })
+        projects.publish(worker.projectId, { resource: 'sessions' })
+      },
     )
   })
 
@@ -93,6 +104,8 @@ export const registerWorkerRoutes = (
     if (!w) return c.json({ error: 'not found' }, 404)
     await store.workers.destroy(id)
     liveness.forget(w.machineId)
+    projects.publish(w.projectId, { resource: 'workers' })
+    projects.publish(w.projectId, { resource: 'sessions' })
     return c.body(null, 204)
   })
 }

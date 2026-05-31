@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import { createApp } from '../app.ts'
 import { freshStore, type TestStore } from '../store/test-db.ts'
-import { postJson, seedSession } from './test-helpers.ts'
+import { postJson, seedSession, seedWorker } from './test-helpers.ts'
 
 describe('server HTTP — sessions + chat protocol', () => {
   let ctx: TestStore
@@ -188,6 +188,47 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
     const idle = (await (await app.request(`/sessions/${session.id}`)).json()) as { busy: boolean }
     assert.equal(idle.busy, false)
+  })
+
+  test('rename: nameless auto-titles while unlocked; human rename locks against auto-title', async () => {
+    const app = createApp(ctx.store)
+    const { projectId, workerId, workerToken } = await seedWorker(app)
+    const auth = { authorization: `Bearer ${workerToken}` }
+    const patchName = (id: number, name: string) =>
+      app.request(`/sessions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+        headers: { 'content-type': 'application/json', ...auth },
+      })
+    const nameOf = async (id: number) =>
+      ((await (await app.request(`/sessions/${id}`)).json()) as { name: string }).name
+
+    // Nameless create → `session-<id>` placeholder, unlocked.
+    const s = (await (await postJson(app, '/sessions', { projectId, workerId })).json()) as {
+      id: number
+      name: string
+    }
+    assert.match(s.name, /^session-\d+$/)
+
+    // Worker auto-title (PATCH name) applies while unlocked.
+    await patchName(s.id, 'Auto Title')
+    assert.equal(await nameOf(s.id), 'Auto Title')
+
+    // Blank human rename → 400.
+    assert.equal((await postJson(app, `/sessions/${s.id}/rename`, { name: ' ' })).status, 400)
+
+    // Human rename → 200 + locks the name.
+    const renamed = await postJson(app, `/sessions/${s.id}/rename`, { name: 'Human Name' })
+    assert.equal(renamed.status, 200)
+    assert.equal(((await renamed.json()) as { name: string }).name, 'Human Name')
+
+    // Subsequent worker auto-title is suppressed — human wins.
+    await patchName(s.id, 'Later Auto')
+    assert.equal(await nameOf(s.id), 'Human Name')
+
+    // Missing session → 404.
+    await app.request(`/sessions/${s.id}`, { method: 'DELETE' })
+    assert.equal((await postJson(app, `/sessions/${s.id}/rename`, { name: 'x' })).status, 404)
   })
 
   test('busy=false when daemon never heartbeated (orphan turn_start, sticky-yellow fix)', async () => {

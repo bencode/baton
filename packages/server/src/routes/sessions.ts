@@ -6,6 +6,7 @@ import type { CommandBus } from '../command-bus.ts'
 import type { EventBus } from '../event-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
+import type { ProjectBus } from '../project-bus.ts'
 import { forgetSessionSeq, synthesize } from '../session-events.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
@@ -26,10 +27,13 @@ export const registerSessionRoutes = (
   busyTracker: BusyTracker,
   attachments: AttachmentStore,
   commands: CommandBus,
+  projects: ProjectBus,
 ): void => {
   const auth = workerBearerAuth(store)
   const toView = (s: Parameters<typeof sessionWithView>[0]) =>
     sessionWithView(s, store, workerLiveness, runtime, busyTracker)
+  // Tell project subscribers the session list changed so they refetch it.
+  const bump = (projectId: Id) => projects.publish(projectId, { resource: 'sessions' })
 
   // Helper: load a session, 404 if missing, 403 if the bearer worker doesn't own
   // it. Used by every worker-authed session route.
@@ -69,8 +73,9 @@ export const registerSessionRoutes = (
     // it after the first turn. The id is only known post-insert.
     const session = body.name
       ? created
-      : await store.sessions.rename(created.id, `session-${created.id}`)
+      : ((await store.sessions.autoTitle(created.id, `session-${created.id}`)) ?? created)
     commands.publish(worker.id, { cmd: 'session.start', sessionId: session.id, name: session.name })
+    bump(session.projectId)
     return c.json(await toView(session), 201)
   })
 
@@ -95,11 +100,14 @@ export const registerSessionRoutes = (
         agentSessionId: body.agentSessionId,
         worktreePath: body.worktreePath,
       })
+      bump(owned.session.projectId)
       return c.json(await toView(updated))
     }
+    // Worker auto-title: guarded, never clobbers a human-locked name.
     if (typeof body.name === 'string' && body.name.trim()) {
-      const updated = await store.sessions.rename(owned.id, body.name.trim())
-      return c.json(await toView(updated))
+      const updated = await store.sessions.autoTitle(owned.id, body.name.trim())
+      if (updated) bump(owned.session.projectId)
+      return c.json(await toView(updated ?? owned.session))
     }
     return c.json({ error: 'agentSessionId+worktreePath, or name, required' }, 400)
   })
@@ -112,6 +120,7 @@ export const registerSessionRoutes = (
     const body = (await c.req.json()) as { active?: boolean }
     runtime.setActive(owned.id, owned.session.workerId, body.active === true)
     if (body.active !== true) busyTracker.forget(owned.id)
+    bump(owned.session.projectId)
     return c.json(await toView(owned.session))
   })
 
@@ -130,6 +139,38 @@ export const registerSessionRoutes = (
     return c.json(await toView(s))
   })
 
+  // Auto-title trigger (UI, no auth in v0). Fired by the browser after the first
+  // turn completes. We only forward a title command for a still-placeholder name
+  // (cheap guard — the worker's PATCH is also guarded by nameLocked) and only
+  // once the session is materialized (the worker needs the transcript). The
+  // worker reads its own transcript for context and PATCHes a name back.
+  app.post('/sessions/:id/autotitle', async c => {
+    const s = await store.sessions.get(intParam(c.req.param('id')))
+    if (!s) return c.json({ error: 'not found' }, 404)
+    if (/^session-\d+$/.test(s.name) && s.agentSessionId && s.worktreePath)
+      commands.publish(s.workerId, {
+        cmd: 'session.title',
+        sessionId: s.id,
+        agentSessionId: s.agentSessionId,
+        worktreePath: s.worktreePath,
+      })
+    return c.json(await toView(s))
+  })
+
+  // Human rename (UI / CLI, no auth in v0). Locks the name (nameLocked) so a
+  // pending auto-title can't override the user's choice. No worker command —
+  // the name is collaboration metadata; the running child doesn't care.
+  app.post('/sessions/:id/rename', async c => {
+    const s = await store.sessions.get(intParam(c.req.param('id')))
+    if (!s) return c.json({ error: 'not found' }, 404)
+    const body = (await c.req.json()) as { name?: string }
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    if (!name) return c.json({ error: 'name required' }, 400)
+    const updated = await store.sessions.rename(s.id, name)
+    bump(s.projectId)
+    return c.json(await toView(updated))
+  })
+
   // Session DELETE (no auth, v0). Tell the owning worker to tear down its child +
   // worktree, then drop the row. Browser-side events live in IndexedDB.
   app.delete('/sessions/:id', async c => {
@@ -146,6 +187,7 @@ export const registerSessionRoutes = (
     busyTracker.forget(id)
     forgetSessionSeq(id)
     await attachments.forgetSession(id)
+    bump(s.projectId)
     return c.body(null, 204)
   })
 
@@ -158,9 +200,15 @@ export const registerSessionRoutes = (
     if ('error' in owned) return owned.error
     const body = (await c.req.json()) as { type?: SessionEventType; payload?: unknown }
     if (!body.type) return c.json({ error: 'type required' }, 400)
-    if (body.type === 'turn_start') busyTracker.set(owned.id, true)
-    else if (body.type === 'turn_complete' || body.type === 'turn_error')
+    // Busy toggles drive the rail's pulse dot — bump so subscribers refetch the
+    // session list (sdk_event streams are skipped: far too frequent to signal).
+    if (body.type === 'turn_start') {
+      busyTracker.set(owned.id, true)
+      bump(owned.session.projectId)
+    } else if (body.type === 'turn_complete' || body.type === 'turn_error') {
       busyTracker.set(owned.id, false)
+      bump(owned.session.projectId)
+    }
     const ev = synthesize(owned.id, body.type, body.payload ?? null)
     bus.publish(owned.id, ev)
     return c.json(ev, 201)

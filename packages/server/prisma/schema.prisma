@@ -110,6 +110,7 @@ model Session {
   workerId       Int // FK → Worker(id). onDelete Cascade: destroy worker takes its sessions with it.
   mode           String /// 'worker' | 'skill' (collaboration dimension; orthogonal to agent kind)
   name           String
+  nameLocked     Boolean   @default(false) // true once a human names it; suppresses auto-title. Server-internal (not in SessionView).
   agentKind      String /// 'claude-code' (v0). Future: 'codex' | …
   agentSessionId String? // claude-code: UUID; null until the Worker materializes.
   worktreePath   String? // local cwd on the worker; null until the Worker materializes.

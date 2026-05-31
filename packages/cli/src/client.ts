@@ -36,7 +36,6 @@ export type ApiClient = {
 // emits turn/sdk events.
 export type WorkerClient = {
   emitEvent(type: SessionEventType, payload: unknown): Promise<SessionEvent>
-  setName(name: string): Promise<unknown>
 }
 
 export const createClient = (baseUrl: string): ApiClient => ({
@@ -62,7 +61,5 @@ export const createWorkerClient = (
         body: { type, payload },
         headers: auth,
       }),
-    setName: name =>
-      request(u(`/sessions/${sessionId}`), { method: 'PATCH', body: { name }, headers: auth }),
   }
 }

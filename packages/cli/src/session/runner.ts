@@ -1,14 +1,11 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { readdirSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import type { SessionEvent } from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
 import { claudeBin, maskedEnvKeys } from './runner/log.ts'
 import type { SpawnImpl } from './runner/spawn.ts'
-import { generateTitle } from './runner/title.ts'
+import { findTranscriptPath } from './runner/transcript.ts'
 import { runTurn } from './runner/turn.ts'
 
 // Re-export for tests + commands wiring.
@@ -32,27 +29,6 @@ export type RunnerDeps = {
 type DaemonState = {
   firstSpawnDone: boolean
   seen: Set<number>
-}
-
-// claude writes a session file on first `--session-id` invocation. Its on-disk
-// layout is `~/.claude/projects/<flattened-cwd>/<agentSessionId>.jsonl`. We
-// don't reproduce the cwd-flattening (it has edge cases); instead, walk every
-// project dir and match by file name. Cheap — handful of dirs typically.
-const claudeSessionFileExists = (agentSessionId: string): boolean => {
-  const root = join(homedir(), '.claude', 'projects')
-  try {
-    for (const dir of readdirSync(root)) {
-      const candidate = join(root, dir, `${agentSessionId}.jsonl`)
-      try {
-        if (statSync(candidate).isFile()) return true
-      } catch {
-        // not a file or doesn't exist; keep looking
-      }
-    }
-  } catch {
-    // ~/.claude/projects missing — fresh machine, first run
-  }
-  return false
 }
 
 // Build the SSE subscription wrapper. Each unseen `user_message` is forwarded
@@ -119,32 +95,11 @@ export const runDaemon = async (
   log(`runtime env keys: ${maskedEnvKeys(deps.env)}`)
 
   const state: DaemonState = {
-    firstSpawnDone: claudeSessionFileExists(config.agentSessionId),
+    firstSpawnDone: findTranscriptPath(config.agentSessionId) !== null,
     seen: new Set(),
   }
   const pendingQueue: SessionEvent[] = []
   let busy = false
-
-  // Auto-title a still-default-named session from its first message. Fire-and-
-  // forget (a throwaway claude call) so it never blocks the drain; runs once.
-  let titled = false
-  const maybeAutoTitle = (msg: SessionEvent): void => {
-    if (titled || !/^session-\d+$/.test(config.name)) return
-    titled = true
-    const firstText =
-      typeof (msg.payload as { text?: unknown }).text === 'string'
-        ? (msg.payload as { text: string }).text
-        : ''
-    if (!firstText) return
-    void generateTitle({
-      worktreePath: config.worktreePath,
-      firstUserText: firstText,
-      spawnImpl: sp,
-    })
-      .then(title => deps.worker.setName(title))
-      .then(() => log(`✎ titled session`))
-      .catch(e => log(`title failed: ${String(e)}`))
-  }
 
   const drain = async (): Promise<void> => {
     if (busy) return
@@ -160,7 +115,6 @@ export const runDaemon = async (
         // even on non-zero exit — future turns must --resume.
         state.firstSpawnDone = true
         log(`✔ msg #${msg.sequence}${code === 0 ? '' : ` (exit ${code})`}`)
-        if (!resuming && code === 0) maybeAutoTitle(msg)
       }
     } finally {
       busy = false

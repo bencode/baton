@@ -7,6 +7,9 @@ import { EventSource } from 'eventsource'
 import type { ApiClient } from '../client.ts'
 import { defaultWorktreeDir, slug } from '../commands/session/shared.ts'
 import type { WorkerConfig } from '../project-config.ts'
+import type { SpawnImpl } from '../session/runner/spawn.ts'
+import { generateTitle } from '../session/runner/title.ts'
+import { readFirstExchange } from '../session/runner/transcript.ts'
 import { createWorktree, removeWorktree, repoHeadBranch } from '../session/worktree.ts'
 
 // The persistent, lightweight worker process. It owns no Claude state itself —
@@ -124,6 +127,26 @@ export const runWorkerDaemon = async (
     log(`deleted session #${sessionId} (removed worktree)`)
   }
 
+  // Auto-title (frontend-triggered after the first turn): read the session's own
+  // transcript for context, generate a short name with a throwaway claude call,
+  // and PATCH it back. The server drops it if the user has locked the name.
+  const onTitle = async (
+    sessionId: Id,
+    agentSessionId: string,
+    worktreePath: string,
+  ): Promise<void> => {
+    const exchange = readFirstExchange(agentSessionId)
+    if (!exchange) return log(`title #${sessionId}: no transcript yet, skipping`)
+    const title = await generateTitle({
+      worktreePath,
+      userText: exchange.userText,
+      assistantText: exchange.assistantText,
+      spawnImpl: spawn as SpawnImpl,
+    })
+    await client.sessions.setName(sessionId, title, cfg.apiToken)
+    log(`✎ titled session #${sessionId} → ${title}`)
+  }
+
   // On (re)connect, kill any child whose session no longer exists server-side —
   // heals a session.delete that was dropped while we were disconnected. We do
   // NOT auto-start sessions: resume is explicit.
@@ -159,6 +182,10 @@ export const runWorkerDaemon = async (
         void onStart(cmd.sessionId, cmd.name).catch(err => log(`start failed: ${String(err)}`))
       else if (cmd.cmd === 'session.stop') onStop(cmd.sessionId)
       else if (cmd.cmd === 'session.delete') onDelete(cmd.sessionId, cmd.worktreePath)
+      else if (cmd.cmd === 'session.title')
+        void onTitle(cmd.sessionId, cmd.agentSessionId, cmd.worktreePath).catch(err =>
+          log(`title failed: ${String(err)}`),
+        )
     } catch {
       // skip malformed commands
     }

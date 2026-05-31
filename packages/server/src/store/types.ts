@@ -112,7 +112,10 @@ export type Store = {
   sessions: {
     create(input: SessionCreate): Promise<Session>
     materialize(id: Id, input: SessionMaterialize): Promise<Session>
+    // Human rename — sets name + locks it against auto-title.
     rename(id: Id, name: string): Promise<Session>
+    // Non-locking, guarded set (placeholder + auto-title). null when locked.
+    autoTitle(id: Id, name: string): Promise<Session | null>
     get(id: Id): Promise<Session | null>
     listByProject(projectId: Id): Promise<Session[]>
     // DELETE the row. Irreversible. Session events live in browser IndexedDB

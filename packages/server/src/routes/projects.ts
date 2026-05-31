@@ -2,7 +2,9 @@ import type { Id } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { BusyTracker } from '../busy.ts'
 import type { LivenessTracker } from '../liveness.ts'
+import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
+import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam, sessionWithView, workerWithView } from '../views.ts'
 
@@ -12,6 +14,7 @@ export const registerProjectRoutes = (
   workerLiveness: LivenessTracker,
   runtime: SessionRuntime,
   busyTracker: BusyTracker,
+  projects: ProjectBus,
 ): void => {
   app.post('/projects', async c => {
     const body = (await c.req.json()) as {
@@ -43,6 +46,13 @@ export const registerProjectRoutes = (
     const id = intParam(c.req.param('id'))
     const list = await store.workers.listByProject(id)
     return c.json(list.map(w => workerWithView(w, workerLiveness)))
+  })
+  // Project change stream: lightweight invalidation signals so the web client
+  // refetches the affected query (sessions / workers / tasks) instead of
+  // polling. No replay — a fresh subscriber simply waits for the next change.
+  app.get('/projects/:id/stream', c => {
+    const id = intParam(c.req.param('id'))
+    return streamBus(c, push => projects.subscribe(id, push))
   })
   // Resolve an item by its project-scoped code (R-N / T-N only). Sessions and
   // workers don't carry human codes — navigate to them by int id.
