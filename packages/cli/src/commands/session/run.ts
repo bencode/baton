@@ -4,9 +4,9 @@ import type { SessionConfig } from '../../project-config.ts'
 import { runDaemon } from '../../session/runner.ts'
 
 // Internal entry spawned by the worker daemon (not meant to be run by hand).
-// Credentials arrive via env (BATON_SERVER / BATON_WORKER_TOKEN /
-// BATON_WORKER_MACHINE_ID); the session metadata comes from the server. Runs
-// the per-session daemon loop (subscribe + drain + spawn claude per turn).
+// Credentials arrive via env (BATON_SERVER / BATON_WORKER_TOKEN); the session
+// metadata comes from the server. Runs the per-session daemon loop (subscribe +
+// drain + spawn claude per turn).
 export const sessionRunCommand = defineCommand({
   meta: { name: 'run', description: 'run a session child (spawned by the worker daemon)' },
   args: {
@@ -15,8 +15,7 @@ export const sessionRunCommand = defineCommand({
   run: async ({ args }) => {
     const server = process.env.BATON_SERVER
     const workerToken = process.env.BATON_WORKER_TOKEN
-    const machineId = process.env.BATON_WORKER_MACHINE_ID
-    if (!server || !workerToken || !machineId)
+    if (!server || !workerToken)
       throw new Error('`session run` must be spawned by the worker daemon (missing BATON_* env)')
     const sessionId = Number(args.session)
     if (!Number.isInteger(sessionId) || sessionId <= 0)
@@ -28,15 +27,9 @@ export const sessionRunCommand = defineCommand({
     const config: SessionConfig = {
       server,
       sessionId,
-      projectId: s.projectId,
-      workerId: s.workerId,
       name: s.name,
-      mode: s.mode,
-      agentKind: s.agentKind,
       agentSessionId: s.agentSessionId,
       worktreePath: s.worktreePath,
-      workerMachineId: machineId,
-      workerToken,
     }
     const worker = createWorkerClient(server, workerToken, sessionId)
     const ac = new AbortController()

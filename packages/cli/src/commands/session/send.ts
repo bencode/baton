@@ -4,9 +4,8 @@ import { clientFor, common, resolveProjectId } from '../../util.ts'
 import { attachPaths, uploadAttachments } from '../attach.ts'
 import { resolveSession } from './shared.ts'
 
-// Primitive form: post one user_message into a session. Higher-level
-// `baton send --name X "msg"` (top-level) additionally streams the daemon's
-// reply to stdout.
+// Post one user_message into a session (fire-and-forget; the reply streams to
+// whoever is subscribed — the web UI, or `baton session get`/the SSE stream).
 export const sessionSendCommand = defineCommand({
   meta: { name: 'send', description: 'post a chat message into a session (no streaming reply)' },
   args: {

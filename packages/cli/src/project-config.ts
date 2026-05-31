@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentKind, Id, SessionMode } from '@baton/shared'
+import type { Id } from '@baton/shared'
 
 // Single local-state file per checkout: `.baton.json` at the repo root.
 // Gitignored — holds this machine's worker identity (id + machineId + apiToken).
@@ -38,22 +38,16 @@ export type WorkerConfig = {
   apiToken: string
 }
 
-// Per-session runtime context the session child process needs. Built from the
-// server's Session row (agentSessionId/worktreePath, both non-null once
-// materialized) plus the worker's credentials. `workerToken` authenticates the
-// session writes (events / heartbeat); `workerMachineId` drives worker heartbeat.
+// What the session child's run loop needs: where to stream from (server +
+// sessionId), what to spawn claude with (worktreePath + agentSessionId), and a
+// label (name). Worker credentials are passed straight into the WorkerClient,
+// not carried here. agentSessionId/worktreePath are non-null once materialized.
 export type SessionConfig = {
   server: string
   sessionId: Id
-  projectId: Id
-  workerId: Id
   name: string
-  mode: SessionMode
-  agentKind: AgentKind
   agentSessionId: string
   worktreePath: string
-  workerMachineId: string
-  workerToken: string
 }
 
 // Pure path join; no fs touch. Override via --config flag, else default to cwd.

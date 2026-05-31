@@ -13,16 +13,10 @@ describe('runTurn', () => {
   test('posts turn_start + N sdk_event + turn_complete; flags first vs resume', async () => {
     const cfg: SessionConfig = {
       server: 'http://localhost:3280',
-      workerToken: 'tok',
       sessionId: 1,
-      projectId: 1,
-      workerId: 9,
       name: 'dogfood',
-      mode: 'worker',
-      agentKind: 'claude-code',
       agentSessionId: '00000000-0000-0000-0000-000000000001',
       worktreePath: '/tmp/wt',
-      workerMachineId: 'mid-test',
     }
     const calls: Array<{ type: string; payload: unknown }> = []
     const worker = {
@@ -102,16 +96,10 @@ describe('runTurn', () => {
   test('empty text → turn_error, no spawn', async () => {
     const cfg: SessionConfig = {
       server: 's',
-      workerToken: 't',
       sessionId: 1,
-      projectId: 1,
-      workerId: 9,
       name: 'x',
-      mode: 'worker',
-      agentKind: 'claude-code',
       agentSessionId: 'uuid',
       worktreePath: '/tmp/wt',
-      workerMachineId: 'mid-test',
     }
     const calls: Array<{ type: string }> = []
     const worker = {
@@ -144,16 +132,10 @@ describe('runTurn', () => {
     const wt = mkdtempSync(join(tmpdir(), 'baton-turn-'))
     const cfg: SessionConfig = {
       server: 'http://srv',
-      workerToken: 't',
       sessionId: 1,
-      projectId: 1,
-      workerId: 9,
       name: 'x',
-      mode: 'worker',
-      agentKind: 'claude-code',
       agentSessionId: 'uuid',
       worktreePath: wt,
-      workerMachineId: 'mid-test',
     }
     const worker = {
       close: async () => {},

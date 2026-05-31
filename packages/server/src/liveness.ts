@@ -15,7 +15,6 @@ export type LivenessTracker = {
   isAlive(machineId: string): boolean
   forget(machineId: string): void
   prune(now?: number): number
-  size(): number
 }
 
 export const createLiveness = (): LivenessTracker => {
@@ -44,9 +43,6 @@ export const createLiveness = (): LivenessTracker => {
         }
       }
       return removed
-    },
-    size() {
-      return last.size
     },
   }
 }

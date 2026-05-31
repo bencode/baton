@@ -8,9 +8,6 @@ import { sessionRunCommand } from './session/run.ts'
 import { sessionSendCommand } from './session/send.ts'
 import { sessionStopCommand } from './session/stop.ts'
 
-// Re-exported for cli tests / other commands.
-export { parseEnvPairs } from './session/shared.ts'
-
 export const session = defineCommand({
   meta: { name: 'session', description: 'create / resume / stop / send to agent sessions' },
   subCommands: {

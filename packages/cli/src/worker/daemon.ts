@@ -61,7 +61,6 @@ export const runWorkerDaemon = async (
         ...process.env,
         BATON_SERVER: cfg.server,
         BATON_WORKER_TOKEN: cfg.apiToken,
-        BATON_WORKER_MACHINE_ID: cfg.machineId,
       },
     })
     children.set(sessionId, { child, worktreePath })

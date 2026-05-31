@@ -73,21 +73,3 @@ export const appendEvent = async (sessionId: Id, ev: StoredEvent): Promise<void>
     tx.onabort = () => reject(tx.error)
   })
 }
-
-export const clearEvents = async (sessionId: Id): Promise<void> => {
-  const db = await open()
-  const tx = db.transaction(STORE, 'readwrite')
-  const store = tx.objectStore(STORE)
-  const index = store.index(INDEX)
-  const req = index.openCursor(IDBKeyRange.only(sessionId))
-  await new Promise<void>((resolve, reject) => {
-    req.onsuccess = () => {
-      const cursor = req.result
-      if (cursor) {
-        cursor.delete()
-        cursor.continue()
-      } else resolve()
-    }
-    req.onerror = () => reject(req.error)
-  })
-}

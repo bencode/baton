@@ -1,4 +1,4 @@
-import type { Id, Session, WorkerView } from '@baton/shared'
+import type { Id, SessionView, WorkerView } from '@baton/shared'
 import { sessionPath } from '../../app/route'
 import { useSessions } from '../sessions/use-sessions'
 import { useWorkers } from './use-workers'
@@ -8,8 +8,6 @@ type WorkersPanelProps = {
   activeId: string
   open: (id: string, title: string) => void
 }
-
-type SessionView = Session & { alive?: boolean; attached?: boolean; busy?: boolean }
 
 // Worker grouping by FK: Session.workerId === Worker.id. Schema guarantees
 // every session has a worker (M2.6.1 FK Cascade). Destroyed sessions are

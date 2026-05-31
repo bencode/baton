@@ -8,7 +8,6 @@ type Subscriber<T> = (item: T) => void
 export type PubSub<T> = {
   publish(key: Id, item: T): void
   subscribe(key: Id, cb: Subscriber<T>): () => void
-  subscriberCount(key: Id): number
 }
 
 export const createPubSub = <T>(label: string): PubSub<T> => {
@@ -38,9 +37,6 @@ export const createPubSub = <T>(label: string): PubSub<T> => {
         s.delete(cb)
         if (s.size === 0) subs.delete(key)
       }
-    },
-    subscriberCount(key) {
-      return subs.get(key)?.size ?? 0
     },
   }
 }

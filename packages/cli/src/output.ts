@@ -1,4 +1,4 @@
-import type { Project, Requirement, SessionView, Task, Worker, Workspace } from '@baton/shared'
+import type { Project, Requirement, SessionView, Task, WorkerView, Workspace } from '@baton/shared'
 
 export const toJson = (data: unknown): string => JSON.stringify(data, null, 2)
 
@@ -8,7 +8,7 @@ export const fmtRequirement = (r: Requirement): string => `${r.code}  [${r.statu
 export const fmtTask = (t: Task): string => `${t.code}  [${t.status}]  ${t.title}`
 export const fmtSession = (s: SessionView): string =>
   `${s.id}  ${s.name}  ${s.attached ? '[active]' : '[inactive]'}  ${s.worktreePath ?? '(pending)'}`
-export const fmtWorker = (w: Worker & { alive?: boolean }): string => {
+export const fmtWorker = (w: WorkerView): string => {
   const offline = w.alive === false ? '  [offline]' : ''
   return `${w.id}  ${w.name}  ${w.hostname}${offline}`
 }
