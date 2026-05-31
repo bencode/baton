@@ -5,6 +5,7 @@ import { createApi } from '../api'
 import { useProject, useProjects } from '../features/projects/use-projects'
 import { RequirementDetail } from '../features/requirements/requirement-detail'
 import { SessionDetail } from '../features/sessions/session-detail'
+import { useSessions } from '../features/sessions/use-sessions'
 import { TaskDetail } from '../features/tasks/task-detail'
 import { useWorkspaces } from '../features/workspaces/use-workspaces'
 import { WorkspaceSwitcher } from '../features/workspaces/workspace-switcher'
@@ -67,9 +68,20 @@ const EmptyMain = () => (
 
 export const Shell = () => {
   const navigate = useNavigate()
-  const { tabs, activeId, open, close } = useTabs()
+  const { tabs, activeId, open, close, retitle } = useTabs()
   const route = parseRoute(activeId)
   const routeProjectId = activeProjectId(activeId)
+  // Keep session tab labels in sync with the live (auto-titled/renamed) name.
+  const { data: sessions } = useSessions(routeProjectId)
+  useEffect(() => {
+    if (!sessions) return
+    for (const tab of tabs) {
+      const r = parseRoute(tab.id)
+      if (r.kind !== 'session') continue
+      const s = sessions.find(x => x.id === r.sessionId)
+      if (s && s.name !== tab.title) retitle(tab.id, s.name)
+    }
+  }, [sessions, tabs, retitle])
   const routeWorkspaceId = route.kind === 'workspace' ? route.workspaceId : null
   const { data: project } = useProject(routeProjectId)
   const { data: workspaces } = useWorkspaces()

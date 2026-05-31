@@ -85,7 +85,7 @@ export type Api = {
     // surface worker/daemon connectivity, not just the bare Session record.
     listByProject(projectId: Id): Promise<SessionView[]>
     get(id: Id): Promise<SessionView>
-    create(input: { projectId: Id; workerId: Id; name: string }): Promise<SessionView>
+    create(input: { projectId: Id; workerId: Id; name?: string }): Promise<SessionView>
     // Lifecycle control: resume (re-spawn the child) / stop (kill it, keep the row).
     resume(id: Id): Promise<SessionView>
     stop(id: Id): Promise<SessionView>

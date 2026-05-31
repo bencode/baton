@@ -22,6 +22,10 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
     })
     return toSession(s)
   },
+  rename: async (id, name) => {
+    const s = await prisma.session.update({ where: { id }, data: { name } })
+    return toSession(s)
+  },
   get: async id => {
     const r = await prisma.session.findUnique({ where: { id } })
     return r ? toSession(r) : null

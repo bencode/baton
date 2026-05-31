@@ -24,6 +24,8 @@ export type TabsController = {
   activeId: string
   open: (id: string, title: string) => void
   close: (id: string) => void
+  // Update an open tab's label in place (e.g. a session got auto-titled/renamed).
+  retitle: (id: string, title: string) => void
 }
 
 // Open tabs live in App-shell state (persisted to localStorage); the active tab
@@ -67,5 +69,13 @@ export const useTabs = (): TabsController => {
     [tabs, activeId, navigate],
   )
 
-  return { tabs, activeId, open, close }
+  const retitle = useCallback((id: string, title: string) => {
+    setTabs(prev => {
+      const t = prev.find(x => x.id === id)
+      if (!t || t.title === title) return prev
+      return prev.map(x => (x.id === id ? { ...x, title } : x))
+    })
+  }, [])
+
+  return { tabs, activeId, open, close, retitle }
 }

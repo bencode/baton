@@ -112,6 +112,7 @@ export type Store = {
   sessions: {
     create(input: SessionCreate): Promise<Session>
     materialize(id: Id, input: SessionMaterialize): Promise<Session>
+    rename(id: Id, name: string): Promise<Session>
     get(id: Id): Promise<Session | null>
     listByProject(projectId: Id): Promise<Session[]>
     // DELETE the row. Irreversible. Session events live in browser IndexedDB

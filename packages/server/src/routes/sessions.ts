@@ -53,18 +53,23 @@ export const registerSessionRoutes = (
       name?: string
       agentKind?: AgentKind
     }
-    if (!body.projectId || !body.workerId || !body.name)
-      return c.json({ error: 'projectId, workerId, name required' }, 400)
+    if (!body.projectId || !body.workerId)
+      return c.json({ error: 'projectId, workerId required' }, 400)
     const worker = await store.workers.get(body.workerId)
     if (!worker || worker.projectId !== body.projectId)
       return c.json({ error: 'worker not found in project' }, 404)
-    const session = await store.sessions.create({
+    const created = await store.sessions.create({
       projectId: body.projectId,
       workerId: body.workerId,
       mode: body.mode ?? 'worker',
-      name: body.name,
+      name: body.name ?? '',
       agentKind: body.agentKind ?? 'claude-code',
     })
+    // No name given → a stable placeholder (`session-<id>`); the worker auto-titles
+    // it after the first turn. The id is only known post-insert.
+    const session = body.name
+      ? created
+      : await store.sessions.rename(created.id, `session-${created.id}`)
     commands.publish(worker.id, { cmd: 'session.start', sessionId: session.id, name: session.name })
     return c.json(await toView(session), 201)
   })
@@ -75,18 +80,28 @@ export const registerSessionRoutes = (
     return c.json(await toView(s))
   })
 
-  // Worker fills in the agent session id + worktree it materialized (worker-bearer).
+  // Worker-bearer PATCH: materialize (agentSessionId+worktreePath, at spawn) OR
+  // rename (name, e.g. the auto-title after the first turn). Never both at once.
   app.patch('/sessions/:id', auth, async c => {
     const owned = await ownedByWorker(c)
     if ('error' in owned) return owned.error
-    const body = (await c.req.json()) as { agentSessionId?: string; worktreePath?: string }
-    if (!body.agentSessionId || !body.worktreePath)
-      return c.json({ error: 'agentSessionId, worktreePath required' }, 400)
-    const updated = await store.sessions.materialize(owned.id, {
-      agentSessionId: body.agentSessionId,
-      worktreePath: body.worktreePath,
-    })
-    return c.json(await toView(updated))
+    const body = (await c.req.json()) as {
+      agentSessionId?: string
+      worktreePath?: string
+      name?: string
+    }
+    if (body.agentSessionId && body.worktreePath) {
+      const updated = await store.sessions.materialize(owned.id, {
+        agentSessionId: body.agentSessionId,
+        worktreePath: body.worktreePath,
+      })
+      return c.json(await toView(updated))
+    }
+    if (typeof body.name === 'string' && body.name.trim()) {
+      const updated = await store.sessions.rename(owned.id, body.name.trim())
+      return c.json(await toView(updated))
+    }
+    return c.json({ error: 'agentSessionId+worktreePath, or name, required' }, 400)
   })
 
   // Worker reports its child up (true, on spawn) / down (false, on exit). This is

@@ -1,8 +1,19 @@
 import type { Id, SessionView, WorkerView } from '@baton/shared'
+import { useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { sessionPath } from '../../app/route'
 import { useSessions } from '../sessions/use-sessions'
 import { useWorkers } from './use-workers'
+
+// Keep the rail scannable when a worker owns many sessions: active first, then
+// recent inactive; collapse the long inactive tail behind a toggle.
+const VISIBLE_BUDGET = 10
+const isLive = (s: SessionView): boolean => s.busy || s.attached
+const orderSessions = (sessions: SessionView[]): SessionView[] => {
+  const live = sessions.filter(isLive)
+  const idle = sessions.filter(s => !isLive(s)).sort((a, b) => b.id - a.id)
+  return [...live, ...idle]
+}
 
 type WorkersPanelProps = {
   projectId: Id
@@ -60,18 +71,20 @@ type WorkerGroupProps = {
 
 const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGroupProps) => {
   const api = useApi()
+  const [expanded, setExpanded] = useState(false)
   const alive = worker.alive
   const dim = !alive
-  // Create a session on this worker → server pushes session.start, the worker
-  // materializes + spawns it, the 2s poll surfaces it. Open it immediately.
+  // Create nameless → server assigns `session-<id>`, the worker auto-titles it
+  // after the first turn. Open it straight away (no prompt).
   const createSession = () => {
-    const name = window.prompt('new session name')?.trim()
-    if (!name) return
     void api.sessions
-      .create({ projectId, workerId: worker.id, name })
+      .create({ projectId, workerId: worker.id })
       .then(s => open(sessionPath(projectId, s.id), s.name))
       .catch(() => {})
   }
+  const ordered = orderSessions(sessions)
+  const visible = expanded ? ordered : ordered.slice(0, VISIBLE_BUDGET)
+  const hidden = ordered.length - visible.length
   return (
     <div className="flex flex-col gap-1">
       <div
@@ -82,8 +95,19 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
         {worker.hostname !== worker.name && (
           <span className="font-mono text-[10px] text-gray-400">{worker.hostname}</span>
         )}
+        {alive && (
+          <button
+            type="button"
+            onClick={createSession}
+            aria-label="new session"
+            title="new session"
+            className="ml-auto px-1 text-base leading-none text-gray-400 transition-colors hover:text-blue-700"
+          >
+            +
+          </button>
+        )}
       </div>
-      {sessions.map(s => (
+      {visible.map(s => (
         <SessionRow
           key={s.id}
           session={s}
@@ -93,13 +117,13 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open }: WorkerGrou
           open={open}
         />
       ))}
-      {alive && (
+      {(hidden > 0 || expanded) && ordered.length > VISIBLE_BUDGET && (
         <button
           type="button"
-          onClick={createSession}
-          className="px-4 py-1 text-left text-[11px] text-gray-400 transition-colors hover:text-blue-700"
+          onClick={() => setExpanded(e => !e)}
+          className="px-4 py-0.5 text-left text-[11px] text-gray-400 transition-colors hover:text-gray-700"
         >
-          + new session
+          {expanded ? '▾ less' : `▸ ${hidden} more`}
         </button>
       )}
     </div>

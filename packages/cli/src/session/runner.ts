@@ -8,6 +8,7 @@ import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
 import { claudeBin, maskedEnvKeys } from './runner/log.ts'
 import type { SpawnImpl } from './runner/spawn.ts'
+import { generateTitle } from './runner/title.ts'
 import { runTurn } from './runner/turn.ts'
 
 // Re-export for tests + commands wiring.
@@ -123,6 +124,28 @@ export const runDaemon = async (
   }
   const pendingQueue: SessionEvent[] = []
   let busy = false
+
+  // Auto-title a still-default-named session from its first message. Fire-and-
+  // forget (a throwaway claude call) so it never blocks the drain; runs once.
+  let titled = false
+  const maybeAutoTitle = (msg: SessionEvent): void => {
+    if (titled || !/^session-\d+$/.test(config.name)) return
+    titled = true
+    const firstText =
+      typeof (msg.payload as { text?: unknown }).text === 'string'
+        ? (msg.payload as { text: string }).text
+        : ''
+    if (!firstText) return
+    void generateTitle({
+      worktreePath: config.worktreePath,
+      firstUserText: firstText,
+      spawnImpl: sp,
+    })
+      .then(title => deps.worker.setName(title))
+      .then(() => log(`✎ titled session`))
+      .catch(e => log(`title failed: ${String(e)}`))
+  }
+
   const drain = async (): Promise<void> => {
     if (busy) return
     busy = true
@@ -137,6 +160,7 @@ export const runDaemon = async (
         // even on non-zero exit — future turns must --resume.
         state.firstSpawnDone = true
         log(`✔ msg #${msg.sequence}${code === 0 ? '' : ` (exit ${code})`}`)
+        if (!resuming && code === 0) maybeAutoTitle(msg)
       }
     } finally {
       busy = false
