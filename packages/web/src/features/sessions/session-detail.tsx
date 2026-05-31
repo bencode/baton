@@ -19,6 +19,12 @@ const renamePasted = (file: File, i: number): File => {
   return new File([file], `paste-${Date.now()}-${i}.${ext}`, { type: file.type })
 }
 
+// Auto-title retries on each completed turn while a session is still unnamed —
+// give up after this many so a session that never gains substance isn't asked
+// forever (the user can always rename by hand).
+const MAX_AUTOTITLE_ATTEMPTS = 5
+const PLACEHOLDER_NAME = /^session-\d+$/
+
 // Render a Session as a chat. Looks up the session by int id; the list query
 // from `useSessions` re-polls so we can use its fresher copy when available.
 export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
@@ -44,16 +50,30 @@ export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
     el.scrollTop = el.scrollHeight
   }, [items.length])
 
-  // Auto-title trigger: once the first turn completes on a still-unnamed session,
-  // ask the worker to title it (it reads its own transcript). Fire once per
-  // session id; the server no-ops if the name is no longer a placeholder.
-  const titledForRef = useRef<Id | null>(null)
+  // Auto-title trigger: while the session is still a placeholder, ask the worker
+  // to title it after each completed turn (it reads its own transcript and may
+  // decline if there's not enough yet). Retry on new turns up to a cap, so a
+  // session that starts trivial but turns substantial gets named later; once a
+  // real name sticks the placeholder check stops it.
+  const autoTitle = useRef({ sid: null as Id | null, firedTurns: 0, attempts: 0, inFlight: false })
   useEffect(() => {
-    if (!session || titledForRef.current === sessionId) return
-    if (!/^session-\d+$/.test(session.name)) return
-    if (!events.some(e => e.type === 'turn_complete')) return
-    titledForRef.current = sessionId
-    void api.sessions.autotitle(sessionId).catch(() => {})
+    const a = autoTitle.current
+    if (a.sid !== sessionId) {
+      a.sid = sessionId
+      a.firedTurns = 0
+      a.attempts = 0
+      a.inFlight = false
+    }
+    if (!session || a.inFlight || a.attempts >= MAX_AUTOTITLE_ATTEMPTS) return
+    if (!PLACEHOLDER_NAME.test(session.name)) return
+    const turns = events.reduce((n, e) => (e.type === 'turn_complete' ? n + 1 : n), 0)
+    if (turns <= a.firedTurns) return
+    a.firedTurns = turns
+    a.attempts += 1
+    a.inFlight = true
+    void api.sessions.autotitle(sessionId).finally(() => {
+      autoTitle.current.inFlight = false
+    })
   }, [events, session, sessionId, api])
 
   if (!session) return <div className="p-6 text-sm text-gray-400">loading…</div>

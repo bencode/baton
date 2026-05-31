@@ -143,6 +143,8 @@ export const runWorkerDaemon = async (
       assistantText: exchange.assistantText,
       spawnImpl: spawn as SpawnImpl,
     })
+    // Declined: not enough to title yet — leave the placeholder, retry later.
+    if (!title) return log(`title #${sessionId}: not enough to title yet, skipping`)
     await client.sessions.setName(sessionId, title, cfg.apiToken)
     log(`✎ titled session #${sessionId} → ${title}`)
   }

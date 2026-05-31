@@ -3,11 +3,17 @@ import type { SpawnImpl } from './spawn.ts'
 
 // Auto-title a fresh session from its first exchange (user ask + assistant
 // reply). We ask claude for a short title in a throwaway `--print` call (no
-// session id, plain text out), and fall back to a heuristic from the user
-// message if that fails or returns junk.
+// session id, plain text out). When there isn't enough to title meaningfully we
+// return null (decline) rather than inventing a junk name — the session keeps
+// its `session-<id>` placeholder and the caller can retry on a later turn.
 
 // Keep each side of the exchange bounded so the title prompt stays small.
 const clip = (s: string, max: number): string => (s.length > max ? s.slice(0, max) : s)
+
+// The model is told to reply with this sentinel when the exchange is too thin /
+// generic to title — we treat that (or empty) as "no title yet".
+const isDeclined = (title: string): boolean =>
+  title.replace(/[^a-z]/gi, '').toUpperCase() === 'NONE'
 
 // Trim model output down to a clean, short title: one line, no quotes/labels,
 // capped. Exported for unit tests.
@@ -21,30 +27,27 @@ export const sanitizeTitle = (raw: string): string =>
     .slice(0, 40)
     .trim()
 
-// First few words of the message — the no-LLM fallback.
-export const heuristicTitle = (firstUserText: string): string => {
-  const words = firstUserText.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean).slice(0, 5)
-  return (words.join(' ') || 'session').slice(0, 40)
-}
-
 const TITLE_TIMEOUT_MS = 30_000
 
 // Spawn `claude --print "<title prompt>"` in the worktree, collect stdout, and
-// return a sanitized title — or the heuristic fallback. Never throws.
+// return a sanitized title — or null when the exchange is too thin to title (no
+// content, model declined with NONE, or empty output). Never throws.
 export const generateTitle = async (input: {
   worktreePath: string
   userText: string
   assistantText: string
   spawnImpl: SpawnImpl
-}): Promise<string> => {
+}): Promise<string | null> => {
   const { worktreePath, userText, assistantText, spawnImpl } = input
+  // Nothing meaningful to summarize → decline without spawning claude.
+  if (`${userText}${assistantText}`.trim().length < 4) return null
   const exchange = [
     `User: ${clip(userText, 800)}`,
     assistantText ? `Assistant: ${clip(assistantText, 800)}` : '',
   ]
     .filter(Boolean)
     .join('\n')
-  const prompt = `Reply with ONLY a 2-5 word title (no quotes, no punctuation) summarizing this coding session:\n${exchange}`
+  const prompt = `Reply with ONLY a 2-5 word title (no quotes, no punctuation) summarizing this coding session. If it is too short or generic to title meaningfully, reply with exactly NONE:\n${exchange}`
   const out = await new Promise<string>(resolve => {
     let buf = ''
     let done = false
@@ -84,5 +87,6 @@ export const generateTitle = async (input: {
       finish('')
     })
   })
-  return sanitizeTitle(out) || heuristicTitle(userText)
+  const title = sanitizeTitle(out)
+  return !title || isDeclined(title) ? null : title
 }

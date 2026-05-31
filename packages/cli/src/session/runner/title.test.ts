@@ -3,7 +3,7 @@ import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { describe, test } from 'node:test'
 import type { SpawnImpl } from './spawn.ts'
-import { generateTitle, heuristicTitle, sanitizeTitle } from './title.ts'
+import { generateTitle, sanitizeTitle } from './title.ts'
 
 // Fake claude that emits `out` on stdout then exits 0.
 const fakeSpawn =
@@ -27,33 +27,34 @@ describe('sanitizeTitle', () => {
   })
 })
 
-describe('heuristicTitle', () => {
-  test('first 5 words; empty → session', () => {
-    assert.equal(
-      heuristicTitle('curl localhost 8889 again and tell me'),
-      'curl localhost 8889 again and',
-    )
-    assert.equal(heuristicTitle('   '), 'session')
-  })
-})
-
 describe('generateTitle', () => {
+  const base = {
+    worktreePath: '/tmp',
+    userText: 'curl the health endpoint and report status',
+    assistantText: 'I will hit /health and report the status.',
+  }
   test('uses claude stdout when present', async () => {
-    const t = await generateTitle({
-      worktreePath: '/tmp',
-      userText: 'curl health',
-      assistantText: 'I will hit /health and report the status.',
-      spawnImpl: fakeSpawn('  Curl Health Check  '),
-    })
+    const t = await generateTitle({ ...base, spawnImpl: fakeSpawn('  Curl Health Check  ') })
     assert.equal(t, 'Curl Health Check')
   })
-  test('falls back to the heuristic (from user text) when claude emits nothing', async () => {
-    const t = await generateTitle({
-      worktreePath: '/tmp',
-      userText: 'curl the health endpoint now please',
-      assistantText: 'sure',
-      spawnImpl: fakeSpawn(''),
-    })
-    assert.equal(t, 'curl the health endpoint now please'.split(' ').slice(0, 5).join(' '))
+  test('declines (null) when the model replies NONE', async () => {
+    assert.equal(await generateTitle({ ...base, spawnImpl: fakeSpawn('NONE') }), null)
+  })
+  test('declines (null) when claude emits nothing', async () => {
+    assert.equal(await generateTitle({ ...base, spawnImpl: fakeSpawn('') }), null)
+  })
+  test('declines (null) for a too-thin exchange without spawning', async () => {
+    const spy: SpawnImpl = () => {
+      throw new Error('should not spawn for a trivial exchange')
+    }
+    assert.equal(
+      await generateTitle({
+        worktreePath: '/tmp',
+        userText: 'hi',
+        assistantText: '',
+        spawnImpl: spy,
+      }),
+      null,
+    )
   })
 })
