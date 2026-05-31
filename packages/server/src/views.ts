@@ -2,6 +2,7 @@ import type { Id, Session, SessionView, Worker } from '@baton/shared'
 import type { BusyTracker } from './busy.ts'
 import type { LivenessTracker } from './liveness.ts'
 import type { AuthVars } from './middleware/auth.ts'
+import type { SessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
 
 // Parse an `:id` URL param to int; NaN is fine — downstream finds return null → 404.
@@ -17,17 +18,15 @@ export const sessionWithView = async (
   session: Session,
   store: Store,
   workerLiveness: LivenessTracker,
-  sessionLiveness: LivenessTracker,
+  runtime: SessionRuntime,
   busyTracker: BusyTracker,
 ): Promise<SessionView> => {
   const worker = await store.workers.get(session.workerId)
-  // busy semantically = "a daemon is currently running a turn". Requires both:
-  //   1. busyTracker has been toggled true by an unresolved turn_start
-  //   2. session-level heartbeat is alive (daemon is still around to finish)
-  // Either being false → busy=false. SIGKILL / crash / partition all collapse
-  // via attached → false within the 90s heartbeat window; busyTracker itself
-  // is reset when the daemon properly emits turn_complete / turn_error.
-  const attached = sessionLiveness.isAlive(String(session.id))
+  // attached = "the worker has a live child process for this session" — set by
+  // the worker on spawn/exit (POST /sessions/:id/status) and cleared instantly
+  // when the worker's command stream drops. busy additionally requires an
+  // unresolved turn_start; either false → busy=false.
+  const attached = runtime.isActive(session.id)
   return {
     ...session,
     worker: worker ?? unknownWorker(session.workerId, session.projectId),

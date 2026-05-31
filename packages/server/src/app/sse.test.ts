@@ -32,18 +32,20 @@ describe('server HTTP — SSE chat stream', () => {
           name: 'sse-worker',
           hostname: 'h-sse',
         })
-      ).json()) as { worker: WithId }
+      ).json()) as { worker: WithId; apiToken: string }
       const s = (await (
         await post('/sessions', {
           projectId: p.id,
           workerId: workerReg.worker.id,
-          mode: 'worker',
           name: 'sse-test',
-          agentKind: 'claude-code',
-          agentSessionId: 'sse-uuid',
-          worktreePath: '/tmp/wt',
         })
-      ).json()) as WithId & { apiToken: string }
+      ).json()) as WithId
+      // Mark active (as the worker would on spawn) so messages aren't 409-gated.
+      await post(
+        `/sessions/${s.id}/status`,
+        { active: true },
+        { authorization: `Bearer ${workerReg.apiToken}` },
+      )
       // A pre-connect message is dropped — there's no longer any server-side
       // history to replay; clients keep their own transcript in IndexedDB.
       await post(`/sessions/${s.id}/messages`, { text: 'pre' })

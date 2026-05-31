@@ -107,7 +107,16 @@ describe('server HTTP — attachments', () => {
 
   test('message carries attachment descriptors in its payload', async () => {
     const app = createApp(ctx.store)
-    const { session } = await seedSession(app)
+    const { session, workerToken } = await seedSession(app)
+    // messages require an active session
+    await postJson(
+      app,
+      `/sessions/${session.id}/status`,
+      { active: true },
+      {
+        authorization: `Bearer ${workerToken}`,
+      },
+    )
     const up = await app.request(`/sessions/${session.id}/attachments?filename=a.png`, {
       method: 'POST',
       body: new Uint8Array([1, 2, 3, 4]),

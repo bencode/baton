@@ -7,26 +7,21 @@ import { createPrismaStore } from './store/prisma-store.ts'
 
 const config = loadConfig()
 const store = createPrismaStore(createPrisma(config.databaseUrl))
-// Two independent liveness trackers (see app.ts comments): one for worker
-// machineId, one for sessionId. Each has its own prune timer.
+// Worker-machine liveness tracker (see app.ts). Session active-state is tracked
+// separately (SessionRuntime, instant via worker reports) and needs no prune.
 const workerLiveness = createLiveness()
-const sessionLiveness = createLiveness()
 const workerPrune = startLivenessPrune(workerLiveness)
-const sessionPrune = startLivenessPrune(sessionLiveness)
-// No boot-time state recovery: busy is derived from the event log at read
-// time; liveness is purely in-memory and naturally resets on boot. Daemons
-// that come online re-ping within their next 30s tick.
+// No boot-time state recovery: liveness is purely in-memory and resets on boot.
+// Workers that come online re-ping within their next 30s tick.
 const server = await startServer({
   store,
   port: config.port,
   workerLiveness,
-  sessionLiveness,
 })
 console.log(`baton server listening on :${server.port}`)
 
 const shutdown = async () => {
   workerPrune.stop()
-  sessionPrune.stop()
   await server.stop()
   process.exit(0)
 }

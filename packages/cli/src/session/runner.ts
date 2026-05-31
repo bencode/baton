@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SessionEvent } from '@baton/shared'
 import { EventSource } from 'eventsource'
-import type { ApiClient, WorkerClient } from '../client.ts'
+import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
 import { claudeBin, maskedEnvKeys } from './runner/log.ts'
 import type { SpawnImpl } from './runner/spawn.ts'
@@ -21,7 +21,6 @@ export type EventSourceLike = {
 }
 
 export type RunnerDeps = {
-  client: ApiClient
   worker: WorkerClient
   env?: Record<string, string>
   spawnImpl?: SpawnImpl
@@ -53,27 +52,6 @@ const claudeSessionFileExists = (agentSessionId: string): boolean => {
     // ~/.claude/projects missing — fresh machine, first run
   }
   return false
-}
-
-const startHeartbeat = (
-  client: ApiClient,
-  worker: WorkerClient,
-  machineId: string,
-  log: (m: string) => void,
-): NodeJS.Timeout => {
-  // Two pings every tick: worker-level (per-machine liveness) and
-  // session-level (per-session 'attached' flag). Worker keeps the machine
-  // alive in UI; session-level distinguishes 'machine up but no daemon for
-  // this session' from 'machine down'. Immediate ping seeds both so a `send`
-  // right after `start` doesn't see stale alive=false / attached=false.
-  const ping = (): void => {
-    void client.workers
-      .heartbeat(machineId)
-      .catch(e => log(`worker heartbeat failed: ${String(e)}`))
-    void worker.heartbeat().catch(e => log(`session heartbeat failed: ${String(e)}`))
-  }
-  ping()
-  return setInterval(ping, 30_000)
 }
 
 // Build the SSE subscription wrapper. Each unseen `user_message` is forwarded
@@ -165,7 +143,6 @@ export const runDaemon = async (
     }
   }
 
-  const hb = startHeartbeat(deps.client, deps.worker, config.workerMachineId, log)
   const es = subscribeStream(
     `${config.server}/sessions/${config.sessionId}/stream`,
     ESCtor,
@@ -178,6 +155,5 @@ export const runDaemon = async (
   )
   await waitForAbort(signal)
   es.close()
-  clearInterval(hb)
   restoreTty()
 }

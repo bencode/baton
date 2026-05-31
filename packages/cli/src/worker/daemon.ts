@@ -66,16 +66,23 @@ export const runWorkerDaemon = async (
     })
     children.set(sessionId, { child, worktreePath })
     log(`spawned session #${sessionId} (${worktreePath})`)
+    // Report active up-front so the UI can let the user message it. (Brief
+    // window before the child finishes subscribing; acceptable for v0.)
+    void client.sessions
+      .setStatus(sessionId, true, cfg.apiToken)
+      .catch(e => log(`status(active) failed: ${String(e)}`))
     child.on('exit', code => {
       children.delete(sessionId)
       log(`session #${sessionId} child exited (code=${code ?? -1})`)
+      // Report inactive; best-effort (404 is fine if the session was deleted).
+      void client.sessions.setStatus(sessionId, false, cfg.apiToken).catch(() => {})
     })
   }
 
   // Materialize on first sight (mint agentSessionId + git worktree, PATCH them
   // back), then spawn. Idempotent: a session that's already materialized (worker
   // restart) reuses the existing worktree and just respawns.
-  const onCreate = async (sessionId: Id, name: string): Promise<void> => {
+  const onStart = async (sessionId: Id, name: string): Promise<void> => {
     if (children.has(sessionId)) return log(`session #${sessionId} already running`)
     const session = await client.sessions.get(sessionId)
     let worktreePath = session.worktreePath
@@ -94,13 +101,45 @@ export const runWorkerDaemon = async (
     spawnChild(sessionId, worktreePath)
   }
 
-  const onDelete = (sessionId: Id): void => {
+  // Stop: kill the child but keep the worktree (session goes inactive, can be
+  // resumed). The child's exit handler reports active=false.
+  const onStop = (sessionId: Id): void => {
     const entry = children.get(sessionId)
     if (!entry) return
     killChild(entry.child)
     children.delete(sessionId)
-    removeWorktree(repo, entry.worktreePath)
-    log(`stopped session #${sessionId} (removed worktree)`)
+    log(`stopped session #${sessionId}`)
+  }
+
+  // Delete: kill the child (if tracked) AND remove the worktree. The path comes
+  // from our tracked entry, or from the command itself when we aren't tracking a
+  // child for it (e.g. delete after a worker restart).
+  const onDelete = (sessionId: Id, worktreePath: string | null): void => {
+    const entry = children.get(sessionId)
+    if (entry) {
+      killChild(entry.child)
+      children.delete(sessionId)
+    }
+    const wt = entry?.worktreePath ?? worktreePath
+    if (wt) removeWorktree(repo, wt)
+    log(`deleted session #${sessionId} (removed worktree)`)
+  }
+
+  // On (re)connect, kill any child whose session no longer exists server-side —
+  // heals a session.delete that was dropped while we were disconnected. We do
+  // NOT auto-start sessions: resume is explicit.
+  const reconcile = async (): Promise<void> => {
+    const owned = (await client.sessions.listByProject(cfg.projectId)).filter(
+      s => s.workerId === cfg.workerId,
+    )
+    const live = new Set(owned.map(s => s.id))
+    for (const [sid, entry] of children) {
+      if (!live.has(sid)) {
+        killChild(entry.child)
+        children.delete(sid)
+        log(`reconcile: stopped orphan session #${sid}`)
+      }
+    }
   }
 
   const es = new EventSource(`${cfg.server}/workers/me/stream`, {
@@ -113,12 +152,14 @@ export const runWorkerDaemon = async (
         },
       }),
   })
+  es.onopen = () => void reconcile().catch(err => log(`reconcile failed: ${String(err)}`))
   es.onmessage = e => {
     try {
       const cmd = JSON.parse(e.data) as WorkerCommand
-      if (cmd.cmd === 'session.create')
-        void onCreate(cmd.sessionId, cmd.name).catch(err => log(`create failed: ${String(err)}`))
-      else if (cmd.cmd === 'session.delete') onDelete(cmd.sessionId)
+      if (cmd.cmd === 'session.start')
+        void onStart(cmd.sessionId, cmd.name).catch(err => log(`start failed: ${String(err)}`))
+      else if (cmd.cmd === 'session.stop') onStop(cmd.sessionId)
+      else if (cmd.cmd === 'session.delete') onDelete(cmd.sessionId, cmd.worktreePath)
     } catch {
       // skip malformed commands
     }

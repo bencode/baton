@@ -8,14 +8,15 @@ import type {
   SessionEventType,
   SessionMode,
 } from '@baton/shared'
-import type { Hono } from 'hono'
-import { streamSSE } from 'hono/streaming'
+import type { Context, Hono } from 'hono'
 import type { AttachmentStore } from '../attachments.ts'
 import type { BusyTracker } from '../busy.ts'
 import type { CommandBus } from '../command-bus.ts'
 import type { EventBus } from '../event-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
+import type { SessionRuntime } from '../session-runtime.ts'
+import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam, sessionWithView } from '../views.ts'
 
@@ -68,14 +69,26 @@ export const registerSessionRoutes = (
   store: Store,
   bus: EventBus,
   workerLiveness: LivenessTracker,
-  sessionLiveness: LivenessTracker,
+  runtime: SessionRuntime,
   busyTracker: BusyTracker,
   attachments: AttachmentStore,
   commands: CommandBus,
 ): void => {
   const auth = workerBearerAuth(store)
+  const toView = (s: Parameters<typeof sessionWithView>[0]) =>
+    sessionWithView(s, store, workerLiveness, runtime, busyTracker)
 
-  // Create a session row (collaboration metadata only) and push a session.create
+  // Helper: load a session, 404 if missing, 403 if the bearer worker doesn't own
+  // it. Used by every worker-authed session route.
+  const ownedByWorker = async (c: Context<AppEnv>) => {
+    const id = intParam(c.req.param('id') ?? '')
+    const s = await store.sessions.get(id)
+    if (!s) return { error: c.json({ error: 'not found' }, 404) }
+    if (s.workerId !== c.get('worker').id) return { error: c.json({ error: 'forbidden' }, 403) }
+    return { id, session: s }
+  }
+
+  // Create a session row (collaboration metadata only) and push a session.start
   // command to the owning worker, which materializes (worktree + agentSessionId)
   // and spawns the session child process. No agentSessionId/worktreePath here —
   // those are worker-assigned. Remote-friendly: the caller needs no local machine.
@@ -99,60 +112,69 @@ export const registerSessionRoutes = (
       name: body.name,
       agentKind: body.agentKind ?? 'claude-code',
     })
-    commands.publish(worker.id, {
-      cmd: 'session.create',
-      sessionId: session.id,
-      name: session.name,
-    })
-    const view = await sessionWithView(session, store, workerLiveness, sessionLiveness, busyTracker)
-    return c.json(view, 201)
+    commands.publish(worker.id, { cmd: 'session.start', sessionId: session.id, name: session.name })
+    return c.json(await toView(session), 201)
   })
 
   app.get('/sessions/:id', async c => {
     const s = await store.sessions.get(intParam(c.req.param('id')))
     if (!s) return c.json({ error: 'not found' }, 404)
-    return c.json(await sessionWithView(s, store, workerLiveness, sessionLiveness, busyTracker))
+    return c.json(await toView(s))
   })
 
-  // Worker fills in the agent session id + worktree it materialized (worker-bearer,
-  // must own the session).
+  // Worker fills in the agent session id + worktree it materialized (worker-bearer).
   app.patch('/sessions/:id', auth, async c => {
-    const id = intParam(c.req.param('id'))
-    const s = await store.sessions.get(id)
-    if (!s) return c.json({ error: 'not found' }, 404)
-    if (s.workerId !== c.get('worker').id) return c.json({ error: 'forbidden' }, 403)
+    const owned = await ownedByWorker(c)
+    if ('error' in owned) return owned.error
     const body = (await c.req.json()) as { agentSessionId?: string; worktreePath?: string }
     if (!body.agentSessionId || !body.worktreePath)
       return c.json({ error: 'agentSessionId, worktreePath required' }, 400)
-    const updated = await store.sessions.materialize(id, {
+    const updated = await store.sessions.materialize(owned.id, {
       agentSessionId: body.agentSessionId,
       worktreePath: body.worktreePath,
     })
-    return c.json(
-      await sessionWithView(updated, store, workerLiveness, sessionLiveness, busyTracker),
-    )
+    return c.json(await toView(updated))
   })
 
-  // Session-level liveness ping (worker-bearer, must own session). Distinguishes
-  // 'machine online' from 'this session has a live child daemon attached'.
-  app.post('/sessions/:id/heartbeat', auth, async c => {
-    const id = intParam(c.req.param('id'))
-    const s = await store.sessions.get(id)
+  // Worker reports its child up (true, on spawn) / down (false, on exit). This is
+  // the source of `attached` — instant, no heartbeat window.
+  app.post('/sessions/:id/status', auth, async c => {
+    const owned = await ownedByWorker(c)
+    if ('error' in owned) return owned.error
+    const body = (await c.req.json()) as { active?: boolean }
+    runtime.setActive(owned.id, owned.session.workerId, body.active === true)
+    if (body.active !== true) busyTracker.forget(owned.id)
+    return c.json(await toView(owned.session))
+  })
+
+  // Resume (start) / stop a session — control ops. resume re-spawns the child for
+  // an existing session; stop kills it but keeps the row + worktree (→ inactive).
+  app.post('/sessions/:id/resume', async c => {
+    const s = await store.sessions.get(intParam(c.req.param('id')))
     if (!s) return c.json({ error: 'not found' }, 404)
-    if (s.workerId !== c.get('worker').id) return c.json({ error: 'forbidden' }, 403)
-    sessionLiveness.ping(String(id))
-    return c.json({ attached: true })
+    commands.publish(s.workerId, { cmd: 'session.start', sessionId: s.id, name: s.name })
+    return c.json(await toView(s))
+  })
+  app.post('/sessions/:id/stop', async c => {
+    const s = await store.sessions.get(intParam(c.req.param('id')))
+    if (!s) return c.json({ error: 'not found' }, 404)
+    commands.publish(s.workerId, { cmd: 'session.stop', sessionId: s.id })
+    return c.json(await toView(s))
   })
 
-  // Session DELETE (no auth, v0). Tell the owning worker to tear down its child,
-  // then drop the row. Browser-side events live in IndexedDB — not ours to wipe.
+  // Session DELETE (no auth, v0). Tell the owning worker to tear down its child +
+  // worktree, then drop the row. Browser-side events live in IndexedDB.
   app.delete('/sessions/:id', async c => {
     const id = intParam(c.req.param('id'))
     const s = await store.sessions.get(id)
     if (!s) return c.json({ error: 'not found' }, 404)
-    commands.publish(s.workerId, { cmd: 'session.delete', sessionId: id })
+    commands.publish(s.workerId, {
+      cmd: 'session.delete',
+      sessionId: id,
+      worktreePath: s.worktreePath,
+    })
     await store.sessions.destroy(id)
-    sessionLiveness.forget(String(id))
+    runtime.forget(id)
     busyTracker.forget(id)
     sessionSeq.delete(id)
     await attachments.forgetSession(id)
@@ -164,16 +186,15 @@ export const registerSessionRoutes = (
   // subscribed browsers / CLIs receive it live. turn_start / turn_complete /
   // turn_error also toggle busyTracker — the UI busy-pulse source of truth.
   app.post('/sessions/:id/events', auth, async c => {
-    const id = intParam(c.req.param('id'))
-    const s = await store.sessions.get(id)
-    if (!s) return c.json({ error: 'not found' }, 404)
-    if (s.workerId !== c.get('worker').id) return c.json({ error: 'forbidden' }, 403)
+    const owned = await ownedByWorker(c)
+    if ('error' in owned) return owned.error
     const body = (await c.req.json()) as { type?: SessionEventType; payload?: unknown }
     if (!body.type) return c.json({ error: 'type required' }, 400)
-    if (body.type === 'turn_start') busyTracker.set(id, true)
-    else if (body.type === 'turn_complete' || body.type === 'turn_error') busyTracker.set(id, false)
-    const ev = synthesize(id, body.type, body.payload ?? null)
-    bus.publish(id, ev)
+    if (body.type === 'turn_start') busyTracker.set(owned.id, true)
+    else if (body.type === 'turn_complete' || body.type === 'turn_error')
+      busyTracker.set(owned.id, false)
+    const ev = synthesize(owned.id, body.type, body.payload ?? null)
+    bus.publish(owned.id, ev)
     return c.json(ev, 201)
   })
 
@@ -185,6 +206,10 @@ export const registerSessionRoutes = (
     const sessionId = intParam(c.req.param('id'))
     const session = await store.sessions.get(sessionId)
     if (!session) return c.json({ error: 'not found' }, 404)
+    // Messages only go to an active session (a live worker child is subscribed).
+    // Otherwise there's no one to receive it — reject rather than drop silently.
+    if (!runtime.isActive(sessionId))
+      return c.json({ error: 'session not active — resume it first' }, 409)
     const body = (await c.req.json()) as {
       text?: string
       images?: unknown
@@ -246,40 +271,6 @@ export const registerSessionRoutes = (
     const id = intParam(c.req.param('id'))
     const exists = await store.sessions.get(id)
     if (!exists) return c.json({ error: 'not found' }, 404)
-    const signal = c.req.raw.signal
-    return streamSSE(c, async stream => {
-      let resolve = (): void => {}
-      const pending: SessionEvent[] = []
-      const wake = () => {
-        const r = resolve
-        resolve = () => {}
-        r()
-      }
-      const unsub = bus.subscribe(id, e => {
-        pending.push(e)
-        wake()
-      })
-      signal.addEventListener('abort', wake)
-      const keepalive = setInterval(() => {
-        if (signal.aborted) return
-        stream.write(': keepalive\n\n').catch(() => {})
-      }, 30_000)
-      try {
-        while (!signal.aborted) {
-          while (pending.length > 0 && !signal.aborted) {
-            const e = pending.shift()
-            if (e) await stream.writeSSE({ data: JSON.stringify(e) })
-          }
-          if (signal.aborted) break
-          await new Promise<void>(r => {
-            resolve = r
-          })
-        }
-      } finally {
-        clearInterval(keepalive)
-        unsub()
-        signal.removeEventListener('abort', wake)
-      }
-    })
+    return streamBus(c, push => bus.subscribe(id, push))
   })
 }

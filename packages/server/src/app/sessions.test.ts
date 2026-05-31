@@ -20,7 +20,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(session.busy, false)
     // alive is true: worker register seeds worker liveness with its first ping.
     assert.equal(session.alive, true)
-    // attached is false: no child daemon has pinged /sessions/:id/heartbeat yet.
+    // attached is false: the worker hasn't reported a running child yet.
     assert.equal(session.attached, false)
     const full = (await (await app.request(`/sessions/${session.id}`)).json()) as {
       agentSessionId: string | null
@@ -30,7 +30,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(full.worktreePath, null)
   })
 
-  test('materialize + heartbeat (worker-bearer): PATCH fills fields, attached flips', async () => {
+  test('materialize (PATCH) + status report flips attached (worker-bearer)', async () => {
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)
     const auth = { authorization: `Bearer ${workerToken}` }
@@ -45,25 +45,62 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(pv.agentSessionId, 'uuid-1')
     assert.equal(pv.worktreePath, '/tmp/wt')
 
-    const hb = await postJson(app, `/sessions/${session.id}/heartbeat`, {}, auth)
-    assert.equal(hb.status, 200)
-    assert.deepEqual(await hb.json(), { attached: true })
-    const view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
+    // worker reports child up → attached true; down → attached false.
+    await postJson(app, `/sessions/${session.id}/status`, { active: true }, auth)
+    let view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
       attached: boolean
     }
     assert.equal(view.attached, true)
-    // unauthenticated heartbeat rejected
-    assert.equal((await postJson(app, `/sessions/${session.id}/heartbeat`, {})).status, 401)
+    await postJson(app, `/sessions/${session.id}/status`, { active: false }, auth)
+    view = (await (await app.request(`/sessions/${session.id}`)).json()) as { attached: boolean }
+    assert.equal(view.attached, false)
+    // unauthenticated status rejected
+    assert.equal(
+      (await postJson(app, `/sessions/${session.id}/status`, { active: true })).status,
+      401,
+    )
+  })
+
+  test('messages require an active session (409 when inactive)', async () => {
+    const app = createApp(ctx.store)
+    const { session, workerToken } = await seedSession(app)
+    const auth = { authorization: `Bearer ${workerToken}` }
+    // inactive → 409
+    assert.equal(
+      (await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })).status,
+      409,
+    )
+    // activate → 201
+    await postJson(app, `/sessions/${session.id}/status`, { active: true }, auth)
+    assert.equal(
+      (await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })).status,
+      201,
+    )
+    // stop (worker reports inactive) → 409 again
+    await postJson(app, `/sessions/${session.id}/status`, { active: false }, auth)
+    assert.equal(
+      (await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })).status,
+      409,
+    )
   })
 
   test('messages: POST /sessions/:id/messages synthesizes ephemeral user_message', async () => {
     const app = createApp(ctx.store)
-    const { session } = await seedSession(app)
+    const { session, workerToken } = await seedSession(app)
+    await postJson(
+      app,
+      `/sessions/${session.id}/status`,
+      { active: true },
+      {
+        authorization: `Bearer ${workerToken}`,
+      },
+    )
     const res = await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
     assert.equal(res.status, 201)
     const ev = (await res.json()) as { type: string; sequence: number; payload: { text: string } }
     assert.equal(ev.type, 'user_message')
-    assert.equal(ev.sequence, 0)
+    // sequence is an ephemeral per-process counter (not reset between tests) — just a number
+    assert.equal(typeof ev.sequence, 'number')
     assert.equal(ev.payload.text, 'hi')
 
     // 400 on empty text + images
@@ -82,7 +119,15 @@ describe('server HTTP — sessions + chat protocol', () => {
 
   test('messages: accepts pasted images (data URLs), rejects empty and oversized', async () => {
     const app = createApp(ctx.store)
-    const { session } = await seedSession(app)
+    const { session, workerToken } = await seedSession(app)
+    await postJson(
+      app,
+      `/sessions/${session.id}/status`,
+      { active: true },
+      {
+        authorization: `Bearer ${workerToken}`,
+      },
+    )
     const img = 'data:image/png;base64,AAAA'
 
     const res = await postJson(app, `/sessions/${session.id}/messages`, { text: '', images: [img] })
@@ -119,8 +164,8 @@ describe('server HTTP — sessions + chat protocol', () => {
       401,
     )
 
-    // Heartbeat first (real daemon order). Without it attached=false → busy=false.
-    await postJson(app, `/sessions/${session.id}/heartbeat`, {}, auth)
+    // Report active first (real worker order). Without it attached=false → busy=false.
+    await postJson(app, `/sessions/${session.id}/status`, { active: true }, auth)
 
     // turn_start → busy=true.
     await postJson(app, `/sessions/${session.id}/events`, { type: 'turn_start', payload: {} }, auth)

@@ -11,10 +11,9 @@ export const startServer = (opts: {
   store: Store
   port: number
   workerLiveness?: LivenessTracker
-  sessionLiveness?: LivenessTracker
 }): Promise<Server> =>
   new Promise(resolve => {
-    const app = createApp(opts.store, undefined, opts.workerLiveness, opts.sessionLiveness)
+    const app = createApp(opts.store, undefined, opts.workerLiveness)
     const httpServer = serve({ fetch: app.fetch, port: opts.port }, info => {
       resolve({
         port: info.port,

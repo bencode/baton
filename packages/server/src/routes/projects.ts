@@ -2,6 +2,7 @@ import type { Id } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { BusyTracker } from '../busy.ts'
 import type { LivenessTracker } from '../liveness.ts'
+import type { SessionRuntime } from '../session-runtime.ts'
 import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam, sessionWithView, workerWithView } from '../views.ts'
 
@@ -9,7 +10,7 @@ export const registerProjectRoutes = (
   app: Hono<AppEnv>,
   store: Store,
   workerLiveness: LivenessTracker,
-  sessionLiveness: LivenessTracker,
+  runtime: SessionRuntime,
   busyTracker: BusyTracker,
 ): void => {
   app.post('/projects', async c => {
@@ -34,7 +35,7 @@ export const registerProjectRoutes = (
     const id = intParam(c.req.param('id'))
     const list = await store.sessions.listByProject(id)
     const merged = await Promise.all(
-      list.map(s => sessionWithView(s, store, workerLiveness, sessionLiveness, busyTracker)),
+      list.map(s => sessionWithView(s, store, workerLiveness, runtime, busyTracker)),
     )
     return c.json(merged)
   })

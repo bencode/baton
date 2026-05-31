@@ -1,4 +1,12 @@
-import type { AgentKind, Attachment, Id, Session, SessionEvent, SessionMode } from '@baton/shared'
+import type {
+  AgentKind,
+  Attachment,
+  Id,
+  Session,
+  SessionEvent,
+  SessionMode,
+  SessionView,
+} from '@baton/shared'
 import { request } from './request.ts'
 
 // Create a session (collaboration metadata only). agentSessionId/worktreePath
@@ -13,14 +21,18 @@ export type SessionCreateInput = {
 }
 
 export type SessionsClient = {
-  create(input: SessionCreateInput): Promise<Session>
+  create(input: SessionCreateInput): Promise<SessionView>
   materialize(
     id: Id,
     input: { agentSessionId: string; worktreePath: string },
     workerToken: string,
   ): Promise<Session>
-  listByProject(projectId: Id): Promise<Session[]>
-  get(id: Id): Promise<Session>
+  // Worker reports its child up/down (worker-bearer). Drives `attached`.
+  setStatus(id: Id, active: boolean, workerToken: string): Promise<Session>
+  resume(id: Id): Promise<SessionView>
+  stop(id: Id): Promise<SessionView>
+  listByProject(projectId: Id): Promise<SessionView[]>
+  get(id: Id): Promise<SessionView>
   findByName(projectId: Id, name: string): Promise<Session | null>
   sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
   uploadAttachment(
@@ -40,6 +52,14 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
         body: input,
         headers: { authorization: `Bearer ${workerToken}` },
       }),
+    setStatus: (id, active, workerToken) =>
+      request(u(`/sessions/${id}/status`), {
+        method: 'POST',
+        body: { active },
+        headers: { authorization: `Bearer ${workerToken}` },
+      }),
+    resume: id => request(u(`/sessions/${id}/resume`), { method: 'POST' }),
+    stop: id => request(u(`/sessions/${id}/stop`), { method: 'POST' }),
     listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
     get: id => request(u(`/sessions/${id}`), { method: 'GET' }),
     findByName: async (projectId, name) => {

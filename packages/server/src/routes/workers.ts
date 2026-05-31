@@ -1,9 +1,10 @@
-import type { Id, WorkerCommand } from '@baton/shared'
+import type { Id } from '@baton/shared'
 import type { Hono } from 'hono'
-import { streamSSE } from 'hono/streaming'
 import type { CommandBus } from '../command-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
+import type { SessionRuntime } from '../session-runtime.ts'
+import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam, workerWithView } from '../views.ts'
 
@@ -12,6 +13,7 @@ export const registerWorkerRoutes = (
   store: Store,
   liveness: LivenessTracker,
   commands: CommandBus,
+  runtime: SessionRuntime,
 ): void => {
   const auth = workerBearerAuth(store)
   // Idempotent register (machineId-anchored). See store.workers.register
@@ -56,45 +58,16 @@ export const registerWorkerRoutes = (
   })
 
   // Worker command stream (worker-bearer). The persistent worker daemon
-  // subscribes here and receives session.create / session.delete commands.
-  // Like the session stream, this is live-only — no replay.
-  app.get('/workers/me/stream', auth, async c => {
+  // subscribes here and receives session.start / session.stop / session.delete
+  // commands. Live-only — no replay. On disconnect, all of this worker's
+  // sessions flip inactive immediately (its child processes died with it).
+  app.get('/workers/me/stream', auth, c => {
     const worker = c.get('worker')
-    const signal = c.req.raw.signal
-    return streamSSE(c, async stream => {
-      let resolve = (): void => {}
-      const pending: WorkerCommand[] = []
-      const wake = () => {
-        const r = resolve
-        resolve = () => {}
-        r()
-      }
-      const unsub = commands.subscribe(worker.id, cmd => {
-        pending.push(cmd)
-        wake()
-      })
-      signal.addEventListener('abort', wake)
-      const keepalive = setInterval(() => {
-        if (signal.aborted) return
-        stream.write(': keepalive\n\n').catch(() => {})
-      }, 30_000)
-      try {
-        while (!signal.aborted) {
-          while (pending.length > 0 && !signal.aborted) {
-            const cmd = pending.shift()
-            if (cmd) await stream.writeSSE({ data: JSON.stringify(cmd) })
-          }
-          if (signal.aborted) break
-          await new Promise<void>(r => {
-            resolve = r
-          })
-        }
-      } finally {
-        clearInterval(keepalive)
-        unsub()
-        signal.removeEventListener('abort', wake)
-      }
-    })
+    return streamBus(
+      c,
+      push => commands.subscribe(worker.id, push),
+      () => runtime.forgetWorker(worker.id),
+    )
   })
 
   app.get('/workers/:id', async c => {

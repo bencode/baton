@@ -43,6 +43,6 @@ export const sessionRunCommand = defineCommand({
     const stop = (): void => ac.abort()
     process.on('SIGINT', stop)
     process.on('SIGTERM', stop)
-    await runDaemon(config, { client, worker }, ac.signal)
+    await runDaemon(config, { worker }, ac.signal)
   },
 })

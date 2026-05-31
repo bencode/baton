@@ -32,8 +32,9 @@ export type ApiClient = {
 
 // Per-session write client used by a session child process: authenticates with
 // the WORKER token and targets /sessions/:id/* (the worker owns the session).
+// Liveness/active is reported by the worker daemon, not the child — this only
+// emits turn/sdk events.
 export type WorkerClient = {
-  heartbeat(): Promise<{ attached: boolean }>
   emitEvent(type: SessionEventType, payload: unknown): Promise<SessionEvent>
 }
 
@@ -54,8 +55,6 @@ export const createWorkerClient = (
   const u = (p: string): string => `${baseUrl}${p}`
   const auth = { authorization: `Bearer ${workerToken}` }
   return {
-    heartbeat: () =>
-      request(u(`/sessions/${sessionId}/heartbeat`), { method: 'POST', headers: auth }),
     emitEvent: (type, payload) =>
       request(u(`/sessions/${sessionId}/events`), {
         method: 'POST',

@@ -1,18 +1,26 @@
 import { defineCommand } from 'citty'
+import { sessionCreateCommand } from './session/create.ts'
 import { sessionGetCommand } from './session/get.ts'
 import { sessionLsCommand } from './session/ls.ts'
+import { sessionResumeCommand } from './session/resume.ts'
+import { sessionRmCommand } from './session/rm.ts'
 import { sessionRunCommand } from './session/run.ts'
 import { sessionSendCommand } from './session/send.ts'
+import { sessionStopCommand } from './session/stop.ts'
 
 // Re-exported for cli tests / other commands.
 export { parseEnvPairs } from './session/shared.ts'
 
 export const session = defineCommand({
-  meta: { name: 'session', description: 'run / inspect / send to agent sessions' },
+  meta: { name: 'session', description: 'create / resume / stop / send to agent sessions' },
   subCommands: {
-    run: sessionRunCommand,
+    create: sessionCreateCommand,
+    resume: sessionResumeCommand,
+    stop: sessionStopCommand,
+    rm: sessionRmCommand,
     send: sessionSendCommand,
     ls: sessionLsCommand,
     get: sessionGetCommand,
+    run: sessionRunCommand,
   },
 })

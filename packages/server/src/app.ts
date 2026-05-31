@@ -10,6 +10,7 @@ import { registerSessionRoutes } from './routes/sessions.ts'
 import { registerTaskRoutes } from './routes/tasks.ts'
 import { registerWorkerRoutes } from './routes/workers.ts'
 import { registerWorkspaceRoutes } from './routes/workspaces.ts'
+import { createSessionRuntime, type SessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
 import type { AppEnv } from './views.ts'
 
@@ -18,21 +19,19 @@ export type { AppEnv } from './views.ts'
 // HTTP surface, sliced by resource. Each routes/<X>.ts attaches its handlers
 // to the shared Hono app so route paths stay flat (no /v1 prefix gymnastics).
 //
-// Three independent in-memory trackers — no DB persistence; all "right now":
-//   workerLiveness   — keyed by machineId; pinged by POST /workers/heartbeat
-//   sessionLiveness  — keyed by sessionId.toString(); pinged by POST
-//                      /sessions/me/heartbeat (bearer). Distinguishes 'machine
-//                      online but no daemon for this session' from 'machine
-//                      offline'.
-//   busyTracker      — keyed by sessionId; toggled by POST /sessions/me/events
-//                      on turn_start (true) / turn_complete / turn_error
-//                      (false). Source of truth for the UI busy pulse since
-//                      session events are no longer persisted server-side.
+// In-memory trackers — no DB persistence; all "right now":
+//   workerLiveness — keyed by machineId; pinged by POST /workers/heartbeat.
+//   runtime        — per-session active flag set by the worker via
+//                    POST /sessions/:id/status, cleared on worker-stream drop.
+//                    Source of `attached`.
+//   busyTracker    — keyed by sessionId; toggled by POST /sessions/:id/events on
+//                    turn_start (true) / turn_complete / turn_error (false).
+//   commands       — server→worker command bus (session.start/stop/delete).
 export const createApp = (
   store: Store,
   bus: EventBus = createEventBus(),
   workerLiveness: LivenessTracker = createLiveness(),
-  sessionLiveness: LivenessTracker = createLiveness(),
+  runtime: SessionRuntime = createSessionRuntime(),
   busyTracker: BusyTracker = createBusy(),
   attachments: AttachmentStore = createAttachmentStore(defaultAttachmentDir()),
   commands: CommandBus = createCommandBus(),
@@ -40,16 +39,16 @@ export const createApp = (
   const app = new Hono<AppEnv>()
   app.get('/health', c => c.json({ ok: true }))
   registerWorkspaceRoutes(app, store)
-  registerProjectRoutes(app, store, workerLiveness, sessionLiveness, busyTracker)
+  registerProjectRoutes(app, store, workerLiveness, runtime, busyTracker)
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store)
-  registerWorkerRoutes(app, store, workerLiveness, commands)
+  registerWorkerRoutes(app, store, workerLiveness, commands, runtime)
   registerSessionRoutes(
     app,
     store,
     bus,
     workerLiveness,
-    sessionLiveness,
+    runtime,
     busyTracker,
     attachments,
     commands,
