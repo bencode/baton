@@ -20,7 +20,8 @@ export const primeLogin = (baseUrl: string): void => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ username, password }),
       })
-      const cookie = (res.headers.get('set-cookie') ?? '').split(';')[0]
+      // undici exposes Set-Cookie only via getSetCookie() — get('set-cookie') is null.
+      const cookie = (res.headers.getSetCookie()[0] ?? '').split(';')[0]
       if (res.ok && cookie) setAuthHeaders({ cookie })
     })().catch(() => {}),
   )
