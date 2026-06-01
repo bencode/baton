@@ -21,6 +21,9 @@ services:
       # outside → live inside, no rebuild, every session). Read-only so the
       # agent can't alter them. ./skills is relative to this compose file.
       - ./skills:/home/baton/.claude/skills:ro
+      # Host-provided CLI a skill shells out to (a self-contained script — no
+      # npm install). Single-file bind onto PATH; reachable as a command inside.
+      # - ./bin/tcollab-bridge:/usr/local/bin/tcollab-bridge:ro
       # Read-only reference repos the agent can read but not modify. Pair with
       # permissions.additionalDirectories in ~/.claude/settings.json (e.g.
       # ["/resources/engine-shell"]) so claude treats them as workspace roots.
