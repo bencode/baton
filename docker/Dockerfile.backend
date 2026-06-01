@@ -7,8 +7,9 @@ RUN npm install -g pnpm@10.33.0
 
 # Workspace manifests first → install layer caches across source-only changes.
 # All package.json are needed so pnpm can validate the frozen lockfile; the
-# --filter below still installs only server + its deps.
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+# --filter below still installs only server + its deps. tsconfig.base.json is
+# extended by each package's tsconfig (tsx reads it at runtime).
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 COPY packages/cli/package.json packages/cli/
@@ -29,6 +30,7 @@ FROM node:26-slim
 WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/tsconfig.base.json ./tsconfig.base.json
 COPY docker/scripts/backend-entrypoint.sh /app/docker/scripts/backend-entrypoint.sh
 RUN chmod +x /app/docker/scripts/backend-entrypoint.sh
 
