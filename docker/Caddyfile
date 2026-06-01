@@ -1,0 +1,20 @@
+# Internal caddy for the baton stack (HTTP only; TLS is the outer machine-i caddy).
+# One listener serves the SPA and proxies the API. The outer caddy reverse-proxies
+# baton.fmap.dev → this container's published ${CADDY_HOST_PORT}.
+:80 {
+	# /api/* → backend. `handle_path` STRIPS the /api prefix (baton routes are flat,
+	# e.g. /sessions, /auth — the dev Vite proxy strips it too). flush_interval -1
+	# keeps SSE / streaming responses unbuffered.
+	handle_path /api/* {
+		reverse_proxy backend:3280 {
+			flush_interval -1
+		}
+	}
+
+	# SPA: serve built assets, fall back to index.html for client-side routes.
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}

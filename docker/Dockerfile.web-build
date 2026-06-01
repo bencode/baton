@@ -1,0 +1,20 @@
+# baton web — one-shot Vite SPA builder. Writes the built dist into the shared
+# `web-dist` volume, which caddy serves. Run via:
+#   docker compose --profile build run --rm web-build
+FROM node:26-slim
+WORKDIR /app
+RUN npm install -g pnpm@10.33.0
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/web/package.json packages/web/
+
+RUN pnpm install --filter @baton/web... --frozen-lockfile
+
+COPY packages/shared/ packages/shared/
+COPY packages/web/ packages/web/
+
+# API_BASE is the relative "/api" (caddy proxies it), so no build-time origin needed.
+RUN pnpm -F @baton/web exec vite build
+
+ENTRYPOINT ["sh", "-c", "rm -rf /output/* && mkdir -p /output && cp -a /app/packages/web/dist/. /output/ && echo '[web-build] copied dist → /output'"]

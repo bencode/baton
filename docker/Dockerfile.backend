@@ -1,0 +1,34 @@
+# baton server — Hono API on Node via tsx (no compiled dist), SQLite via Prisma/libsql.
+# Multi-stage: builder installs the workspace + generates the Prisma client; the
+# runtime stage carries node_modules + sources and runs `tsx src/index.ts`.
+FROM node:26-slim AS builder
+WORKDIR /app
+RUN npm install -g pnpm@10.33.0
+
+# Workspace manifests first → install layer caches across source-only changes.
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/server/package.json packages/server/
+
+# Server + its workspace dep (shared). --prod=false keeps tsx + prisma (devDeps),
+# which the runtime needs (server runs via tsx; entrypoint runs prisma migrate).
+RUN pnpm install --filter @baton/server... --frozen-lockfile --prod=false
+
+# Sources + generate the Prisma client (no DB connection; URL just satisfies config).
+COPY packages/shared/ packages/shared/
+COPY packages/server/ packages/server/
+RUN cd packages/server && DATABASE_URL=file:/tmp/build.db pnpm exec prisma generate
+
+# ── runtime ──────────────────────────────────────────────────────────
+FROM node:26-slim
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY docker/scripts/backend-entrypoint.sh /app/docker/scripts/backend-entrypoint.sh
+RUN chmod +x /app/docker/scripts/backend-entrypoint.sh
+
+WORKDIR /app/packages/server
+ENV NODE_ENV=production
+ENV PORT=3280
+EXPOSE 3280
+ENTRYPOINT ["sh", "/app/docker/scripts/backend-entrypoint.sh"]

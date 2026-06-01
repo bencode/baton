@@ -1,0 +1,45 @@
+# baton back-office — self-contained docker stack (server + web).
+#   caddy     — serves the SPA + proxies /api → backend (internal :80, published)
+#   backend   — Hono via tsx; entrypoint runs `prisma migrate deploy`; SQLite on a volume
+#   web-build — one-shot SPA builder (profile: build); writes the dist into web-dist
+# The outer (machine i) caddy reverse-proxies baton.fmap.dev → ${CADDY_HOST_PORT}.
+# Worker + DingTalk bridge run elsewhere and connect to https://baton.fmap.dev/api.
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - "${CADDY_HOST_PORT}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - web-dist:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  web-build:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web-build
+    volumes:
+      - web-dist:/output
+    restart: "no"
+    profiles: ["build"]
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    env_file: .env
+    volumes:
+      - baton_data:/data
+    expose:
+      - "3280"
+    restart: unless-stopped
+
+volumes:
+  web-dist:
+  caddy_data:
+  caddy_config:
+  baton_data:
