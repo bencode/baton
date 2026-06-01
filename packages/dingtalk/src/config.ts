@@ -11,8 +11,10 @@ export type DingtalkConfig = {
   route: { projectId: Id; workerId: Id }
   clientId: string
   clientSecret: string
-  // Set when the baton server enforces auth (a user is seeded). undefined → the
-  // bridge talks to an open server (dev / auth-off).
+  // Machine auth (when the server enforces auth). Prefer a personal API token
+  // (BATON_TOKEN); BATON_USER/PASS cookie login is a fallback. Both undefined →
+  // open server (dev / auth-off).
+  token?: string
   creds?: BatonCreds
 }
 
@@ -51,5 +53,6 @@ export const loadConfig = (): DingtalkConfig => ({
   route: { projectId: requiredInt('BATON_PROJECT_ID'), workerId: requiredInt('BATON_WORKER_ID') },
   clientId: required('DINGTALK_CLIENT_ID'),
   clientSecret: required('DINGTALK_CLIENT_SECRET'),
+  token: process.env.BATON_TOKEN,
   creds: optionalCreds(),
 })

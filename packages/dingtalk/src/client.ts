@@ -7,10 +7,14 @@ import type { Attachment, Id, SessionEvent, SessionView } from '@baton/shared'
 // session cookie. With no creds it behaves exactly as before (dev / auth-off).
 type ReqInit = { method: string; body?: unknown }
 
+let authToken = ''
 let authCookie = ''
 let loginGate: Promise<void> | null = null
 
-const cookieHeader = (): Record<string, string> => (authCookie ? { cookie: authCookie } : {})
+// Prefer the Bearer API token (machine principal); else the login cookie; else
+// nothing (dev / auth-off).
+const authHeaders = (): Record<string, string> =>
+  authToken ? { authorization: `Bearer ${authToken}` } : authCookie ? { cookie: authCookie } : {}
 
 const request = async <T>(url: string, init: ReqInit): Promise<T> => {
   if (loginGate) await loginGate
@@ -18,7 +22,7 @@ const request = async <T>(url: string, init: ReqInit): Promise<T> => {
     method: init.method,
     headers: {
       ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
-      ...cookieHeader(),
+      ...authHeaders(),
     },
     ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
   })
@@ -35,7 +39,7 @@ export const authedFetch = async (
   init?: { signal?: AbortSignal },
 ): Promise<Response> => {
   if (loginGate) await loginGate
-  return fetch(url, { signal: init?.signal, headers: cookieHeader() })
+  return fetch(url, { signal: init?.signal, headers: authHeaders() })
 }
 
 export type BatonClient = {
@@ -54,10 +58,14 @@ export type BatonClient = {
 }
 
 export type BatonCreds = { username: string; password: string }
+export type BatonAuth = { token?: string; creds?: BatonCreds }
 
-export const createBatonClient = (server: string, creds?: BatonCreds): BatonClient => {
+export const createBatonClient = (server: string, auth?: BatonAuth): BatonClient => {
   const u = (p: string): string => `${server}${p}`
-  if (creds) {
+  if (auth?.token) {
+    authToken = auth.token
+  } else if (auth?.creds) {
+    const creds = auth.creds
     loginGate = (async () => {
       const res = await fetch(u('/auth/login'), {
         method: 'POST',
@@ -84,7 +92,7 @@ export const createBatonClient = (server: string, creds?: BatonCreds): BatonClie
       const url = u(`/sessions/${id}/attachments?filename=${encodeURIComponent(input.filename)}`)
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'content-type': input.contentType, ...cookieHeader() },
+        headers: { 'content-type': input.contentType, ...authHeaders() },
         body: input.body,
       })
       if (!res.ok) throw new Error(`POST ${url} → ${res.status}: ${await res.text()}`)

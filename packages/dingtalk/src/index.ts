@@ -53,7 +53,7 @@ const collectImages = async (
 
 const main = (): void => {
   const cfg = loadConfig()
-  const client = createBatonClient(cfg.server, cfg.creds)
+  const client = createBatonClient(cfg.server, { token: cfg.token, creds: cfg.creds })
   const bindings = createBindingStore()
 
   const onMessage = async (msg: InboundMessage): Promise<void> => {

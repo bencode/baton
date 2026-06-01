@@ -1,14 +1,19 @@
 import { setAuthHeaders, setLoginGate } from './request.ts'
 
-// One-time transparent login for the CLI. If BATON_USER/BATON_PASS are set we
-// exchange them for a session cookie and stash it for every later request (via
-// the request module's login gate). Idempotent per process; a no-op without
-// creds (dev / auth-off, and the worker-bearer paths are exempt regardless).
+// One-time transparent auth for the CLI. Prefer a personal API token
+// (BATON_TOKEN → Authorization: Bearer); else exchange BATON_USER/PASS for a
+// session cookie. Idempotent per process; a no-op without either (dev / auth-off,
+// and the worker-bearer paths are exempt regardless).
 let primed = false
 
 export const primeLogin = (baseUrl: string): void => {
   if (primed) return
   primed = true
+  const token = process.env.BATON_TOKEN
+  if (token) {
+    setAuthHeaders({ authorization: `Bearer ${token}` })
+    return
+  }
   const username = process.env.BATON_USER
   const password = process.env.BATON_PASS
   if (!username || !password) return
