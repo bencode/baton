@@ -19,6 +19,9 @@ const memBindings = (seed: Record<string, Id> = {}): BindingStore => {
     set: (c, id) => {
       m.set(c, id)
     },
+    delete: c => {
+      m.delete(c)
+    },
   }
 }
 
@@ -38,6 +41,7 @@ describe('ensureSession', () => {
       resumeSession: async id => view(id, true),
       sendMessage: async () => evt(),
       streamUrl: () => '',
+      stopSession: async id => view(id, true),
       uploadAttachment: async () => att(),
     }
     const bindings = memBindings()
@@ -61,6 +65,7 @@ describe('ensureSession', () => {
       },
       sendMessage: async () => evt(),
       streamUrl: () => '',
+      stopSession: async id => view(id, true),
       uploadAttachment: async () => att(),
     }
     const id = await ensureSession(client, memBindings({ 'conv-B': 5 }), route, 'conv-B', fast)
@@ -81,6 +86,7 @@ describe('ensureSession', () => {
       },
       sendMessage: async () => evt(),
       streamUrl: () => '',
+      stopSession: async id => view(id, true),
       uploadAttachment: async () => att(),
     }
     const id = await ensureSession(client, memBindings({ 'conv-C': 8 }), route, 'conv-C', fast)
@@ -95,6 +101,7 @@ describe('ensureSession', () => {
       resumeSession: async id => view(id, false),
       sendMessage: async () => evt(),
       streamUrl: () => '',
+      stopSession: async id => view(id, true),
       uploadAttachment: async () => att(),
     }
     await assert.rejects(
@@ -121,6 +128,7 @@ describe('ensureSession', () => {
       resumeSession: async id => view(id, true),
       sendMessage: async () => evt(),
       streamUrl: () => '',
+      stopSession: async id => view(id, true),
       uploadAttachment: async () => att(),
     }
     const bindings = memBindings({ 'conv-E': 4 })

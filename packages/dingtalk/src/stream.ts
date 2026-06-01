@@ -5,6 +5,7 @@ import { DWClient, type DWClientDownStream, EventAck, TOPIC_ROBOT } from 'dingta
 // resolves them to bytes and forwards them as session attachments.
 export type InboundMessage = {
   conversationId: string
+  senderId: string // stable per-user id (senderStaffId; falls back to senderId/nick)
   sender: string
   text: string
   imageCodes: string[]
@@ -23,6 +24,7 @@ export const parseInbound = (raw: unknown): InboundMessage | null => {
   if (!isRecord(raw)) return null
   const base = {
     conversationId: str(raw.conversationId),
+    senderId: str(raw.senderStaffId) || str(raw.senderId) || str(raw.senderNick),
     sender: str(raw.senderNick),
     sessionWebhook: str(raw.sessionWebhook),
   }

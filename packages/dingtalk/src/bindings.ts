@@ -3,12 +3,14 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Id } from '@baton/shared'
 
-// Persistent conversation → sessionId map, owned entirely by the bridge (baton
-// core never learns about DingTalk). A small JSON file so it survives restarts;
-// nothing here is hot enough to need a real db.
+// Persistent binding-key → sessionId map, owned entirely by the bridge (baton
+// core never learns about DingTalk). The key is per conversation AND sender
+// (`conversationId:senderId`) so each person in a group gets their own session.
+// A small JSON file so it survives restarts; nothing here needs a real db.
 export type BindingStore = {
-  get(conversationId: string): Id | undefined
-  set(conversationId: string, sessionId: Id): void
+  get(key: string): Id | undefined
+  set(key: string, sessionId: Id): void
+  delete(key: string): void
 }
 
 const defaultPath = (): string =>
@@ -24,12 +26,19 @@ export const createBindingStore = (path: string = defaultPath()): BindingStore =
     }
   }
   const map = load()
+  const persist = (): void => {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify(map, null, 2))
+  }
   return {
-    get: conversationId => map[conversationId],
-    set: (conversationId, sessionId) => {
-      map[conversationId] = sessionId
-      mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, JSON.stringify(map, null, 2))
+    get: key => map[key],
+    set: (key, sessionId) => {
+      map[key] = sessionId
+      persist()
+    },
+    delete: key => {
+      delete map[key]
+      persist()
     },
   }
 }

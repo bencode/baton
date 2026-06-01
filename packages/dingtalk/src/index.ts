@@ -1,6 +1,7 @@
 import type { Attachment } from '@baton/shared'
 import { createBindingStore } from './bindings.ts'
 import { authedFetch, type BatonClient, createBatonClient } from './client.ts'
+import { parseCommand, runCommand } from './commands.ts'
 import { applyTemplate, type DingtalkConfig, loadConfig } from './config.ts'
 import { ensureSession } from './ensure-session.ts'
 import { downloadImage } from './media.ts'
@@ -58,9 +59,20 @@ const main = (): void => {
 
   const onMessage = async (msg: InboundMessage): Promise<void> => {
     const imgNote = msg.imageCodes.length > 0 ? ` [+${msg.imageCodes.length} img]` : ''
-    log(`← ${msg.sender}: ${msg.text}${imgNote}  (conv ${msg.conversationId})`)
+    // Per-user session: key by conversation AND sender so each person in a group
+    // gets an isolated context (a 1-on-1 chat is one sender anyway).
+    const key = `${msg.conversationId}:${msg.senderId}`
+    log(`← ${msg.sender}: ${msg.text}${imgNote}  (conv ${msg.conversationId}, sender ${msg.senderId})`)
     try {
-      const sessionId = await ensureSession(client, bindings, cfg.route, msg.conversationId)
+      // Slash commands (/clear, /help, …) are handled by the bridge, not the agent.
+      const cmd = parseCommand(msg.text)
+      if (cmd) {
+        const out = await runCommand(cmd, { client, bindings, key })
+        await reply(msg.sessionWebhook, out)
+        log(`→ /${cmd.name} → ${out.split('\n')[0]}`)
+        return
+      }
+      const sessionId = await ensureSession(client, bindings, cfg.route, key)
       const prompt = applyTemplate(cfg.promptTemplate, msg.sender, msg.text)
       const attachments = await collectImages(client, cfg, sessionId, msg.imageCodes, log)
       const ev = await client.sendMessage(sessionId, prompt, attachments)

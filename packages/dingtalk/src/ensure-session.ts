@@ -34,10 +34,10 @@ export const ensureSession = async (
   client: BatonClient,
   bindings: BindingStore,
   route: { projectId: Id; workerId: Id },
-  conversationId: string,
+  key: string,
   opts: ActiveWaitOpts = {},
 ): Promise<Id> => {
-  const existing = bindings.get(conversationId)
+  const existing = bindings.get(key)
   if (existing !== undefined) {
     const s = await client.getSession(existing).catch(() => null)
     if (s) {
@@ -47,7 +47,7 @@ export const ensureSession = async (
     }
   }
   const created = await client.createSession(route.projectId, route.workerId)
-  bindings.set(conversationId, created.id)
+  bindings.set(key, created.id)
   await awaitActive(client, created.id, opts)
   return created.id
 }

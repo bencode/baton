@@ -8,11 +8,18 @@ test('parseInbound: plain text message', () => {
   const m = parseInbound({ ...base, msgtype: 'text', text: { content: 'hello' } })
   assert.deepEqual(m, {
     conversationId: 'c1',
+    senderId: 'alice', // no senderStaffId/senderId → falls back to nick
     sender: 'alice',
     sessionWebhook: 'https://hook',
     text: 'hello',
     imageCodes: [],
   })
+})
+
+test('parseInbound: senderId prefers senderStaffId over nick', () => {
+  const m = parseInbound({ ...base, senderStaffId: 'u123', msgtype: 'text', text: { content: 'hi' } })
+  assert.equal(m?.senderId, 'u123')
+  assert.equal(m?.sender, 'alice')
 })
 
 test('parseInbound: richText extracts text + image downloadCodes', () => {

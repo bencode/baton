@@ -46,6 +46,9 @@ export type BatonClient = {
   createSession(projectId: Id, workerId: Id): Promise<SessionView>
   getSession(id: Id): Promise<SessionView>
   resumeSession(id: Id): Promise<SessionView>
+  // Kill the session's worker child (worktree kept). Used by /clear so the
+  // next message starts a brand-new session (claude has no headless reset).
+  stopSession(id: Id): Promise<SessionView>
   // Returns the synthesized user_message event — its `sequence` lets us wait for
   // the matching turn_complete (one after this message).
   sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
@@ -82,6 +85,7 @@ export const createBatonClient = (server: string, auth?: BatonAuth): BatonClient
       request(u('/sessions'), { method: 'POST', body: { projectId, workerId } }),
     getSession: id => request(u(`/sessions/${id}`), { method: 'GET' }),
     resumeSession: id => request(u(`/sessions/${id}/resume`), { method: 'POST' }),
+    stopSession: id => request(u(`/sessions/${id}/stop`), { method: 'POST' }),
     sendMessage: (id, text, attachments) =>
       request(u(`/sessions/${id}/messages`), {
         method: 'POST',
