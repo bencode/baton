@@ -17,8 +17,9 @@ COPY packages/web/package.json packages/web/
 COPY packages/dingtalk/package.json packages/dingtalk/
 
 # Server + its workspace dep (shared). --prod=false keeps tsx + prisma (devDeps),
-# which the runtime needs (server runs via tsx; entrypoint runs prisma migrate).
-RUN pnpm install --filter @baton/server... --frozen-lockfile --prod=false
+# which the runtime needs. --ignore-scripts skips the server's `postinstall:
+# prisma generate` (the schema isn't copied yet) — we generate explicitly below.
+RUN pnpm install --filter @baton/server... --frozen-lockfile --prod=false --ignore-scripts
 
 # Sources + generate the Prisma client (no DB connection; URL just satisfies config).
 COPY packages/shared/ packages/shared/
