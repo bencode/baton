@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import type { ApiClient } from '../client.ts'
+import { updateProject } from './project.ts'
 import { setRequirementStatus } from './requirement.ts'
 import { addTaskComment, createTask, listTaskComments } from './task.ts'
-import { createWorkspace, removeWorkspace } from './workspace.ts'
+import { createWorkspace, removeWorkspace, updateWorkspace } from './workspace.ts'
 
 describe('command handlers (fake client)', () => {
   test('createWorkspace renders the created workspace', async () => {
@@ -26,6 +27,34 @@ describe('command handlers (fake client)', () => {
     } as unknown as ApiClient
     assert.equal(await removeWorkspace(c, 9, false), 'deleted workspace 9')
     assert.equal(removedId, 9)
+  })
+
+  test('updateWorkspace forwards id + name and renders', async () => {
+    let got: [number, { name?: string }] | null = null
+    const c = {
+      workspaces: {
+        update: async (id: number, patch: { name?: string }) => {
+          got = [id, patch]
+          return { id, name: patch.name, createdAt: 0 }
+        },
+      },
+    } as unknown as ApiClient
+    assert.equal(await updateWorkspace(c, 2, 'trantor', false), '2  trantor')
+    assert.deepEqual(got, [2, { name: 'trantor' }])
+  })
+
+  test('updateProject forwards id + patch and renders', async () => {
+    let got: [number, { name?: string; description?: string }] | null = null
+    const c = {
+      projects: {
+        update: async (id: number, patch: { name?: string; description?: string }) => {
+          got = [id, patch]
+          return { id, workspaceId: 1, name: patch.name ?? 'x', createdAt: 0 }
+        },
+      },
+    } as unknown as ApiClient
+    assert.equal(await updateProject(c, 2, { name: 'daily', description: 'd' }, false), '2  daily')
+    assert.deepEqual(got, [2, { name: 'daily', description: 'd' }])
   })
 
   test('setRequirementStatus passes id + status through', async () => {

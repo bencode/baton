@@ -1,5 +1,6 @@
 import type { Id } from '@baton/shared'
 import { defineCommand } from 'citty'
+import type { ProjectPatch } from '../client/projects.ts'
 import type { ApiClient } from '../client.ts'
 import { fmtProject, removed, renderList, renderOne } from '../output.ts'
 import { clientFor, common, resolveWorkspaceId } from '../util.ts'
@@ -13,6 +14,12 @@ export const listProjects = (c: ApiClient, workspaceId: Id, json: boolean): Prom
   c.projects.listByWorkspace(workspaceId).then(ps => renderList(ps, fmtProject, json))
 export const getProject = (c: ApiClient, id: Id, json: boolean): Promise<string> =>
   c.projects.get(id).then(p => renderOne(p, fmtProject, json))
+export const updateProject = (
+  c: ApiClient,
+  id: Id,
+  patch: ProjectPatch,
+  json: boolean,
+): Promise<string> => c.projects.update(id, patch).then(p => renderOne(p, fmtProject, json))
 export const removeProject = (c: ApiClient, id: Id, json: boolean): Promise<string> =>
   c.projects.remove(id).then(() => removed('project', id, json))
 
@@ -53,6 +60,25 @@ export const project = defineCommand({
       args: { id: { type: 'positional', required: true }, ...common },
       run: async ({ args }) => {
         console.log(await getProject(clientFor(args), Number(args.id), Boolean(args.json)))
+      },
+    }),
+    update: defineCommand({
+      meta: { name: 'update', description: 'rename a project / set its description' },
+      args: {
+        id: { type: 'positional', required: true },
+        name: { type: 'string', description: 'new name' },
+        desc: { type: 'string', description: 'new description' },
+        ...common,
+      },
+      run: async ({ args }) => {
+        const patch: ProjectPatch = {
+          ...(args.name !== undefined ? { name: args.name } : {}),
+          ...(args.desc !== undefined ? { description: args.desc } : {}),
+        }
+        if (Object.keys(patch).length === 0) throw new Error('pass --name and/or --desc')
+        console.log(
+          await updateProject(clientFor(args), Number(args.id), patch, Boolean(args.json)),
+        )
       },
     }),
     rm: defineCommand({

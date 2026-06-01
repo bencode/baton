@@ -10,6 +10,12 @@ export const listWorkspaces = (c: ApiClient, json: boolean): Promise<string> =>
   c.workspaces.list().then(ws => renderList(ws, fmtWorkspace, json))
 export const getWorkspace = (c: ApiClient, id: Id, json: boolean): Promise<string> =>
   c.workspaces.get(id).then(w => renderOne(w, fmtWorkspace, json))
+export const updateWorkspace = (
+  c: ApiClient,
+  id: Id,
+  name: string,
+  json: boolean,
+): Promise<string> => c.workspaces.update(id, { name }).then(w => renderOne(w, fmtWorkspace, json))
 export const removeWorkspace = (c: ApiClient, id: Id, json: boolean): Promise<string> =>
   c.workspaces.remove(id).then(() => removed('workspace', id, json))
 
@@ -38,6 +44,20 @@ export const workspace = defineCommand({
       args: { id: { type: 'positional', required: true }, ...common },
       run: async ({ args }) => {
         console.log(await getWorkspace(clientFor(args), Number(args.id), Boolean(args.json)))
+      },
+    }),
+    update: defineCommand({
+      meta: { name: 'update', description: 'rename a workspace' },
+      args: {
+        id: { type: 'positional', required: true },
+        name: { type: 'string', description: 'new name' },
+        ...common,
+      },
+      run: async ({ args }) => {
+        if (!args.name) throw new Error('pass --name <new name>')
+        console.log(
+          await updateWorkspace(clientFor(args), Number(args.id), args.name, Boolean(args.json)),
+        )
       },
     }),
     rm: defineCommand({
