@@ -6,6 +6,8 @@ import type {
   RequirementStatus,
   ResourceRef,
   Session,
+  SessionEvent,
+  SessionEventType,
   SessionMode,
   Task,
   TaskComment,
@@ -17,11 +19,14 @@ import type {
   Project as DbProject,
   Requirement as DbRequirement,
   Session as DbSession,
+  SessionEvent as DbSessionEvent,
   Task as DbTask,
   TaskComment as DbTaskComment,
+  User as DbUser,
   Worker as DbWorker,
   Workspace as DbWorkspace,
 } from '@prisma/client'
+import type { UserRecord } from './types.ts'
 
 const parseJson = <T>(s: string): T => JSON.parse(s) as T
 
@@ -84,8 +89,25 @@ export const toSession = (r: DbSession): Session => ({
   agentKind: r.agentKind as AgentKind,
   agentSessionId: r.agentSessionId,
   worktreePath: r.worktreePath,
+  shareToken: r.shareToken,
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),
+})
+
+export const toSessionEvent = (r: DbSessionEvent): SessionEvent => ({
+  id: r.id,
+  sessionId: r.sessionId,
+  sequence: r.sequence,
+  type: r.type as SessionEventType,
+  payload: parseJson<unknown>(r.payload),
+  createdAt: r.createdAt.getTime(),
+})
+
+export const toUserRecord = (r: DbUser): UserRecord => ({
+  id: r.id,
+  username: r.username,
+  passwordHash: r.passwordHash,
+  createdAt: r.createdAt.getTime(),
 })
 
 export const toWorker = (r: DbWorker): Worker => ({

@@ -4,7 +4,9 @@ import { type BusyTracker, createBusy } from './busy.ts'
 import { type CommandBus, createCommandBus } from './command-bus.ts'
 import { createEventBus, type EventBus } from './event-bus.ts'
 import { createLiveness, type LivenessTracker } from './liveness.ts'
+import { cookieAuth } from './middleware/cookie-auth.ts'
 import { createProjectBus, type ProjectBus } from './project-bus.ts'
+import { registerAuthRoutes } from './routes/auth.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
 import { registerRequirementRoutes } from './routes/requirements.ts'
 import { registerSessionAttachmentRoutes } from './routes/session-attachments.ts'
@@ -41,6 +43,11 @@ export const createApp = (
 ): Hono<AppEnv> => {
   const app = new Hono<AppEnv>()
   app.get('/health', c => c.json({ ok: true }))
+  // /health + /auth are registered before the gate (and isExempt) so they stay
+  // public; everything below is behind the cookie gate (enforced iff a user
+  // exists), except the worker-bearer routes isExempt carves out.
+  registerAuthRoutes(app, store)
+  app.use('*', cookieAuth(store))
   registerWorkspaceRoutes(app, store)
   registerProjectRoutes(app, store, workerLiveness, runtime, busyTracker, projects)
   registerRequirementRoutes(app, store)

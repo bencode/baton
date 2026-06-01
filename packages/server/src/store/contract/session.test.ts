@@ -36,8 +36,7 @@ describe('Store contract — sessions', () => {
     assert.equal((await ctx.store.sessions.get(s.id))?.worktreePath, '/tmp/wt')
   })
 
-  test('session destroy: row disappears (events live in browser-local storage,', async () => {
-    // not in the contract anymore)
+  test('share token: create assigns one; getByShareToken resolves it; bad token → null', async () => {
     const { project } = await seedReq(ctx)
     const workerId = await seedWorker(ctx, project)
     const s = await ctx.store.sessions.create({
@@ -47,7 +46,50 @@ describe('Store contract — sessions', () => {
       name: 's',
       agentKind: 'claude-code',
     })
+    assert.ok(s.shareToken)
+    assert.equal((await ctx.store.sessions.getByShareToken(s.shareToken ?? ''))?.id, s.id)
+    assert.equal(await ctx.store.sessions.getByShareToken('garbage'), null)
+  })
+
+  test('transcript: appendEvent assigns per-session sequence (0-based); listEvents is ordered', async () => {
+    const { project } = await seedReq(ctx)
+    const workerId = await seedWorker(ctx, project)
+    const s = await ctx.store.sessions.create({
+      projectId: project,
+      workerId,
+      mode: 'worker',
+      name: 's',
+      agentKind: 'claude-code',
+    })
+    const a = await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'hi' })
+    const b = await ctx.store.sessions.appendEvent(s.id, 'turn_start', { messageId: a.id })
+    assert.equal(a.sequence, 0)
+    assert.equal(b.sequence, 1)
+    const events = await ctx.store.sessions.listEvents(s.id)
+    assert.deepEqual(
+      events.map(e => [e.sequence, e.type]),
+      [
+        [0, 'user_message'],
+        [1, 'turn_start'],
+      ],
+    )
+    // payload round-trips through JSON
+    assert.deepEqual(events[0]?.payload, { text: 'hi' })
+  })
+
+  test('session destroy: row disappears and its transcript cascades away', async () => {
+    const { project } = await seedReq(ctx)
+    const workerId = await seedWorker(ctx, project)
+    const s = await ctx.store.sessions.create({
+      projectId: project,
+      workerId,
+      mode: 'worker',
+      name: 's',
+      agentKind: 'claude-code',
+    })
+    await ctx.store.sessions.appendEvent(s.id, 'user_message', { text: 'hi' })
     await ctx.store.sessions.destroy(s.id)
     assert.equal(await ctx.store.sessions.get(s.id), null)
+    assert.deepEqual(await ctx.store.sessions.listEvents(s.id), [])
   })
 })

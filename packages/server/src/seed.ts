@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { hashPassword } from './auth/password.ts'
 import { loadConfig } from './config.ts'
 import { createPrisma } from './db/client.ts'
 import { createPrismaStore } from './store/prisma-store.ts'
@@ -11,6 +12,19 @@ import { createPrismaStore } from './store/prisma-store.ts'
 
 const config = loadConfig()
 const store = createPrismaStore(createPrisma(config.databaseUrl))
+
+// Seed a login user so dev runs with auth ON, same as prod (the cookie gate
+// enforces once a user exists). Independent of the workspace guard below, and
+// never clobbers an existing user. Override the dev defaults with
+// BATON_SEED_USER / BATON_SEED_PASS.
+const seedUsername = process.env.BATON_SEED_USER ?? 'admin'
+const seedPassword = process.env.BATON_SEED_PASS ?? 'admin'
+if (await store.users.getByUsername(seedUsername)) {
+  console.log(`login user "${seedUsername}" already exists; left as-is`)
+} else {
+  await store.users.create({ username: seedUsername, passwordHash: hashPassword(seedPassword) })
+  console.log(`created login user "${seedUsername}" — auth is now enforced (dev == prod)`)
+}
 
 const existing = await store.workspaces.list()
 if (existing.some(w => w.name === 'lesscap')) {

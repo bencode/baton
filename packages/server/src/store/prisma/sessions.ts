@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
-import { toSession } from '../mappers.ts'
+import { toSession, toSessionEvent } from '../mappers.ts'
 import type { Store } from '../types.ts'
+import { issueToken } from './codec.ts'
 
 export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
   create: async input => {
@@ -13,10 +14,16 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
         // An explicitly-named session is locked from birth — never auto-retitled.
         // Nameless creates pass '' here (placeholder set after, unlocked).
         nameLocked: input.name.trim().length > 0,
+        // Unguessable key for the standalone share page (/s/:shareToken).
+        shareToken: issueToken(),
         agentKind: input.agentKind,
       },
     })
     return toSession(s)
+  },
+  getByShareToken: async token => {
+    const r = await prisma.session.findFirst({ where: { shareToken: token } })
+    return r ? toSession(r) : null
   },
   materialize: async (id, input) => {
     const s = await prisma.session.update({
@@ -53,4 +60,28 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
   destroy: async id => {
     await prisma.session.delete({ where: { id } })
   },
+  // Append one transcript event with the next per-session sequence. The
+  // read-then-insert runs in a tx so concurrent appends can't collide on the
+  // (sessionId, sequence) unique key.
+  appendEvent: async (sessionId, type, payload) =>
+    prisma.$transaction(async tx => {
+      const top = await tx.sessionEvent.findFirst({
+        where: { sessionId },
+        orderBy: { sequence: 'desc' },
+        select: { sequence: true },
+      })
+      const ev = await tx.sessionEvent.create({
+        data: {
+          sessionId,
+          sequence: (top?.sequence ?? -1) + 1,
+          type,
+          payload: JSON.stringify(payload),
+        },
+      })
+      return toSessionEvent(ev)
+    }),
+  listEvents: async sessionId =>
+    (
+      await prisma.sessionEvent.findMany({ where: { sessionId }, orderBy: { sequence: 'asc' } })
+    ).map(toSessionEvent),
 })

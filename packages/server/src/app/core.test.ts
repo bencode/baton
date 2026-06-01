@@ -52,7 +52,10 @@ describe('server HTTP — core', () => {
       await postJson(app, '/tasks', { requirementId: r.id, title: 'impl' })
     ).json()) as WithId
 
-    assert.equal((await postJson(app, `/tasks/${t.id}/comments`, { body: 'human note' })).status, 201)
+    assert.equal(
+      (await postJson(app, `/tasks/${t.id}/comments`, { body: 'human note' })).status,
+      201,
+    )
     const second = await postJson(app, `/tasks/${t.id}/comments`, {
       body: 'agent hand-off',
       workerId: 42,

@@ -1,9 +1,10 @@
-import type { Worker } from '@baton/shared'
+import type { Id, Worker } from '@baton/shared'
 import type { MiddlewareHandler } from 'hono'
 import type { Store } from '../store/types.ts'
 
-// Variables a worker-authenticated route handler can read via c.get('worker').
-export type AuthVars = { worker: Worker }
+// Variables auth middleware sets: `worker` on worker-bearer routes (c.get),
+// `userId` on cookie-authed back-office routes (set by the cookie gate).
+export type AuthVars = { worker: Worker; userId?: Id }
 
 // Resolves the bearer token to a Worker and rejects if missing. Every session
 // is worker-created, so the worker token is the single credential for all

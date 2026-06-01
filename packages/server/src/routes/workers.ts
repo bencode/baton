@@ -68,17 +68,15 @@ export const registerWorkerRoutes = (
     const worker = c.get('worker')
     // Daemon online: presence changed → refetch workers.
     projects.publish(worker.projectId, { resource: 'workers' })
-    return streamBus(
-      c,
-      push => commands.subscribe(worker.id, push),
-      () => {
+    return streamBus(c, push => commands.subscribe(worker.id, push), {
+      onClose: () => {
         // Daemon offline: its sessions flip inactive (forgetWorker) and its
         // presence drops — refetch both.
         runtime.forgetWorker(worker.id)
         projects.publish(worker.projectId, { resource: 'workers' })
         projects.publish(worker.projectId, { resource: 'sessions' })
       },
-    )
+    })
   })
 
   app.get('/workers/:id', async c => {

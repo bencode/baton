@@ -84,7 +84,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
   })
 
-  test('messages: POST /sessions/:id/messages synthesizes ephemeral user_message', async () => {
+  test('messages: POST /sessions/:id/messages persists a user_message (per-session sequence)', async () => {
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)
     await postJson(
@@ -99,8 +99,8 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(res.status, 201)
     const ev = (await res.json()) as { type: string; sequence: number; payload: { text: string } }
     assert.equal(ev.type, 'user_message')
-    // sequence is an ephemeral per-process counter (not reset between tests) — just a number
-    assert.equal(typeof ev.sequence, 'number')
+    // Persisted now → sequence is the per-session 0-based position (fresh db).
+    assert.equal(ev.sequence, 0)
     assert.equal(ev.payload.text, 'hi')
 
     // 400 on empty text + images
@@ -115,6 +115,56 @@ describe('server HTTP — sessions + chat protocol', () => {
       (await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })).status,
       404,
     )
+  })
+
+  test('messages are persisted + replayable via GET history (store-backed)', async () => {
+    const app = createApp(ctx.store)
+    const { session, workerToken } = await seedSession(app)
+    await postJson(
+      app,
+      `/sessions/${session.id}/status`,
+      { active: true },
+      { authorization: `Bearer ${workerToken}` },
+    )
+    await postJson(app, `/sessions/${session.id}/messages`, { text: 'one' })
+    await postJson(app, `/sessions/${session.id}/messages`, { text: 'two' })
+    // The transcript is now persisted server-side (not browser-only): the store
+    // holds both in order — what the stream replays on (re)connect.
+    const events = await ctx.store.sessions.listEvents(session.id)
+    const texts = events
+      .filter(e => e.type === 'user_message')
+      .map(e => (e.payload as { text: string }).text)
+    assert.deepEqual(texts, ['one', 'two'])
+    assert.deepEqual(
+      events.filter(e => e.type === 'user_message').map(e => e.sequence),
+      [0, 1],
+    )
+
+    // GET history endpoint returns the same persisted list (the web loads this
+    // once instead of replaying over SSE). 404 for an unknown session.
+    const res = await app.request(`/sessions/${session.id}/events`)
+    assert.equal(res.status, 200)
+    const got = (await res.json()) as Array<{ type: string; payload: { text?: string } }>
+    assert.deepEqual(
+      got.filter(e => e.type === 'user_message').map(e => e.payload.text),
+      ['one', 'two'],
+    )
+    assert.equal((await app.request('/sessions/999999/events')).status, 404)
+  })
+
+  test('share token: POST /auth/share/:token resolves the session, 404 on bad token', async () => {
+    const app = createApp(ctx.store)
+    const { session } = await seedSession(app)
+    const full = (await (await app.request(`/sessions/${session.id}`)).json()) as {
+      shareToken: string
+    }
+    assert.ok(full.shareToken)
+    // good token → the session (the standalone page renders it with the normal api)
+    const ok = await postJson(app, `/auth/share/${full.shareToken}`, {})
+    assert.equal(ok.status, 200)
+    assert.equal(((await ok.json()) as { session: { id: number } }).session.id, session.id)
+    // guessed/garbage token → 404
+    assert.equal((await postJson(app, '/auth/share/not-a-real-token', {})).status, 404)
   })
 
   test('messages: accepts pasted images (data URLs), rejects empty and oversized', async () => {

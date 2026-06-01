@@ -5,6 +5,7 @@ import { prismaRequirements } from './prisma/requirements.ts'
 import { prismaSessions } from './prisma/sessions.ts'
 import { prismaTaskComments } from './prisma/task-comments.ts'
 import { prismaTasks } from './prisma/tasks.ts'
+import { prismaUsers } from './prisma/users.ts'
 import { prismaWorkers } from './prisma/workers.ts'
 import { prismaWorkspaces } from './prisma/workspaces.ts'
 import type { Store } from './types.ts'
@@ -20,6 +21,7 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
   taskComments: prismaTaskComments(prisma),
   sessions: prismaSessions(prisma),
   workers: prismaWorkers(prisma),
+  users: prismaUsers(prisma),
   getRequirementWithTasks: async id => {
     const r = await prisma.requirement.findUnique({ where: { id }, include: { tasks: true } })
     if (!r) return null

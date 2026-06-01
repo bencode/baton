@@ -29,6 +29,9 @@ export type Session = {
   agentKind: AgentKind
   agentSessionId: string | null
   worktreePath: string | null
+  // Unguessable per-session key for the standalone share page (/s/:shareToken).
+  // null for legacy sessions created before sharing existed.
+  shareToken: string | null
   createdAt: number
   updatedAt: number
 }

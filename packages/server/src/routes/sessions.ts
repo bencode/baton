@@ -1,4 +1,11 @@
-import type { AgentKind, Attachment, Id, SessionEventType, SessionMode } from '@baton/shared'
+import type {
+  AgentKind,
+  Attachment,
+  Id,
+  SessionEvent,
+  SessionEventType,
+  SessionMode,
+} from '@baton/shared'
 import type { Context, Hono } from 'hono'
 import type { AttachmentStore } from '../attachments.ts'
 import type { BusyTracker } from '../busy.ts'
@@ -7,7 +14,6 @@ import type { EventBus } from '../event-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
 import type { ProjectBus } from '../project-bus.ts'
-import { forgetSessionSeq, synthesize } from '../session-events.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
@@ -185,16 +191,15 @@ export const registerSessionRoutes = (
     await store.sessions.destroy(id)
     runtime.forget(id)
     busyTracker.forget(id)
-    forgetSessionSeq(id)
     await attachments.forgetSession(id)
     bump(s.projectId)
     return c.body(null, 204)
   })
 
-  // Session child emits events (worker-bearer, must own session). Server doesn't
-  // persist; it synthesizes an ephemeral envelope and publishes to the bus so
-  // subscribed browsers / CLIs receive it live. turn_start / turn_complete /
-  // turn_error also toggle busyTracker — the UI busy-pulse source of truth.
+  // Session child emits events (worker-bearer, must own session). Persisted to
+  // the transcript then published to the bus so subscribed browsers / CLIs
+  // receive it live AND a late/other client can replay it. turn_start /
+  // turn_complete / turn_error also toggle busyTracker — the UI busy-pulse SoT.
   app.post('/sessions/:id/events', auth, async c => {
     const owned = await ownedByWorker(c)
     if ('error' in owned) return owned.error
@@ -209,15 +214,14 @@ export const registerSessionRoutes = (
       busyTracker.set(owned.id, false)
       bump(owned.session.projectId)
     }
-    const ev = synthesize(owned.id, body.type, body.payload ?? null)
+    const ev = await store.sessions.appendEvent(owned.id, body.type, body.payload ?? null)
     bus.publish(owned.id, ev)
     return c.json(ev, 201)
   })
 
-  // Chat ingress (UI / CLI, no auth in v0). Synthesizes a user_message event
-  // and publishes; the subscribed daemon (via SSE) picks it up and runs a
-  // turn. Not persisted server-side — the browser writes incoming events to
-  // its own IndexedDB for replay.
+  // Chat ingress (UI / CLI, no auth in v0). Persists a user_message then
+  // publishes it; the subscribed daemon (via SSE) picks it up and runs a turn,
+  // and any client replays it from the transcript on (re)connect.
   app.post('/sessions/:id/messages', async c => {
     const sessionId = intParam(c.req.param('id'))
     const session = await store.sessions.get(sessionId)
@@ -245,18 +249,38 @@ export const registerSessionRoutes = (
       ...(images.length > 0 ? { images } : {}),
       ...(atts.length > 0 ? { attachments: atts } : {}),
     }
-    const ev = synthesize(sessionId, 'user_message', payload)
+    const ev = await store.sessions.appendEvent(sessionId, 'user_message', payload)
     bus.publish(sessionId, ev)
     return c.json(ev, 201)
   })
 
-  // Live tail. No history replay — events aren't persisted server-side. A
-  // browser that wants context replays from its own IndexedDB before
-  // connecting; this stream is purely 'what arrives from now on'.
+  // Transcript history (persisted log) as a plain JSON list — the web loads this
+  // once on open instead of replaying the whole transcript over SSE (which cost
+  // one re-render per event → O(n²) on long sessions). Gated like other reads.
+  app.get('/sessions/:id/events', async c => {
+    const id = intParam(c.req.param('id'))
+    const exists = await store.sessions.get(id)
+    if (!exists) return c.json({ error: 'not found' }, 404)
+    return c.json(await store.sessions.listEvents(id))
+  })
+
+  // Transcript stream: replays the persisted log then tails live. `?live=1` skips
+  // the replay (the web now loads history via GET above and only tails live here;
+  // the worker child also uses ?live=1 so a resume doesn't re-run past messages).
+  // `?since=<seq>` bounds the replay to events at/after a sequence — the DingTalk
+  // bridge passes its message's sequence so it doesn't re-read the whole history.
   app.get('/sessions/:id/stream', async c => {
     const id = intParam(c.req.param('id'))
     const exists = await store.sessions.get(id)
     if (!exists) return c.json({ error: 'not found' }, 404)
-    return streamBus(c, push => bus.subscribe(id, push))
+    const live = c.req.query('live') === '1'
+    const since = Number(c.req.query('since'))
+    const load = async (): Promise<SessionEvent[]> => {
+      const all = await store.sessions.listEvents(id)
+      return Number.isFinite(since) ? all.filter(e => e.sequence >= since) : all
+    }
+    return streamBus<SessionEvent>(c, push => bus.subscribe(id, push), {
+      ...(live ? {} : { replay: { load, keyOf: e => e.id } }),
+    })
   })
 }

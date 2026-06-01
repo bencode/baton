@@ -11,6 +11,17 @@ datasource db {
   provider = "sqlite"
 }
 
+// A back-office login user (username/password → signed session cookie). Added
+// pre-deploy. Auth is enforced only once ≥1 user row exists: seed one to lock
+// production; an empty table leaves the API open (dev + CLI/bridge convenience).
+// passwordHash is a scrypt "saltHex:hashHex" pair (see src/auth/password.ts).
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
 model Workspace {
   id        Int      @id @default(autoincrement())
   name      String   @unique
@@ -135,15 +146,18 @@ model Session {
   agentKind      String /// 'claude-code' (v0). Future: 'codex' | …
   agentSessionId String? // claude-code: UUID; null until the Worker materializes.
   worktreePath   String? // local cwd on the worker; null until the Worker materializes.
+  shareToken     String? // unguessable key for the standalone /s/:token page; null on legacy rows (32-byte random ⇒ effectively unique)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  worker  Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  events  SessionEvent[]
 
   @@unique([agentKind, agentSessionId])
   @@index([projectId])
   @@index([workerId])
+  @@index([shareToken])
 }
 
 // A Worker is a (project × machine) registration. machineId is a UUID baton
@@ -170,7 +184,23 @@ model Worker {
   @@unique([projectId, name])
 }
 
-// Session events (user_message / sdk_event / turn_* / system) used to live
-// here as an append-only log. They were moved out of server storage in 2026
-// — content now lives only in each browser's IndexedDB. The server is a
-// real-time relay, not a transcript store. Privacy first.
+// Append-only transcript of a Session — user_message / sdk_event / turn_* /
+// system. Persisted server-side again (the browser-IndexedDB-only model was
+// dropped): the server is the single source of truth, so any client — a
+// reloaded tab, another device, a DingTalk-opened link, a headless run — sees
+// the full history. `sequence` is per-session (0-based, assigned in a tx);
+// payload is JSON text, (de)serialized by the Store mapping layer. Retention /
+// auth come later; v0 keeps everything.
+model SessionEvent {
+  id        Int      @id @default(autoincrement())
+  sessionId Int
+  sequence  Int
+  type      String /// 'user_message' | 'sdk_event' | 'turn_start' | 'turn_complete' | 'turn_error' | 'system'
+  payload   String // JSON
+  createdAt DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId])
+}
