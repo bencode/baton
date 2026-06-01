@@ -1,0 +1,59 @@
+# baton worker — runs a claude-code agent inside a Linux container (colima on a
+# Mac). The published @lesscap/baton-cli daemon (`baton worker run`) drives
+# remote baton sessions; each turn spawns `claude` in a git worktree off /repo.
+# The container is the security boundary: claude runs --dangerously-skip-
+# permissions, but can only touch the mounted repo + volumes.
+#
+# claude auth is env-based (Anthropic-compatible proxy): ANTHROPIC_BASE_URL +
+# ANTHROPIC_AUTH_TOKEN (and/or ANTHROPIC_API_KEY), set via .env. Modeled on
+# trantor/tcollab's Dockerfile.server.
+FROM node:26-bookworm-slim
+
+ARG CLAUDE_CODE_VERSION=2.1.159
+ARG BATON_CLI_VERSION=0.1.2
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git ca-certificates curl ripgrep jq less python3 procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Non-root agent user (reuse uid 1000; the slim image's `node` user holds it).
+RUN userdel -r node 2>/dev/null || true \
+    && useradd -m -s /bin/bash -u 1000 baton
+
+USER baton
+WORKDIR /home/baton
+ENV HOME=/home/baton \
+    PATH=/home/baton/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+
+# claude-code ships its native binary as a per-arch optional dep
+# (@anthropic-ai/claude-code-<platform>). npm's optional-dep resolution can
+# silently skip it → `claude: not found`. Install the linux-arm64 package
+# explicitly so a missing native binary fails the build instead of producing a
+# usable-looking but broken image. (Switch to linux-x64 for an amd64 host.)
+RUN mkdir -p /home/baton/.npm-global \
+    && npm config set prefix /home/baton/.npm-global \
+    && npm i -g \
+      "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+      "@anthropic-ai/claude-code-linux-arm64@${CLAUDE_CODE_VERSION}" \
+      "@lesscap/baton-cli@${BATON_CLI_VERSION}" \
+    && claude --version && command -v baton >/dev/null
+
+# git identity for commits made inside spawned worktrees (else first commit
+# errors "Author identity unknown"). Push creds (only if the agent pushes) via
+# credential.helper store; the deploy host mounts /home/baton/.gitcfg/ as a
+# directory holding a `credentials` file (one line: https://USER:TOKEN@host).
+RUN git config --global user.name "baton" \
+    && git config --global user.email "baton@lesscap.local" \
+    && git config --global credential.helper "store --file=/home/baton/.gitcfg/credentials"
+
+# Seed claude settings (no Co-Authored-By trailer). A named volume on ~/.claude
+# shadows this for existing deployments; fresh volumes get it copied in.
+RUN mkdir -p /home/baton/.claude \
+    && printf '{\n  "includeCoAuthoredBy": false,\n  "theme": "dark"\n}\n' \
+      > /home/baton/.claude/settings.json
+
+COPY --chown=baton:baton entrypoint.sh /home/baton/entrypoint.sh
+RUN chmod +x /home/baton/entrypoint.sh
+
+WORKDIR /repo
+ENTRYPOINT ["/home/baton/entrypoint.sh"]
