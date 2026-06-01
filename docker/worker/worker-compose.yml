@@ -17,6 +17,10 @@ services:
       - baton_state:/home/baton/.local/share/baton
       # claude session state / settings (resume needs this to persist).
       - claude_home:/home/baton/.claude
+      # Host-managed skills, surfaced inside as user-level skills (install/edit
+      # outside → live inside, no rebuild, every session). Read-only so the
+      # agent can't alter them. ./skills is relative to this compose file.
+      - ./skills:/home/baton/.claude/skills:ro
       # Uncomment to let the agent `git push` (credential.helper store reads a
       # `credentials` file inside this directory). Directory mount, not a single
       # file — a file bind pins an inode and breaks git's atomic rewrite.
