@@ -46,9 +46,12 @@ RUN git config --global user.name "baton" \
     && git config --global user.email "baton@lesscap.local" \
     && git config --global credential.helper "store --file=/home/baton/.gitcfg/credentials"
 
-# Seed claude settings (no Co-Authored-By trailer). A named volume on ~/.claude
-# shadows this for existing deployments; fresh volumes get it copied in.
-RUN mkdir -p /home/baton/.claude \
+# Pre-create the dirs that get named-volume mounts, owned by `baton`. Docker
+# seeds a fresh volume from the image path's ownership — without this, the
+# mount point is created root-owned and the non-root user can't write
+# (EACCES on ~/.local/share/baton/machine-id).
+# Seed claude settings too (no Co-Authored-By trailer); fresh volume copies it in.
+RUN mkdir -p /home/baton/.claude /home/baton/.local/share/baton \
     && printf '{\n  "includeCoAuthoredBy": false,\n  "theme": "dark"\n}\n' \
       > /home/baton/.claude/settings.json
 
