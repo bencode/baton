@@ -5,9 +5,13 @@ FROM node:26-slim
 WORKDIR /app
 RUN npm install -g pnpm@10.33.0
 
+# All package.json so pnpm can validate the frozen lockfile; --filter installs web only.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/server/package.json packages/server/
+COPY packages/cli/package.json packages/cli/
 COPY packages/web/package.json packages/web/
+COPY packages/dingtalk/package.json packages/dingtalk/
 
 RUN pnpm install --filter @baton/web... --frozen-lockfile
 

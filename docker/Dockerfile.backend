@@ -6,9 +6,14 @@ WORKDIR /app
 RUN npm install -g pnpm@10.33.0
 
 # Workspace manifests first → install layer caches across source-only changes.
+# All package.json are needed so pnpm can validate the frozen lockfile; the
+# --filter below still installs only server + its deps.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
+COPY packages/cli/package.json packages/cli/
+COPY packages/web/package.json packages/web/
+COPY packages/dingtalk/package.json packages/dingtalk/
 
 # Server + its workspace dep (shared). --prod=false keeps tsx + prisma (devDeps),
 # which the runtime needs (server runs via tsx; entrypoint runs prisma migrate).
