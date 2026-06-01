@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
-import { useNavigate } from 'react-router-dom'
+import { Route, Routes, useNavigate } from 'react-router-dom'
 import { createApi } from '../api'
+import { LoginPage } from '../features/auth/login-page'
+import { RequireAuth } from '../features/auth/require-auth'
 import { useProject, useProjects } from '../features/projects/use-projects'
 import { RequirementDetail } from '../features/requirements/requirement-detail'
 import { SessionDetail } from '../features/sessions/session-detail'
+import { SessionPage } from '../features/sessions/session-page'
 import { useSessions } from '../features/sessions/use-sessions'
 import { TaskDetail } from '../features/tasks/task-detail'
 import { useWorkspaces } from '../features/workspaces/use-workspaces'
@@ -50,8 +53,7 @@ export const HealthBadge = () => {
 // route; sessions navigate by int id under /proj/<p>/session/<sid>.
 const renderTab = (tab: Tab) => {
   const route = parseRoute(tab.id)
-  if (route.kind === 'session')
-    return <SessionDetail projectId={route.projectId} sessionId={route.sessionId} />
+  if (route.kind === 'session') return <SessionDetail sessionId={route.sessionId} />
   if (route.kind !== 'item') return null
   if (route.itemKind === 'requirement')
     return <RequirementDetail projectId={route.projectId} code={route.code} />
@@ -153,8 +155,23 @@ export const Shell = () => {
   )
 }
 
+// `/s/:token` is the standalone session page (a DingTalk share link, etc.): it
+// auto-logs-in with the token, then renders the same SessionDetail without the
+// shell. `/login` is the gate's redirect target. Everything else is the Shell,
+// guarded by RequireAuth (a no-op when auth is off — no users seeded).
 export const App = () => (
   <ApiContext.Provider value={api}>
-    <Shell />
+    <Routes>
+      <Route path="/s/:token" element={<SessionPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="*"
+        element={
+          <RequireAuth>
+            <Shell />
+          </RequireAuth>
+        }
+      />
+    </Routes>
   </ApiContext.Provider>
 )

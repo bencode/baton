@@ -9,7 +9,7 @@ import { SessionHeader } from './session-detail/session-header'
 import { useSessionStream } from './use-session-stream'
 import { useSession, useSessions } from './use-sessions'
 
-type SessionDetailProps = { projectId: Id; sessionId: Id }
+type SessionDetailProps = { sessionId: Id }
 
 // Clipboard images arrive as a File with an empty name; give it a stable one
 // (File.name is read-only, so wrap it) so the upload + worktree filename read
@@ -27,9 +27,12 @@ const PLACEHOLDER_NAME = /^session-\d+$/
 
 // Render a Session as a chat. Looks up the session by int id; the list query
 // from `useSessions` re-polls so we can use its fresher copy when available.
-export const SessionDetail = ({ projectId, sessionId }: SessionDetailProps) => {
+export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const api = useApi()
   const { data: sessionShallow } = useSession(sessionId)
+  // projectId comes from the session itself, so this body works keyed by
+  // sessionId alone — reused by both the in-app tab and the standalone /s/:token page.
+  const projectId = sessionShallow?.projectId ?? null
   const { data: liveSessions } = useSessions(projectId)
   const session = liveSessions?.find(s => s.id === sessionId) ?? sessionShallow
   const { events, status } = useSessionStream(session?.id ?? null)

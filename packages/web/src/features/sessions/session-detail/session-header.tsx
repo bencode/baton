@@ -104,16 +104,13 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
           {session.agentSessionId ? truncateUuid(session.agentSessionId) : 'materializing…'}
         </span>
         <CopyButton text={session.agentSessionId ?? ''} />
-        <span aria-hidden className="text-gray-300">
-          ·
-        </span>
         <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
           <span
             className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-gray-300'}`}
           />
           {active ? 'active' : 'inactive'}
         </span>
-        {active ? (
+        {active && (
           <button
             type="button"
             onClick={onStop}
@@ -121,7 +118,8 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
           >
             stop
           </button>
-        ) : (
+        )}
+        {!active && (
           <button
             type="button"
             onClick={onResume}

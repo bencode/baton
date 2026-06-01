@@ -1,10 +1,9 @@
-import type { Attachment } from '@baton/shared'
-import type { StoredEvent } from './local-store'
+import type { Attachment, SessionEvent } from '@baton/shared'
 
-// Pure reducer turning stored session events (arrival-ordered, each carrying a
-// stable clientId) into a list of RenderItems UI can dispatch over. Tries to
-// read Claude stream-json payloads loosely (the SDK's shape evolves); unknown
-// shapes fall through to a `raw` item so nothing is silently dropped.
+// Pure reducer turning session events (sequence-ordered, each carrying a stable
+// server `id`) into a list of RenderItems UI can dispatch over. Tries to read
+// Claude stream-json payloads loosely (the SDK's shape evolves); unknown shapes
+// fall through to a `raw` item so nothing is silently dropped.
 
 export type RenderItem =
   | { kind: 'system-header'; model?: string; sessionId?: string; key: string }
@@ -96,7 +95,7 @@ const formatToolResult = (raw: unknown): { text: string; isError: boolean } => {
 
 // --- reducer -----------------------------------------------------------------
 
-export const reduceEvents = (events: StoredEvent[]): RenderItem[] => {
+export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
   const items: RenderItem[] = []
   const pendingTools = new Map<string, Extract<RenderItem, { kind: 'tool-block' }>>()
   let pendingResult: TurnEndSummary | undefined
@@ -105,9 +104,9 @@ export const reduceEvents = (events: StoredEvent[]): RenderItem[] => {
   let systemEmitted = false
 
   for (const e of events) {
-    // clientId is the client-minted stable identity (see local-store): unique
-    // across server restarts, unlike the server's resettable sequence/id.
-    const key = e.clientId
+    // Server `id` is a stable unique identity (events are persisted) — safe as
+    // the per-item React key.
+    const key = String(e.id)
     if (e.type === 'user_message') {
       const text = isRecord(e.payload) && typeof e.payload.text === 'string' ? e.payload.text : ''
       const images =

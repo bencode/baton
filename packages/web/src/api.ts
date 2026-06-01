@@ -6,11 +6,13 @@ import type {
   Requirement,
   RequirementStatus,
   ResourceRef,
+  Session,
   SessionEvent,
   SessionView,
   Task,
   TaskComment,
   TaskStatus,
+  User,
   WorkerView,
   Workspace,
 } from '@baton/shared'
@@ -26,6 +28,9 @@ type ReqInit = { method: string; body?: unknown }
 const request = async <T>(url: string, init: ReqInit): Promise<T> => {
   const res = await fetch(url, {
     method: init.method,
+    // Same-origin (the web is served alongside /api) → the session cookie rides
+    // along; this is what authenticates every back-office call once auth is on.
+    credentials: 'same-origin',
     ...(init.body !== undefined
       ? { body: JSON.stringify(init.body), headers: { 'content-type': 'application/json' } }
       : {}),
@@ -54,6 +59,17 @@ export type TaskInput = {
 // web's own HTTP client (browser fetch), mirroring the server routes; types from @baton/shared.
 export type Api = {
   health(): Promise<{ ok: boolean }>
+  // Cookie-session auth. login/shareLogin mint the cookie (the browser stores it);
+  // me drives the auth gate (401 → show login). shareLogin is the standalone
+  // page's auto-login — a valid share token logs in as the seeded user.
+  auth: {
+    login(username: string, password: string): Promise<{ user: User }>
+    logout(): Promise<void>
+    // Resolves when access is allowed (authRequired:false when no users seeded, or
+    // a valid cookie); throws 401 when auth is on and the caller isn't logged in.
+    me(): Promise<{ authRequired: boolean; user: User | null }>
+    shareLogin(token: string): Promise<{ session: Session }>
+  }
   workspaces: {
     create(input: WorkspaceInput): Promise<Workspace>
     list(): Promise<Workspace[]>
@@ -101,11 +117,16 @@ export type Api = {
     remove(id: Id): Promise<void>
     sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
     uploadAttachment(id: Id, file: File): Promise<Attachment>
+    // Persisted transcript history, fetched once on open (the stream then only
+    // tails live) — avoids replaying the whole log over SSE.
+    listEvents(id: Id): Promise<SessionEvent[]>
   }
   workers: {
     listByProject(projectId: Id): Promise<WorkerView[]>
     get(id: Id): Promise<WorkerView>
   }
+  // SSE URL for a session's transcript (EventSource sends the cookie same-origin).
+  sessionStreamUrl(id: Id): string
 }
 
 export const createApi = (base: string = API_BASE): Api => {
@@ -121,6 +142,13 @@ export const createApi = (base: string = API_BASE): Api => {
   }
   return {
     health: () => request(u('/health'), { method: 'GET' }),
+    auth: {
+      login: (username, password) =>
+        request(u('/auth/login'), { method: 'POST', body: { username, password } }),
+      logout: () => request(u('/auth/logout'), { method: 'POST' }),
+      me: () => request(u('/auth/me'), { method: 'GET' }),
+      shareLogin: token => request(u(`/auth/share/${token}`), { method: 'POST' }),
+    },
     workspaces: {
       create: input => request(u('/workspaces'), { method: 'POST', body: input }),
       list: () => request(u('/workspaces'), { method: 'GET' }),
@@ -181,16 +209,21 @@ export const createApi = (base: string = API_BASE): Api => {
         )
         const r = await fetch(url, {
           method: 'POST',
+          credentials: 'same-origin',
           body: file,
           headers: { 'content-type': file.type || 'application/octet-stream' },
         })
         if (!r.ok) throw new Error(`POST ${url} → ${r.status}: ${await r.text()}`)
         return (await r.json()) as Attachment
       },
+      listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
     },
     workers: {
       listByProject: projectId => request(u(`/projects/${projectId}/workers`), { method: 'GET' }),
       get: id => request(u(`/workers/${id}`), { method: 'GET' }),
     },
+    // Live-only — history comes from sessions.listEvents (one fetch), so the
+    // stream never replays the whole transcript.
+    sessionStreamUrl: id => u(`/sessions/${id}/stream?live=1`),
   }
 }

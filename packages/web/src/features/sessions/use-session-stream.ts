@@ -1,26 +1,28 @@
 import type { Id, SessionEvent } from '@baton/shared'
 import { useEffect, useState } from 'react'
-import { API_BASE } from '../../api'
-import { appendEvent, loadEvents, type StoredEvent } from './local-store'
+import { useApi } from '../../app/api-context'
 
-// EventSource subscription to /api/sessions/:id/stream paired with an
-// IndexedDB-backed local transcript.
-//
-// Server no longer persists events — there's no history replay. On mount we
-// fill `events` from the browser's local store (whatever this browser has
-// seen for this session before), then subscribe to the live stream and
-// append every incoming event both to in-memory state and IndexedDB.
-//
-// Cross-tab semantics: each tab keeps its own state and both write to the
-// shared IndexedDB. Late tabs will see whatever the earliest tab persisted
-// the next time they mount; live updates are per-tab via SSE.
+// The transcript is two sources folded into one ordered list: the persisted
+// history (one GET on open) and the live tail (SSE `?live=1`). Splitting them
+// keeps open cheap — the old design replayed the whole log over SSE, one frame
+// per event, so the browser re-rendered O(n) times → O(n²) on long sessions.
 export type StreamState = {
-  events: StoredEvent[]
+  events: SessionEvent[]
   status: 'connecting' | 'open' | 'closed' | 'error'
 }
 
+// Dedupe by stable server `id`, order by per-session `sequence`. Pure → tested.
+export const mergeEvents = (existing: SessionEvent[], incoming: SessionEvent[]): SessionEvent[] => {
+  if (incoming.length === 0) return existing
+  const byId = new Map<number, SessionEvent>()
+  for (const e of existing) byId.set(e.id, e)
+  for (const e of incoming) byId.set(e.id, e)
+  return [...byId.values()].sort((a, b) => a.sequence - b.sequence)
+}
+
 export const useSessionStream = (sessionId: Id | null): StreamState => {
-  const [events, setEvents] = useState<StoredEvent[]>([])
+  const api = useApi()
+  const [events, setEvents] = useState<SessionEvent[]>([])
   const [status, setStatus] = useState<StreamState['status']>('connecting')
 
   useEffect(() => {
@@ -29,49 +31,32 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
       setStatus('closed')
       return
     }
-    let cancelled = false
     setEvents([])
     setStatus('connecting')
-
-    // Hydrate from local store first so the user sees yesterday's chat before
-    // SSE opens. If IndexedDB is unavailable (private browsing on some
-    // browsers, quota issues) we silently fall back to a live-only view.
-    // Merge rather than replace: a live event can arrive during this async read
-    // (e.g. opening a session with a turn already running) — keep any live-only
-    // events instead of clobbering them, deduped by clientId.
-    void loadEvents(sessionId)
-      .then(local => {
-        if (cancelled) return
-        setEvents(prev => {
-          const seen = new Set(local.map(e => e.clientId))
-          return [...local, ...prev.filter(e => !seen.has(e.clientId))]
-        })
-      })
-      .catch(() => {})
-
-    const es = new EventSource(`${API_BASE}/sessions/${sessionId}/stream`)
+    let alive = true
+    // Live tail first (so nothing created during the history fetch is missed —
+    // the merge dedupes any overlap by id), then load history in one shot.
+    const es = new EventSource(api.sessionStreamUrl(sessionId))
     es.onopen = () => setStatus('open')
     es.onmessage = e => {
       try {
-        const parsed = JSON.parse(e.data) as SessionEvent
-        // Stamp the one identity the client can trust. The server's id/sequence
-        // reset to 0 on restart, so we mint a stable clientId here, at the
-        // single receive point, and key dedup/ordering/React off it. The same
-        // object goes to both in-memory state and IndexedDB so they agree.
-        const stored: StoredEvent = { ...parsed, clientId: crypto.randomUUID() }
-        setEvents(prev => [...prev, stored])
-        void appendEvent(sessionId, stored).catch(() => {})
+        const ev = JSON.parse(e.data) as SessionEvent
+        setEvents(prev => mergeEvents(prev, [ev]))
       } catch {
         // ignore malformed payloads
       }
     }
     es.onerror = () => setStatus('error')
+    api.sessions
+      .listEvents(sessionId)
+      .then(history => alive && setEvents(prev => mergeEvents(prev, history)))
+      .catch(() => {})
     return () => {
-      cancelled = true
+      alive = false
       es.close()
       setStatus('closed')
     }
-  }, [sessionId])
+  }, [sessionId, api])
 
   return { events, status }
 }

@@ -1,17 +1,15 @@
-import type { SessionEventType } from '@baton/shared'
+import type { SessionEvent, SessionEventType } from '@baton/shared'
 import { describe, expect, test } from 'vitest'
 import { reduceEvents } from './event-render'
-import type { StoredEvent } from './local-store'
 
 let seq = 0
-const ev = (type: SessionEventType, payload: unknown): StoredEvent => ({
+const ev = (type: SessionEventType, payload: unknown): SessionEvent => ({
   id: ++seq,
   sessionId: 1,
   sequence: seq,
   type,
   payload,
   createdAt: 0,
-  clientId: `c${seq}`,
 })
 
 describe('reduceEvents', () => {

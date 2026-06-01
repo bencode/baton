@@ -59,6 +59,9 @@ export const projectPath = (projectId: number): string => `/proj/${projectId}`
 export const itemPath = (projectId: number, code: Code): string => `/proj/${projectId}/${enc(code)}`
 export const sessionPath = (projectId: number, sessionId: number): string =>
   `/proj/${projectId}/session/${sessionId}`
+// Standalone, shell-less session page (shared deep link, e.g. from DingTalk).
+// Keyed by the session's unguessable share token, not its int id.
+export const standaloneSessionPath = (shareToken: string): string => `/s/${shareToken}`
 
 // Whether a path opens a tab (item or session).
 export const isItemRoute = (pathname: string): boolean => {
