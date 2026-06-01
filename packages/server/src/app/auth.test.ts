@@ -62,6 +62,20 @@ describe('server HTTP — cookie auth gate', () => {
       headers: { authorization: `Bearer ${workerToken}` },
     })
     assert.equal(read.status, 200)
+
+    // A user's personal API token also authenticates (the bridge / CLI use it).
+    const u = await ctx.store.users.getByUsername('admin')
+    await ctx.store.users.setApiToken(u?.id ?? 0, 'tok-abc123')
+    assert.equal(
+      (await app.request('/workspaces', { headers: { authorization: 'Bearer tok-abc123' } }))
+        .status,
+      200,
+    )
+    // a bogus bearer is still rejected
+    assert.equal(
+      (await app.request('/workspaces', { headers: { authorization: 'Bearer nope' } })).status,
+      401,
+    )
   })
 
   test('share-token login: 200 + cookie on a valid token, 404 on garbage', async () => {

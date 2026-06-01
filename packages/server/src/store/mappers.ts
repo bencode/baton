@@ -107,6 +107,7 @@ export const toUserRecord = (r: DbUser): UserRecord => ({
   id: r.id,
   username: r.username,
   passwordHash: r.passwordHash,
+  apiToken: r.apiToken,
   createdAt: r.createdAt.getTime(),
 })
 

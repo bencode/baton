@@ -9,6 +9,7 @@
     "start": "tsx src/index.ts",
     "seed": "tsx src/seed.ts",
     "seed:user": "tsx src/seed-user.ts",
+    "token": "tsx src/seed-token.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test 'src/**/*.test.ts'",
     "db:migrate": "prisma migrate dev",

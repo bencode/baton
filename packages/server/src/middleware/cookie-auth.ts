@@ -32,10 +32,17 @@ export const cookieAuth =
       c.set('userId', userId)
       return next()
     }
-    // The worker daemon / session child authenticate as a machine principal with
-    // their Bearer token (reads + the EventSource stream, which can't carry a
-    // cookie). Worker-write routes still re-check ownership via workerBearerAuth.
+    // Machine principals authenticate with a Bearer token (no cookie):
+    //  - a user's personal API token (the DingTalk bridge / CLI) → acts as that user
+    //  - a worker's token (the worker daemon's reads + EventSource stream)
     const bearer = (c.req.header('authorization') ?? '').match(/^Bearer (.+)$/)?.[1]
-    if (bearer && (await store.workers.getByToken(bearer))) return next()
+    if (bearer) {
+      const user = await store.users.getByApiToken(bearer)
+      if (user) {
+        c.set('userId', user.id)
+        return next()
+      }
+      if (await store.workers.getByToken(bearer)) return next()
+    }
     return c.json({ error: 'unauthorized' }, 401)
   }

@@ -12,6 +12,13 @@ export const prismaUsers = (prisma: PrismaClient): Store['users'] => ({
     const r = await prisma.user.findUnique({ where: { username } })
     return r ? toUserRecord(r) : null
   },
+  getByApiToken: async token => {
+    // findFirst (not unique) — apiToken is @@index'd, 32-byte random ⇒ unique.
+    const r = await prisma.user.findFirst({ where: { apiToken: token } })
+    return r ? toUserRecord(r) : null
+  },
+  setApiToken: async (id, token) =>
+    toUserRecord(await prisma.user.update({ where: { id }, data: { apiToken: token } })),
   first: async () => {
     const r = await prisma.user.findFirst({ orderBy: { id: 'asc' } })
     return r ? toUserRecord(r) : null

@@ -19,7 +19,14 @@ model User {
   id           Int      @id @default(autoincrement())
   username     String   @unique
   passwordHash String
+  // Optional personal access token (like a GitHub PAT) for machine clients
+  // (the DingTalk bridge, CLI) — sent as `Authorization: Bearer <token>`. Minted
+  // out-of-band (seed-token script); null until generated. 32-byte random ⇒
+  // effectively unique; @@index (not @unique) keeps migrate non-interactive.
+  apiToken     String?
   createdAt    DateTime @default(now())
+
+  @@index([apiToken])
 }
 
 model Workspace {
