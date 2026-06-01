@@ -51,3 +51,13 @@ project's workers on https://baton.fmap.dev .
   container and drop the `ANTHROPIC_*` env — a future variant.
 - **git push**: uncomment the `.gitcfg` mount in `worker-compose.yml` and drop a
   `credentials` file there (`https://USER:TOKEN@host`).
+- **skills**: drop Claude Code skills into `./skills/` (mounted to
+  `~/.claude/skills`, read-only). They become user-level skills, available in
+  every session — install/edit on the host, no rebuild. Skills that shell out to
+  external CLIs (e.g. `tcollab`, `erda-cli`) only work if those CLIs are also
+  installed in the image.
+- **reference repos**: to let the agent read (not modify) other repos, put them
+  in a host dir, give colima a read-only mount (`--mount <dir>:r`), bind it to
+  `/resources:ro`, and list the paths in `permissions.additionalDirectories` in
+  `~/.claude/settings.json`. The agent works in its `/repo` worktree; `/resources`
+  is read-only context.
