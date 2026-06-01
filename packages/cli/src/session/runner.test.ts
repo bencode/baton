@@ -7,7 +7,7 @@ import { Readable } from 'node:stream'
 import { describe, test } from 'node:test'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
-import { runTurn } from './runner.ts'
+import { runTurn, shouldReap } from './runner.ts'
 
 describe('runTurn', () => {
   test('posts turn_start + N sdk_event + turn_complete; flags first vs resume', async () => {
@@ -191,5 +191,16 @@ describe('runTurn', () => {
     } finally {
       rmSync(wt, { recursive: true, force: true })
     }
+  })
+})
+
+describe('shouldReap', () => {
+  const idle = 1000
+  const now = 10_000
+  test('reaps only when idle long enough, not busy, and queue empty', () => {
+    assert.equal(shouldReap(now - idle, now, false, 0, idle), true) // idle → reap
+    assert.equal(shouldReap(now - idle, now, true, 0, idle), false) // mid-turn → keep
+    assert.equal(shouldReap(now - idle, now, false, 2, idle), false) // queued work → keep
+    assert.equal(shouldReap(now - 1, now, false, 0, idle), false) // recent activity → keep
   })
 })

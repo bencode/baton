@@ -115,7 +115,7 @@ export const worker = defineCommand({
       args: { ...common },
       run: async () => {
         const cfg = viewWorker(loadProjectConfig(projectConfigPath()))
-        const client = createClient(cfg.server)
+        const client = createClient(cfg.server, { bearer: cfg.apiToken })
         const ac = new AbortController()
         const stop = (): void => ac.abort()
         process.on('SIGINT', stop)

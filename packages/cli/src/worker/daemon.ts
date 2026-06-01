@@ -68,11 +68,10 @@ export const runWorkerDaemon = async (
     })
     children.set(sessionId, { child, worktreePath })
     log(`spawned session #${sessionId} (${worktreePath})`)
-    // Report active up-front so the UI can let the user message it. (Brief
-    // window before the child finishes subscribing; acceptable for v0.)
-    void client.sessions
-      .setStatus(sessionId, true, cfg.apiToken)
-      .catch(e => log(`status(active) failed: ${String(e)}`))
+    // The child reports itself active once its stream subscription is open (see
+    // runner.ts) — so `attached` means "ready to receive", not just "spawned".
+    // We only own the inactive report here (on exit), which is the reliable
+    // signal even if the child crashes.
     child.on('exit', code => {
       children.delete(sessionId)
       log(`session #${sessionId} child exited (code=${code ?? -1})`)
