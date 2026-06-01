@@ -13,9 +13,9 @@ echo "[deploy] build web (SPA → web-dist volume)"
 docker compose --profile build build web-build
 docker compose --profile build run --rm web-build
 
-echo "[deploy] build + (re)start backend & caddy"
-docker compose build backend
-docker compose up -d caddy backend
+echo "[deploy] build + (re)start backend, bridge & caddy"
+docker compose build backend bridge
+docker compose up -d caddy backend bridge
 
 echo "[deploy] done."
 docker compose ps
