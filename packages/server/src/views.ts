@@ -8,6 +8,11 @@ import type { Store } from './store/types.ts'
 // Parse an `:id` URL param to int; NaN is fine — downstream finds return null → 404.
 export const intParam = (s: string): Id => Number(s)
 
+// Prisma unique-constraint violation (P2002) — a rename/create hitting a taken
+// name. Routes map it to 409 instead of a 500.
+export const isUniqueViolation = (e: unknown): boolean =>
+  typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002'
+
 export type AppEnv = { Variables: AuthVars }
 
 // Merge a Session record with derived runtime view + the worker it belongs to.

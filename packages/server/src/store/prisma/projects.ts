@@ -19,6 +19,13 @@ export const prismaProjects = (prisma: PrismaClient): Store['projects'] => ({
   },
   listByWorkspace: async workspaceId =>
     (await prisma.project.findMany({ where: { workspaceId } })).map(toProject),
+  update: async (id, patch) =>
+    toProject(
+      await prisma.project.update({
+        where: { id },
+        data: { name: patch.name, description: patch.description },
+      }),
+    ),
   delete: async id => {
     await prisma.project.delete({ where: { id } })
   },

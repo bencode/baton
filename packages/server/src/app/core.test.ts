@@ -101,6 +101,36 @@ describe('server HTTP — core', () => {
     assert.equal((await app.request('/workspaces/999')).status, 404)
   })
 
+  test('PATCH renames workspace + project; 404 missing; 409 on duplicate name', async () => {
+    const app = createApp(ctx.store)
+    const patch = (path: string, body: unknown) =>
+      app.request(path, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+      })
+    const w = (await (await postJson(app, '/workspaces', { name: 'eng' })).json()) as WithId
+    const p = (await (
+      await postJson(app, '/projects', { workspaceId: w.id, name: 'daily' })
+    ).json()) as WithId
+
+    // rename workspace + project
+    const wRes = await patch(`/workspaces/${w.id}`, { name: 'trantor' })
+    assert.equal(wRes.status, 200)
+    assert.equal(((await wRes.json()) as { name: string }).name, 'trantor')
+    const pRes = await patch(`/projects/${p.id}`, { name: 'ops', description: 'd' })
+    assert.equal(pRes.status, 200)
+    const pv = (await pRes.json()) as { name: string; description: string }
+    assert.equal(pv.name, 'ops')
+    assert.equal(pv.description, 'd')
+
+    // missing → 404
+    assert.equal((await patch('/workspaces/999', { name: 'x' })).status, 404)
+    // duplicate workspace name → 409
+    await postJson(app, '/workspaces', { name: 'other' })
+    assert.equal((await patch(`/workspaces/${w.id}`, { name: 'other' })).status, 409)
+  })
+
   test('real node server start/stop + /health', async () => {
     const server = await startServer({ store: ctx.store, port: 0 })
     try {

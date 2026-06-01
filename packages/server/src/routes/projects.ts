@@ -5,8 +5,14 @@ import type { LivenessTracker } from '../liveness.ts'
 import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
-import type { Store } from '../store/types.ts'
-import { type AppEnv, intParam, sessionWithView, workerWithView } from '../views.ts'
+import type { ProjectPatch, Store } from '../store/types.ts'
+import {
+  type AppEnv,
+  intParam,
+  isUniqueViolation,
+  sessionWithView,
+  workerWithView,
+} from '../views.ts'
 
 export const registerProjectRoutes = (
   app: Hono<AppEnv>,
@@ -68,6 +74,17 @@ export const registerProjectRoutes = (
       return t ? c.json({ kind: 'task', item: t }) : c.json({ error: 'not found' }, 404)
     }
     return c.json({ error: 'unknown code prefix' }, 400)
+  })
+  app.patch('/projects/:id', async c => {
+    const id = intParam(c.req.param('id'))
+    if (!(await store.projects.get(id))) return c.json({ error: 'not found' }, 404)
+    const patch = (await c.req.json()) as ProjectPatch
+    try {
+      return c.json(await store.projects.update(id, patch))
+    } catch (e) {
+      if (isUniqueViolation(e)) return c.json({ error: 'name already in use' }, 409)
+      throw e
+    }
   })
   app.delete('/projects/:id', async c => {
     const id = intParam(c.req.param('id'))
