@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Id, WorkerCommand } from '@baton/shared'
@@ -18,10 +19,14 @@ import { createWorktree, removeWorktree, repoHeadBranch } from '../session/workt
 // one dies the worker just respawns it when the next command arrives. This is
 // what makes the worker resilient and sessions cheap.
 
-// Re-exec the CLI bin for the session child. The bin shim resolves tsx + the
-// entry itself, preserving the dev runtime.
-const binPath = (): string =>
-  join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'baton.mjs')
+// Node-runnable entry to re-exec for the session child (`baton session run`).
+// Dev: the tsx shim (bin/baton.mjs) that loads src/index.ts. Published bundle:
+// no bin/ is shipped, so import.meta.url IS the bundle — re-exec it directly.
+const binPath = (): string => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const devShim = join(here, '..', '..', 'bin', 'baton.mjs')
+  return existsSync(devShim) ? devShim : fileURLToPath(import.meta.url)
+}
 
 export const runWorkerDaemon = async (
   cfg: WorkerConfig,

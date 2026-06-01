@@ -8,28 +8,30 @@ importers:
 
   .:
     devDependencies:
-      '@baton/cli':
-        specifier: workspace:*
-        version: link:packages/cli
       '@biomejs/biome':
         specifier: ^2.4.16
         version: 2.4.16
+      '@lesscap/baton-cli':
+        specifier: workspace:*
+        version: link:packages/cli
 
   packages/cli:
-    dependencies:
+    devDependencies:
       '@baton/shared':
         specifier: workspace:*
         version: link:../shared
-      citty:
-        specifier: ^0.2.2
-        version: 0.2.2
-      eventsource:
-        specifier: ^4.1.0
-        version: 4.1.0
-    devDependencies:
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
+      citty:
+        specifier: ^0.2.2
+        version: 0.2.2
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.0
+      eventsource:
+        specifier: ^4.1.0
+        version: 4.1.0
       tsx:
         specifier: ^4.22.4
         version: 4.22.4

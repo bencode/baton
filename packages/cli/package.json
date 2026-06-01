@@ -1,23 +1,25 @@
 {
-  "name": "@baton/cli",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@lesscap/baton-cli",
+  "version": "0.1.0",
   "type": "module",
+  "description": "baton CLI — register/run a worker, manage projects/requirements/tasks/sessions",
   "bin": {
-    "baton": "./bin/baton.mjs"
+    "baton": "./dist/baton.mjs"
   },
+  "files": ["dist"],
   "scripts": {
     "baton": "tsx src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --packages=bundle --banner:js=\"#!/usr/bin/env node\" --outfile=dist/baton.mjs && chmod +x dist/baton.mjs",
+    "prepublishOnly": "pnpm build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test 'src/**/*.test.ts'"
   },
-  "dependencies": {
-    "@baton/shared": "workspace:*",
-    "citty": "^0.2.2",
-    "eventsource": "^4.1.0"
-  },
   "devDependencies": {
+    "@baton/shared": "workspace:*",
     "@types/node": "^25.9.1",
+    "citty": "^0.2.2",
+    "esbuild": "^0.28.0",
+    "eventsource": "^4.1.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }

@@ -11,7 +11,7 @@
     "check": "biome check --write . && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
-    "@baton/cli": "workspace:*",
+    "@lesscap/baton-cli": "workspace:*",
     "@biomejs/biome": "^2.4.16"
   },
   "pnpm": {
