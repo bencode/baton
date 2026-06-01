@@ -11,3 +11,16 @@ export const resolveBaseUrl = (
   if (cfg?.server) return cfg.server
   return env.BATON_URL ?? 'http://localhost:3280'
 }
+
+// Same priority WITHOUT the localhost fallback → null when no server was given.
+// `worker register` uses this so you can't silently register against localhost
+// by omitting --url; it errors instead.
+export const resolveBaseUrlOrNull = (
+  urlArg?: string,
+  env: Record<string, string | undefined> = process.env,
+): string | null => {
+  if (urlArg) return urlArg
+  const cfg = loadProjectConfigOrNull(projectConfigPath())
+  if (cfg?.server) return cfg.server
+  return env.BATON_URL ?? null
+}

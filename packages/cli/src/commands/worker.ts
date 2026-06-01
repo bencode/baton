@@ -2,7 +2,7 @@ import { hostname as osHostname } from 'node:os'
 import type { Id } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { type ApiClient, createClient, type WorkerRegisterOutput } from '../client.ts'
-import { resolveBaseUrl } from '../config.ts'
+import { resolveBaseUrlOrNull } from '../config.ts'
 import { fmtWorker, renderList, renderOne, toJson } from '../output.ts'
 import {
   loadProjectConfig,
@@ -83,8 +83,14 @@ export const worker = defineCommand({
         ...common,
       },
       run: async ({ args }) => {
-        const server = resolveBaseUrl(args.url)
-        const c = clientFor(args)
+        // Require an explicit server — don't silently register against localhost.
+        const server = resolveBaseUrlOrNull(args.url)
+        if (!server)
+          throw new Error(
+            'no baton server — pass --url <url> (e.g. https://baton.fmap.dev/api), set BATON_URL, or run `baton init`',
+          )
+        if (!args.json) console.log(`registering against ${server}`)
+        const c = createClient(server)
         const hostname = osHostname()
         const machineId = readOrCreateMachineId()
         const name = args.name ?? hostname
