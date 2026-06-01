@@ -1,19 +1,22 @@
 import type { Id, Project } from '@baton/shared'
 import { useApi } from '../../app/api-context'
 import { useAsync } from '../../hooks/use-async'
+import { useListRevision } from '../../hooks/use-list-revision'
 
 export const useProjects = (workspaceId: Id | null) => {
   const api = useApi()
+  const rev = useListRevision()
   return useAsync<Project[]>(
     () => (workspaceId !== null ? api.projects.listByWorkspace(workspaceId) : Promise.resolve([])),
-    workspaceId,
+    `${workspaceId}:${rev}`,
   )
 }
 
 export const useProject = (projectId: Id | null) => {
   const api = useApi()
+  const rev = useListRevision()
   return useAsync<Project | null>(
     () => (projectId !== null ? api.projects.get(projectId) : Promise.resolve(null)),
-    projectId,
+    `${projectId}:${rev}`,
   )
 }

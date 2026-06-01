@@ -74,12 +74,14 @@ export type Api = {
     create(input: WorkspaceInput): Promise<Workspace>
     list(): Promise<Workspace[]>
     get(id: Id): Promise<Workspace>
+    update(id: Id, patch: { name?: string }): Promise<Workspace>
     remove(id: Id): Promise<void>
   }
   projects: {
     create(input: ProjectInput): Promise<Project>
     listByWorkspace(workspaceId: Id): Promise<Project[]>
     get(id: Id): Promise<Project>
+    update(id: Id, patch: { name?: string; description?: string }): Promise<Project>
     remove(id: Id): Promise<void>
   }
   requirements: {
@@ -153,6 +155,7 @@ export const createApi = (base: string = API_BASE): Api => {
       create: input => request(u('/workspaces'), { method: 'POST', body: input }),
       list: () => request(u('/workspaces'), { method: 'GET' }),
       get: id => request(u(`/workspaces/${id}`), { method: 'GET' }),
+      update: (id, patch) => request(u(`/workspaces/${id}`), { method: 'PATCH', body: patch }),
       remove: id => request(u(`/workspaces/${id}`), { method: 'DELETE' }),
     },
     projects: {
@@ -160,6 +163,7 @@ export const createApi = (base: string = API_BASE): Api => {
       listByWorkspace: workspaceId =>
         request(u(`/workspaces/${workspaceId}/projects`), { method: 'GET' }),
       get: id => request(u(`/projects/${id}`), { method: 'GET' }),
+      update: (id, patch) => request(u(`/projects/${id}`), { method: 'PATCH', body: patch }),
       remove: id => request(u(`/projects/${id}`), { method: 'DELETE' }),
     },
     requirements: {
