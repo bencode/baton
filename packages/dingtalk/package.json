@@ -10,11 +10,11 @@
   },
   "dependencies": {
     "@baton/shared": "workspace:*",
-    "dingtalk-stream": "^2.1.6-beta.1"
+    "dingtalk-stream": "2.1.6-beta.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
-    "tsx": "^4.22.3",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }
 }
