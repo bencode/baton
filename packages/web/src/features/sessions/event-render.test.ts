@@ -20,6 +20,16 @@ describe('reduceEvents', () => {
     expect(out[0]).toMatchObject({ kind: 'user-bubble', text: 'hello' })
   })
 
+  test('system context_cleared → system-notice (other system → raw)', () => {
+    seq = 0
+    const out = reduceEvents([
+      ev('system', { action: 'context_cleared' }),
+      ev('system', { action: 'something_else' }),
+    ])
+    expect(out[0]).toMatchObject({ kind: 'system-notice' })
+    expect(out[1]).toMatchObject({ kind: 'raw' })
+  })
+
   test('user_message carries attachments through to the bubble', () => {
     seq = 0
     const att = {

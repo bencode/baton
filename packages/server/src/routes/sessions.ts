@@ -162,8 +162,15 @@ export const registerSessionRoutes = (
         agentSessionId: randomUUID(),
         worktreePath: s.worktreePath,
       })
-      commands.publish(s.workerId, { cmd: 'session.stop', sessionId: s.id })
-      commands.publish(s.workerId, { cmd: 'session.start', sessionId: s.id, name: s.name })
+      // Restart the running child so it picks up the new id — but only if it's
+      // actually active. Clearing a stopped session just regenerates the id
+      // (the next resume reads it); don't silently revive a deliberately-stopped
+      // one. The stop→start restart shares the same (rare) status race as
+      // stop→resume; a manual resume recovers if it ever lands wrong.
+      if (runtime.isActive(s.id)) {
+        commands.publish(s.workerId, { cmd: 'session.stop', sessionId: s.id })
+        commands.publish(s.workerId, { cmd: 'session.start', sessionId: s.id, name: s.name })
+      }
     }
     const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'context_cleared' })
     bus.publish(s.id, ev)

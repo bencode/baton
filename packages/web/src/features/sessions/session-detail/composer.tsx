@@ -3,8 +3,9 @@ import { useRef, useState } from 'react'
 import { attachmentSrc } from '../../../api'
 import { FileChip, isImage } from './attachment-view'
 import { CommandMenu } from './command-menu'
-import { matchCommands, resolveCommand, type SlashCommand } from './commands'
+import type { SlashCommand } from './commands'
 import { PaperclipIcon, SendIcon, Spinner } from './icons'
+import { useSlashCommands } from './use-slash-commands'
 
 // Pull image files out of a paste/clipboard synchronously (getAsFile must run
 // inside the event).
@@ -89,22 +90,9 @@ export const Composer = ({
 }: ComposerProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [dragging, setDragging] = useState(false)
-  const [cmdIndex, setCmdIndex] = useState(0)
-  const [dismissed, setDismissed] = useState(false)
+  const slash = useSlashCommands(draft, setDraft, onCommand)
   const busy = sending || uploading
   const canSend = active && !busy && (draft.trim().length > 0 || attachments.length > 0)
-
-  // Command autocomplete: while typing "/<name>" show the matching commands.
-  const menu = matchCommands(draft)
-  const menuOpen = menu.length > 0 && !dismissed
-  const idx = Math.min(cmdIndex, menu.length - 1)
-  // Picking from the menu: a command with args (/plan) just fills the input so
-  // you keep typing; a no-arg command (/clear, /help) runs immediately.
-  const pick = (cmd: SlashCommand) => {
-    if (cmd.takesArgs) return setDraft(`/${cmd.name} `)
-    onCommand(cmd, '')
-    setDraft('')
-  }
   return (
     <div className="shrink-0 border-t border-gray-200 bg-white p-3">
       {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone is the whole card */}
@@ -126,13 +114,14 @@ export const Composer = ({
         )}
         {uploadError && <p className="mb-2 text-xs text-red-600">{uploadError}</p>}
         {sendError && <p className="mb-2 text-xs text-red-600">{sendError}</p>}
-        {menuOpen && <CommandMenu commands={menu} activeIndex={idx} onPick={pick} />}
+        {slash.open && (
+          <CommandMenu commands={slash.menu} activeIndex={slash.activeIndex} onPick={slash.pick} />
+        )}
         <textarea
           value={draft}
           onChange={e => {
             setDraft(e.target.value)
-            setCmdIndex(0)
-            setDismissed(false)
+            slash.reset()
           }}
           onPaste={e => {
             const files = extractImageFiles(e.clipboardData.items)
@@ -141,40 +130,7 @@ export const Composer = ({
             onAddFiles(files)
           }}
           onKeyDown={e => {
-            if (menuOpen) {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                setCmdIndex(i => (i + 1) % menu.length)
-                return
-              }
-              if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                setCmdIndex(i => (i - 1 + menu.length) % menu.length)
-                return
-              }
-              if (e.key === 'Enter' || e.key === 'Tab') {
-                e.preventDefault()
-                const cmd = menu[idx]
-                if (cmd) pick(cmd)
-                return
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                setDismissed(true)
-                return
-              }
-            }
-            // Plain Enter on a complete "/command …" line runs it (commands are
-            // single-line); an unknown slash line falls through to a newline.
-            if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
-              const resolved = resolveCommand(draft)
-              if (resolved) {
-                e.preventDefault()
-                onCommand(resolved.command, resolved.args)
-                setDraft('')
-                return
-              }
-            }
+            if (slash.onKeyDown(e)) return
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault()
               if (canSend) onSend()

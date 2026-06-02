@@ -42,8 +42,12 @@ export const matchCommands = (draft: string): SlashCommand[] => {
 }
 
 // Resolve a submitted draft to a known command (exact name match), or null.
+// A command that takes args needs them — a bare "/plan" resolves to null so
+// Enter falls through to a newline instead of firing an empty command.
 export const resolveCommand = (draft: string): { command: SlashCommand; args: string } | null => {
   const parsed = parseSlash(draft)
   const command = parsed && SLASH_COMMANDS.find(c => c.name === parsed.name)
-  return command ? { command, args: parsed?.args ?? '' } : null
+  if (!command) return null
+  if (command.takesArgs && !parsed?.args) return null
+  return { command, args: parsed?.args ?? '' }
 }
