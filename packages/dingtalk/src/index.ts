@@ -1,7 +1,6 @@
 import type { Attachment } from '@baton/shared'
 import { createBindingStore } from './bindings.ts'
 import { authedFetch, type BatonClient, createBatonClient } from './client.ts'
-import { parseCommand, runCommand } from './commands.ts'
 import { applyTemplate, type DingtalkConfig, loadConfig } from './config.ts'
 import { ensureSession } from './ensure-session.ts'
 import { downloadImage } from './media.ts'
@@ -64,14 +63,6 @@ const main = (): void => {
     const key = `${msg.conversationId}:${msg.senderId}`
     log(`← ${msg.sender}: ${msg.text}${imgNote}  (conv ${msg.conversationId}, sender ${msg.senderId})`)
     try {
-      // Slash commands (/clear, /help, …) are handled by the bridge, not the agent.
-      const cmd = parseCommand(msg.text)
-      if (cmd) {
-        const out = await runCommand(cmd, { client, bindings, key })
-        await reply(msg.sessionWebhook, out)
-        log(`→ /${cmd.name} → ${out.split('\n')[0]}`)
-        return
-      }
       const sessionId = await ensureSession(client, bindings, cfg.route, key)
       const prompt = applyTemplate(cfg.promptTemplate, msg.sender, msg.text)
       const attachments = await collectImages(client, cfg, sessionId, msg.imageCodes, log)

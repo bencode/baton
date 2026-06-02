@@ -10,7 +10,6 @@ import type { Id } from '@baton/shared'
 export type BindingStore = {
   get(key: string): Id | undefined
   set(key: string, sessionId: Id): void
-  delete(key: string): void
 }
 
 const defaultPath = (): string =>
@@ -26,19 +25,12 @@ export const createBindingStore = (path: string = defaultPath()): BindingStore =
     }
   }
   const map = load()
-  const persist = (): void => {
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, JSON.stringify(map, null, 2))
-  }
   return {
     get: key => map[key],
     set: (key, sessionId) => {
       map[key] = sessionId
-      persist()
-    },
-    delete: key => {
-      delete map[key]
-      persist()
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(path, JSON.stringify(map, null, 2))
     },
   }
 }
