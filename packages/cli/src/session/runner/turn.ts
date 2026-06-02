@@ -7,18 +7,38 @@ import type { TailBuffer } from './log.ts'
 import { type SpawnImpl, spawnClaude } from './spawn.ts'
 import { streamSdkEvents } from './stream.ts'
 
-// Wait for exit, then emit turn_error (if non-zero) + turn_complete. Returns
-// the child exit code so the caller can decide if this turn was good enough
-// to switch the next one to --resume.
+const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+
+// Hard ceiling on a single turn. A wedged claude — or one that exits without
+// closing stdout — must never hold the session forever (busy stays true → the
+// session is never idle-reaped and every queued message blocks behind it). Past
+// this we kill the child and finalize. Overridable; default 30m.
+const turnTimeoutMs = (): number => Number(process.env.BATON_TURN_TIMEOUT_MS) || 30 * 60_000
+
+// Grace for stdout to flush buffered stream-json after the child has already
+// exited. If EOF never arrives (a lingering grandchild holds the write end), we
+// stop waiting on stdout after this and finalize anyway.
+const DRAIN_GRACE_MS = 3_000
+
+// Resolve with the child's exit code. Critically, this handles an exit that
+// fired *before* the listener is attached: claude routinely exits while we are
+// still draining its stdout, and `once('exit')` does not replay a past event —
+// awaiting it then hangs the turn forever (no turn_complete, the bridge waits
+// out its whole timeout, the session wedges). Reading exitCode/signalCode first
+// closes that race. -1 for signal kills.
+const waitExit = (child: ChildProcess): Promise<number> => {
+  if (typeof child.exitCode === 'number') return Promise.resolve(child.exitCode)
+  if (typeof child.signalCode === 'string') return Promise.resolve(-1)
+  return new Promise<number>(resolve => child.once('exit', code => resolve(code ?? -1)))
+}
+
+// Emit turn_error (if non-zero) + turn_complete for a finished turn.
 const finalizeTurn = async (
-  child: ChildProcess,
+  exitCode: number,
   tail: TailBuffer,
   worker: WorkerClient,
   log: (m: string) => void,
 ): Promise<number> => {
-  const exitCode = await new Promise<number>(resolve =>
-    child.once('exit', code => resolve(code ?? -1)),
-  )
   log(`[exit] code=${exitCode}`)
   const stderrTail = tail.toString()
   if (exitCode !== 0) {
@@ -77,14 +97,45 @@ export const runTurn = async (
   }
   const result = await spawnClaude(config, worker, text, resuming, spawnImpl, log, envOverlay)
   if (!result) return -1
+  const { child, tail } = result
+  // Non-null asserted: spawnClaude already checked child.stdout.
+  const stdout = child.stdout as NonNullable<typeof child.stdout>
+  // Attach the exit watcher up front — before draining stdout — so an exit that
+  // fires mid-drain isn't lost (see waitExit).
+  const exited = waitExit(child)
+
+  // Watchdog: kill a turn that outlives the ceiling so it can never wedge the
+  // session. On kill, `exited` resolves via the child's signal exit.
+  let timedOut = false
+  const ceiling = turnTimeoutMs()
+  const watchdog = setTimeout(() => {
+    timedOut = true
+    log(`[watchdog] turn exceeded ${ceiling}ms — killing claude`)
+    child.kill('SIGKILL')
+  }, ceiling)
+
   try {
-    // Non-null asserted: spawnClaude already checked child.stdout.
-    await streamSdkEvents(result.child.stdout as NonNullable<typeof result.child.stdout>, worker)
-    return await finalizeTurn(result.child, result.tail, worker, log)
+    // Drain stdout for sdk_events, but never let a stuck pipe gate the turn:
+    // once claude exits, give stdout a short grace to flush, then finalize even
+    // if EOF never arrives (a lingering grandchild can hold the write end open).
+    const streaming = streamSdkEvents(stdout, worker)
+    void streaming.catch(() => {}) // we may tear stdout down below
+    await Promise.race([streaming, exited.then(() => delay(DRAIN_GRACE_MS))])
+    stdout.destroy() // stop an orphaned readline if stdout outlived the child
+    const exitCode = await exited
+    if (timedOut) {
+      await worker.emitEvent('turn_error', {
+        message: `turn exceeded ${ceiling}ms — claude killed`,
+        stderrTail: tail.toString(),
+      })
+    }
+    return await finalizeTurn(exitCode, tail, worker, log)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log(`[run] ${message}`)
-    await worker.emitEvent('turn_error', { message, stderrTail: result.tail.toString() })
+    await worker.emitEvent('turn_error', { message, stderrTail: tail.toString() })
     return -1
+  } finally {
+    clearTimeout(watchdog)
   }
 }
