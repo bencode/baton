@@ -33,6 +33,9 @@ export type SessionsClient = {
   setName(id: Id, name: string, workerToken: string): Promise<Session>
   resume(id: Id): Promise<SessionView>
   stop(id: Id): Promise<SessionView>
+  // Reset the claude conversation (fresh agentSessionId) but keep the session +
+  // worktree; the running child is restarted to pick up the new context.
+  clear(id: Id): Promise<SessionView>
   rename(id: Id, name: string): Promise<SessionView>
   listByProject(projectId: Id): Promise<SessionView[]>
   get(id: Id): Promise<SessionView>
@@ -69,6 +72,7 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
       }),
     resume: id => request(u(`/sessions/${id}/resume`), { method: 'POST' }),
     stop: id => request(u(`/sessions/${id}/stop`), { method: 'POST' }),
+    clear: id => request(u(`/sessions/${id}/clear`), { method: 'POST' }),
     rename: (id, name) => request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
     listByProject: projectId => request(u(`/projects/${projectId}/sessions`), { method: 'GET' }),
     get: id => request(u(`/sessions/${id}`), { method: 'GET' }),

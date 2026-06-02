@@ -2,6 +2,8 @@ import type { Attachment, Id } from '@baton/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { reduceEvents } from './event-render'
+import { CommandHelp } from './session-detail/command-menu'
+import { PLAN_PREAMBLE, type SlashCommand } from './session-detail/commands'
 import { Composer } from './session-detail/composer'
 import { ConnectionBanner } from './session-detail/connection-banner'
 import { EventStream } from './session-detail/event-stream'
@@ -43,6 +45,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [showHelp, setShowHelp] = useState(false)
 
   // Auto-scroll the event list to the bottom whenever new items arrive.
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -107,8 +110,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     // The orphaned server blob is transient (cascade-cleaned on session destroy); fine for v0.
     setAttachments(prev => prev.filter(a => a.id !== id))
 
-  const send = async () => {
-    const text = draft.trim()
+  const send = async (textOverride?: string) => {
+    const text = (textOverride ?? draft).trim()
     if (!text && attachments.length === 0) return
     setSending(true)
     setSendError(null)
@@ -136,6 +139,15 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   // Rename propagates back via the project stream (rail/tab/header all refetch).
   const rename = (name: string) => void api.sessions.rename(sessionId, name).catch(() => {})
 
+  // Slash command from the composer. /clear resets context (the server appends a
+  // notice the transcript renders); /help opens the command list; /plan prepends
+  // a "plan first" preamble and sends as a normal message.
+  const runCommand = (command: SlashCommand, args: string) => {
+    if (command.kind === 'clear') void api.sessions.clear(sessionId).catch(() => {})
+    else if (command.kind === 'help') setShowHelp(true)
+    else if (command.kind === 'plan' && args) void send(`${PLAN_PREAMBLE}${args}`)
+  }
+
   return (
     <div className="flex h-full flex-col">
       <SessionHeader
@@ -147,6 +159,11 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
       />
       <ConnectionBanner streamStatus={status} alive={session.alive} attached={session.attached} />
       <EventStream items={items} scrollRef={scrollRef} />
+      {showHelp && (
+        <div className="shrink-0 bg-white px-3">
+          <CommandHelp onClose={() => setShowHelp(false)} />
+        </div>
+      )}
       <Composer
         draft={draft}
         setDraft={setDraft}
@@ -159,6 +176,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         active={session.attached}
         sendError={sendError}
         onSend={() => void send()}
+        onCommand={runCommand}
       />
     </div>
   )

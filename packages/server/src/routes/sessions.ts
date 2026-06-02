@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type {
   AgentKind,
   Attachment,
@@ -143,6 +144,30 @@ export const registerSessionRoutes = (
     if (!s) return c.json({ error: 'not found' }, 404)
     commands.publish(s.workerId, { cmd: 'session.stop', sessionId: s.id })
     return c.json(await toView(s))
+  })
+
+  // Clear context — reset the claude conversation while keeping the session row,
+  // worktree, share url, and DingTalk binding. We give the session a fresh
+  // agentSessionId (next turn finds no transcript → a brand-new `--session-id`
+  // conversation; code in the worktree is kept), then restart the child so it
+  // reads the new id (the runner caches it in memory). A 'system' event records
+  // it in the transcript. Materialized sessions only — a fresh one has nothing
+  // to clear.
+  app.post('/sessions/:id/clear', async c => {
+    const s = await store.sessions.get(intParam(c.req.param('id')))
+    if (!s) return c.json({ error: 'not found' }, 404)
+    let view = s
+    if (s.agentSessionId && s.worktreePath) {
+      view = await store.sessions.materialize(s.id, {
+        agentSessionId: randomUUID(),
+        worktreePath: s.worktreePath,
+      })
+      commands.publish(s.workerId, { cmd: 'session.stop', sessionId: s.id })
+      commands.publish(s.workerId, { cmd: 'session.start', sessionId: s.id, name: s.name })
+    }
+    const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'context_cleared' })
+    bus.publish(s.id, ev)
+    return c.json(await toView(view))
   })
 
   // Auto-title trigger (UI, no auth in v0). Fired by the browser after the first

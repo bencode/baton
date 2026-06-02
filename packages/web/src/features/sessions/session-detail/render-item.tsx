@@ -40,8 +40,19 @@ export const RenderItemView = ({ item }: { item: RenderItem }) => {
       />
     )
   if (item.kind === 'thinking') return <ThinkingBlock text={item.text} />
+  if (item.kind === 'system-notice') return <SystemNotice text={item.text} />
   return <RawBlock payload={item.payload} />
 }
+
+// Centered hairline notice for session-level events (e.g. /clear). Lighter than
+// a turn divider — no capsule, just dimmed text between two faint rules.
+const SystemNotice = ({ text }: { text: string }) => (
+  <div className="my-4 flex items-center gap-3">
+    <div className="h-px flex-1 bg-gray-100" />
+    <span className="font-mono text-[11px] text-gray-400">🆕 {text}</span>
+    <div className="h-px flex-1 bg-gray-100" />
+  </div>
+)
 
 const SystemHeader = ({ model, sessionId }: { model?: string; sessionId?: string }) => (
   <div className="flex items-center gap-2 font-mono text-[11px] text-gray-400">

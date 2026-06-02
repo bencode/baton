@@ -39,6 +39,7 @@ export type RenderItem =
       key: string
     }
   | { kind: 'thinking'; text: string; key: string }
+  | { kind: 'system-notice'; text: string; key: string }
   | { kind: 'raw'; payload: unknown; key: string }
 
 export type TurnEndSummary = {
@@ -150,7 +151,12 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       continue
     }
     if (e.type === 'system') {
-      items.push({ kind: 'raw', payload: e.payload, key })
+      // /clear marks a fresh conversation — render as a centered notice, not raw.
+      if (isRecord(e.payload) && e.payload.action === 'context_cleared') {
+        items.push({ kind: 'system-notice', text: 'context cleared — fresh conversation', key })
+      } else {
+        items.push({ kind: 'raw', payload: e.payload, key })
+      }
       continue
     }
     // e.type === 'sdk_event' below

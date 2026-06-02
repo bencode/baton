@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty'
+import { sessionClearCommand } from './session/clear.ts'
 import { sessionCreateCommand } from './session/create.ts'
 import { sessionGetCommand } from './session/get.ts'
 import { sessionLsCommand } from './session/ls.ts'
@@ -15,6 +16,7 @@ export const session = defineCommand({
     create: sessionCreateCommand,
     resume: sessionResumeCommand,
     stop: sessionStopCommand,
+    clear: sessionClearCommand,
     rename: sessionRenameCommand,
     rm: sessionRmCommand,
     send: sessionSendCommand,

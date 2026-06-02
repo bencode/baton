@@ -61,6 +61,32 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
   })
 
+  test('clear: regenerates agentSessionId, keeps worktree, appends a context_cleared notice', async () => {
+    const app = createApp(ctx.store)
+    const { session, workerToken } = await seedSession(app)
+    const auth = { authorization: `Bearer ${workerToken}` }
+    await app.request(`/sessions/${session.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ agentSessionId: 'uuid-1', worktreePath: '/tmp/wt' }),
+      headers: { 'content-type': 'application/json', ...auth },
+    })
+
+    const res = await postJson(app, `/sessions/${session.id}/clear`, {})
+    assert.equal(res.status, 200)
+    const cleared = (await res.json()) as { agentSessionId: string; worktreePath: string }
+    assert.notEqual(cleared.agentSessionId, 'uuid-1') // a fresh claude conversation
+    assert.equal(cleared.worktreePath, '/tmp/wt') // code in the worktree is kept
+
+    const events = (await (await app.request(`/sessions/${session.id}/events`)).json()) as {
+      type: string
+      payload: { action?: string } | null
+    }[]
+    assert.ok(
+      events.some(e => e.type === 'system' && e.payload?.action === 'context_cleared'),
+      'a context_cleared system event was appended',
+    )
+  })
+
   test('messages require an active session (409 when inactive)', async () => {
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)
