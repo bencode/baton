@@ -4,6 +4,7 @@ import { Route, Routes, useNavigate } from 'react-router-dom'
 import { createApi } from '../api'
 import { LoginPage } from '../features/auth/login-page'
 import { RequireAuth } from '../features/auth/require-auth'
+import { DingtalkHelpPage } from '../features/help/dingtalk-help-page'
 import { useProject, useProjects } from '../features/projects/use-projects'
 import { RequirementDetail } from '../features/requirements/requirement-detail'
 import { SessionDetail } from '../features/sessions/session-detail'
@@ -164,6 +165,7 @@ export const App = () => (
     <Routes>
       <Route path="/s/:token" element={<SessionPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/help/dingtalk" element={<DingtalkHelpPage />} />
       <Route
         path="*"
         element={
