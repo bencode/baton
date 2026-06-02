@@ -94,6 +94,21 @@ const formatToolResult = (raw: unknown): { text: string; isError: boolean } => {
   return { text: JSON.stringify(c ?? ''), isError }
 }
 
+// --- turn liveness -----------------------------------------------------------
+
+// These four events mark a turn's start / end; everything else (sdk_event, …)
+// leaves the state untouched.
+const opensTurn = (e: SessionEvent) => e.type === 'user_message' || e.type === 'turn_start'
+const closesTurn = (e: SessionEvent) => e.type === 'turn_complete' || e.type === 'turn_error'
+
+// Is the agent still working? Look at the last start-or-end event — if it opened
+// a turn, that turn hasn't closed yet. findLast (not some) because order matters:
+// a completed history is full of turn_start events.
+export const isAgentWorking = (events: SessionEvent[]): boolean => {
+  const last = events.findLast(e => opensTurn(e) || closesTurn(e))
+  return last ? opensTurn(last) : false
+}
+
 // --- reducer -----------------------------------------------------------------
 
 export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {

@@ -1,13 +1,14 @@
 import type { Attachment, Id } from '@baton/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
-import { reduceEvents } from './event-render'
+import { isAgentWorking, reduceEvents } from './event-render'
 import { CommandHelp } from './session-detail/command-menu'
 import { PLAN_PREAMBLE, type SlashCommand } from './session-detail/commands'
 import { Composer } from './session-detail/composer'
 import { ConnectionBanner } from './session-detail/connection-banner'
 import { EventStream } from './session-detail/event-stream'
 import { SessionHeader } from './session-detail/session-header'
+import { WorkingIndicator } from './session-detail/working-indicator'
 import { useSessionStream } from './use-session-stream'
 import { useSession, useSessions } from './use-sessions'
 
@@ -148,6 +149,11 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     else if (command.kind === 'plan' && args) void send(`${PLAN_PREAMBLE}${args}`)
   }
 
+  // Show the breathing indicator while a turn is open. `sending` covers the brief
+  // optimistic window before our user_message round-trips back over SSE; the
+  // attached guard keeps it from sticking if the session detaches mid-turn.
+  const working = (sending || isAgentWorking(events)) && session.attached
+
   return (
     <div className="flex h-full flex-col">
       <SessionHeader
@@ -159,6 +165,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
       />
       <ConnectionBanner streamStatus={status} alive={session.alive} attached={session.attached} />
       <EventStream items={items} scrollRef={scrollRef} />
+      {working && <WorkingIndicator />}
       {showHelp && (
         <div className="shrink-0 bg-white px-3">
           <CommandHelp onClose={() => setShowHelp(false)} />

@@ -15,3 +15,26 @@ body,
     cursor: pointer;
   }
 }
+
+/* Gentle "breathing" pulse for the working indicator — softer and slower than
+   Tailwind's built-in animate-pulse (opacity 0.5, mechanical) so it reads as a
+   calm breath rather than a blink. */
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.animate-breathe {
+  animation: breathe 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-breathe {
+    animation: none;
+  }
+}

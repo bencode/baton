@@ -1,6 +1,6 @@
 import type { SessionEvent, SessionEventType } from '@baton/shared'
 import { describe, expect, test } from 'vitest'
-import { reduceEvents } from './event-render'
+import { isAgentWorking, reduceEvents } from './event-render'
 
 let seq = 0
 const ev = (type: SessionEventType, payload: unknown): SessionEvent => ({
@@ -161,5 +161,57 @@ describe('reduceEvents', () => {
     ])
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({ kind: 'user-bubble' })
+  })
+})
+
+describe('isAgentWorking', () => {
+  test('empty history → not working', () => {
+    seq = 0
+    expect(isAgentWorking([])).toBe(false)
+  })
+
+  test('just-sent message (no turn_start yet) → working', () => {
+    seq = 0
+    expect(isAgentWorking([ev('user_message', { text: 'go' })])).toBe(true)
+  })
+
+  test('mid-stream (turn_start, sdk_event, no close) → working', () => {
+    seq = 0
+    expect(
+      isAgentWorking([
+        ev('user_message', { text: 'go' }),
+        ev('turn_start', { messageId: 1 }),
+        ev('sdk_event', { type: 'assistant', message: { content: [] } }),
+      ]),
+    ).toBe(true)
+  })
+
+  test('completed turn → not working', () => {
+    seq = 0
+    expect(
+      isAgentWorking([
+        ev('user_message', { text: 'go' }),
+        ev('turn_start', { messageId: 1 }),
+        ev('turn_complete', { exitCode: 0 }),
+      ]),
+    ).toBe(false)
+  })
+
+  test('errored turn → not working', () => {
+    seq = 0
+    expect(
+      isAgentWorking([ev('turn_start', { messageId: 1 }), ev('turn_error', { message: 'x' })]),
+    ).toBe(false)
+  })
+
+  test('new message after a completed turn → working again', () => {
+    seq = 0
+    expect(
+      isAgentWorking([
+        ev('user_message', { text: 'first' }),
+        ev('turn_complete', { exitCode: 0 }),
+        ev('user_message', { text: 'second' }),
+      ]),
+    ).toBe(true)
   })
 })
