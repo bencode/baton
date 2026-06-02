@@ -99,8 +99,8 @@ const UserBubble = ({
   images?: string[]
   attachments?: Attachment[]
 }) => (
-  <div className="rounded-md bg-gray-50 px-3 py-2">
-    <span className="mr-2 font-mono text-xs text-gray-500 select-none">you›</span>
+  <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
+    <span className="mr-2 font-mono text-xs text-blue-500 select-none">you›</span>
     <span className="text-sm whitespace-pre-wrap text-gray-800">{text}</span>
     {images && images.length > 0 && (
       <div className="mt-2 flex flex-wrap gap-2">
