@@ -23,7 +23,7 @@ RUN userdel -r node 2>/dev/null || true \
 USER baton
 WORKDIR /home/baton
 ENV HOME=/home/baton \
-    PATH=/home/baton/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+    PATH=/home/baton/.npm-global/bin:/home/baton/.erda/bin:/usr/local/bin:/usr/bin:/bin
 
 # claude-code ships its native binary as a per-arch optional dep
 # (@anthropic-ai/claude-code-<platform>). npm's optional-dep resolution can
@@ -36,7 +36,18 @@ RUN mkdir -p /home/baton/.npm-global \
       "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
       "@anthropic-ai/claude-code-linux-arm64@${CLAUDE_CODE_VERSION}" \
       "@lesscap/baton-cli@${BATON_CLI_VERSION}" \
-    && claude --version && command -v baton >/dev/null
+      esbuild \
+    && claude --version && command -v baton >/dev/null && command -v esbuild >/dev/null
+
+# erda-cli — for trantor-fe-mr (erda.cloud merge requests). install.sh only
+# ships linux/amd64 today; on arm64 there's no release, so this is BEST-EFFORT
+# (skip, don't fail the build). On arm64 hosts the MR-create step runs
+# off-worker (erda web, or an amd64 host); push itself uses native git.
+# Login deferred to runtime (`erda-cli login -u $ERDA_USERNAME -p $ERDA_PASSWORD`).
+RUN curl -fsSL https://raw.githubusercontent.com/erda-project/erda/master/tools/cli/install.sh -o /tmp/erda-install.sh \
+    && (bash /tmp/erda-install.sh alpha && erda-cli version \
+        || echo "WARN: erda-cli unavailable for $(uname -m) — MR-create runs off-worker") \
+    && rm -f /tmp/erda-install.sh
 
 # git identity for commits made inside spawned worktrees (else first commit
 # errors "Author identity unknown"). Push creds (only if the agent pushes) via
