@@ -1,10 +1,10 @@
 import type { Attachment } from '@baton/shared'
 import { useRef, useState } from 'react'
-import { attachmentSrc } from '../../../api'
-import { FileChip, isImage } from './attachment-view'
+import { AttachmentStrip } from './attachment-strip'
 import { CommandMenu } from './command-menu'
 import type { SlashCommand } from './commands'
 import { PaperclipIcon, SendIcon, Spinner } from './icons'
+import { useAutosize } from './use-autosize'
 import { useSlashCommands } from './use-slash-commands'
 
 // Pull image files out of a paste/clipboard synchronously (getAsFile must run
@@ -14,44 +14,6 @@ const extractImageFiles = (items: DataTransferItemList): File[] =>
     .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
     .map(it => it.getAsFile())
     .filter((f): f is File => f !== null)
-
-const RemoveButton = ({ onRemove }: { onRemove: () => void }) => (
-  <button
-    type="button"
-    onClick={onRemove}
-    aria-label="remove attachment"
-    className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white text-[10px] leading-none text-gray-500 shadow-sm hover:text-gray-800"
-  >
-    ×
-  </button>
-)
-
-// Pending attachments inside the input card, above the textarea: image previews
-// as thumbnails, other files as labelled chips. Each removable before send.
-const AttachmentStrip = ({
-  attachments,
-  onRemove,
-}: {
-  attachments: Attachment[]
-  onRemove: (id: string) => void
-}) => (
-  <div className="mb-2 flex flex-wrap gap-2">
-    {attachments.map(att => (
-      <div key={att.id} className="relative">
-        {isImage(att) ? (
-          // biome-ignore lint/a11y/useAltText: uploaded screenshot preview
-          <img
-            src={attachmentSrc(att)}
-            className="h-16 w-16 rounded border border-gray-200 object-cover"
-          />
-        ) : (
-          <FileChip att={att} />
-        )}
-        <RemoveButton onRemove={() => onRemove(att.id)} />
-      </div>
-    ))}
-  </div>
-)
 
 type ComposerProps = {
   draft: string
@@ -89,10 +51,26 @@ export const Composer = ({
   onCommand,
 }: ComposerProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [dragging, setDragging] = useState(false)
   const slash = useSlashCommands(draft, setDraft, onCommand)
+  useAutosize(textareaRef, draft)
   const busy = sending || uploading
   const canSend = active && !busy && (draft.trim().length > 0 || attachments.length > 0)
+  // Insert a {label} reference token at the caret so the user can cite a pending
+  // attachment in their text.
+  const insertLabel = (label: string) => {
+    const token = `{${label}} `
+    const el = textareaRef.current
+    const start = el?.selectionStart ?? draft.length
+    const end = el?.selectionEnd ?? draft.length
+    setDraft(draft.slice(0, start) + token + draft.slice(end))
+    requestAnimationFrame(() => {
+      const pos = start + token.length
+      el?.focus()
+      el?.setSelectionRange(pos, pos)
+    })
+  }
   return (
     <div className="shrink-0 border-t border-gray-200 bg-white p-3">
       {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone is the whole card */}
@@ -110,7 +88,11 @@ export const Composer = ({
         className={`mx-auto max-w-5xl rounded-xl border px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'} ${active ? 'bg-white' : 'bg-gray-50'}`}
       >
         {attachments.length > 0 && (
-          <AttachmentStrip attachments={attachments} onRemove={onRemoveAttachment} />
+          <AttachmentStrip
+            attachments={attachments}
+            onRemove={onRemoveAttachment}
+            onInsertLabel={insertLabel}
+          />
         )}
         {uploadError && <p className="mb-2 text-xs text-red-600">{uploadError}</p>}
         {sendError && <p className="mb-2 text-xs text-red-600">{sendError}</p>}
@@ -118,6 +100,7 @@ export const Composer = ({
           <CommandMenu commands={slash.menu} activeIndex={slash.activeIndex} onPick={slash.pick} />
         )}
         <textarea
+          ref={textareaRef}
           value={draft}
           onChange={e => {
             setDraft(e.target.value)
@@ -142,8 +125,7 @@ export const Composer = ({
               ? 'message… (⌘/Ctrl-Enter to send · 📎/drag/paste to attach)'
               : 'session inactive — resume to send'
           }
-          className="w-full resize-none border-0 bg-transparent px-1 text-sm text-gray-800 focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
-          rows={2}
+          className="max-h-48 min-h-[3.25rem] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 text-sm text-gray-800 focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
         />
         <div className="mt-1.5 flex items-center">
           <button

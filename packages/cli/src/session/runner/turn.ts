@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
-import type { Attachment, SessionEvent } from '@baton/shared'
+import { type Attachment, labelAttachments, type SessionEvent } from '@baton/shared'
 import type { WorkerClient } from '../../client.ts'
 import type { SessionConfig } from '../../project-config.ts'
 import { augmentPrompt, type FetchImpl, materializeAttachments } from './attachments.ts'
@@ -68,7 +68,7 @@ export const runTurn = async (
         fetchImpl,
       })
       log(`[attach] downloaded ${relPaths.length} file(s) → ${config.worktreePath}/attachments`)
-      text = augmentPrompt(rawText, relPaths)
+      text = augmentPrompt(rawText, relPaths, labelAttachments(attachments))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       await worker.emitEvent('turn_error', { message: `attachment download failed: ${message}` })

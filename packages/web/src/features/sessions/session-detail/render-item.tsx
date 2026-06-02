@@ -1,4 +1,4 @@
-import type { Attachment } from '@baton/shared'
+import { type Attachment, labelAttachments } from '@baton/shared'
 import { useState } from 'react'
 import { attachmentSrc } from '../../../api'
 import { Markdown } from '../../../components/markdown'
@@ -63,6 +63,33 @@ const SystemHeader = ({ model, sessionId }: { model?: string; sessionId?: string
   </div>
 )
 
+// Sent attachments echo the same {label} the user saw in the composer, so a
+// "{image-1}" reference in the text lines up with the thumbnail below it.
+const SentAttachments = ({ attachments }: { attachments: Attachment[] }) => {
+  const labels = labelAttachments(attachments)
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {attachments.map((att, i) => {
+        const label = labels[i] ?? ''
+        return isImage(att) ? (
+          <figure key={att.id} className="m-0">
+            {/* biome-ignore lint/a11y/useAltText: uploaded image, filename is the closest caption */}
+            <img
+              src={attachmentSrc(att)}
+              className="max-h-80 max-w-full rounded border border-gray-200"
+            />
+            <figcaption className="mt-0.5 font-mono text-[10px] text-gray-400">
+              {`{${label}}`}
+            </figcaption>
+          </figure>
+        ) : (
+          <FileChip key={att.id} att={att} download label={label} />
+        )
+      })}
+    </div>
+  )
+}
+
 const UserBubble = ({
   text,
   images,
@@ -87,22 +114,7 @@ const UserBubble = ({
         ))}
       </div>
     )}
-    {attachments && attachments.length > 0 && (
-      <div className="mt-2 flex flex-wrap gap-2">
-        {attachments.map(att =>
-          isImage(att) ? (
-            // biome-ignore lint/a11y/useAltText: uploaded image, filename is the closest caption
-            <img
-              key={att.id}
-              src={attachmentSrc(att)}
-              className="max-h-80 max-w-full rounded border border-gray-200"
-            />
-          ) : (
-            <FileChip key={att.id} att={att} download />
-          ),
-        )}
-      </div>
-    )}
+    {attachments && attachments.length > 0 && <SentAttachments attachments={attachments} />}
   </div>
 )
 

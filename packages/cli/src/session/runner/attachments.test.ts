@@ -60,18 +60,22 @@ describe('materializeAttachments', () => {
 })
 
 describe('augmentPrompt', () => {
-  test('prepends a file header before the text', () => {
-    const out = augmentPrompt('describe these', ['attachments/a.png', 'attachments/b.pdf'])
+  test('prepends a labelled file header before the text', () => {
+    const out = augmentPrompt(
+      'describe these',
+      ['attachments/a.png', 'attachments/b.pdf'],
+      ['image-1', 'file-1'],
+    )
     assert.match(out, /already saved in the working directory/)
-    assert.match(out, /- attachments\/a\.png/)
-    assert.match(out, /- attachments\/b\.pdf/)
+    assert.match(out, /- \{image-1\} attachments\/a\.png/)
+    assert.match(out, /- \{file-1\} attachments\/b\.pdf/)
     assert.ok(out.trimEnd().endsWith('describe these'))
   })
 
   test('no attachments → text unchanged; empty text → header only', () => {
-    assert.equal(augmentPrompt('hi', []), 'hi')
-    const headerOnly = augmentPrompt('', ['attachments/a.png'])
-    assert.match(headerOnly, /- attachments\/a\.png/)
+    assert.equal(augmentPrompt('hi', [], []), 'hi')
+    const headerOnly = augmentPrompt('', ['attachments/a.png'], ['image-1'])
+    assert.match(headerOnly, /- \{image-1\} attachments\/a\.png/)
     assert.ok(!headerOnly.includes('\n\n'))
   })
 })

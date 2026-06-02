@@ -63,12 +63,14 @@ export const materializeAttachments = async (opts: {
 }
 
 // Prepend a short header naming the downloaded files so Claude knows they're
-// already on disk and where. Original text follows untouched.
-export const augmentPrompt = (text: string, relPaths: string[]): string => {
+// already on disk and where. Each line carries the same {label} the user sees in
+// the composer (labels[i] aligns with relPaths[i]), so a "{image-1}" mention in
+// the text resolves to a concrete path. Original text follows untouched.
+export const augmentPrompt = (text: string, relPaths: string[], labels: string[]): string => {
   if (relPaths.length === 0) return text
   const header = [
-    '[Attached files — already saved in the working directory:]',
-    ...relPaths.map(p => `- ${p}`),
+    '[Attached files — already saved in the working directory. Reference them by label:]',
+    ...relPaths.map((p, i) => `- {${labels[i]}} ${p}`),
   ].join('\n')
   return text.length > 0 ? `${header}\n\n${text}` : header
 }
