@@ -26,10 +26,13 @@ const awaitActive = async (
   throw new Error(`session ${id} did not become active in time (worker offline?)`)
 }
 
-// Resolve the session for a DingTalk conversation: reuse the bound one (resuming
-// if its worker child isn't running), or create + bind a fresh one. Returns an
-// active session id ready to receive a message. A bound session that no longer
-// exists server-side falls through to a new one.
+// Resolve the session for a DingTalk conversation: reuse the bound one ONLY if
+// it's still active (a daemon child is attached), else create + bind a fresh
+// one. A bound session that's gone, stopped, or idle-auto-stopped (attached =
+// false) is treated as a finished conversation — we start fresh rather than
+// silently resuming stale context (so "write a new component" doesn't continue
+// the old task). Manual web resume re-activates a session, so a later DingTalk
+// message will continue it. Returns an active session id ready for a message.
 export const ensureSession = async (
   client: BatonClient,
   bindings: BindingStore,
@@ -40,8 +43,9 @@ export const ensureSession = async (
   const existing = bindings.get(key)
   if (existing !== undefined) {
     const s = await client.getSession(existing).catch(() => null)
-    if (s) {
-      if (!s.attached) await client.resumeSession(s.id)
+    // Reuse only an active (attached) session. Stopped / auto-stopped ones fall
+    // through to a fresh session below — don't auto-resume stale context.
+    if (s?.attached) {
       await awaitActive(client, s.id, opts)
       return s.id
     }

@@ -68,24 +68,28 @@ describe('ensureSession', () => {
     assert.deepEqual(calls, [])
   })
 
-  test('existing inactive conversation: resumes then waits active', async () => {
+  test('existing inactive (stopped/auto-stopped) conversation: creates fresh + rebinds, never resumes', async () => {
     const calls: string[] = []
-    let attached = false
     const client: BatonClient = {
-      createSession: async () => view(0, false),
-      getSession: async id => view(id, attached),
+      createSession: async () => {
+        calls.push('create')
+        return view(20, true)
+      },
+      // bound session 8 is inactive (stopped/auto-stopped); the fresh one (20) is active.
+      getSession: async id => view(id, id !== 8),
       resumeSession: async id => {
         calls.push('resume')
-        attached = true
         return view(id, true)
       },
       sendMessage: async () => evt(),
       streamUrl: () => '',
       uploadAttachment: async () => att(),
     }
-    const id = await ensureSession(client, memBindings({ 'conv-C': 8 }), route, 'conv-C', fast)
-    assert.equal(id, 8)
-    assert.deepEqual(calls, ['resume'])
+    const bindings = memBindings({ 'conv-C': 8 })
+    const id = await ensureSession(client, bindings, route, 'conv-C', fast)
+    assert.equal(id, 20) // a fresh session, not the stopped 8
+    assert.equal(bindings.get('conv-C'), 20) // rebound to the new one
+    assert.deepEqual(calls, ['create']) // created, never resumed
   })
 
   test('never active: throws after the bounded wait', async () => {
