@@ -109,10 +109,60 @@ export const isAgentWorking = (events: SessionEvent[]): boolean => {
   return last ? opensTurn(last) : false
 }
 
+// --- queued (pending) messages ----------------------------------------------
+
+// A user message sent while a turn is running sits in the worker's queue until
+// its own turn starts. We surface those in a separate "queued" zone rather than
+// inlining them into the transcript, where they'd misrepresent a processed turn.
+export type QueuedMessage = {
+  text: string
+  images?: string[]
+  attachments?: Attachment[]
+  key: string
+}
+
+// Extract the renderable payload of a user_message event — shared by the inline
+// transcript bubble and the queued zone so both read the envelope identically.
+const userBubble = (e: SessionEvent): QueuedMessage => {
+  const text = isRecord(e.payload) && typeof e.payload.text === 'string' ? e.payload.text : ''
+  const images =
+    isRecord(e.payload) && Array.isArray(e.payload.images)
+      ? e.payload.images.filter((i): i is string => typeof i === 'string')
+      : undefined
+  const attachments =
+    isRecord(e.payload) && Array.isArray(e.payload.attachments)
+      ? (e.payload.attachments as Attachment[])
+      : undefined
+  return { text, images, attachments, key: String(e.id) }
+}
+
+// Ids of user_messages whose turn has started (turn_start carries messageId). A
+// user_message absent here hasn't been picked up yet → it's queued, not inline.
+const startedMessageIds = (events: SessionEvent[]): Set<number> => {
+  const ids = new Set<number>()
+  for (const e of events) {
+    if (e.type !== 'turn_start') continue
+    const id = isRecord(e.payload) ? e.payload.messageId : undefined
+    if (typeof id === 'number') ids.add(id)
+  }
+  return ids
+}
+
+// User messages still waiting in the queue (no turn_start yet), in send order.
+// State is derived purely from the event stream — no client-side queue to keep
+// in sync — so a message moves out the instant its turn_start arrives.
+export const pendingMessages = (events: SessionEvent[]): QueuedMessage[] => {
+  const started = startedMessageIds(events)
+  return events.filter(e => e.type === 'user_message' && !started.has(e.id)).map(userBubble)
+}
+
 // --- reducer -----------------------------------------------------------------
 
 export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
   const items: RenderItem[] = []
+  // Queued messages render in their own zone (see pendingMessages); keep them
+  // out of the transcript until their turn_start lands.
+  const started = startedMessageIds(events)
   const pendingTools = new Map<string, Extract<RenderItem, { kind: 'tool-block' }>>()
   // Fold a tool_result block back into its tool-block (by tool_use_id). Used in
   // both the assistant branch (server-tool results) and user branch (client).
@@ -133,15 +183,9 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
     // the per-item React key.
     const key = String(e.id)
     if (e.type === 'user_message') {
-      const text = isRecord(e.payload) && typeof e.payload.text === 'string' ? e.payload.text : ''
-      const images =
-        isRecord(e.payload) && Array.isArray(e.payload.images)
-          ? e.payload.images.filter((i): i is string => typeof i === 'string')
-          : undefined
-      const attachments =
-        isRecord(e.payload) && Array.isArray(e.payload.attachments)
-          ? (e.payload.attachments as Attachment[])
-          : undefined
+      // Not yet started → it's queued; pendingMessages() renders it elsewhere.
+      if (!started.has(e.id)) continue
+      const { text, images, attachments } = userBubble(e)
       items.push({ kind: 'user-bubble', text, images, attachments, key })
       continue
     }

@@ -14,7 +14,7 @@ describe('parseSlash', () => {
 
 describe('matchCommands', () => {
   test('shows matches only while typing the name (no space yet)', () => {
-    expect(matchCommands('/').map(c => c.name)).toEqual(['help', 'clear', 'plan'])
+    expect(matchCommands('/').map(c => c.name)).toEqual(['help', 'clear', 'abort', 'plan'])
     expect(matchCommands('/cl').map(c => c.name)).toEqual(['clear'])
     expect(matchCommands('/clear ')).toEqual([]) // space → typing args, menu hidden
     expect(matchCommands('hi')).toEqual([])

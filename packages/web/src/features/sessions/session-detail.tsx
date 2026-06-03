@@ -1,12 +1,13 @@
 import { type Attachment, type Id, isPlaceholderSessionName } from '@baton/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
-import { isAgentWorking, reduceEvents } from './event-render'
+import { isAgentWorking, pendingMessages, reduceEvents } from './event-render'
 import { CommandHelp } from './session-detail/command-menu'
 import { PLAN_PREAMBLE, type SlashCommand } from './session-detail/commands'
 import { Composer } from './session-detail/composer'
 import { ConnectionBanner } from './session-detail/connection-banner'
 import { EventStream } from './session-detail/event-stream'
+import { QueuedMessages } from './session-detail/queued-messages'
 import { SessionHeader } from './session-detail/session-header'
 import { WorkingIndicator } from './session-detail/working-indicator'
 import { useSessionStream } from './use-session-stream'
@@ -39,6 +40,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const session = liveSessions?.find(s => s.id === sessionId) ?? sessionShallow
   const { events, status } = useSessionStream(session?.id ?? null)
   const items = useMemo(() => reduceEvents(events), [events])
+  const queued = useMemo(() => pendingMessages(events), [events])
   const [draft, setDraft] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(false)
@@ -166,6 +168,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
       <ConnectionBanner streamStatus={status} alive={session.alive} attached={session.attached} />
       <EventStream items={items} scrollRef={scrollRef} />
       {working && <WorkingIndicator />}
+      <QueuedMessages queued={queued} />
       {showHelp && (
         <div className="shrink-0 bg-white px-3">
           <CommandHelp onClose={() => setShowHelp(false)} />

@@ -1,6 +1,6 @@
 import type { SessionEvent, SessionEventType } from '@baton/shared'
 import { describe, expect, test } from 'vitest'
-import { isAgentWorking, reduceEvents } from './event-render'
+import { isAgentWorking, pendingMessages, reduceEvents } from './event-render'
 
 let seq = 0
 const ev = (type: SessionEventType, payload: unknown): SessionEvent => ({
@@ -13,11 +13,24 @@ const ev = (type: SessionEventType, payload: unknown): SessionEvent => ({
 })
 
 describe('reduceEvents', () => {
-  test('user_message → user-bubble', () => {
+  test('started user_message → user-bubble', () => {
     seq = 0
-    const out = reduceEvents([ev('user_message', { text: 'hello' })])
+    const um = ev('user_message', { text: 'hello' })
+    const out = reduceEvents([um, ev('turn_start', { messageId: um.id })])
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({ kind: 'user-bubble', text: 'hello' })
+  })
+
+  test('user_message without its turn_start → queued, not inline; turn_start moves it inline', () => {
+    seq = 0
+    const um = ev('user_message', { text: 'queued one' })
+    // No turn_start yet → out of the transcript, surfaced as queued instead.
+    expect(reduceEvents([um])).toHaveLength(0)
+    expect(pendingMessages([um])).toMatchObject([{ text: 'queued one' }])
+    // Its turn_start arrives → inline in transcript, gone from the queue.
+    const started = [um, ev('turn_start', { messageId: um.id })]
+    expect(reduceEvents(started)[0]).toMatchObject({ kind: 'user-bubble', text: 'queued one' })
+    expect(pendingMessages(started)).toHaveLength(0)
   })
 
   test('system context_cleared → system-notice (other system → raw)', () => {
@@ -41,7 +54,8 @@ describe('reduceEvents', () => {
       url: '/sessions/1/attachments/a1',
       createdAt: 0,
     }
-    const out = reduceEvents([ev('user_message', { text: 'look', attachments: [att] })])
+    const um = ev('user_message', { text: 'look', attachments: [att] })
+    const out = reduceEvents([um, ev('turn_start', { messageId: um.id })])
     expect(out[0]).toMatchObject({ kind: 'user-bubble', text: 'look', attachments: [att] })
   })
 
