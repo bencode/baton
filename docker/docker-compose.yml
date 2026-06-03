@@ -45,6 +45,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.bridge
     env_file: .env
+    # The user→session binding map must outlive container rebuilds — without a
+    # volume every redeploy wiped it, so each user's next message spawned a fresh
+    # session instead of reusing their still-active one. Persist it on a volume.
+    environment:
+      - BATON_DINGTALK_BINDINGS=/data/dingtalk-bindings.json
+    volumes:
+      - bridge_data:/data
     depends_on:
       - backend
     restart: unless-stopped
@@ -54,3 +61,4 @@ volumes:
   caddy_data:
   caddy_config:
   baton_data:
+  bridge_data:

@@ -12,7 +12,11 @@ export type BindingStore = {
   set(key: string, sessionId: Id): void
 }
 
+// In docker the homedir is ephemeral (the bridge has no volume by default), so
+// honor an explicit path env — the compose stack points it at a named volume so
+// the user→session map survives redeploys. Local dev falls back to homedir.
 const defaultPath = (): string =>
+  process.env.BATON_DINGTALK_BINDINGS ??
   join(homedir(), '.local', 'share', 'baton', 'dingtalk-bindings.json')
 
 export const createBindingStore = (path: string = defaultPath()): BindingStore => {
