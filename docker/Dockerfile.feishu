@@ -1,0 +1,31 @@
+# baton Feishu (Lark) bridge — a standalone Node process (tsx, no DB). Connects
+# out to Feishu over a long-connection and to the baton backend (internal,
+# http://backend:3280). Mirror of Dockerfile.bridge (DingTalk).
+FROM node:26-slim AS builder
+WORKDIR /app
+RUN npm install -g pnpm@10.33.0
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/server/package.json packages/server/
+COPY packages/cli/package.json packages/cli/
+COPY packages/web/package.json packages/web/
+COPY packages/dingtalk/package.json packages/dingtalk/
+COPY packages/feishu/package.json packages/feishu/
+
+# Bridge + its workspace dep (shared) + @larksuiteoapi/node-sdk. --prod=false keeps tsx.
+RUN pnpm install --filter @baton/feishu... --frozen-lockfile --prod=false --ignore-scripts
+
+COPY packages/shared/ packages/shared/
+COPY packages/feishu/ packages/feishu/
+
+# ── runtime ──────────────────────────────────────────────────────────
+FROM node:26-slim
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/tsconfig.base.json ./tsconfig.base.json
+
+WORKDIR /app/packages/feishu
+ENV NODE_ENV=production
+ENTRYPOINT ["sh", "-c", "exec node_modules/.bin/tsx src/index.ts"]

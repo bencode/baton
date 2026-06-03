@@ -56,9 +56,28 @@ services:
       - backend
     restart: unless-stopped
 
+  # Feishu (Lark) → baton bridge. Same shape as `bridge`; routes to its own
+  # (project, worker) via `environment` (overrides .env, which the DingTalk
+  # bridge uses for its route). FEISHU_APP_ID/SECRET + BATON_TOKEN live in .env.
+  feishu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.feishu
+    env_file: .env
+    environment:
+      - BATON_PROJECT_ID=3
+      - BATON_WORKER_ID=3
+      - BATON_FEISHU_BINDINGS=/data/feishu-bindings.json
+    volumes:
+      - feishu_data:/data
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   web-dist:
   caddy_data:
   caddy_config:
   baton_data:
   bridge_data:
+  feishu_data:
