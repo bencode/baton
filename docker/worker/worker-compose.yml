@@ -24,10 +24,13 @@ services:
       # Host-provided CLI a skill shells out to (a self-contained script — no
       # npm install). Single-file bind onto PATH; reachable as a command inside.
       # - ./bin/tcollab-bridge:/usr/local/bin/tcollab-bridge:ro
-      # Read-only reference repos the agent can read but not modify. Pair with
-      # permissions.additionalDirectories in ~/.claude/settings.json (e.g.
-      # ["/resources/engine-shell"]) so claude treats them as workspace roots.
-      # The host dir also needs a colima read-only mount: `--mount <dir>:r`.
+      # Read-only reference repos the agent can read but not modify (real source
+      # to grep when asked "how is X wired"). Mount them, then set BATON_ADD_DIRS
+      # in .env to the same absolute paths (colon-separated) — the runner passes
+      # them as the SDK's --add-dir so claude treats them as workspace roots.
+      # (settings.json permissions.additionalDirectories is NOT enough under
+      # bypassPermissions.) The host dir also needs a colima read-only mount:
+      # `--mount <dir>:r`. e.g. in .env: BATON_ADD_DIRS=/resources/engine-shell
       # - /Users/you/baton-resources:/resources:ro
       # Uncomment to let the agent `git push` (credential.helper store reads a
       # `credentials` file inside this directory). Directory mount, not a single

@@ -58,6 +58,9 @@ project's workers on https://baton.fmap.dev .
   installed in the image.
 - **reference repos**: to let the agent read (not modify) other repos, put them
   in a host dir, give colima a read-only mount (`--mount <dir>:r`), bind it to
-  `/resources:ro`, and list the paths in `permissions.additionalDirectories` in
-  `~/.claude/settings.json`. The agent works in its `/repo` worktree; `/resources`
-  is read-only context.
+  `/resources:ro`, and set `BATON_ADD_DIRS` in `.env` to those absolute paths
+  (colon-separated, e.g. `/resources/engine-shell:/resources/foo`). The runner
+  passes them as the SDK's `--add-dir`, so the agent treats them as searchable
+  workspace roots — `permissions.additionalDirectories` in `settings.json` is
+  NOT honored under `bypassPermissions`. The agent works in its `/repo`
+  worktree; the add-dirs are read-only context it can grep/read.

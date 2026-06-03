@@ -1,14 +1,11 @@
-import { query, type Options, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { SessionConfig } from '../../project-config.ts'
-import { buildSdkEnv, claudeExecutable } from './sdk-env.ts'
+import { additionalDirs, buildSdkEnv, claudeExecutable } from './sdk-env.ts'
 
 // Injection seam for tests: the real `query` returns a Query (an
 // AsyncGenerator<SDKMessage>); a fake just needs to be an async-iterable of
 // messages. Kept structural so `query` is assignable without a cast.
-export type QueryFn = (params: {
-  prompt: string
-  options?: Options
-}) => AsyncIterable<SDKMessage>
+export type QueryFn = (params: { prompt: string; options?: Options }) => AsyncIterable<SDKMessage>
 
 // Start one turn through the SDK. Mirrors the old buildClaudeArgs/spawn:
 //   - cwd: the session worktree (isolation, unchanged)
@@ -28,6 +25,8 @@ export const startQuery = (
 ): AsyncIterable<SDKMessage> => {
   const env = buildSdkEnv(envOverlay)
   const exe = claudeExecutable()
+  const addDirs = additionalDirs()
+  if (addDirs) log(`[add-dir] ${addDirs.join(', ')}`)
   const options: Options = {
     cwd: config.worktreePath,
     permissionMode: 'bypassPermissions',
@@ -37,6 +36,7 @@ export const startQuery = (
     ...(resuming ? { resume: config.agentSessionId } : { sessionId: config.agentSessionId }),
     ...(env ? { env } : {}),
     ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),
+    ...(addDirs ? { additionalDirectories: addDirs } : {}),
   }
   return queryFn({ prompt: text, options })
 }
