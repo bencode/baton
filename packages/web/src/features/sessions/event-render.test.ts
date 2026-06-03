@@ -90,6 +90,37 @@ describe('reduceEvents', () => {
     expect((out[1] as { resultText?: string }).resultText).toBeUndefined()
   })
 
+  test('server_tool_use → tool-block; its in-assistant tool_result pairs (no raw dump)', () => {
+    seq = 0
+    const out = reduceEvents([
+      ev('sdk_event', {
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'server_tool_use',
+              id: 'st_1',
+              name: 'analyze_image',
+              input: { imageSource: 'http://x/i.png', prompt: 'describe' },
+            },
+            {
+              type: 'tool_result',
+              tool_use_id: 'st_1',
+              content: [{ type: 'text', text: 'a login page' }],
+            },
+          ],
+        },
+      }),
+    ])
+    expect(out.some(i => i.kind === 'raw')).toBe(false)
+    expect(out[0]).toMatchObject({
+      kind: 'tool-block',
+      name: 'analyze_image',
+      toolUseId: 'st_1',
+      resultText: 'a login page',
+    })
+  })
+
   test('user tool_result is grafted onto the matching tool_use', () => {
     seq = 0
     const out = reduceEvents([

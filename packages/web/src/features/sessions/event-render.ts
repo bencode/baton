@@ -114,6 +114,15 @@ export const isAgentWorking = (events: SessionEvent[]): boolean => {
 export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
   const items: RenderItem[] = []
   const pendingTools = new Map<string, Extract<RenderItem, { kind: 'tool-block' }>>()
+  // Fold a tool_result block back into its tool-block (by tool_use_id). Used in
+  // both the assistant branch (server-tool results) and user branch (client).
+  const applyToolResult = (b: Record<string, unknown>): void => {
+    const target = pendingTools.get(str(b.tool_use_id) ?? '')
+    if (!target) return
+    const { text, isError } = formatToolResult(b)
+    target.resultText = text
+    target.isError = isError
+  }
   let pendingResult: TurnEndSummary | undefined
   let pendingRateLimit: RateLimitInfo | undefined
   let turnIndex = 0
@@ -210,7 +219,10 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
           items.push({ kind: 'assistant-text', text: textBuf, key: `${key}-text-${i}` })
           textBuf = ''
         }
-        if (b.type === 'tool_use') {
+        // Client tool calls (`tool_use`) and model-side server tools
+        // (`server_tool_use`, e.g. analyze_image / web_search) render the same:
+        // a tool-block, never a raw JSON dump.
+        if (b.type === 'tool_use' || b.type === 'server_tool_use') {
           const id = str(b.id) ?? `${key}-tool-${i}`
           const name = str(b.name) ?? 'tool'
           const item: Extract<RenderItem, { kind: 'tool-block' }> = {
@@ -222,6 +234,10 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
           }
           items.push(item)
           pendingTools.set(id, item)
+        } else if (b.type === 'tool_result') {
+          // Server-tool results arrive inside the assistant message (client-tool
+          // results come in the user message — handled below). Pair either way.
+          applyToolResult(b)
         } else if (b.type === 'thinking') {
           // Drop empty thinking frames (extended-thinking streams open with one);
           // signature is an opaque verification token — never surface it.
@@ -243,15 +259,7 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i]
         if (!b) continue
-        if (b.type === 'tool_result') {
-          const id = str(b.tool_use_id)
-          if (!id) continue
-          const target = pendingTools.get(id)
-          if (!target) continue
-          const { text, isError } = formatToolResult(b)
-          target.resultText = text
-          target.isError = isError
-        }
+        if (b.type === 'tool_result') applyToolResult(b)
         // user text inside sdk_event echoes our prompt or carries tool_results
         // we already render user_message envelopes; skip text here
       }
