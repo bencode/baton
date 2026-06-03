@@ -1,4 +1,4 @@
-import type { Attachment } from '@baton/shared'
+import { type Attachment, isPlaceholderSessionName } from '@baton/shared'
 import { createBindingStore } from './bindings.ts'
 import { authedFetch, type BatonClient, createBatonClient } from './client.ts'
 import { applyTemplate, type DingtalkConfig, loadConfig } from './config.ts'
@@ -80,7 +80,9 @@ const main = (): void => {
       // Deep link uses the unguessable share token (opens without a manual login).
       const view = await client.getSession(sessionId)
       const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
-      await reply(msg.sessionWebhook, replyText(sessionId, link, text))
+      // Card title = the session's auto-title once it has one; until then "baton".
+      const cardTitle = isPlaceholderSessionName(view.name) ? 'baton' : view.name
+      await reply(msg.sessionWebhook, replyText(sessionId, link, text), cardTitle)
       log(`→ replied (${outcome}, ${text.length} chars) ${link}`)
     } catch (e) {
       log(`failed: ${e instanceof Error ? e.message : String(e)}`)

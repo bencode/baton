@@ -1,4 +1,4 @@
-import type { Attachment, Id } from '@baton/shared'
+import { type Attachment, type Id, isPlaceholderSessionName } from '@baton/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { isAgentWorking, reduceEvents } from './event-render'
@@ -26,7 +26,6 @@ const renamePasted = (file: File, i: number): File => {
 // give up after this many so a session that never gains substance isn't asked
 // forever (the user can always rename by hand).
 const MAX_AUTOTITLE_ATTEMPTS = 5
-const PLACEHOLDER_NAME = /^session-\d+$/
 
 // Render a Session as a chat. Looks up the session by int id; the list query
 // from `useSessions` re-polls so we can use its fresher copy when available.
@@ -72,7 +71,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
       a.inFlight = false
     }
     if (!session || a.inFlight || a.attempts >= MAX_AUTOTITLE_ATTEMPTS) return
-    if (!PLACEHOLDER_NAME.test(session.name)) return
+    if (!isPlaceholderSessionName(session.name)) return
     const turns = events.reduce((n, e) => (e.type === 'turn_complete' ? n + 1 : n), 0)
     if (turns <= a.firedTurns) return
     a.firedTurns = turns

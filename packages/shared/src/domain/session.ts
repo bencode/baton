@@ -50,3 +50,9 @@ export type SessionView = Session & {
   busy: boolean
   worker: Worker
 }
+
+// A session is born with a placeholder name (`session-<id>`); auto-title renames
+// it from the first exchange. Single source for "has it been titled yet?" so the
+// web header, share page, and DingTalk card all agree (else each drifts its own
+// regex). Untitled → callers fall back to a generic label ("baton").
+export const isPlaceholderSessionName = (name: string): boolean => /^session-\d+$/.test(name)

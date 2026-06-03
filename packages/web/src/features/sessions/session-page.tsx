@@ -1,3 +1,5 @@
+import { isPlaceholderSessionName } from '@baton/shared'
+import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
 import { useAsync } from '../../hooks/use-async'
@@ -13,6 +15,14 @@ export const SessionPage = () => {
   const { token = '' } = useParams()
   const { data, loading, error } = useAsync(() => api.auth.shareLogin(token), token)
 
+  // Title strip + browser tab follow the session's auto-title once it has one;
+  // until then "baton". Same rule as the back-office header — no layout split.
+  const name = data?.session.name
+  const title = name && !isPlaceholderSessionName(name) ? name : 'baton'
+  useEffect(() => {
+    document.title = title
+  }, [title])
+
   if (loading)
     return <div className="grid h-screen place-items-center text-sm text-gray-400">…</div>
   if (error || !data)
@@ -23,7 +33,7 @@ export const SessionPage = () => {
     <div className="flex h-screen flex-col bg-white text-gray-900">
       <div className="flex shrink-0 items-center gap-2 border-b border-gray-200 px-4 py-2">
         <span className="inline-block h-2 w-2 rotate-45 bg-emerald-500" aria-hidden />
-        <span className="font-mono text-[13px] font-semibold tracking-tight">baton</span>
+        <span className="font-mono text-[13px] font-semibold tracking-tight">{title}</span>
       </div>
       <div className="min-h-0 flex-1">
         <SessionDetail sessionId={data.session.id} />
