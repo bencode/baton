@@ -1,5 +1,5 @@
-import { claudeBin } from './log.ts'
-import type { SpawnImpl } from './spawn.ts'
+import type { QueryFn } from './query.ts'
+import { claudeExecutable } from './sdk-env.ts'
 
 // Auto-title a fresh session from its first exchange (user ask + assistant
 // reply). We ask claude for a short title in a throwaway `--print` call (no
@@ -29,17 +29,18 @@ export const sanitizeTitle = (raw: string): string =>
 
 const TITLE_TIMEOUT_MS = 30_000
 
-// Spawn `claude --print "<title prompt>"` in the worktree, collect stdout, and
-// return a sanitized title — or null when the exchange is too thin to title (no
-// content, model declined with NONE, or empty output). Never throws.
+// Run a throwaway SDK query in the worktree (no session id — this isn't part of
+// the conversation) and return its sanitized result as a title, or null when the
+// exchange is too thin (no content, model declined with NONE, empty output).
+// Never throws; an aborted timeout or SDK error yields ''.
 export const generateTitle = async (input: {
   worktreePath: string
   userText: string
   assistantText: string
-  spawnImpl: SpawnImpl
+  queryFn: QueryFn
 }): Promise<string | null> => {
-  const { worktreePath, userText, assistantText, spawnImpl } = input
-  // Nothing meaningful to summarize → decline without spawning claude.
+  const { worktreePath, userText, assistantText, queryFn } = input
+  // Nothing meaningful to summarize → decline without calling claude.
   if (`${userText}${assistantText}`.trim().length < 4) return null
   const exchange = [
     `User: ${clip(userText, 800)}`,
@@ -48,45 +49,31 @@ export const generateTitle = async (input: {
     .filter(Boolean)
     .join('\n')
   const prompt = `Reply with ONLY a 2-5 word title (no quotes, no punctuation) summarizing this coding session. If it is too short or generic to title meaningfully, reply with exactly NONE:\n${exchange}`
-  const out = await new Promise<string>(resolve => {
-    let buf = ''
-    let done = false
-    const finish = (s: string): void => {
-      if (!done) {
-        done = true
-        resolve(s)
-      }
-    }
-    let child: ReturnType<SpawnImpl>
-    try {
-      child = spawnImpl(claudeBin(), ['--print', '--dangerously-skip-permissions', prompt], {
+  const exe = claudeExecutable()
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), TITLE_TIMEOUT_MS)
+  let out = ''
+  try {
+    const messages = queryFn({
+      prompt,
+      options: {
         cwd: worktreePath,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: process.env,
-      })
-    } catch {
-      return finish('')
+        permissionMode: 'bypassPermissions',
+        allowedTools: [],
+        includePartialMessages: false,
+        abortController: abort,
+        ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),
+      },
+    })
+    for await (const m of messages) {
+      if (m.type === 'result' && typeof (m as { result?: unknown }).result === 'string')
+        out = (m as { result: string }).result
     }
-    const timer = setTimeout(() => {
-      try {
-        child.kill()
-      } catch {
-        // already gone
-      }
-      finish('')
-    }, TITLE_TIMEOUT_MS)
-    child.stdout?.on('data', d => {
-      buf += String(d)
-    })
-    child.on('exit', () => {
-      clearTimeout(timer)
-      finish(buf)
-    })
-    child.on('error', () => {
-      clearTimeout(timer)
-      finish('')
-    })
-  })
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
   const title = sanitizeTitle(out)
   return !title || isDeclined(title) ? null : title
 }

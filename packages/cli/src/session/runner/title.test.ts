@@ -1,23 +1,15 @@
 import assert from 'node:assert/strict'
-import type { ChildProcess } from 'node:child_process'
-import { EventEmitter } from 'node:events'
 import { describe, test } from 'node:test'
-import type { SpawnImpl } from './spawn.ts'
+import type { QueryFn } from './query.ts'
 import { generateTitle, sanitizeTitle } from './title.ts'
 
-// Fake claude that emits `out` on stdout then exits 0.
-const fakeSpawn =
-  (out: string): SpawnImpl =>
-  () => {
-    const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; kill: () => void }
-    child.stdout = new EventEmitter()
-    child.kill = () => {}
-    setImmediate(() => {
-      if (out) child.stdout.emit('data', Buffer.from(out))
-      child.emit('exit', 0)
-    })
-    return child as unknown as ChildProcess
-  }
+// Fake claude that returns `out` as its result message.
+const fakeQuery =
+  (out: string): QueryFn =>
+  () =>
+    (async function* () {
+      yield { type: 'result', subtype: 'success', is_error: false, result: out } as never
+    })()
 
 describe('sanitizeTitle', () => {
   test('strips quotes / leading label / newlines, collapses + caps', () => {
@@ -33,26 +25,26 @@ describe('generateTitle', () => {
     userText: 'curl the health endpoint and report status',
     assistantText: 'I will hit /health and report the status.',
   }
-  test('uses claude stdout when present', async () => {
-    const t = await generateTitle({ ...base, spawnImpl: fakeSpawn('  Curl Health Check  ') })
+  test('uses claude result when present', async () => {
+    const t = await generateTitle({ ...base, queryFn: fakeQuery('  Curl Health Check  ') })
     assert.equal(t, 'Curl Health Check')
   })
   test('declines (null) when the model replies NONE', async () => {
-    assert.equal(await generateTitle({ ...base, spawnImpl: fakeSpawn('NONE') }), null)
+    assert.equal(await generateTitle({ ...base, queryFn: fakeQuery('NONE') }), null)
   })
   test('declines (null) when claude emits nothing', async () => {
-    assert.equal(await generateTitle({ ...base, spawnImpl: fakeSpawn('') }), null)
+    assert.equal(await generateTitle({ ...base, queryFn: fakeQuery('') }), null)
   })
-  test('declines (null) for a too-thin exchange without spawning', async () => {
-    const spy: SpawnImpl = () => {
-      throw new Error('should not spawn for a trivial exchange')
+  test('declines (null) for a too-thin exchange without calling claude', async () => {
+    const spy: QueryFn = () => {
+      throw new Error('should not call claude for a trivial exchange')
     }
     assert.equal(
       await generateTitle({
         worktreePath: '/tmp',
         userText: 'hi',
         assistantText: '',
-        spawnImpl: spy,
+        queryFn: spy,
       }),
       null,
     )

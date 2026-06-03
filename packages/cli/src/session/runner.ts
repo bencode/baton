@@ -1,16 +1,18 @@
-import { spawn, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
+import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { SessionEvent } from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
 import type { FetchImpl } from './runner/attachments.ts'
-import { claudeBin, maskedEnvKeys } from './runner/log.ts'
-import type { SpawnImpl } from './runner/spawn.ts'
+import { maskedEnvKeys } from './runner/log.ts'
+import type { QueryFn } from './runner/query.ts'
+import { claudeExecutable } from './runner/sdk-env.ts'
 import { findTranscriptPath } from './runner/transcript.ts'
 import { runTurn } from './runner/turn.ts'
 
 // Re-export for tests + commands wiring.
-export type { SpawnImpl } from './runner/spawn.ts'
+export type { QueryFn } from './runner/query.ts'
 export { runTurn } from './runner/turn.ts'
 
 export type EventSourceLike = {
@@ -23,7 +25,7 @@ export type EventSourceLike = {
 export type RunnerDeps = {
   worker: WorkerClient
   env?: Record<string, string>
-  spawnImpl?: SpawnImpl
+  queryFn?: QueryFn
   eventSourceImpl?: new (url: string) => EventSourceLike
   // Authenticated fetch for pulling attachments into the worktree (carries the
   // worker Bearer so the gated /sessions/:id/attachments/:id route accepts it).
@@ -110,11 +112,11 @@ export const runDaemon = async (
   signal: AbortSignal,
 ): Promise<void> => {
   const log = deps.log ?? (m => console.log(`[#${config.sessionId} ${config.name}] ${m}`))
-  const sp = deps.spawnImpl ?? (spawn as SpawnImpl)
+  const qf = deps.queryFn ?? query
   const ESCtor =
     deps.eventSourceImpl ?? (EventSource as unknown as new (u: string) => EventSourceLike)
 
-  log(`bin: ${claudeBin()}  cwd: ${config.worktreePath}`)
+  log(`bin: ${claudeExecutable() ?? '(sdk bundled)'}  cwd: ${config.worktreePath}`)
   log(`runtime env keys: ${maskedEnvKeys(deps.env)}`)
 
   const state: DaemonState = {
@@ -139,7 +141,7 @@ export const runDaemon = async (
           deps.worker,
           msg,
           resuming,
-          sp,
+          qf,
           log,
           deps.env,
           deps.fetchImpl,

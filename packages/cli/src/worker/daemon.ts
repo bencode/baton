@@ -3,12 +3,12 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { Id, WorkerCommand } from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { ApiClient } from '../client.ts'
 import { defaultWorktreeDir, slug } from '../commands/session/shared.ts'
 import type { WorkerConfig } from '../project-config.ts'
-import type { SpawnImpl } from '../session/runner/spawn.ts'
 import { generateTitle } from '../session/runner/title.ts'
 import { readFirstExchange } from '../session/runner/transcript.ts'
 import { createWorktree, removeWorktree, repoHeadBranch } from '../session/worktree.ts'
@@ -145,7 +145,7 @@ export const runWorkerDaemon = async (
       worktreePath,
       userText: exchange.userText,
       assistantText: exchange.assistantText,
-      spawnImpl: spawn as SpawnImpl,
+      queryFn: query,
     })
     // Declined: not enough to title yet — leave the placeholder, retry later.
     if (!title) return log(`title #${sessionId}: not enough to title yet, skipping`)

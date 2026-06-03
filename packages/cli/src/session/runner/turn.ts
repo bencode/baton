@@ -1,70 +1,73 @@
-import type { ChildProcess } from 'node:child_process'
 import { type Attachment, labelAttachments, type SessionEvent } from '@baton/shared'
 import type { WorkerClient } from '../../client.ts'
 import type { SessionConfig } from '../../project-config.ts'
 import { augmentPrompt, type FetchImpl, materializeAttachments } from './attachments.ts'
-import type { TailBuffer } from './log.ts'
-import { type SpawnImpl, spawnClaude } from './spawn.ts'
-import { streamSdkEvents } from './stream.ts'
+import { type QueryFn, startQuery } from './query.ts'
+import { streamSdkEvents, type TurnResult } from './stream.ts'
 
-const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
-
-// Hard ceiling on a single turn. A wedged claude — or one that exits without
-// closing stdout — must never hold the session forever (busy stays true → the
-// session is never idle-reaped and every queued message blocks behind it). Past
-// this we kill the child and finalize. Overridable; default 30m.
+// Hard ceiling on a single turn. A wedged claude must never hold the session
+// forever (busy stays true → the session is never idle-reaped and every queued
+// message blocks behind it). Past this we abort the SDK query and finalize.
+// Overridable; default 30m.
 const turnTimeoutMs = (): number => Number(process.env.BATON_TURN_TIMEOUT_MS) || 30 * 60_000
 
-// Grace for stdout to flush buffered stream-json after the child has already
-// exited. If EOF never arrives (a lingering grandchild holds the write end), we
-// stop waiting on stdout after this and finalize anyway.
-const DRAIN_GRACE_MS = 3_000
+const TIMEOUT = Symbol('turn-timeout')
 
-// Resolve with the child's exit code. Critically, this handles an exit that
-// fired *before* the listener is attached: claude routinely exits while we are
-// still draining its stdout, and `once('exit')` does not replay a past event —
-// awaiting it then hangs the turn forever (no turn_complete, the bridge waits
-// out its whole timeout, the session wedges). Reading exitCode/signalCode first
-// closes that race. -1 for signal kills.
-const waitExit = (child: ChildProcess): Promise<number> => {
-  if (typeof child.exitCode === 'number') return Promise.resolve(child.exitCode)
-  if (typeof child.signalCode === 'string') return Promise.resolve(-1)
-  return new Promise<number>(resolve => child.once('exit', code => resolve(code ?? -1)))
-}
-
-// Emit turn_error (if non-zero) + turn_complete for a finished turn.
+// Emit turn_error (on a failed/empty result) + turn_complete for a finished
+// turn. Returns 0 on success, 1 on a result-level error.
 const finalizeTurn = async (
-  exitCode: number,
-  tail: TailBuffer,
+  result: TurnResult | null,
   worker: WorkerClient,
   log: (m: string) => void,
 ): Promise<number> => {
-  log(`[exit] code=${exitCode}`)
-  const stderrTail = tail.toString()
-  if (exitCode !== 0) {
+  if (!result) {
+    log('[exit] stream ended with no result')
+    await worker.emitEvent('turn_error', { message: 'claude produced no result' })
+    await worker.emitEvent('turn_complete', {})
+    return -1
+  }
+  log(`[exit] subtype=${result.subtype} isError=${result.isError}`)
+  if (result.isError) {
     await worker.emitEvent('turn_error', {
-      message: `claude exited with code ${exitCode}`,
-      exitCode,
-      stderrTail,
+      message: result.resultText || `claude result: ${result.subtype}`,
+      subtype: result.subtype,
     })
   }
-  await worker.emitEvent('turn_complete', {
-    exitCode,
-    ...(stderrTail ? { stderrTail } : {}),
-  })
-  return exitCode
+  await worker.emitEvent('turn_complete', { subtype: result.subtype })
+  return result.isError ? 1 : 0
 }
 
-// Run exactly one turn end-to-end. POSTs turn_start, spawns claude, forwards
-// each stream-json line as sdk_event, finishes with turn_complete on exit.
-// Non-zero exit also emits a turn_error with stderr tail. Spawn/IO failures
-// become turn_error and return -1.
+// Pull attachments into the worktree (if any) and return the prompt text,
+// possibly augmented to point at the downloaded files. Throws on download
+// failure so the caller can surface a turn_error.
+const buildPrompt = async (
+  config: SessionConfig,
+  rawText: string,
+  attachments: Attachment[],
+  log: (m: string) => void,
+  fetchImpl?: FetchImpl,
+): Promise<string> => {
+  if (attachments.length === 0) return rawText
+  const relPaths = await materializeAttachments({
+    worktreePath: config.worktreePath,
+    serverBase: config.server,
+    attachments,
+    fetchImpl,
+  })
+  log(`[attach] downloaded ${relPaths.length} file(s) → ${config.worktreePath}/attachments`)
+  return augmentPrompt(rawText, relPaths, labelAttachments(attachments))
+}
+
+// Run exactly one turn end-to-end. POSTs turn_start, drives claude through the
+// SDK, forwards each message as sdk_event, finishes with turn_complete (plus a
+// turn_error on failure). A watchdog aborts a turn that outlives the ceiling so
+// it can never wedge the session. Returns 0 on success, -1/1 otherwise.
 export const runTurn = async (
   config: SessionConfig,
   worker: WorkerClient,
   msg: SessionEvent,
   resuming: boolean,
-  spawnImpl: SpawnImpl,
+  queryFn: QueryFn,
   log: (m: string) => void = m => console.log(m),
   envOverlay?: Record<string, string>,
   fetchImpl?: FetchImpl,
@@ -77,65 +80,43 @@ export const runTurn = async (
     await worker.emitEvent('turn_error', { message: 'user_message missing text and attachments' })
     return -1
   }
-  // Pull attachments into the worktree first, then point the prompt at them.
-  let text = rawText
-  if (attachments.length > 0) {
-    try {
-      const relPaths = await materializeAttachments({
-        worktreePath: config.worktreePath,
-        serverBase: config.server,
-        attachments,
-        fetchImpl,
-      })
-      log(`[attach] downloaded ${relPaths.length} file(s) → ${config.worktreePath}/attachments`)
-      text = augmentPrompt(rawText, relPaths, labelAttachments(attachments))
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      await worker.emitEvent('turn_error', { message: `attachment download failed: ${message}` })
-      return -1
-    }
-  }
-  const result = await spawnClaude(config, worker, text, resuming, spawnImpl, log, envOverlay)
-  if (!result) return -1
-  const { child, tail } = result
-  // Non-null asserted: spawnClaude already checked child.stdout.
-  const stdout = child.stdout as NonNullable<typeof child.stdout>
-  // Attach the exit watcher up front — before draining stdout — so an exit that
-  // fires mid-drain isn't lost (see waitExit).
-  const exited = waitExit(child)
 
-  // Watchdog: kill a turn that outlives the ceiling so it can never wedge the
-  // session. On kill, `exited` resolves via the child's signal exit.
-  let timedOut = false
+  let text: string
+  try {
+    text = await buildPrompt(config, rawText, attachments, log, fetchImpl)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    await worker.emitEvent('turn_error', { message: `attachment download failed: ${message}` })
+    return -1
+  }
+
+  const abort = new AbortController()
   const ceiling = turnTimeoutMs()
-  const watchdog = setTimeout(() => {
-    timedOut = true
-    log(`[watchdog] turn exceeded ${ceiling}ms — killing claude`)
-    child.kill('SIGKILL')
-  }, ceiling)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<typeof TIMEOUT>(resolve => {
+    timer = setTimeout(() => resolve(TIMEOUT), ceiling)
+  })
 
   try {
-    // Drain stdout for sdk_events, but never let a stuck pipe gate the turn:
-    // once claude exits, give stdout a short grace to flush, then finalize even
-    // if EOF never arrives (a lingering grandchild can hold the write end open).
-    const streaming = streamSdkEvents(stdout, worker)
-    void streaming.catch(() => {}) // we may tear stdout down below
-    await Promise.race([streaming, exited.then(() => delay(DRAIN_GRACE_MS))])
-    stdout.destroy() // stop an orphaned readline if stdout outlived the child
-    const exitCode = await exited
-    if (timedOut) {
-      await worker.emitEvent('turn_error', {
-        message: `turn exceeded ${ceiling}ms — claude killed`,
-        stderrTail: tail.toString(),
-      })
+    const messages = startQuery(config, text, resuming, queryFn, abort, log, envOverlay)
+    const consume = streamSdkEvents(messages, worker)
+    void consume.catch(() => {}) // abort below may make it reject; handled via race
+    const outcome = await Promise.race([consume, timeout])
+    if (outcome === TIMEOUT) {
+      log(`[watchdog] turn exceeded ${ceiling}ms — aborting claude`)
+      abort.abort()
+      await worker.emitEvent('turn_error', { message: `turn exceeded ${ceiling}ms — claude aborted` })
+      await worker.emitEvent('turn_complete', {})
+      return -1
     }
-    return await finalizeTurn(exitCode, tail, worker, log)
+    return await finalizeTurn(outcome, worker, log)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log(`[run] ${message}`)
-    await worker.emitEvent('turn_error', { message, stderrTail: tail.toString() })
+    await worker.emitEvent('turn_error', { message })
+    await worker.emitEvent('turn_complete', {})
     return -1
   } finally {
-    clearTimeout(watchdog)
+    clearTimeout(timer)
   }
 }

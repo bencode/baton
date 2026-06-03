@@ -1,16 +1,31 @@
 import assert from 'node:assert/strict'
-import { EventEmitter } from 'node:events'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Readable } from 'node:stream'
 import { describe, test } from 'node:test'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
+import type { QueryFn } from './runner/query.ts'
 import { runTurn, shouldReap } from './runner.ts'
 
+// Build a fake query that records the params it was called with and yields the
+// given SDK messages. `seen` lets a test inspect prompt + options afterwards.
+const recordingQuery = (
+  messages: unknown[],
+): { qf: QueryFn; seen: { prompt?: string; options?: Record<string, unknown> } } => {
+  const seen: { prompt?: string; options?: Record<string, unknown> } = {}
+  const qf: QueryFn = params => {
+    seen.prompt = params.prompt
+    seen.options = params.options as Record<string, unknown>
+    return (async function* () {
+      for (const m of messages) yield m as never
+    })()
+  }
+  return { qf, seen }
+}
+
 describe('runTurn', () => {
-  test('posts turn_start + N sdk_event + turn_complete; flags first vs resume', async () => {
+  test('posts turn_start + N sdk_event + turn_complete; presets sessionId vs resume', async () => {
     const cfg: SessionConfig = {
       server: 'http://localhost:3280',
       sessionId: 1,
@@ -27,73 +42,45 @@ describe('runTurn', () => {
       },
     } as unknown as WorkerClient
 
-    // Fake spawn: returns a child whose stdout emits 3 stream-json lines, then exits.
-    // The 'exit' must fire *after* readline drains stdout, otherwise the runTurn
-    // listener that awaits 'exit' would be registered too late (microtask races).
-    type FakeChild = EventEmitter & { stdout: Readable }
-    const makeChild = (lines: string[]): FakeChild => {
-      const child = new EventEmitter() as FakeChild
-      child.stdout = Readable.from(lines)
-      child.stdout.on('end', () => setImmediate(() => child.emit('exit', 0)))
-      return child
-    }
+    const { qf, seen } = recordingQuery([
+      { type: 'assistant', message: { content: 'hi' } },
+      { type: 'tool_use', name: 'Read' },
+      { type: 'result', subtype: 'success', is_error: false },
+    ])
 
-    let spawnArgs: string[] = []
-    const fakeSpawn = ((_cmd: string, args: ReadonlyArray<string>) => {
-      spawnArgs = [...args]
-      return makeChild([
-        `${JSON.stringify({ type: 'assistant', message: { content: 'hi' } })}\n`,
-        `${JSON.stringify({ type: 'tool_use', name: 'Read' })}\n`,
-        `${JSON.stringify({ type: 'result', subtype: 'success' })}\n`,
-      ]) as never
-    }) as never
-
-    // first turn → --session-id
+    // first turn → sessionId preset (= CLI --session-id)
     const code1 = await runTurn(
       cfg,
       worker,
-      {
-        id: 99,
-        sessionId: 1,
-        sequence: 0,
-        type: 'user_message',
-        payload: { text: 'hi' },
-        createdAt: 0,
-      },
+      { id: 99, sessionId: 1, sequence: 0, type: 'user_message', payload: { text: 'hi' }, createdAt: 0 },
       false,
-      fakeSpawn,
+      qf,
     )
-    assert.ok(spawnArgs.includes('--session-id'))
-    assert.ok(!spawnArgs.includes('--resume'))
+    assert.equal(seen.options?.sessionId, cfg.agentSessionId)
+    assert.equal(seen.options?.resume, undefined)
+    assert.equal(seen.options?.cwd, cfg.worktreePath)
     assert.deepEqual(
       calls.map(c => c.type),
       ['turn_start', 'sdk_event', 'sdk_event', 'sdk_event', 'turn_complete'],
     )
     assert.deepEqual(calls[0]?.payload, { messageId: 99 })
-    assert.deepEqual(calls[4]?.payload, { exitCode: 0 })
+    assert.deepEqual(calls[4]?.payload, { subtype: 'success' })
     assert.equal(code1, 0)
 
-    // second turn → --resume
+    // second turn → resume (= CLI --resume)
     calls.length = 0
     await runTurn(
       cfg,
       worker,
-      {
-        id: 100,
-        sessionId: 1,
-        sequence: 5,
-        type: 'user_message',
-        payload: { text: 'again' },
-        createdAt: 0,
-      },
+      { id: 100, sessionId: 1, sequence: 5, type: 'user_message', payload: { text: 'again' }, createdAt: 0 },
       true,
-      fakeSpawn,
+      qf,
     )
-    assert.ok(spawnArgs.includes('--resume'))
-    assert.ok(!spawnArgs.includes('--session-id'))
+    assert.equal(seen.options?.resume, cfg.agentSessionId)
+    assert.equal(seen.options?.sessionId, undefined)
   })
 
-  test('empty text → turn_error, no spawn', async () => {
+  test('empty text → turn_error, no query', async () => {
     const cfg: SessionConfig = {
       server: 's',
       sessionId: 1,
@@ -109,19 +96,19 @@ describe('runTurn', () => {
         return {} as never
       },
     } as unknown as WorkerClient
-    let spawned = false
-    const fakeSpawn = (() => {
-      spawned = true
+    let called = false
+    const qf: QueryFn = () => {
+      called = true
       throw new Error('should not be called')
-    }) as unknown as never
+    }
     await runTurn(
       cfg,
       worker,
       { id: 1, sessionId: 1, sequence: 0, type: 'user_message', payload: {}, createdAt: 0 },
       false,
-      fakeSpawn,
+      qf,
     )
-    assert.equal(spawned, false)
+    assert.equal(called, false)
     assert.deepEqual(
       calls.map(c => c.type),
       ['turn_start', 'turn_error'],
@@ -143,15 +130,7 @@ describe('runTurn', () => {
     } as unknown as WorkerClient
     const fetchImpl = (async () => new Response('PNGDATA')) as unknown as typeof fetch
 
-    type FakeChild = EventEmitter & { stdout: Readable }
-    let promptArg = ''
-    const fakeSpawn = ((_cmd: string, args: ReadonlyArray<string>) => {
-      promptArg = args[args.length - 1] ?? ''
-      const child = new EventEmitter() as FakeChild
-      child.stdout = Readable.from([`${JSON.stringify({ type: 'result' })}\n`])
-      child.stdout.on('end', () => setImmediate(() => child.emit('exit', 0)))
-      return child as never
-    }) as unknown as never
+    const { qf, seen } = recordingQuery([{ type: 'result', subtype: 'success', is_error: false }])
 
     try {
       const code = await runTurn(
@@ -179,14 +158,14 @@ describe('runTurn', () => {
           createdAt: 0,
         },
         false,
-        fakeSpawn,
+        qf,
         () => {},
         undefined,
         fetchImpl,
       )
       assert.equal(code, 0)
-      assert.match(promptArg, /attachments\/shot\.png/)
-      assert.ok(promptArg.includes('describe'))
+      assert.match(seen.prompt ?? '', /attachments\/shot\.png/)
+      assert.ok((seen.prompt ?? '').includes('describe'))
       assert.equal(readFileSync(join(wt, 'attachments/shot.png'), 'utf8'), 'PNGDATA')
     } finally {
       rmSync(wt, { recursive: true, force: true })

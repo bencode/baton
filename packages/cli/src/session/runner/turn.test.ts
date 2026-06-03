@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict'
-import { EventEmitter } from 'node:events'
-import { Readable } from 'node:stream'
 import { afterEach, describe, test } from 'node:test'
 import type { WorkerClient } from '../../client.ts'
 import type { SessionConfig } from '../../project-config.ts'
+import type { QueryFn } from './query.ts'
 import { runTurn } from './turn.ts'
 
 const cfg: SessionConfig = {
@@ -35,56 +34,55 @@ const userMsg = (): Parameters<typeof runTurn>[2] => ({
   createdAt: 0,
 })
 
-type FakeChild = EventEmitter & {
-  stdout: Readable
-  exitCode?: number | null
-  signalCode?: string | null
-  kill?: (sig?: string) => boolean
-}
+// Fake query: yields the given SDK messages then completes.
+const fakeQuery =
+  (messages: unknown[]): QueryFn =>
+  () =>
+    (async function* () {
+      for (const m of messages) yield m as never
+    })()
+
+// Fake query that never yields and never ends — models a wedged claude.
+const hangingQuery: QueryFn = () =>
+  (async function* () {
+    await new Promise(() => {})
+  })()
 
 afterEach(() => {
   delete process.env.BATON_TURN_TIMEOUT_MS
 })
 
-describe('runTurn — exit race', () => {
-  // The production wedge: claude exits *before* the runner finishes draining
-  // stdout, so the exit event is already gone by the time we'd listen for it.
-  // We model that by setting exitCode and never emitting 'exit'. Pre-fix this
-  // hangs forever (no turn_complete); the fix reads exitCode and finalizes.
-  test('child already exited (no exit event) still completes', async () => {
+describe('runTurn', () => {
+  // A successful turn forwards the result as an sdk_event and finalizes with a
+  // single turn_complete — no turn_error.
+  test('success result completes cleanly', async () => {
     const { calls, worker } = collector()
-    const spawnImpl = (() => {
-      const child = new EventEmitter() as FakeChild
-      child.stdout = Readable.from([`${JSON.stringify({ type: 'result' })}\n`])
-      child.exitCode = 0 // already reaped, like a real finished ChildProcess
-      return child as unknown as never
-    }) as unknown as never
-
-    const code = await runTurn(cfg, worker, userMsg(), false, spawnImpl, () => {})
+    const qf = fakeQuery([{ type: 'result', subtype: 'success', is_error: false, result: 'ok' }])
+    const code = await runTurn(cfg, worker, userMsg(), false, qf, () => {})
     assert.equal(code, 0)
     assert.deepEqual(calls, ['turn_start', 'sdk_event', 'turn_complete'])
   })
 
-  // A turn that never produces output and never exits must not hang the session
-  // forever — the watchdog kills it and we finalize with an error.
-  test('watchdog kills a turn that overruns the ceiling', async () => {
+  // An error result (non-success subtype / is_error) emits turn_error then
+  // turn_complete and reports a non-zero code.
+  test('error result emits turn_error', async () => {
+    const { calls, worker } = collector()
+    const qf = fakeQuery([
+      { type: 'result', subtype: 'error_during_execution', is_error: true, result: 'boom' },
+    ])
+    const code = await runTurn(cfg, worker, userMsg(), false, qf, () => {})
+    assert.notEqual(code, 0)
+    assert.ok(calls.includes('turn_error'))
+    assert.ok(calls.includes('turn_complete'))
+  })
+
+  // A turn that never produces a result and never ends must not hang the session
+  // forever — the watchdog aborts it and we finalize with an error.
+  test('watchdog aborts a turn that overruns the ceiling', async () => {
     process.env.BATON_TURN_TIMEOUT_MS = '40'
     const { calls, worker } = collector()
-    const spawnImpl = (() => {
-      const child = new EventEmitter() as FakeChild
-      child.stdout = new Readable({ read() {} }) // never ends on its own
-      child.kill = (sig?: string) => {
-        child.stdout.push(null) // SIGKILL closes claude's stdout → EOF
-        setImmediate(() => child.emit('exit', null, sig))
-        return true
-      }
-      return child as unknown as never
-    }) as unknown as never
-
-    const code = await runTurn(cfg, worker, userMsg(), false, spawnImpl, () => {})
+    const code = await runTurn(cfg, worker, userMsg(), false, hangingQuery, () => {})
     assert.equal(code, -1)
-    // turn_error for the timeout, then a second turn_error for the non-zero exit,
-    // then turn_complete — the turn always terminates rather than wedging.
     assert.ok(calls.includes('turn_complete'))
     assert.ok(calls.filter(c => c === 'turn_error').length >= 1)
   })
