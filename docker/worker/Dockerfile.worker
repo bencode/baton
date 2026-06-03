@@ -10,7 +10,7 @@
 FROM node:26-bookworm-slim
 
 ARG CLAUDE_CODE_VERSION=2.1.159
-ARG BATON_CLI_VERSION=0.2.0
+ARG BATON_CLI_VERSION=0.2.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates curl ripgrep jq less python3 procps \
