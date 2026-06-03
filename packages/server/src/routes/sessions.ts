@@ -177,6 +177,17 @@ export const registerSessionRoutes = (
     return c.json(await toView(view))
   })
 
+  // Interrupt the in-flight turn (web /abort, like Esc): emit an `interrupt`
+  // the worker's session child catches to abort the current SDK query. Session,
+  // worktree, transcript, and binding all stay — the next message resumes.
+  app.post('/sessions/:id/abort', async c => {
+    const s = await store.sessions.get(intParam(c.req.param('id')))
+    if (!s) return c.json({ error: 'not found' }, 404)
+    const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'interrupt' })
+    bus.publish(s.id, ev)
+    return c.json(await toView(s))
+  })
+
   // Auto-title trigger (UI, no auth in v0). Fired by the browser after the first
   // turn completes. We only forward a title command for a still-placeholder name
   // (cheap guard — the worker's PATCH is also guarded by nameLocked) and only

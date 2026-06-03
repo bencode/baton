@@ -86,4 +86,16 @@ describe('runTurn', () => {
     assert.ok(calls.includes('turn_complete'))
     assert.ok(calls.filter(c => c === 'turn_error').length >= 1)
   })
+
+  // An external abort signal (web /abort, like Esc) interrupts the in-flight
+  // turn and finalizes cleanly instead of waiting it out.
+  test('external abort signal interrupts the turn', async () => {
+    const { calls, worker } = collector()
+    const ac = new AbortController()
+    ac.abort()
+    const code = await runTurn(cfg, worker, userMsg(), false, hangingQuery, () => {}, undefined, undefined, ac.signal)
+    assert.equal(code, -1)
+    assert.ok(calls.includes('turn_error'))
+    assert.ok(calls.includes('turn_complete'))
+  })
 })

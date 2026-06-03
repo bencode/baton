@@ -2,7 +2,7 @@
 // in the input runs a command instead of sending a normal message. The registry
 // feeds both the autocomplete menu and the submit handler; new commands (e.g.
 // /model once the worker takes --model) are just another entry here.
-export type SlashKind = 'help' | 'clear' | 'plan'
+export type SlashKind = 'help' | 'clear' | 'plan' | 'abort'
 
 export type SlashCommand = {
   name: string
@@ -14,6 +14,7 @@ export type SlashCommand = {
 export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'help', kind: 'help', desc: 'show available commands' },
   { name: 'clear', kind: 'clear', desc: 'reset the conversation (keeps session + code)' },
+  { name: 'abort', kind: 'abort', desc: 'interrupt the running turn (like Esc)' },
   { name: 'plan', kind: 'plan', desc: 'ask for a plan first, no edits yet', takesArgs: true },
 ]
 

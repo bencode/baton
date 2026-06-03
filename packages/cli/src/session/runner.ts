@@ -49,6 +49,7 @@ const subscribeStream = (
   seen: Set<number>,
   log: (m: string) => void,
   onUserMessage: (ev: SessionEvent) => void,
+  onInterrupt: () => void,
   onReady: () => void,
 ): EventSourceLike => {
   const es = new ESCtor(url)
@@ -59,6 +60,12 @@ const subscribeStream = (
       if (seen.has(ev.sequence)) return
       seen.add(ev.sequence)
       if (ev.type === 'user_message') onUserMessage(ev)
+      // /abort (Esc): interrupt the in-flight turn without ending the session.
+      else if (
+        ev.type === 'system' &&
+        (ev.payload as { action?: string } | null)?.action === 'interrupt'
+      )
+        onInterrupt()
     } catch {
       // skip malformed payloads
     }
@@ -126,6 +133,9 @@ export const runDaemon = async (
   const pendingQueue: SessionEvent[] = []
   let busy = false
   let lastActivity = Date.now()
+  // The in-flight turn's abort handle, so a session `interrupt` event (web
+  // /abort, like Esc) can cancel it without killing the session.
+  let currentTurn: AbortController | undefined
 
   const drain = async (): Promise<void> => {
     if (busy) return
@@ -136,6 +146,8 @@ export const runDaemon = async (
         if (!msg) break
         const resuming = state.firstSpawnDone
         log(`▶ msg #${msg.sequence} (${resuming ? 'resume' : 'first'})`)
+        const turnAbort = new AbortController()
+        currentTurn = turnAbort
         const code = await runTurn(
           config,
           deps.worker,
@@ -145,7 +157,9 @@ export const runDaemon = async (
           log,
           deps.env,
           deps.fetchImpl,
+          turnAbort.signal,
         )
+        currentTurn = undefined
         // Claude's session file exists after the first --session-id invocation
         // even on non-zero exit — future turns must --resume.
         state.firstSpawnDone = true
@@ -168,6 +182,13 @@ export const runDaemon = async (
       lastActivity = Date.now()
       pendingQueue.push(ev)
       void drain()
+    },
+    () => {
+      lastActivity = Date.now()
+      if (currentTurn) {
+        log('interrupt — aborting current turn')
+        currentTurn.abort()
+      }
     },
     // Report active only now that we're subscribed — before this, a message
     // sent right after spawn would be missed (no replay on the live stream).

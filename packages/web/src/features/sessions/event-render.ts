@@ -175,9 +175,12 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       continue
     }
     if (e.type === 'system') {
-      // /clear marks a fresh conversation — render as a centered notice, not raw.
-      if (isRecord(e.payload) && e.payload.action === 'context_cleared') {
+      // /clear and /abort mark control actions — centered notices, not raw.
+      const action = isRecord(e.payload) ? e.payload.action : undefined
+      if (action === 'context_cleared') {
         items.push({ kind: 'system-notice', text: 'context cleared — fresh conversation', key })
+      } else if (action === 'interrupt') {
+        items.push({ kind: 'system-notice', text: 'interrupted', key })
       } else {
         items.push({ kind: 'raw', payload: e.payload, key })
       }

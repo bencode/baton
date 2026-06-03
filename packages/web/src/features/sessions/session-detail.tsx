@@ -144,6 +144,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   // a "plan first" preamble and sends as a normal message.
   const runCommand = (command: SlashCommand, args: string) => {
     if (command.kind === 'clear') void api.sessions.clear(sessionId).catch(() => {})
+    else if (command.kind === 'abort') void api.sessions.abort(sessionId).catch(() => {})
     else if (command.kind === 'help') setShowHelp(true)
     else if (command.kind === 'plan' && args) void send(`${PLAN_PREAMBLE}${args}`)
   }

@@ -12,6 +12,7 @@ import { streamSdkEvents, type TurnResult } from './stream.ts'
 const turnTimeoutMs = (): number => Number(process.env.BATON_TURN_TIMEOUT_MS) || 30 * 60_000
 
 const TIMEOUT = Symbol('turn-timeout')
+const ABORTED = Symbol('turn-aborted')
 
 // Emit turn_error (on a failed/empty result) + turn_complete for a finished
 // turn. Returns 0 on success, 1 on a result-level error.
@@ -71,6 +72,7 @@ export const runTurn = async (
   log: (m: string) => void = m => console.log(m),
   envOverlay?: Record<string, string>,
   fetchImpl?: FetchImpl,
+  externalSignal?: AbortSignal,
 ): Promise<number> => {
   await worker.emitEvent('turn_start', { messageId: msg.id })
   const payload = msg.payload as { text?: unknown; attachments?: Attachment[] }
@@ -96,12 +98,26 @@ export const runTurn = async (
   const timeout = new Promise<typeof TIMEOUT>(resolve => {
     timer = setTimeout(() => resolve(TIMEOUT), ceiling)
   })
+  // User-initiated interrupt (web /abort, like Esc): the runner passes a signal
+  // it aborts on a session `interrupt` event. Resolving the race lets us abort
+  // the SDK query and finalize cleanly instead of waiting the turn out.
+  const interrupted = new Promise<typeof ABORTED>(resolve => {
+    if (externalSignal?.aborted) resolve(ABORTED)
+    else externalSignal?.addEventListener('abort', () => resolve(ABORTED), { once: true })
+  })
 
   try {
     const messages = startQuery(config, text, resuming, queryFn, abort, log, envOverlay)
     const consume = streamSdkEvents(messages, worker)
     void consume.catch(() => {}) // abort below may make it reject; handled via race
-    const outcome = await Promise.race([consume, timeout])
+    const outcome = await Promise.race([consume, timeout, interrupted])
+    if (outcome === ABORTED) {
+      log('[abort] interrupted by user')
+      abort.abort()
+      await worker.emitEvent('turn_error', { message: 'interrupted by user' })
+      await worker.emitEvent('turn_complete', {})
+      return -1
+    }
     if (outcome === TIMEOUT) {
       log(`[watchdog] turn exceeded ${ceiling}ms — aborting claude`)
       abort.abort()

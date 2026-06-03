@@ -114,6 +114,9 @@ export type Api = {
     // Reset the conversation context (fresh agentSessionId) — keeps the session,
     // worktree, url. The /clear composer command calls this.
     clear(id: Id): Promise<SessionView>
+    // Interrupt the in-flight turn (the /abort composer command, like Esc) —
+    // keeps the session + conversation.
+    abort(id: Id): Promise<SessionView>
     // Human rename — locks the name against auto-title.
     rename(id: Id, name: string): Promise<SessionView>
     // Ask the worker to auto-title this session (no-op unless still unnamed).
@@ -200,6 +203,7 @@ export const createApi = (base: string = API_BASE): Api => {
       resume: id => request(u(`/sessions/${id}/resume`), { method: 'POST' }),
       stop: id => request(u(`/sessions/${id}/stop`), { method: 'POST' }),
       clear: id => request(u(`/sessions/${id}/clear`), { method: 'POST' }),
+      abort: id => request(u(`/sessions/${id}/abort`), { method: 'POST' }),
       rename: (id, name) =>
         request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
       autotitle: id => request(u(`/sessions/${id}/autotitle`), { method: 'POST' }),
