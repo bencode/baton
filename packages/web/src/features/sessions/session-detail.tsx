@@ -167,7 +167,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         onRename={rename}
       />
       <ConnectionBanner streamStatus={status} alive={session.alive} attached={session.attached} />
-      <EventStream items={items} scrollRef={scrollRef} />
+      <EventStream items={items} scrollRef={scrollRef} working={working} />
       {working && <WorkingIndicator />}
       <QueuedMessages queued={queued} />
       {showHelp && (

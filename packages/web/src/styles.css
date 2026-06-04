@@ -33,8 +33,26 @@ body,
   animation: breathe 1.8s ease-in-out infinite;
 }
 
+/* One-shot entrance for streamed transcript rows: fade + slight rise. Uses
+   transform/opacity only (no layout properties), ease-out, fast. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.2s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-breathe {
+  .animate-breathe,
+  .animate-rise {
     animation: none;
   }
 }

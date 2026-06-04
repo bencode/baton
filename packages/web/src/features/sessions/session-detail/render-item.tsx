@@ -4,7 +4,7 @@ import { attachmentSrc } from '../../../api'
 import { Markdown } from '../../../components/markdown'
 import type { RateLimitInfo, RenderItem, TurnEndSummary } from '../event-render'
 import { FileChip, isImage } from './attachment-view'
-import { ToolBlock } from './tool-block'
+import { Caret, ToolBlock } from './tool-block'
 
 export const RenderItemView = ({ item }: { item: RenderItem }) => {
   if (item.kind === 'system-header')
@@ -118,8 +118,10 @@ const UserBubble = ({
   </div>
 )
 
+// The answer is the hero of the transcript: slightly larger, darker, looser
+// than everything else, line length capped near 70ch for readability.
 const AssistantBubble = ({ text }: { text: string }) => (
-  <div className="text-sm text-gray-800">
+  <div className="max-w-[70ch] text-[15px] leading-relaxed text-gray-900">
     <Markdown text={text} />
   </div>
 )
@@ -212,19 +214,34 @@ const TurnDivider = ({ variant, turnIndex, result, rateLimit, message }: TurnDiv
 // the header to read; the body renders as markdown so headings / lists /
 // code show through. The opaque `signature` field is intentionally dropped
 // upstream (in the reducer) so it can never accidentally leak.
-const ThinkingBlock = ({ text }: { text: string }) => {
+// First non-empty line of the reasoning, clipped — gives the collapsed row
+// enough scent to spot turning points ("now I see the problem…") at a glance.
+export const thinkingPreview = (text: string, max = 60): string => {
+  const line =
+    text
+      .split('\n')
+      .find(l => l.trim() !== '')
+      ?.trim() ?? ''
+  return line.length > max ? `${line.slice(0, max)}…` : line
+}
+
+export const ThinkingBlock = ({ text, bare = false }: { text: string; bare?: boolean }) => {
   const [open, setOpen] = useState(false)
+  const chrome = bare
+    ? 'px-1 py-1'
+    : 'rounded-md border border-gray-200 bg-white px-2 py-1.5 hover:bg-gray-50'
   return (
     <div className="flex flex-col gap-1">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 self-start rounded-md border border-gray-200 bg-white px-2 py-1.5 text-left font-mono text-xs text-gray-500 italic hover:bg-gray-50"
+        className={`flex items-center gap-2 self-start text-left font-mono text-xs text-gray-500 italic ${chrome}`}
       >
-        <span aria-hidden="true" className="text-gray-400 not-italic">
-          {open ? '▾' : '▸'}
+        <span className="not-italic">
+          <Caret open={open} />
         </span>
         <span>thinking</span>
+        {!open && <span className="truncate text-gray-400">{thinkingPreview(text)}</span>}
       </button>
       {open && (
         <div className="ml-4 max-w-4xl rounded-md border border-gray-100 bg-gray-50/60 px-3 py-2 text-sm text-gray-600 italic">
