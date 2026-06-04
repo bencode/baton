@@ -103,3 +103,12 @@ export const viewWorker = (cfg: ProjectConfig): WorkerConfig => {
     apiToken: worker.apiToken,
   }
 }
+
+// Inverse of viewWorker: the `.baton.json` a worker drops into each session
+// worktree so the agent's bare `baton` calls resolve server/project/worker
+// from cwd (project-config lookup is strictly cwd-only — no upward walk).
+export const worktreeConfig = (cfg: WorkerConfig): ProjectConfig => ({
+  server: cfg.server,
+  project: cfg.projectId,
+  worker: { id: cfg.workerId, name: cfg.name, machineId: cfg.machineId, apiToken: cfg.apiToken },
+})

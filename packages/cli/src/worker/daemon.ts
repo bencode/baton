@@ -8,10 +8,20 @@ import type { Id, WorkerCommand } from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { ApiClient } from '../client.ts'
 import { defaultWorktreeDir, slug } from '../commands/session/shared.ts'
-import type { WorkerConfig } from '../project-config.ts'
+import {
+  PROJECT_CONFIG_NAME,
+  saveProjectConfig,
+  type WorkerConfig,
+  worktreeConfig,
+} from '../project-config.ts'
 import { generateTitle } from '../session/runner/title.ts'
 import { readFirstExchange } from '../session/runner/transcript.ts'
-import { createWorktree, removeWorktree, repoHeadBranch } from '../session/worktree.ts'
+import {
+  createWorktree,
+  ensureExcluded,
+  removeWorktree,
+  repoHeadBranch,
+} from '../session/worktree.ts'
 
 // The persistent, lightweight worker process. It owns no Claude state itself —
 // it listens on the server→worker command stream and supervises one child
@@ -104,6 +114,12 @@ export const runWorkerDaemon = async (
       await client.sessions.materialize(sessionId, { agentSessionId, worktreePath }, cfg.apiToken)
       log(`materialized session #${sessionId} → ${worktreePath}`)
     }
+    // Drop the worker's baton context into the worktree so the agent's bare
+    // `baton` calls resolve server/project/worker from cwd. Overwrite every
+    // start (refreshes a rotated token; no live child yet, so no race), and
+    // keep the token-bearing file out of agent commits via info/exclude.
+    ensureExcluded(repo, PROJECT_CONFIG_NAME)
+    saveProjectConfig(join(worktreePath, PROJECT_CONFIG_NAME), worktreeConfig(cfg))
     spawnChild(sessionId, worktreePath)
   }
 

@@ -10,6 +10,8 @@ import {
   saveProjectConfig,
   setWorker,
   viewWorker,
+  type WorkerConfig,
+  worktreeConfig,
 } from './project-config.ts'
 
 describe('project-config', () => {
@@ -39,6 +41,18 @@ describe('project-config', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+
+  test('worktreeConfig is the inverse of viewWorker', () => {
+    const w: WorkerConfig = {
+      server: 'http://x',
+      projectId: 1,
+      workerId: 9,
+      name: 'w',
+      machineId: 'mid',
+      apiToken: 'wtok',
+    }
+    assert.deepEqual(viewWorker(worktreeConfig(w)), w)
   })
 
   test('setWorker + viewWorker round-trip (carries apiToken)', () => {

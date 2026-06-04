@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { dirname, isAbsolute, resolve } from 'node:path'
 
 // Provision a git worktree for a session. Creates a branch named
 // `baton/<sessionCode>` checked out at `base` in the target path. The repo
@@ -34,6 +34,29 @@ export const repoHeadBranch = (repo: string): string => {
   })
   const branch = r.status === 0 ? r.stdout.trim() : ''
   return branch || 'main'
+}
+
+// Append a pattern to the repo's `.git/info/exclude` unless already present.
+// Shared by all worktrees (git resolves info/exclude to the common dir) and
+// never touches the target repo's tracked files — used to keep the injected
+// `.baton.json` (worker token inside) out of agent commits. Best-effort.
+export const ensureExcluded = (repo: string, pattern: string): void => {
+  try {
+    const r = spawnSync('git', ['-C', repo, 'rev-parse', '--git-path', 'info/exclude'], {
+      stdio: 'pipe',
+      encoding: 'utf8',
+    })
+    if (r.status !== 0) return
+    const rel = r.stdout.trim()
+    const path = isAbsolute(rel) ? rel : resolve(repo, rel)
+    const current = existsSync(path) ? readFileSync(path, 'utf8') : ''
+    if (current.split('\n').includes(pattern)) return
+    mkdirSync(dirname(path), { recursive: true })
+    const sep = current === '' || current.endsWith('\n') ? '' : '\n'
+    appendFileSync(path, `${sep}${pattern}\n`, 'utf8')
+  } catch {
+    // ignore
+  }
 }
 
 // Best-effort removal. Won't throw on missing/unclean state.
