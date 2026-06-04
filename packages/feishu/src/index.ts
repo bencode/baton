@@ -3,6 +3,7 @@ import { createBindingStore } from './bindings.ts'
 import { authedFetch, createBatonClient } from './client.ts'
 import { applyTemplate, type FeishuConfig, loadConfig } from './config.ts'
 import { ensureSession } from './ensure-session.ts'
+import { addReaction, removeReaction } from './reactions.ts'
 import { reply } from './reply.ts'
 import { type InboundMessage, startStream } from './stream.ts'
 import { waitForTurn } from './wait-turn.ts'
@@ -46,6 +47,9 @@ const main = (): void => {
       await reply(lark, msg.conversationId, '（暂只支持文本消息，图片稍后支持）').catch(() => {})
       return
     }
+    // "Seen + on it" — show a processing reaction on the user's message for the
+    // whole turn, cleared once we reply (or time out / error).
+    const reactionId = await addReaction(lark, msg.messageId)
     try {
       const sessionId = await ensureSession(client, bindings, cfg.route, key)
       const prompt = applyTemplate(cfg.promptTemplate, msg.sender, msg.text)
@@ -69,6 +73,8 @@ const main = (): void => {
         msg.conversationId,
         `处理失败：${e instanceof Error ? e.message : String(e)}`,
       ).catch(() => {})
+    } finally {
+      if (reactionId) await removeReaction(lark, msg.messageId, reactionId)
     }
   }
 
