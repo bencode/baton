@@ -3,6 +3,7 @@ import { createBindingStore } from './bindings.ts'
 import { authedFetch, createBatonClient } from './client.ts'
 import { applyTemplate, type FeishuConfig, loadConfig } from './config.ts'
 import { ensureSession } from './ensure-session.ts'
+import { resolveSenderName } from './names.ts'
 import { addReaction, removeReaction } from './reactions.ts'
 import { reply } from './reply.ts'
 import { type InboundMessage, startStream } from './stream.ts'
@@ -41,7 +42,10 @@ const main = (): void => {
     // Per-user session: key by conversation AND sender so each person in a group
     // gets an isolated context (a 1-on-1 chat is one sender anyway).
     const key = `${msg.conversationId}:${msg.senderId}`
-    log(`← ${msg.sender}: ${msg.text}${imgNote}  (chat ${msg.conversationId})`)
+    // The event only carries open_id; resolve a display name (best-effort) so the
+    // agent knows who's talking. Cached per chat.
+    const senderName = await resolveSenderName(lark, msg.conversationId, msg.senderId)
+    log(`← ${senderName}: ${msg.text}${imgNote}  (chat ${msg.conversationId})`)
     if (!msg.text) {
       // v0 forwards text only; an image-only message has nothing to relay yet.
       await reply(lark, msg.conversationId, '（暂只支持文本消息，图片稍后支持）').catch(() => {})
@@ -52,7 +56,7 @@ const main = (): void => {
     const reactionId = await addReaction(lark, msg.messageId)
     try {
       const sessionId = await ensureSession(client, bindings, cfg.route, key)
-      const prompt = applyTemplate(cfg.promptTemplate, msg.sender, msg.text)
+      const prompt = applyTemplate(cfg.promptTemplate, senderName, msg.text)
       const ev = await client.sendMessage(sessionId, prompt)
       log(`→ delivered to session #${sessionId} (msg ${ev.id}), waiting…`)
       // `?since` bounds the replay to our message onward — no full-history re-read.
