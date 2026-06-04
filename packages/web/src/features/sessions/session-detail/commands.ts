@@ -15,13 +15,13 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'help', kind: 'help', desc: 'show available commands' },
   { name: 'clear', kind: 'clear', desc: 'reset the conversation (keeps session + code)' },
   { name: 'abort', kind: 'abort', desc: 'interrupt the running turn (like Esc)' },
-  { name: 'plan', kind: 'plan', desc: 'ask for a plan first, no edits yet', takesArgs: true },
+  {
+    name: 'plan',
+    kind: 'plan',
+    desc: 'read-only planning — propose a plan, no file edits',
+    takesArgs: true,
+  },
 ]
-
-// /plan is a prompt convention (claude has no headless plan mode): prepend a
-// "plan first, don't touch files" instruction to the user's task.
-export const PLAN_PREAMBLE =
-  "Give me an implementation plan and the steps first; don't change any files until I confirm. Task: "
 
 // Parse the draft as "/name args". null when it isn't a slash line.
 export const parseSlash = (draft: string): { name: string; args: string } | null => {

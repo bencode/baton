@@ -93,9 +93,36 @@ describe('runTurn', () => {
     const { calls, worker } = collector()
     const ac = new AbortController()
     ac.abort()
-    const code = await runTurn(cfg, worker, userMsg(), false, hangingQuery, () => {}, undefined, undefined, ac.signal)
+    const code = await runTurn(
+      cfg,
+      worker,
+      userMsg(),
+      false,
+      hangingQuery,
+      () => {},
+      undefined,
+      undefined,
+      ac.signal,
+    )
     assert.equal(code, -1)
     assert.ok(calls.includes('turn_error'))
     assert.ok(calls.includes('turn_complete'))
+  })
+
+  // The web /plan command sets payload.planMode → the SDK runs read-only
+  // (permissionMode:'plan'); a normal message stays bypassPermissions.
+  test('planMode message → permissionMode plan; normal → bypassPermissions', async () => {
+    const seen: { mode?: unknown } = {}
+    const capture: QueryFn = params => {
+      seen.mode = (params.options as { permissionMode?: unknown } | undefined)?.permissionMode
+      return (async function* () {
+        yield { type: 'result', subtype: 'success', is_error: false, result: 'ok' } as never
+      })()
+    }
+    const planMsg = { ...userMsg(), payload: { text: 'hi', planMode: true } }
+    await runTurn(cfg, collector().worker, planMsg, false, capture, () => {})
+    assert.equal(seen.mode, 'plan')
+    await runTurn(cfg, collector().worker, userMsg(), false, capture, () => {})
+    assert.equal(seen.mode, 'bypassPermissions')
   })
 })

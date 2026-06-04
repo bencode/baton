@@ -12,7 +12,9 @@ export type QueryFn = (params: { prompt: string; options?: Options }) => AsyncIt
 //   - sessionId vs resume: first turn presets our own UUID (= CLI --session-id),
 //     later turns resume it (= CLI --resume) — keeps transcript/title lookups working
 //   - bypassPermissions: behaviour-identical to --dangerously-skip-permissions
-//     (a real permission policy via canUseTool is the deliberate next step)
+//   - planMode: the web /plan command — run this turn read-only ('plan'), so the
+//     agent proposes a plan (via ExitPlanMode) without touching files; the user
+//     then sends a normal message to execute. The SDK enforces read-only.
 //   - abortController: the watchdog aborts it to kill an overrunning turn
 export const startQuery = (
   config: SessionConfig,
@@ -22,14 +24,16 @@ export const startQuery = (
   abortController: AbortController,
   log: (m: string) => void,
   envOverlay?: Record<string, string>,
+  planMode = false,
 ): AsyncIterable<SDKMessage> => {
   const env = buildSdkEnv(envOverlay)
   const exe = claudeExecutable()
   const addDirs = additionalDirs()
   if (addDirs) log(`[add-dir] ${addDirs.join(', ')}`)
+  if (planMode) log('[plan] read-only planning turn')
   const options: Options = {
     cwd: config.worktreePath,
-    permissionMode: 'bypassPermissions',
+    permissionMode: planMode ? 'plan' : 'bypassPermissions',
     includePartialMessages: false,
     abortController,
     stderr: line => log(`[claude] ${line.trimEnd()}`),

@@ -42,7 +42,12 @@ export type SessionsClient = {
   listByProject(projectId: Id): Promise<SessionView[]>
   get(id: Id): Promise<SessionView>
   findByName(projectId: Id, name: string): Promise<Session | null>
-  sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
+  sendMessage(
+    id: Id,
+    text: string,
+    attachments?: Attachment[],
+    planMode?: boolean,
+  ): Promise<SessionEvent>
   uploadAttachment(
     id: Id,
     input: { filename: string; contentType: string; body: Blob },
@@ -85,10 +90,14 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
       const matches = all.filter(s => s.name === name)
       return matches.length === 0 ? null : (matches[matches.length - 1] ?? null)
     },
-    sendMessage: (id, text, attachments) =>
+    sendMessage: (id, text, attachments, planMode) =>
       request(u(`/sessions/${id}/messages`), {
         method: 'POST',
-        body: attachments && attachments.length > 0 ? { text, attachments } : { text },
+        body: {
+          text,
+          ...(attachments && attachments.length > 0 ? { attachments } : {}),
+          ...(planMode ? { planMode: true } : {}),
+        },
       }),
     // Raw-body upload: the file streams as the request body (no multipart), so
     // a Blob backed by a file on disk uploads without buffering. filename rides

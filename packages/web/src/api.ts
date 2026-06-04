@@ -123,7 +123,12 @@ export type Api = {
     autotitle(id: Id): Promise<SessionView>
     // Delete the session (worker tears down its child + worktree; row dropped).
     remove(id: Id): Promise<void>
-    sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
+    sendMessage(
+      id: Id,
+      text: string,
+      attachments?: Attachment[],
+      planMode?: boolean,
+    ): Promise<SessionEvent>
     uploadAttachment(id: Id, file: File): Promise<Attachment>
     // Persisted transcript history, fetched once on open (the stream then only
     // tails live) — avoids replaying the whole log over SSE.
@@ -208,10 +213,14 @@ export const createApi = (base: string = API_BASE): Api => {
         request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
       autotitle: id => request(u(`/sessions/${id}/autotitle`), { method: 'POST' }),
       remove: id => request(u(`/sessions/${id}`), { method: 'DELETE' }),
-      sendMessage: (id, text, attachments) =>
+      sendMessage: (id, text, attachments, planMode) =>
         request(u(`/sessions/${id}/messages`), {
           method: 'POST',
-          body: attachments && attachments.length > 0 ? { text, attachments } : { text },
+          body: {
+            text,
+            ...(attachments && attachments.length > 0 ? { attachments } : {}),
+            ...(planMode ? { planMode: true } : {}),
+          },
         }),
       // Raw-body upload (the JSON `request` helper can't carry binary): the File
       // streams as the request body, filename on the query, media type on the header.

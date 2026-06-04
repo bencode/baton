@@ -277,6 +277,7 @@ export const registerSessionRoutes = (
       text?: string
       images?: unknown
       attachments?: unknown
+      planMode?: unknown
     }
     const text = typeof body.text === 'string' ? body.text : ''
     const images = Array.isArray(body.images)
@@ -291,6 +292,8 @@ export const registerSessionRoutes = (
       text,
       ...(images.length > 0 ? { images } : {}),
       ...(atts.length > 0 ? { attachments: atts } : {}),
+      // /plan: run this turn read-only (SDK permissionMode:'plan'); the worker reads it.
+      ...(body.planMode === true ? { planMode: true } : {}),
     }
     const ev = await store.sessions.appendEvent(sessionId, 'user_message', payload)
     bus.publish(sessionId, ev)

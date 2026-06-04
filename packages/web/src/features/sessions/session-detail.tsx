@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { isAgentWorking, pendingMessages, reduceEvents } from './event-render'
 import { CommandHelp } from './session-detail/command-menu'
-import { PLAN_PREAMBLE, type SlashCommand } from './session-detail/commands'
+import type { SlashCommand } from './session-detail/commands'
 import { Composer } from './session-detail/composer'
 import { ConnectionBanner } from './session-detail/connection-banner'
 import { EventStream } from './session-detail/event-stream'
@@ -112,13 +112,13 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     // The orphaned server blob is transient (cascade-cleaned on session destroy); fine for v0.
     setAttachments(prev => prev.filter(a => a.id !== id))
 
-  const send = async (textOverride?: string) => {
+  const send = async (textOverride?: string, planMode = false) => {
     const text = (textOverride ?? draft).trim()
     if (!text && attachments.length === 0) return
     setSending(true)
     setSendError(null)
     try {
-      await api.sessions.sendMessage(sessionId, text, attachments)
+      await api.sessions.sendMessage(sessionId, text, attachments, planMode)
       setDraft('')
       setAttachments([])
     } catch (e) {
@@ -142,13 +142,14 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const rename = (name: string) => void api.sessions.rename(sessionId, name).catch(() => {})
 
   // Slash command from the composer. /clear resets context (the server appends a
-  // notice the transcript renders); /help opens the command list; /plan prepends
-  // a "plan first" preamble and sends as a normal message.
+  // notice the transcript renders); /help opens the command list; /plan sends the
+  // task as a read-only planning turn (server flags it → worker runs the SDK in
+  // permissionMode:'plan', so the agent proposes a plan without touching files).
   const runCommand = (command: SlashCommand, args: string) => {
     if (command.kind === 'clear') void api.sessions.clear(sessionId).catch(() => {})
     else if (command.kind === 'abort') void api.sessions.abort(sessionId).catch(() => {})
     else if (command.kind === 'help') setShowHelp(true)
-    else if (command.kind === 'plan' && args) void send(`${PLAN_PREAMBLE}${args}`)
+    else if (command.kind === 'plan' && args) void send(args, true)
   }
 
   // Show the breathing indicator while a turn is open. `sending` covers the brief

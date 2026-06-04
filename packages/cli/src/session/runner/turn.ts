@@ -75,9 +75,10 @@ export const runTurn = async (
   externalSignal?: AbortSignal,
 ): Promise<number> => {
   await worker.emitEvent('turn_start', { messageId: msg.id })
-  const payload = msg.payload as { text?: unknown; attachments?: Attachment[] }
+  const payload = msg.payload as { text?: unknown; attachments?: Attachment[]; planMode?: unknown }
   const rawText = typeof payload?.text === 'string' ? payload.text : ''
   const attachments = Array.isArray(payload?.attachments) ? payload.attachments : []
+  const planMode = payload?.planMode === true
   if (rawText.length === 0 && attachments.length === 0) {
     await worker.emitEvent('turn_error', { message: 'user_message missing text and attachments' })
     return -1
@@ -107,7 +108,7 @@ export const runTurn = async (
   })
 
   try {
-    const messages = startQuery(config, text, resuming, queryFn, abort, log, envOverlay)
+    const messages = startQuery(config, text, resuming, queryFn, abort, log, envOverlay, planMode)
     const consume = streamSdkEvents(messages, worker)
     void consume.catch(() => {}) // abort below may make it reject; handled via race
     const outcome = await Promise.race([consume, timeout, interrupted])
@@ -121,7 +122,9 @@ export const runTurn = async (
     if (outcome === TIMEOUT) {
       log(`[watchdog] turn exceeded ${ceiling}ms — aborting claude`)
       abort.abort()
-      await worker.emitEvent('turn_error', { message: `turn exceeded ${ceiling}ms — claude aborted` })
+      await worker.emitEvent('turn_error', {
+        message: `turn exceeded ${ceiling}ms — claude aborted`,
+      })
       await worker.emitEvent('turn_complete', {})
       return -1
     }

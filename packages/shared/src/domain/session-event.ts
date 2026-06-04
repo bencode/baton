@@ -7,8 +7,10 @@ import type { Id } from './ids.ts'
 // dedupe against.
 //
 // type discriminator (kept loose; payload shape is owned by the producer):
-//   - user_message:  payload = { text: string; attachments?: Attachment[]; images?: string[] }
-//                    (images is legacy base64; attachments is the canonical path)
+//   - user_message:  payload = { text: string; attachments?: Attachment[]; images?: string[];
+//                    planMode?: boolean }
+//                    (images is legacy base64; attachments is the canonical path;
+//                    planMode=true → worker runs this turn read-only, SDK permissionMode:'plan')
 //   - turn_start:    payload = { messageId?: number }
 //   - sdk_event:     payload = a parsed line from `claude --output-format stream-json`
 //   - turn_complete: payload = { exitCode: number }
