@@ -192,7 +192,7 @@ const SessionRow = ({ session, path, active, dim, open, onDelete }: SessionRowPr
         </span>
       </button>
       {confirming ? (
-        <span className="flex shrink-0 items-center gap-1.5 px-1.5 text-xs">
+        <span className="flex shrink-0 items-center gap-3 px-1.5 text-xs">
           <button
             type="button"
             aria-label="confirm delete"
@@ -201,7 +201,7 @@ const SessionRow = ({ session, path, active, dim, open, onDelete }: SessionRowPr
               setConfirming(false)
               onDelete()
             }}
-            className="text-red-500 transition-colors hover:text-red-700"
+            className="px-0.5 text-red-500 transition-colors hover:text-red-700"
           >
             ✓
           </button>
@@ -210,7 +210,7 @@ const SessionRow = ({ session, path, active, dim, open, onDelete }: SessionRowPr
             aria-label="cancel delete"
             title="cancel"
             onClick={() => setConfirming(false)}
-            className="text-gray-400 transition-colors hover:text-gray-700"
+            className="px-0.5 text-gray-400 transition-colors hover:text-gray-700"
           >
             ✗
           </button>
