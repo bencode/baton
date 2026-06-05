@@ -13,7 +13,7 @@ import remarkGfm from 'remark-gfm'
 export const Markdown = ({ text }: { text: string }) => (
   <div
     className={[
-      'prose prose-sm max-w-none',
+      'prose prose-sm max-w-none break-words',
       'prose-headings:font-semibold',
       'prose-h1:text-lg prose-h1:mt-3 prose-h1:mb-1.5',
       'prose-h2:text-base prose-h2:mt-2.5 prose-h2:mb-1',
