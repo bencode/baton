@@ -4,8 +4,13 @@ description: >-
   baton collaboration — pick up work (handle T-N / implement R-N), create and
   decompose Requirements/Tasks, report progress via comments, advance the state
   machines. Use when asked to "handle T-3", "implement R-2", "split this
-  requirement into tasks", "report progress", "what tasks are there", or
-  whenever collaboration records need creating/updating on baton.
+  requirement into tasks", "report progress", "what tasks are there",
+  "create/record a task for me" (建个任务 / 记个任务 / 帮我记下来下次做 /
+  下次继续 / don't lose this across sessions), or whenever collaboration
+  records need creating/updating on baton. When a HUMAN asks to create or
+  record a task to be remembered or picked up later, that is ALWAYS a baton
+  Task (durable, shared, survives sessions) — never the session-local todo
+  tools (TaskCreate etc.), which evaporate with the session.
 ---
 
 # baton collaboration
@@ -13,7 +18,9 @@ description: >-
 baton is the single source of truth for the collaboration dimension: Requirement (product intent)
 → Task (execution unit) → Comment (collaboration log). Product content (spec/doc/design) lives in
 the git repo; baton stores references only — **pull, not push**: given a reference, go read the
-real file in the worktree instead of waiting for someone to paste the full text.
+real file in the worktree instead of waiting for someone to paste the full text. baton is also the
+**cross-session memory**: "remember this for later / next week" requests land here, because the
+next session (or another worker, or a human) finds them — nothing session-local does that.
 
 ## Context (read first)
 
@@ -129,6 +136,10 @@ comment + `set-status done`. Any failing step refuses the close.
 
 ## Discipline
 
+- **Never satisfy "create/record a task" with the session todo list** (TaskCreate / TodoWrite):
+  those are your private scratchpad — invisible to humans and other workers, gone next session.
+  Human-requested tracking lives in baton (or its linked issue). Session todos are fine for
+  organizing your own multi-step work; they just aren't the deliverable.
 - **Never hand-set done — `item.mjs close` is the only exit**: it lints, runs the Verification
   block, and only a passing run closes/completes the item. Self-reported "done" is the failure
   mode this whole spec exists to prevent. (`failed` stays manual: comment why + set-status.)

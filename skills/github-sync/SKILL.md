@@ -7,8 +7,8 @@ description: >-
   (decides GitHub vs local-only so agents never pick a side), publishing R/T to
   GitHub, and mirroring blocked/help-needed onto the issue (baton:* labels).
   Use when asked to "sync github issues", "create a work item / 建个任务需求",
-  "send R-N to GitHub", "把求助挂到 issue 上", or to check whether issues and
-  requirements line up.
+  "record this for later / 记下来下周做", "send R-N to GitHub", "把求助挂到
+  issue 上", or to check whether issues and requirements line up.
 ---
 
 # github-sync
