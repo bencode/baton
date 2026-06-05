@@ -12,9 +12,9 @@ description: >-
 
 Division of labor — don't cross it:
 
-- **GitHub issues (via gh)** — source of truth for the product dimension: body, discussion, open/closed state all live here
+- **GitHub issues (via gh)** — source of truth for the product dimension: body, discussion, open/closed state all live here (raw issue operations: sibling skill `github-issues`)
 - **baton** — the R/T collaboration dimension + session/worker orchestration
-- **github-sync (this skill)** — the light bridge in between, maintaining "number + title + link" only
+- **github-sync (this skill)** — the light bridge in between, maintaining "number + title + status + link" only
 
 ## Prerequisites
 
