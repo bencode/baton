@@ -1,5 +1,6 @@
 import type { Session } from '@baton/shared'
 import { useState } from 'react'
+import { standaloneSessionPath } from '../../../app/route'
 
 // SessionHeader — one-line identity strip, gritty enough that the rest of the
 // surface stays a quiet reading area. Diagnostic info (cwd, full agent UUID)
@@ -87,6 +88,27 @@ const CopyButton = ({ text }: { text: string }) => {
   )
 }
 
+// Copy the standalone collaboration link (/s/:token) — same URL the DingTalk /
+// Feishu bots push. Anyone with the link can read the transcript and write into
+// the session (share token logs the visitor in with full permissions).
+const ShareButton = ({ shareToken }: { shareToken: string }) => {
+  const [copied, setCopied] = useState(false)
+  const onShare = () => {
+    void navigator.clipboard.writeText(window.location.origin + standaloneSessionPath(shareToken))
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <button
+      type="button"
+      onClick={onShare}
+      className="rounded border border-gray-200 px-1.5 text-xs text-gray-500 transition-colors hover:border-blue-300 hover:text-blue-600"
+    >
+      {copied ? 'copied ✓' : 'share'}
+    </button>
+  )
+}
+
 export const SessionHeader = ({ session, active, onStop, onResume, onRename }: HeaderProps) => {
   const [open, setOpen] = useState(false)
   return (
@@ -116,6 +138,7 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
           />
           {active ? 'active' : 'inactive'}
         </span>
+        {session.shareToken && <ShareButton shareToken={session.shareToken} />}
         {active && (
           <button
             type="button"
