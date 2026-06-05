@@ -42,6 +42,18 @@ Project ─► Requirement (R-N)   status: active → done | cancelled   (produc
                      └─► Comment (append-only; text + git references, never file contents)
 ```
 
+## What kind to create
+
+- **A new problem / bug / idea / need = a Requirement** — any size; a one-line bug is a valid
+  work item (in a GitHub repo, github-sync's `create-work-item` makes it an issue + linked
+  mirror in one step). If one sitting finishes it, don't decompose at all.
+- **Tasks exist only as decomposition** of a Requirement (`plan-and-decompose`).
+- **A task with no natural parent** goes under the project's standing **`Inbox`** Requirement:
+  find it by exact title `Inbox`; if missing, create it once
+  (`baton requirement create Inbox --body "Standing inbox for stray tasks; stays active."`).
+  Inbox stays `active` forever and never goes through acceptance; humans review it
+  periodically — re-parent tasks that grew up, finish the rest in place.
+
 ## Work-item spec (every R / T / issue body)
 
 Every work item entering the loop carries three sections — the Verification
@@ -136,6 +148,8 @@ comment + `set-status done`. Any failing step refuses the close.
 
 ## Discipline
 
+- **Don't invent a throwaway Requirement per stray task — use `Inbox`**; and don't dump real
+  product work into Inbox either (it's an inbox, not a landfill — promote what grows).
 - **Never satisfy "create/record a task" with the session todo list** (TaskCreate / TodoWrite):
   those are your private scratchpad — invisible to humans and other workers, gone next session.
   Human-requested tracking lives in baton (or its linked issue). Session todos are fine for

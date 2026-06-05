@@ -115,7 +115,8 @@ passes, then labels it `baton:needs-verification` and cc's the creator. The crea
       (item.mjs lint T-N)))
 
 (defn create-work-item [title spec-body]          ; UNIFIED CREATE — agents never pick a side themselves
-  (if (and (git remote get-url origin :is-github?) ; body = Goal/Verification/Refs (baton skill spec)
+  ;; any size counts: a one-line bug is a valid work item (body = Goal/Verification/Refs)
+  (if (and (git remote get-url origin :is-github?)
            (gh auth status :ok?))
     (-> (gh issue create --title title --body-file f --label "baton:requirement")
         (baton requirement create title --github url --body url) ; both sides, linked, one step
