@@ -21,7 +21,7 @@ export const Markdown = ({ text }: { text: string }) => (
       'prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5',
       'prose-blockquote:my-2 prose-blockquote:not-italic',
       // fenced code blocks: light bg, dark text — visible without dark mode
-      '[&_pre]:my-2 [&_pre]:rounded [&_pre]:border [&_pre]:border-gray-200',
+      '[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:border [&_pre]:border-gray-200',
       '[&_pre]:bg-gray-50 [&_pre]:text-gray-800 [&_pre]:p-3 [&_pre]:text-xs',
       '[&_pre_code]:bg-transparent [&_pre_code]:text-gray-800',
       '[&_pre_code]:p-0 [&_pre_code]:font-normal',

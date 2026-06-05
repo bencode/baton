@@ -59,7 +59,7 @@ const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) =
           setEditing(false)
         }
       }}
-      className="w-48 rounded border border-gray-300 px-1 text-sm font-semibold text-gray-900 focus:border-blue-400 focus:outline-none"
+      className="w-48 rounded border border-gray-300 px-1 text-base font-semibold text-gray-900 focus:border-blue-400 focus:outline-none sm:text-sm"
     />
   )
 }
@@ -69,10 +69,25 @@ const truncateUuid = (id: string): string => {
   return `${id.slice(0, 8)}…${id.slice(-4)}`
 }
 
+// The Clipboard API only exists in secure contexts (HTTPS / localhost); plain-
+// HTTP LAN access (phone testing) gets the hidden-textarea execCommand fallback.
+const copyText = (text: string) => {
+  if (navigator.clipboard) {
+    void navigator.clipboard.writeText(text)
+    return
+  }
+  const ta = document.createElement('textarea')
+  ta.value = text
+  document.body.appendChild(ta)
+  ta.select()
+  document.execCommand('copy')
+  ta.remove()
+}
+
 const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false)
   const onCopy = () => {
-    void navigator.clipboard.writeText(text)
+    copyText(text)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1500)
   }
@@ -94,13 +109,14 @@ const CopyButton = ({ text }: { text: string }) => {
 const ShareButton = ({ shareToken }: { shareToken: string }) => {
   const [copied, setCopied] = useState(false)
   const onShare = () => {
-    void navigator.clipboard.writeText(window.location.origin + standaloneSessionPath(shareToken))
+    copyText(window.location.origin + standaloneSessionPath(shareToken))
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1500)
   }
   return (
     <button
       type="button"
+      aria-label="share"
       onClick={onShare}
       className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
     >

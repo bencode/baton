@@ -39,7 +39,7 @@ export const LoginPage = () => {
           onChange={e => setUsername(e.target.value)}
           placeholder="username"
           autoComplete="username"
-          className="rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="rounded-md border border-gray-200 px-3 py-2 text-base focus:border-blue-400 sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
         />
         <input
           aria-label="password"
@@ -48,7 +48,7 @@ export const LoginPage = () => {
           onChange={e => setPassword(e.target.value)}
           placeholder="password"
           autoComplete="current-password"
-          className="rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="rounded-md border border-gray-200 px-3 py-2 text-base focus:border-blue-400 sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
         />
         {error && <p className="text-xs text-red-600">{error}</p>}
         <button

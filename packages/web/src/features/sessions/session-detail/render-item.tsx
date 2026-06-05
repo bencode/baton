@@ -195,7 +195,7 @@ const TurnDivider = ({ variant, turnIndex, result, rateLimit, message }: TurnDiv
     <div className="my-6 flex items-center gap-3">
       <div className={`h-px flex-1 ${lineColor}`} />
       <div
-        className={`inline-flex min-w-0 flex-wrap items-center justify-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[11px] ${capsuleStyle}`}
+        className={`inline-flex flex-wrap items-center justify-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[11px] wrap-anywhere ${capsuleStyle}`}
       >
         <span>turn {turnIndex}</span>
         {parts.map(p => (
