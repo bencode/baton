@@ -1,8 +1,8 @@
-import type { Id, TaskStatus } from '@baton/shared'
+import type { ExternalRef, Id, TaskStatus } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { ProjectBus } from '../project-bus.ts'
 import type { Store, TaskPatch } from '../store/types.ts'
-import { type AppEnv, intParam } from '../views.ts'
+import { type AppEnv, intParam, isExternalRef } from '../views.ts'
 
 export const registerTaskRoutes = (app: Hono<AppEnv>, store: Store, projects: ProjectBus): void => {
   app.post('/tasks', async c => {
@@ -12,11 +12,17 @@ export const registerTaskRoutes = (app: Hono<AppEnv>, store: Store, projects: Pr
       body?: string
       dependsOn?: Id[]
       status?: TaskStatus
+      external?: ExternalRef
     }
     if (!reqBody.requirementId || !reqBody.title)
       return c.json({ error: 'requirementId and title required' }, 400)
-    const { requirementId, title, body, dependsOn, status } = reqBody
-    return c.json(await store.tasks.create({ requirementId, title, body, dependsOn, status }), 201)
+    if (reqBody.external !== undefined && !isExternalRef(reqBody.external))
+      return c.json({ error: 'invalid external ref (need source=github + integer number)' }, 400)
+    const { requirementId, title, body, dependsOn, status, external } = reqBody
+    return c.json(
+      await store.tasks.create({ requirementId, title, body, dependsOn, status, external }),
+      201,
+    )
   })
   app.get('/tasks/:id', async c => {
     const t = await store.tasks.get(intParam(c.req.param('id')))
@@ -25,7 +31,10 @@ export const registerTaskRoutes = (app: Hono<AppEnv>, store: Store, projects: Pr
   app.patch('/tasks/:id', async c => {
     const id = intParam(c.req.param('id'))
     if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
-    return c.json(await store.tasks.update(id, (await c.req.json()) as TaskPatch))
+    const patch = (await c.req.json()) as TaskPatch
+    if (patch.external !== undefined && !isExternalRef(patch.external))
+      return c.json({ error: 'invalid external ref (need source=github + integer number)' }, 400)
+    return c.json(await store.tasks.update(id, patch))
   })
   app.delete('/tasks/:id', async c => {
     const id = intParam(c.req.param('id'))

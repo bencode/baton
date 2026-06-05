@@ -1,4 +1,4 @@
-import type { Code, Id, Requirement, RequirementStatus, ResourceRef } from '@baton/shared'
+import type { Code, ExternalRef, Id, Requirement, RequirementStatus, ResourceRef } from '@baton/shared'
 import { fetchItemByCode } from './items.ts'
 import { request } from './request.ts'
 
@@ -8,13 +8,22 @@ export type RequirementInput = {
   description?: string
   body?: string
   resources?: ResourceRef[]
+  external?: ExternalRef
 }
+
+export type RequirementUpdate = Partial<{
+  title: string
+  description: string
+  body: string
+  external: ExternalRef
+}>
 
 export type RequirementClient = {
   create(input: RequirementInput): Promise<Requirement>
   listByProject(projectId: Id): Promise<Requirement[]>
   get(id: Id): Promise<Requirement>
   getByCode(projectId: Id, code: Code): Promise<Requirement>
+  update(id: Id, patch: RequirementUpdate): Promise<Requirement>
   setStatus(id: Id, status: RequirementStatus): Promise<Requirement>
   remove(id: Id): Promise<void>
 }
@@ -28,6 +37,7 @@ export const requirementClient = (baseUrl: string): RequirementClient => {
     get: id => request(u(`/requirements/${id}`), { method: 'GET' }),
     getByCode: (projectId, code) =>
       fetchItemByCode<Requirement>(baseUrl, projectId, code, 'requirement'),
+    update: (id, patch) => request(u(`/requirements/${id}`), { method: 'PATCH', body: patch }),
     setStatus: (id, status) =>
       request(u(`/requirements/${id}`), { method: 'PATCH', body: { status } }),
     remove: id => request(u(`/requirements/${id}`), { method: 'DELETE' }),

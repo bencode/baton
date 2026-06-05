@@ -1,3 +1,4 @@
+import type { ExternalRef } from './github.ts'
 import type { Code, Id } from './ids.ts'
 
 export type ResourceKind = 'doc' | 'link' | 'file'
@@ -23,6 +24,7 @@ export type Requirement = {
   body?: string // detailed content (Markdown); rendered with the shared Markdown component
   resources: ResourceRef[]
   status: RequirementStatus // stored, not derived
+  external?: ExternalRef // light link to the external record this mirrors (e.g. GitHub issue)
   createdAt: number
   updatedAt: number
 }

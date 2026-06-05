@@ -1,5 +1,6 @@
 import type {
   AgentKind,
+  ExternalRef,
   Id,
   Project,
   Requirement,
@@ -30,6 +31,25 @@ import type { UserRecord } from './types.ts'
 
 const parseJson = <T>(s: string): T => JSON.parse(s) as T
 
+// The external* columns shared by Requirement and Task (light association).
+type DbExternal = Pick<DbRequirement, 'externalSource' | 'externalNumber' | 'externalUrl'>
+
+const toExternalRef = (r: DbExternal): ExternalRef | undefined =>
+  r.externalSource
+    ? {
+        source: r.externalSource as ExternalRef['source'],
+        number: r.externalNumber ?? undefined,
+        url: r.externalUrl ?? undefined,
+      }
+    : undefined
+
+// Domain ExternalRef → the external* column shape for Prisma create/update data.
+export const toExternalColumns = (e: ExternalRef) => ({
+  externalSource: e.source,
+  externalNumber: e.number ?? null,
+  externalUrl: e.url ?? null,
+})
+
 export const toWorkspace = (r: DbWorkspace): Workspace => ({
   id: r.id,
   name: r.name,
@@ -53,6 +73,7 @@ export const toRequirement = (r: DbRequirement): Requirement => ({
   body: r.body ?? undefined,
   resources: parseJson<ResourceRef[]>(r.resources),
   status: r.status as RequirementStatus,
+  external: toExternalRef(r),
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),
 })
@@ -66,6 +87,7 @@ export const toTask = (r: DbTask): Task => ({
   body: r.body ?? undefined,
   dependsOn: parseJson<Id[]>(r.dependsOn),
   status: r.status as TaskStatus,
+  external: toExternalRef(r),
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),
 })

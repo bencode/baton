@@ -1,4 +1,5 @@
 import type { Code, Id } from '@baton/shared'
+import { GithubLink } from '../../components/github-link'
 import { Markdown } from '../../components/markdown'
 import { StatusBadge } from '../../components/status-badge'
 import { useRequirementByCode } from './use-requirements'
@@ -21,6 +22,7 @@ export const RequirementDetail = ({ projectId, code }: RequirementDetailProps) =
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold tracking-tight text-gray-900">{req.title}</h2>
         <StatusBadge status={req.status} />
+        <GithubLink external={req.external} />
       </div>
       {req.description && <p className="text-sm text-gray-600">{req.description}</p>}
       {req.body && <Markdown text={req.body} />}

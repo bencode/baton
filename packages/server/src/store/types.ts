@@ -1,6 +1,7 @@
 import type {
   AgentKind,
   Code,
+  ExternalRef,
   Id,
   Project,
   Requirement,
@@ -36,6 +37,7 @@ export type RequirementCreate = {
   body?: string
   resources?: ResourceRef[]
   status?: RequirementStatus
+  external?: ExternalRef
 }
 export type RequirementPatch = Partial<{
   title: string
@@ -43,6 +45,7 @@ export type RequirementPatch = Partial<{
   body: string
   resources: ResourceRef[]
   status: RequirementStatus
+  external: ExternalRef
 }>
 export type TaskCreate = {
   requirementId: Id
@@ -50,12 +53,14 @@ export type TaskCreate = {
   body?: string
   dependsOn?: Id[]
   status?: TaskStatus
+  external?: ExternalRef
 }
 export type TaskPatch = Partial<{
   title: string
   body: string
   dependsOn: Id[]
   status: TaskStatus
+  external: ExternalRef
 }>
 // Comments are append-only — created one at a time, never updated. No patch type.
 export type TaskCommentCreate = { taskId: Id; body: string; workerId?: Id }

@@ -1,14 +1,27 @@
-import type { Id, TaskStatus } from '@baton/shared'
+import type { ExternalRef, Id, TaskStatus } from '@baton/shared'
 import { defineCommand } from 'citty'
+import type { TaskUpdate } from '../client/tasks.ts'
 import type { ApiClient } from '../client.ts'
 import { fmtComment, fmtTask, removed, renderList, renderOne } from '../output.ts'
-import { clientFor, common, resolveProjectId, splitCsv } from '../util.ts'
+import { clientFor, common, parseIssueUrl, resolveProjectId, splitCsv } from '../util.ts'
 
 export const createTask = (
   c: ApiClient,
-  input: { requirementId: Id; title: string; body?: string; dependsOn?: Id[] },
+  input: {
+    requirementId: Id
+    title: string
+    body?: string
+    dependsOn?: Id[]
+    external?: ExternalRef
+  },
   json: boolean,
 ): Promise<string> => c.tasks.create(input).then(t => renderOne(t, fmtTask, json))
+export const updateTask = (
+  c: ApiClient,
+  id: Id,
+  patch: TaskUpdate,
+  json: boolean,
+): Promise<string> => c.tasks.update(id, patch).then(t => renderOne(t, fmtTask, json))
 export const listTasks = (c: ApiClient, requirementId: Id, json: boolean): Promise<string> =>
   c.tasks.listByRequirement(requirementId).then(ts => renderList(ts, fmtTask, json))
 export const getTask = (c: ApiClient, id: Id, json: boolean): Promise<string> =>
@@ -48,6 +61,7 @@ export const task = defineCommand({
         project: { type: 'string', description: 'project id (overrides .baton.json)' },
         body: { type: 'string', description: 'task body (markdown)' },
         deps: { type: 'string', description: 'comma-separated dependency task codes (T-N,T-N)' },
+        github: { type: 'string', description: 'link a GitHub issue url (light association)' },
         ...common,
       },
       run: async ({ args }) => {
@@ -66,9 +80,47 @@ export const task = defineCommand({
               title: args.title,
               body: args.body,
               dependsOn: dependsOn.length ? dependsOn : undefined,
+              external: args.github ? parseIssueUrl(args.github) : undefined,
             },
             Boolean(args.json),
           ),
+        )
+      },
+    }),
+    update: defineCommand({
+      meta: { name: 'update', description: 'update a task title / body' },
+      args: {
+        code: { type: 'positional', required: true, description: 'task code (T-N)' },
+        title: { type: 'string', description: 'new title' },
+        body: { type: 'string', description: 'new body (markdown)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
+        ...common,
+      },
+      run: async ({ args }) => {
+        const patch: TaskUpdate = {
+          ...(args.title !== undefined ? { title: args.title } : {}),
+          ...(args.body !== undefined ? { body: args.body } : {}),
+        }
+        if (Object.keys(patch).length === 0) throw new Error('pass --title and/or --body')
+        const c = clientFor(args)
+        const id = await resolveTaskByCode(c, resolveProjectId(args), args.code)
+        console.log(await updateTask(c, id, patch, Boolean(args.json)))
+      },
+    }),
+    link: defineCommand({
+      meta: { name: 'link', description: 'link a task to a GitHub issue url' },
+      args: {
+        code: { type: 'positional', required: true, description: 'task code (T-N)' },
+        // Named `issue` (not `url`) — `url` would collide with the common --url flag.
+        issue: { type: 'positional', required: true, description: 'GitHub issue url' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
+        ...common,
+      },
+      run: async ({ args }) => {
+        const c = clientFor(args)
+        const id = await resolveTaskByCode(c, resolveProjectId(args), args.code)
+        console.log(
+          await updateTask(c, id, { external: parseIssueUrl(args.issue) }, Boolean(args.json)),
         )
       },
     }),

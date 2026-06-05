@@ -1,5 +1,6 @@
 export * from './domain/attachment.ts'
 export * from './domain/derive.ts'
+export * from './domain/github.ts'
 export * from './domain/ids.ts'
 export * from './domain/project.ts'
 export * from './domain/requirement.ts'

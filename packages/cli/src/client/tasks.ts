@@ -1,4 +1,4 @@
-import type { Code, Id, Task, TaskComment, TaskStatus } from '@baton/shared'
+import type { Code, ExternalRef, Id, Task, TaskComment, TaskStatus } from '@baton/shared'
 import { fetchItemByCode } from './items.ts'
 import { request } from './request.ts'
 
@@ -7,13 +7,17 @@ export type TaskInput = {
   title: string
   body?: string
   dependsOn?: Id[]
+  external?: ExternalRef
 }
+
+export type TaskUpdate = Partial<{ title: string; body: string; external: ExternalRef }>
 
 export type TaskClient = {
   create(input: TaskInput): Promise<Task>
   listByRequirement(requirementId: Id): Promise<Task[]>
   get(id: Id): Promise<Task>
   getByCode(projectId: Id, code: Code): Promise<Task>
+  update(id: Id, patch: TaskUpdate): Promise<Task>
   setStatus(id: Id, status: TaskStatus): Promise<Task>
   remove(id: Id): Promise<void>
   listComments(id: Id): Promise<TaskComment[]>
@@ -28,6 +32,7 @@ export const taskClient = (baseUrl: string): TaskClient => {
       request(u(`/requirements/${requirementId}/tasks`), { method: 'GET' }),
     get: id => request(u(`/tasks/${id}`), { method: 'GET' }),
     getByCode: (projectId, code) => fetchItemByCode<Task>(baseUrl, projectId, code, 'task'),
+    update: (id, patch) => request(u(`/tasks/${id}`), { method: 'PATCH', body: patch }),
     setStatus: (id, status) => request(u(`/tasks/${id}`), { method: 'PATCH', body: { status } }),
     remove: id => request(u(`/tasks/${id}`), { method: 'DELETE' }),
     listComments: id => request(u(`/tasks/${id}/comments`), { method: 'GET' }),

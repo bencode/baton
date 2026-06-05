@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
-import { toTask } from '../mappers.ts'
+import { toExternalColumns, toTask } from '../mappers.ts'
 import type { Store } from '../types.ts'
 import { nextCode } from './codec.ts'
 
@@ -20,6 +20,7 @@ export const prismaTasks = (prisma: PrismaClient): Store['tasks'] => ({
           body: input.body,
           dependsOn: JSON.stringify(input.dependsOn ?? []),
           status: input.status ?? 'todo',
+          ...(input.external ? toExternalColumns(input.external) : {}),
         },
       })
       return toTask(t)
@@ -43,6 +44,7 @@ export const prismaTasks = (prisma: PrismaClient): Store['tasks'] => ({
           body: patch.body,
           dependsOn: patch.dependsOn ? JSON.stringify(patch.dependsOn) : undefined,
           status: patch.status,
+          ...(patch.external ? toExternalColumns(patch.external) : {}),
         },
       }),
     ),

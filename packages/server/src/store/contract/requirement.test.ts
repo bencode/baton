@@ -47,4 +47,26 @@ describe('Store contract — requirements', () => {
     const updated = await ctx.store.requirements.update(r.id, { status: 'done' })
     assert.equal(updated.status, 'done')
   })
+
+  test('external ref: round-trips, relinks, and rejects a duplicate link', async () => {
+    const w = await ctx.store.workspaces.create({ name: 'w' })
+    const p = await ctx.store.projects.create({ workspaceId: w.id, name: 'p' })
+    const ext = { source: 'github' as const, number: 42, url: 'https://github.com/o/r/issues/42' }
+    const r = await ctx.store.requirements.create({ projectId: p.id, title: 'x', external: ext })
+    assert.deepEqual((await ctx.store.requirements.get(r.id))?.external, ext)
+    // relink (overwrite) is allowed; a patch without external leaves it untouched
+    const relinked = await ctx.store.requirements.update(r.id, {
+      external: { ...ext, number: 43, url: 'https://github.com/o/r/issues/43' },
+    })
+    assert.equal(relinked.external?.number, 43)
+    assert.equal((await ctx.store.requirements.update(r.id, { title: 'y' })).external?.number, 43)
+    // one issue maps to at most one requirement per project (unique constraint)
+    await assert.rejects(
+      ctx.store.requirements.create({
+        projectId: p.id,
+        title: 'dup',
+        external: { ...ext, number: 43 },
+      }),
+    )
+  })
 })
