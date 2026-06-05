@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
 import { workspacePath } from '../../app/route'
+import { PencilIcon } from '../../components/icons'
 import { InlineRename } from '../../components/inline-rename'
 import { bumpLists } from '../../hooks/use-list-revision'
 import { useWorkspaces } from './use-workspaces'
@@ -56,9 +57,9 @@ export const WorkspaceSwitcher = ({ activeWorkspaceId }: WorkspaceSwitcherProps)
           title="rename workspace"
           aria-label="rename workspace"
           onClick={() => setEditing(true)}
-          className="text-xs text-gray-400 transition-colors hover:text-gray-700"
+          className="text-gray-400 transition-colors hover:text-gray-700"
         >
-          ✎
+          <PencilIcon />
         </button>
       )}
     </span>
