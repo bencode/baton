@@ -45,15 +45,24 @@ Division of labor — don't cross it:
 | `baton:requirement` | publishing a Requirement | this issue mirrors a baton Requirement |
 | `baton:task` | publishing a Task | mirrors a baton Task — **sync skips it** (must not double-mirror as a Requirement) |
 | `baton:blocked` | a linked item goes blocked | the baton side is waiting on a human; removed on resume |
+| `baton:needs-verification` | `item.mjs close` succeeds | machine verify passed, closed, awaiting the creator's in-person acceptance |
 
 Unlabeled issues still mirror as Requirements by default (zero-setup repos keep working).
 Create labels lazily and idempotently the first time one is needed:
 
 ```bash
-gh label create "baton:requirement" --color 5319e7 2>/dev/null || true
-gh label create "baton:task"        --color 5319e7 2>/dev/null || true
-gh label create "baton:blocked"     --color d93f0b 2>/dev/null || true
+gh label create "baton:requirement"        --color 5319e7 2>/dev/null || true
+gh label create "baton:task"               --color 5319e7 2>/dev/null || true
+gh label create "baton:blocked"            --color d93f0b 2>/dev/null || true
+gh label create "baton:needs-verification" --color 1d76db 2>/dev/null || true
 ```
+
+### Acceptance (two stages: machine verify, then a human)
+
+`item.mjs close` (baton skill) closes the issue only after the Verification block
+passes, then labels it `baton:needs-verification` and cc's the creator. The creator:
+- satisfied → `gh issue edit <n> --remove-label baton:needs-verification` (accepted, fully done)
+- not satisfied → `gh issue reopen <n>` + a comment why — sync pulls the row back to active
 
 ## Flows
 
@@ -88,27 +97,31 @@ gh label create "baton:blocked"     --color d93f0b 2>/dev/null || true
   (-> (baton requirement get R-N --json)          ; :external :number → n
       (gh issue view n --comments)                ; live-read body + discussion, never copy
       (implement :per baton-skill pick-up flow)
-      (gh issue comment n --body conclusion)      ; progress/conclusion goes back to the issue
-      (when human-confirmed-done
-        (gh issue close n --comment "...")        ; closing requires a conclusion comment
-        (sync))))                                 ; baton catches up through the one sync path — never hand-set status on linked rows
+      (gh issue comment n --body progress)        ; progress goes back to the issue
+      (when done
+        (item.mjs close R-N)                      ; the gate: lint → verify → close + needs-verification + cc
+        (sync))))                                 ; baton catches up through the one sync path
 
 (defn publish [R-N]                               ; reverse direction, ONLY on explicit request
   (-> (ensure-labels)                             ; lazy idempotent label init (see Labels)
       (gh issue create --title (:title r) --body (:body r) --label "baton:requirement")
-      (baton requirement link R-N issue-url)))
+      (baton requirement link R-N issue-url)
+      (item.mjs lint R-N)))                       ; published body must be spec-compliant
 
 (defn publish-task [T-N]                          ; task wants GitHub visibility (help, hand-off)
   (-> (ensure-labels)
       (gh issue create --title (:title t) --body (:body t) --label "baton:task")
-      (baton task link T-N issue-url)))           ; baton:task keeps sync from re-mirroring it as an R
+      (baton task link T-N issue-url)             ; baton:task keeps sync from re-mirroring it as an R
+      (item.mjs lint T-N)))
 
-(defn create-work-item [title body]               ; UNIFIED CREATE — agents never pick a side themselves
-  (if (and (git remote get-url origin :is-github?)
+(defn create-work-item [title spec-body]          ; UNIFIED CREATE — agents never pick a side themselves
+  (if (and (git remote get-url origin :is-github?) ; body = Goal/Verification/Refs (baton skill spec)
            (gh auth status :ok?))
     (-> (gh issue create --title title --body-file f --label "baton:requirement")
-        (baton requirement create title --github url --body url)) ; both sides, linked, one step
-    (baton requirement create title --body body))) ; no GitHub in play → local-only
+        (baton requirement create title --github url --body url) ; both sides, linked, one step
+        (item.mjs lint issue-url))                ; born valid or fixed on the spot
+    (-> (baton requirement create title --body spec-body) ; no GitHub in play → local-only
+        (item.mjs lint R-N))))
 
 (defn block-mirror [T-N question human?]          ; linked item went blocked (see baton skill `stuck`)
   (-> (gh issue comment n --body question)        ; the ask, with full context, on the issue

@@ -35,6 +35,46 @@ Project ─► Requirement (R-N)   status: active → done | cancelled   (produc
                      └─► Comment (append-only; text + git references, never file contents)
 ```
 
+## Work-item spec (every R / T / issue body)
+
+Every work item entering the loop carries three sections — the Verification
+block is the **formal definition of done** (a sensor, not prose). Status can't
+turn without it: agents never self-report completion.
+
+```markdown
+## Goal
+
+Quantified outcome — "after this, the system has state X". Not "improve X".
+
+## Verification
+
+​```bash
+test -f src/lib/validate.ts
+pnpm test src/lib/validate.test.ts --silent
+​```
+
+## Refs
+
+- doc: docs/xxx.md / file paths / #N / R-N
+```
+
+Rules: the ```bash block sits **immediately after** the `## Verification`
+heading (blank lines only — strict position keeps extraction deterministic);
+exactly one block; executable, repeatable commands only — never `# manual: ...`.
+
+The sensor tool (bundled with this skill; ref = `#N` / issue url / `R-N` / `T-N`,
+linked rows follow their issue link for the body):
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/item.mjs" lint   <ref>  # structure gate
+node "${CLAUDE_SKILL_DIR}/scripts/item.mjs" verify <ref>  # run the bash block ("is it done?")
+node "${CLAUDE_SKILL_DIR}/scripts/item.mjs" close  <ref>  # lint → verify → close/done + report
+```
+
+`close` is the ONLY exit to done: issues get closed (completed) with the verify
+output + `baton:needs-verification` + cc to the creator; local rows get a result
+comment + `set-status done`. Any failing step refuses the close.
+
 ## Command surface
 
 | command | purpose |
@@ -52,20 +92,24 @@ Project ─► Requirement (R-N)   status: active → done | cancelled   (produc
 
 ```clojure
 (defn pick-up [T-N]
-  (-> (baton task get T-N --json)              ; title/body = the short brief
+  (-> (item.mjs lint T-N)                      ; gate first: malformed brief → stuck/clarify, never guess
+      (baton task get T-N --json)              ; title/body = the spec (Goal/Verification/Refs)
       (baton task comment ls T-N --json)       ; cold-start memory: read what predecessors/you left behind
       (baton requirement get R-N --json)       ; background + resources
       (read-real-spec :from worktree :via resources) ; references point into git → read the files
       (baton task set-status T-N in_progress)
       (implement)                              ; write code / change files / commit on the current worktree branch
-      (baton task comment add T-N result --worker id) ; conclusion + file/commit/branch references
-      (baton task set-status T-N (if success done failed))))
+      (if success
+        (item.mjs close T-N)                   ; the only exit to done: lint → verify → close + report
+        (do (baton task comment add T-N why --worker id)
+            (baton task set-status T-N failed)))))
 
 (defn plan-and-decompose [requirement]
-  (-> (baton requirement create title --desc one-liner --body detailed-md)
+  (-> (baton requirement create title --desc one-liner --body spec-md) ; body = Goal/Verification/Refs
       (doseq [t subtasks]                      ; granularity: "one session can finish it in one sitting"
         (baton task create (:title t) --requirement R-N
-               --body (:spec t) --deps (:deps t)))
+               --body (:spec t) --deps (:deps t))) ; each task body is spec-compliant too
+      (doseq [t created] (item.mjs lint t))    ; re-check what you just wrote
       (reply "R-N split into T-x..T-y, dependencies ...")))
 
 (defn report-progress [T-N]                    ; mid-flight on long tasks, or when asked "how is it going"
@@ -85,6 +129,9 @@ Project ─► Requirement (R-N)   status: active → done | cancelled   (produc
 
 ## Discipline
 
+- **Never hand-set done — `item.mjs close` is the only exit**: it lints, runs the Verification
+  block, and only a passing run closes/completes the item. Self-reported "done" is the failure
+  mode this whole spec exists to prevent. (`failed` stays manual: comment why + set-status.)
 - **A result comment must precede done/failed**: what was done, which branch/commit, how it was verified.
 - **No bare blocked**: the comment must say what's stuck, who is needed, and what answer unblocks it — `blocked` without that is just silence with a different color.
 - Comments carry conclusions + references (file paths, commits, T-N), not big spec or diff dumps.
