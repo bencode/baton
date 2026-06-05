@@ -32,6 +32,16 @@ export const Markdown = ({ text }: { text: string }) => (
       'prose-code:before:hidden prose-code:after:hidden',
     ].join(' ')}
   >
-    <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        // Open links in a new tab (the transcript is the app; don't navigate away).
+        a: ({ node: _node, ...props }) => (
+          <a {...props} target="_blank" rel="noopener noreferrer" />
+        ),
+      }}
+    >
+      {text}
+    </ReactMarkdown>
   </div>
 )
