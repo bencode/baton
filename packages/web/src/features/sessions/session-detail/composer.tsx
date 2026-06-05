@@ -73,7 +73,7 @@ export const Composer = ({
     })
   }
   return (
-    <div className="shrink-0 border-t border-gray-200 bg-white p-3">
+    <div className="shrink-0 border-t border-gray-200 bg-white p-2 sm:p-3">
       {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone is the whole card */}
       <div
         onDragOver={e => {
@@ -86,7 +86,7 @@ export const Composer = ({
           setDragging(false)
           onAddFiles(Array.from(e.dataTransfer.files))
         }}
-        className={`mx-auto max-w-5xl rounded-xl border px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'} ${active ? 'bg-white' : 'bg-gray-50'}`}
+        className={`mx-auto min-w-0 max-w-5xl rounded-xl border px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'} ${active ? 'bg-white' : 'bg-gray-50'}`}
       >
         {attachments.length > 0 && (
           <AttachmentStrip
@@ -126,7 +126,9 @@ export const Composer = ({
           placeholder={
             active ? '发消息…  Enter 发送 · Shift+Enter 换行' : 'session inactive — resume to send'
           }
-          className="max-h-48 min-h-[3.25rem] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 text-sm text-gray-800 focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
+          // text-base on phones keeps iOS Safari from auto-zooming on focus (it
+          // zooms any input < 16px); sm: restores the desktop 14px density.
+          className="max-h-48 min-h-[3.25rem] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 text-base text-gray-800 focus:outline-none focus:ring-0 disabled:cursor-not-allowed sm:text-sm"
         />
         <div className="mt-1.5 flex items-center">
           <button

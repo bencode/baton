@@ -91,19 +91,25 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
   const [open, setOpen] = useState(false)
   return (
     <div className="shrink-0 border-b border-gray-200 bg-white px-6 py-3">
-      <div className="flex items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <SessionName name={session.name} onRename={onRename} />
-        <span aria-hidden className="text-gray-300">
+        {/* Diagnostics (agent kind + session id) duplicate the ⓘ panel below, so
+            hide them on phones to keep the row from overflowing. */}
+        <span aria-hidden className="hidden text-gray-300 sm:inline">
           ·
         </span>
-        <span className="font-mono text-xs text-gray-500">{session.agentKind}</span>
-        <span aria-hidden className="text-gray-300">
+        <span className="hidden font-mono text-xs text-gray-500 sm:inline">
+          {session.agentKind}
+        </span>
+        <span aria-hidden className="hidden text-gray-300 sm:inline">
           ·
         </span>
-        <span className="font-mono text-xs text-gray-500">
+        <span className="hidden font-mono text-xs text-gray-500 sm:inline">
           {session.agentSessionId ? truncateUuid(session.agentSessionId) : 'materializing…'}
         </span>
-        <CopyButton text={session.agentSessionId ?? ''} />
+        <span className="hidden sm:inline-flex">
+          <CopyButton text={session.agentSessionId ?? ''} />
+        </span>
         <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
           <span
             className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-gray-300'}`}

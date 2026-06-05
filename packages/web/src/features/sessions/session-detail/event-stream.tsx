@@ -12,11 +12,11 @@ type EventStreamProps = {
 }
 
 export const EventStream = ({ items, scrollRef, working = false }: EventStreamProps) => (
-  <div ref={scrollRef} className="flex-1 overflow-auto bg-white px-6 py-4">
+  <div ref={scrollRef} className="flex-1 overflow-auto bg-white px-3 py-4 sm:px-6">
     {items.length === 0 ? (
       <p className="text-sm text-gray-400">no events yet — say something below.</p>
     ) : (
-      <div className="mx-auto flex max-w-5xl flex-col gap-3">
+      <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-3">
         {groupRenderItems(items, working).map(item =>
           item.kind === 'activity-group' ? (
             <ActivityGroupView key={item.key} group={item} />

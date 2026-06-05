@@ -32,8 +32,10 @@ export const SessionPage = () => {
   return (
     <div className="flex h-screen flex-col bg-white text-gray-900">
       <div className="flex shrink-0 items-center gap-2 border-b border-gray-200 px-4 py-2">
-        <span className="inline-block h-2 w-2 rotate-45 bg-emerald-500" aria-hidden />
-        <span className="font-mono text-[13px] font-semibold tracking-tight">{title}</span>
+        <span className="inline-block h-2 w-2 shrink-0 rotate-45 bg-emerald-500" aria-hidden />
+        <span className="min-w-0 truncate font-mono text-[13px] font-semibold tracking-tight">
+          {title}
+        </span>
       </div>
       <div className="min-h-0 flex-1">
         <SessionDetail sessionId={data.session.id} />

@@ -44,10 +44,10 @@ export const ActivityGroupView = ({ group }: { group: ActivityGroup }) => {
         {group.live && <span className="text-blue-500">running…</span>}
       </button>
       {open && (
-        <div className="relative flex flex-col gap-0.5 pl-4">
+        <div className="relative flex min-w-0 flex-col gap-0.5 pl-4">
           <div aria-hidden="true" className="absolute top-2 bottom-2 left-[3px] w-px bg-gray-100" />
           {group.items.map(item => (
-            <div key={item.key} className="animate-rise relative">
+            <div key={item.key} className="animate-rise relative min-w-0">
               <span
                 aria-hidden="true"
                 className="absolute top-[7px] -left-4 flex h-2 w-2 items-center justify-center"

@@ -69,7 +69,7 @@ const inputText = (name: string, input: unknown): string =>
     : JSON.stringify(input, null, 2)
 
 const ToolBlockBody = ({ name, input, resultText, isError }: ToolBlockProps) => (
-  <div className="ml-4 flex flex-col gap-1">
+  <div className="ml-4 flex min-w-0 flex-col gap-1">
     <SectionLabel>input</SectionLabel>
     <pre className="overflow-x-auto rounded border border-gray-100 bg-gray-50 p-2 font-mono text-xs whitespace-pre-wrap break-words text-gray-700">
       {inputText(name, input)}
