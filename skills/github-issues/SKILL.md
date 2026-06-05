@@ -102,6 +102,8 @@ are about to start working on it.
 - Creating an issue is outward-facing: confirm title/body wording with the human first.
 - If the repo has its own issue conventions (lifecycle labels, automation bots, required
   body sections), follow them — this skill defines defaults, not overrides.
+- Labels in the `baton:*` namespace belong to the github-sync bridge (mirror markers,
+  blocked signal); don't add or remove them from here.
 - Issues linked to baton R/T: title/status flow through the github-sync skill's sync pass;
   don't hand-edit the baton side.
 

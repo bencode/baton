@@ -29,7 +29,9 @@ real file in the worktree instead of waiting for someone to paste the full text.
 Project ─► Requirement (R-N)   status: active → done | cancelled   (product dimension; humans advance it)
               ├─ resources: [{kind: doc|link|file, uri, label}]    (references into git — go read the repo)
               └─► Task (T-N)   status: todo → in_progress → done | failed | cancelled
-                     ├─ dependsOn: prerequisite tasks (unfinished dep = blocked; do ready ones first)
+                     │                          ▲    │
+                     │                          └────┘ blocked (waiting on a human; answer → back to in_progress)
+                     ├─ dependsOn: prerequisite tasks (unmet dep = derived dep-blocked; do ready ones first)
                      └─► Comment (append-only; text + git references, never file contents)
 ```
 
@@ -42,7 +44,7 @@ Project ─► Requirement (R-N)   status: active → done | cancelled   (produc
 | `baton requirement set-status R-N <active\|done\|cancelled>` | advance requirement status |
 | `baton task create <title> --requirement R-N [--body MD] [--deps T-a,T-b]` | create a task, returns T-N |
 | `baton task ls --requirement R-N` / `get T-N` / `rm T-N` | list / detail / delete |
-| `baton task set-status T-N <todo\|in_progress\|done\|failed\|cancelled>` | advance task status |
+| `baton task set-status T-N <todo\|in_progress\|blocked\|done\|failed\|cancelled>` | advance task status |
 | `baton task comment add T-N <body> --worker <id>` | report (append-only; sign it) |
 | `baton task comment ls T-N` | read the collaboration log in order |
 
@@ -68,11 +70,23 @@ Project ─► Requirement (R-N)   status: active → done | cancelled   (produc
 
 (defn report-progress [T-N]                    ; mid-flight on long tasks, or when asked "how is it going"
   (baton task comment add T-N "done so far… / stuck on… / next…" --worker id))
+
+(defn stuck [T-N]                              ; need a human: a decision, a credential, missing context
+  (-> (baton task comment add T-N "blocked: <what's stuck> / need <who> to <answer what> / tried <...>" --worker id)
+      (baton task set-status T-N blocked)
+      (when (linked? T-N or its R-N)           ; GitHub-linked → mirror the ask (github-sync skill)
+        (github-sync block-mirror))))          ; issue comment + baton:blocked label + optional assignee
+
+(defn resume [T-N]                             ; the human answered (baton comment or issue reply)
+  (-> (baton task set-status T-N in_progress)
+      (when linked (github-sync unblock-mirror)) ; remove baton:blocked
+      (continue)))
 ```
 
 ## Discipline
 
 - **A result comment must precede done/failed**: what was done, which branch/commit, how it was verified.
+- **No bare blocked**: the comment must say what's stuck, who is needed, and what answer unblocks it — `blocked` without that is just silence with a different color.
 - Comments carry conclusions + references (file paths, commits, T-N), not big spec or diff dumps.
 - Failures go through `failed` + a comment explaining why — no silence, no pretending it worked.
 - Don't reach for `rm` commands unless a human explicitly asks for deletion.

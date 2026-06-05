@@ -166,7 +166,7 @@ export const task = defineCommand({
     'set-status': defineCommand({
       meta: {
         name: 'set-status',
-        description: 'set task status (todo|in_progress|done|failed|cancelled)',
+        description: 'set task status (todo|in_progress|blocked|done|failed|cancelled)',
       },
       args: {
         code: { type: 'positional', required: true, description: 'task code (T-N)' },

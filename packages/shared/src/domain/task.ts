@@ -1,8 +1,10 @@
 import type { ExternalRef } from './github.ts'
 import type { Code, Id } from './ids.ts'
 
-// Execution dimension, aligned with Helm's flat board; blocked/ready are derived, not stored.
-export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'failed' | 'cancelled'
+// Execution dimension. `blocked` is stored and means "waiting on a human"
+// (question asked, answer pending) — distinct from the *derived* dep-blocked
+// (dependsOn not met), which is computed and never stored. `ready` stays derived.
+export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'failed' | 'cancelled'
 
 // Execution unit, always belongs to a Requirement. Tasks form a DAG via dependsOn.
 // `projectId` is denormalized (also available via requirement) so the DB can enforce
