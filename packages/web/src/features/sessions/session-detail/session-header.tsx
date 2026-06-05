@@ -102,7 +102,7 @@ const ShareButton = ({ shareToken }: { shareToken: string }) => {
     <button
       type="button"
       onClick={onShare}
-      className="rounded border border-gray-200 px-1.5 text-xs text-gray-500 transition-colors hover:border-blue-300 hover:text-blue-600"
+      className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
     >
       {copied ? 'copied ✓' : 'share'}
     </button>
@@ -138,12 +138,11 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
           />
           {active ? 'active' : 'inactive'}
         </span>
-        {session.shareToken && <ShareButton shareToken={session.shareToken} />}
         {active && (
           <button
             type="button"
             onClick={onStop}
-            className="rounded border border-gray-200 px-1.5 text-xs text-gray-500 transition-colors hover:border-amber-300 hover:text-amber-600"
+            className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-700"
           >
             stop
           </button>
@@ -152,11 +151,12 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
           <button
             type="button"
             onClick={onResume}
-            className="rounded border border-emerald-300 px-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+            className="rounded-md border border-emerald-400 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
           >
             resume
           </button>
         )}
+        {session.shareToken && <ShareButton shareToken={session.shareToken} />}
         <button
           type="button"
           onClick={() => setOpen(o => !o)}
