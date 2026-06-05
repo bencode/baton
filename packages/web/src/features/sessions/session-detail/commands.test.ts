@@ -5,7 +5,10 @@ describe('parseSlash', () => {
   test('splits name + args, lowercases name; null for non-slash', () => {
     expect(parseSlash('/clear')).toEqual({ name: 'clear', args: '' })
     expect(parseSlash('/CLEAR')).toEqual({ name: 'clear', args: '' })
-    expect(parseSlash('/plan refactor the auth')).toEqual({ name: 'plan', args: 'refactor the auth' })
+    expect(parseSlash('/plan refactor the auth')).toEqual({
+      name: 'plan',
+      args: 'refactor the auth',
+    })
     expect(parseSlash('/clear  extra')).toEqual({ name: 'clear', args: 'extra' })
     expect(parseSlash('hello')).toBeNull()
     expect(parseSlash('see /clear later')).toBeNull()
