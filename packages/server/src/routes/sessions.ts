@@ -296,6 +296,9 @@ export const registerSessionRoutes = (
       ...(body.planMode === true ? { planMode: true } : {}),
     }
     const ev = await store.sessions.appendEvent(sessionId, 'user_message', payload)
+    // Mark the session as just-active (drives the rail's "last active" time).
+    await store.sessions.touch(sessionId).catch(() => {})
+    bump(session.projectId)
     bus.publish(sessionId, ev)
     return c.json(ev, 201)
   })

@@ -34,6 +34,9 @@ export type Session = {
   shareToken: string | null
   createdAt: number
   updatedAt: number
+  // Last time someone sent this session a message — the honest "last active"
+  // for the rail (updatedAt only bumps on row writes: rename/materialize).
+  lastActiveAt: number
 }
 
 // Server read endpoints return record + runtime view. The worker object is

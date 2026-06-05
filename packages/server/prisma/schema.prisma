@@ -170,6 +170,10 @@ model Session {
   shareToken     String? // unguessable key for the standalone /s/:token page; null on legacy rows (32-byte random ⇒ effectively unique)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  // Last time someone sent this session a message (touched on each user_message).
+  // updatedAt only bumps on row writes (rename/materialize) and can't be set
+  // manually (@updatedAt); this is the honest "last active" for the rail.
+  lastActiveAt   DateTime  @default(now())
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)

@@ -123,6 +123,7 @@ export const toSession = (r: DbSession): Session => ({
   shareToken: r.shareToken,
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),
+  lastActiveAt: r.lastActiveAt.getTime(),
 })
 
 export const toSessionEvent = (r: DbSessionEvent): SessionEvent => ({

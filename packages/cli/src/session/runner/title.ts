@@ -20,11 +20,14 @@ const isDeclined = (title: string): boolean =>
 export const sanitizeTitle = (raw: string): string =>
   raw
     .replace(/[\r\n]+/g, ' ')
-    .replace(/["'`]/g, '')
-    .replace(/^\s*(title|session)\s*[:-]\s*/i, '')
+    .replace(/[*_`~#>]/g, '') // markdown emphasis / heading / quote / code marks
+    .replace(/["']/g, '')
+    .replace(/^\s*(?:title|session|标题)\s*[:：-]\s*/i, '') // label prefix
+    .replace(/^\s*(?:[-*•]|\d+[.)、])\s+/, '') // leading list marker
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 40)
+    .slice(0, 30)
+    .replace(/[\s。．，,、；;：:!！?？.]+$/, '') // trailing punctuation
     .trim()
 
 const TITLE_TIMEOUT_MS = 30_000
@@ -48,7 +51,7 @@ export const generateTitle = async (input: {
   ]
     .filter(Boolean)
     .join('\n')
-  const prompt = `Reply with ONLY a 2-5 word title (no quotes, no punctuation) summarizing this coding session. If it is too short or generic to title meaningfully, reply with exactly NONE:\n${exchange}`
+  const prompt = `Reply with ONLY a short title for this session: a noun phrase like a filename — at most 6 words or ~12 Chinese characters. It must NOT be a sentence, no punctuation, no markdown, no quotes, and never an opener like "好的"/"收到"/"I'll". If it is too thin or generic to title meaningfully, reply with exactly NONE.\n\n${exchange}`
   const exe = claudeExecutable()
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), TITLE_TIMEOUT_MS)
@@ -58,6 +61,9 @@ export const generateTitle = async (input: {
       prompt,
       options: {
         cwd: worktreePath,
+        // Don't load the worktree's CLAUDE.md / project settings — they steer the
+        // model into verbose summaries instead of a terse title.
+        settingSources: [],
         permissionMode: 'bypassPermissions',
         allowedTools: [],
         includePartialMessages: false,

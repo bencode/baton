@@ -2,6 +2,7 @@ import type { Id, SessionView, WorkerView } from '@baton/shared'
 import { useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { sessionPath } from '../../app/route'
+import { relativeTime } from '../sessions/relative-time'
 import { useSessions } from '../sessions/use-sessions'
 import { useWorkers } from './use-workers'
 
@@ -186,6 +187,9 @@ const SessionRow = ({ session, path, active, dim, open, onDelete }: SessionRowPr
       >
         <SessionDot session={session} />
         <span className="truncate">{session.name}</span>
+        <span className="ml-auto shrink-0 pr-1 text-[10px] text-gray-400 tabular-nums">
+          {relativeTime(session.lastActiveAt)}
+        </span>
       </button>
       {confirming ? (
         <span className="flex shrink-0 items-center gap-1.5 px-1.5 text-xs">

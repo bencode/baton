@@ -15,7 +15,14 @@ describe('sanitizeTitle', () => {
   test('strips quotes / leading label / newlines, collapses + caps', () => {
     assert.equal(sanitizeTitle('Title: "Fix the curl health check"\n'), 'Fix the curl health check')
     assert.equal(sanitizeTitle('  hello   world  '), 'hello world')
-    assert.equal(sanitizeTitle('x'.repeat(60)).length, 40)
+    assert.equal(sanitizeTitle('x'.repeat(60)).length, 30)
+  })
+
+  test('strips markdown, leading list markers, and trailing punctuation', () => {
+    assert.equal(sanitizeTitle('**问题描述确认**：'), '问题描述确认')
+    assert.equal(sanitizeTitle('## CardList 联动排查'), 'CardList 联动排查')
+    assert.equal(sanitizeTitle('- 发货反馈字段排查。'), '发货反馈字段排查')
+    assert.equal(sanitizeTitle('1. 移动端 RecordActions'), '移动端 RecordActions')
   })
 })
 

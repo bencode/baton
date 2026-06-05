@@ -144,6 +144,8 @@ export type Store = {
     rename(id: Id, name: string): Promise<Session>
     // Non-locking, guarded set (placeholder + auto-title). null when locked.
     autoTitle(id: Id, name: string): Promise<Session | null>
+    // Bump lastActiveAt to now — called on each inbound user message.
+    touch(id: Id): Promise<Session>
     get(id: Id): Promise<Session | null>
     getByShareToken(token: string): Promise<Session | null>
     listByProject(projectId: Id): Promise<Session[]>
