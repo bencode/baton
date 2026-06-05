@@ -46,7 +46,7 @@ export const useSlashCommands = (
         setIndex(i => (i - 1 + menu.length) % menu.length)
         return true
       }
-      if (e.key === 'Enter' || e.key === 'Tab') {
+      if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
         e.preventDefault()
         const cmd = menu[activeIndex]
         if (cmd) pick(cmd)
@@ -59,8 +59,8 @@ export const useSlashCommands = (
       }
     }
     // Plain Enter on a complete "/command …" line runs it; an unknown slash line
-    // falls through to a newline.
-    if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+    // falls through to a newline. Shift+Enter is always a newline, never a command.
+    if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
       const resolved = resolveCommand(draft)
       if (resolved) {
         e.preventDefault()

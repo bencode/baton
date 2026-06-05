@@ -35,7 +35,8 @@ type ComposerProps = {
 // toolbar (📎 left, circular send button right). Attachments arrive three ways —
 // the 📎 picker, drag-drop, and paste — all funnelling through onAddFiles, which
 // uploads immediately; the whole card is the drop zone. Send is available via the
-// button and ⌘/Ctrl-Enter, both gated on `canSend` (idle + has text/attachment).
+// button and Enter (Shift+Enter = newline), both gated on `canSend` (idle + has
+// text/attachment).
 export const Composer = ({
   draft,
   setDraft,
@@ -114,16 +115,16 @@ export const Composer = ({
           }}
           onKeyDown={e => {
             if (slash.onKeyDown(e)) return
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            // Enter sends; Shift+Enter is a newline (standard chat). ⌘/Ctrl-Enter
+            // also sends (no shift), so existing muscle memory still works.
+            if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               if (canSend) onSend()
             }
           }}
           disabled={!active}
           placeholder={
-            active
-              ? 'message… (⌘/Ctrl-Enter to send · 📎/drag/paste to attach)'
-              : 'session inactive — resume to send'
+            active ? '发消息…  Enter 发送 · Shift+Enter 换行' : 'session inactive — resume to send'
           }
           className="max-h-48 min-h-[3.25rem] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 text-sm text-gray-800 focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
         />
