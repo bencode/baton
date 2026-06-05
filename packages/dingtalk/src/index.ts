@@ -18,7 +18,7 @@ const log = (m: string): void => console.log(`[dingtalk] ${m}`)
 const TURN_TIMEOUT_MS = 10 * 60_000
 
 // Reply card: the agent's answer inline (so simple Q&A is readable without
-// clicking through), then a "查看详情 #N" link. The id (单号) tags the link so
+// clicking through), then a "查看详情 #N" link. The id (ticket number) tags the link so
 // different conversations' replies are distinguishable (the URL is an opaque
 // token). No answer (timeout / empty) → just the link.
 const MAX_REPLY = 3500

@@ -91,7 +91,7 @@ await store.tasks.create({
   status: 'done',
 })
 
-// Second project: baton 的对外门面（介绍站 / 文档库 / 路线图）。
+// Second project: baton's public-facing site (intro page / docs / roadmap).
 await store.projects.create({
   workspaceId: ws.id,
   name: 'compass',

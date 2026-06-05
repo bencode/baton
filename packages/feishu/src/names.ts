@@ -2,7 +2,7 @@ import type * as Lark from '@larksuiteoapi/node-sdk'
 
 // Feishu message events carry only the sender's open_id (no display name). Resolve
 // it to a name via the chat's member list — this reuses the `im` permission the
-// bot already has (no extra contact/通讯录 scope), the same way the old rooma bot
+// bot already has (no extra contacts-directory scope), the same way the old rooma bot
 // did it. Cached per chat with a short TTL; best-effort (falls back to the open_id
 // if the lookup is empty / unpermitted), so naming never blocks a reply.
 
