@@ -15,7 +15,7 @@ export type RequirementUpdate = Partial<{
   title: string
   description: string
   body: string
-  external: ExternalRef
+  external: ExternalRef | null // null clears the association (unlink)
 }>
 
 export type RequirementClient = {

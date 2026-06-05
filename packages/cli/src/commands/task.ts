@@ -124,6 +124,19 @@ export const task = defineCommand({
         )
       },
     }),
+    unlink: defineCommand({
+      meta: { name: 'unlink', description: 'clear a task’s GitHub issue association' },
+      args: {
+        code: { type: 'positional', required: true, description: 'task code (T-N)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
+        ...common,
+      },
+      run: async ({ args }) => {
+        const c = clientFor(args)
+        const id = await resolveTaskByCode(c, resolveProjectId(args), args.code)
+        console.log(await updateTask(c, id, { external: null }, Boolean(args.json)))
+      },
+    }),
     ls: defineCommand({
       meta: { name: 'ls', description: 'list tasks in a requirement' },
       args: {

@@ -32,7 +32,8 @@ export const registerTaskRoutes = (app: Hono<AppEnv>, store: Store, projects: Pr
     const id = intParam(c.req.param('id'))
     if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
     const patch = (await c.req.json()) as TaskPatch
-    if (patch.external !== undefined && !isExternalRef(patch.external))
+    // external: undefined = untouched, null = unlink, otherwise must validate
+    if (patch.external != null && !isExternalRef(patch.external))
       return c.json({ error: 'invalid external ref (need source=github + integer number)' }, 400)
     return c.json(await store.tasks.update(id, patch))
   })

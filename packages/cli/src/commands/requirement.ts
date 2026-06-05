@@ -115,6 +115,19 @@ export const requirement = defineCommand({
         )
       },
     }),
+    unlink: defineCommand({
+      meta: { name: 'unlink', description: 'clear a requirement’s GitHub issue association' },
+      args: {
+        code: { type: 'positional', required: true, description: 'requirement code (R-N)' },
+        project: { type: 'string', description: 'project id (overrides .baton.json)' },
+        ...common,
+      },
+      run: async ({ args }) => {
+        const c = clientFor(args)
+        const id = await resolveByCode(c, resolveProjectId(args), args.code)
+        console.log(await updateRequirement(c, id, { external: null }, Boolean(args.json)))
+      },
+    }),
     ls: defineCommand({
       meta: { name: 'ls', description: 'list requirements in a project' },
       args: {

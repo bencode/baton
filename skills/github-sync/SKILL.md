@@ -70,6 +70,7 @@ Division of labor — don't cross it:
 | `baton requirement create <title> --github <url> --body <url>` | create the minimal mirror |
 | `baton requirement update R-N --title <t>` | re-sync rename |
 | `baton requirement link R-N <url>` / `baton task link T-N <url>` | attach a link to an existing R/T |
+| `baton requirement unlink R-N` / `baton task unlink T-N` | clear a mistaken association |
 
 ## Discipline
 

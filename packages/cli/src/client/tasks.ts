@@ -10,7 +10,8 @@ export type TaskInput = {
   external?: ExternalRef
 }
 
-export type TaskUpdate = Partial<{ title: string; body: string; external: ExternalRef }>
+// external: null clears the association (unlink)
+export type TaskUpdate = Partial<{ title: string; body: string; external: ExternalRef | null }>
 
 export type TaskClient = {
   create(input: TaskInput): Promise<Task>

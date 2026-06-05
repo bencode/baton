@@ -50,6 +50,15 @@ export const toExternalColumns = (e: ExternalRef) => ({
   externalUrl: e.url ?? null,
 })
 
+// Patch semantics for the external association: undefined = leave unchanged,
+// null = clear (unlink), value = set/relink.
+export const externalColumnsPatch = (e: ExternalRef | null | undefined) =>
+  e === undefined
+    ? {}
+    : e === null
+      ? { externalSource: null, externalNumber: null, externalUrl: null }
+      : toExternalColumns(e)
+
 export const toWorkspace = (r: DbWorkspace): Workspace => ({
   id: r.id,
   name: r.name,

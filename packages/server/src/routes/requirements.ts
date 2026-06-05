@@ -47,7 +47,8 @@ export const registerRequirementRoutes = (app: Hono<AppEnv>, store: Store): void
     const id = intParam(c.req.param('id'))
     if (!(await store.requirements.get(id))) return c.json({ error: 'not found' }, 404)
     const patch = (await c.req.json()) as RequirementPatch
-    if (patch.external !== undefined && !isExternalRef(patch.external))
+    // external: undefined = untouched, null = unlink, otherwise must validate
+    if (patch.external != null && !isExternalRef(patch.external))
       return c.json({ error: 'invalid external ref (need source=github + integer number)' }, 400)
     return c.json(await store.requirements.update(id, patch))
   })

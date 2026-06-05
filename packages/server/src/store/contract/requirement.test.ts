@@ -69,4 +69,18 @@ describe('Store contract — requirements', () => {
       }),
     )
   })
+
+  test('external ref: unlink clears it; unlink when not linked is a no-op', async () => {
+    const w = await ctx.store.workspaces.create({ name: 'w' })
+    const p = await ctx.store.projects.create({ workspaceId: w.id, name: 'p' })
+    const ext = { source: 'github' as const, number: 7, url: 'https://github.com/o/r/issues/7' }
+    const r = await ctx.store.requirements.create({ projectId: p.id, title: 'x', external: ext })
+    const unlinked = await ctx.store.requirements.update(r.id, { external: null })
+    assert.equal(unlinked.external, undefined)
+    // idempotent on an unlinked row
+    assert.equal((await ctx.store.requirements.update(r.id, { external: null })).external, undefined)
+    // the slot is free again: another row can take the same issue
+    const again = await ctx.store.requirements.create({ projectId: p.id, title: 'y', external: ext })
+    assert.equal(again.external?.number, 7)
+  })
 })

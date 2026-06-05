@@ -45,7 +45,7 @@ export type RequirementPatch = Partial<{
   body: string
   resources: ResourceRef[]
   status: RequirementStatus
-  external: ExternalRef
+  external: ExternalRef | null // null clears the association (unlink)
 }>
 export type TaskCreate = {
   requirementId: Id
@@ -60,7 +60,7 @@ export type TaskPatch = Partial<{
   body: string
   dependsOn: Id[]
   status: TaskStatus
-  external: ExternalRef
+  external: ExternalRef | null // null clears the association (unlink)
 }>
 // Comments are append-only — created one at a time, never updated. No patch type.
 export type TaskCommentCreate = { taskId: Id; body: string; workerId?: Id }
