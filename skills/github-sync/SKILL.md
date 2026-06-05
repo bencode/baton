@@ -25,24 +25,41 @@ Division of labor — don't cross it:
 
 - **Never copy the body**: issue content lives on GitHub; read it live with `gh issue view <n> --comments`.
   The baton-side body holds a single line — the issue link.
-- **Never copy comments, never touch status**: the sync pass changes no status on either side;
-  Requirement status is advanced by humans (baton skill discipline).
-- **Update title only**: on re-sync, if the issue title changed, rename the baton side; touch nothing else.
+- **Never copy comments**: discussion stays on the issue.
+- **What DOES sync** (GitHub wins, pull direction only): title, status, url.
+  Status map — `open → active`, `closed/completed → done`, `closed/not_planned → cancelled`.
+  Linked tasks: closed maps the same way; open **keeps the local todo/in_progress granularity**
+  (an open issue can't distinguish them — never downgrade).
+- Consequence: for a linked row, advance status **on GitHub** (`gh issue close`), not in baton —
+  a baton-only `set-status done` on a still-open issue gets pulled back to `active` next sync.
 
 ## Flows
 
 ```clojure
 (defn sync []                                     ; "sync github issues"
-  (let [issues (gh issue list --state open --json number,title,url)
+  (let [issues (gh issue list --state all --limit 200   ; all: closed ones drive status sync
+                  --json number,title,url,state,stateReason)
         reqs   (baton requirement ls --json)]     ; external.number = reconciliation key
     (doseq [i issues]
       (if-let [r (find-by #(= (-> % :external :number) (:number i)) reqs)]
-        (when (not= (:title r) (:title i))        ; linked: title-only update
-          (baton requirement update (:code r) --title (:title i)))
-        (baton requirement create (:title i)      ; new issue: minimal mirror
-               --github (:url i)
-               --body   (:url i))))               ; body holds the link, nothing else
-    (report "created R-x..R-y / renamed n / drift reminders (below)")))
+        (do
+          (when (not= (:title r) (:title i))      ; linked: follow title
+            (baton requirement update (:code r) --title (:title i)))
+          (when (not= (:status r) (status<-issue i)) ; ... and status (GitHub wins)
+            (baton requirement set-status (:code r) (status<-issue i)))
+          (when (not= (-> r :external :url) (:url i)) ; ... and url (repo rename/transfer)
+            (baton requirement link (:code r) (:url i))))
+        (when (= (:state i) "OPEN")               ; new issue: minimal mirror (skip dead ones)
+          (baton requirement create (:title i)
+                 --github (:url i)
+                 --body   (:url i)))))            ; body holds the link, nothing else
+    (doseq [r (filter :external reqs)]            ; orphan check: linked row, issue gone
+      (when (not (find-by #(= (:number %) (-> r :external :number)) issues))
+        (remind-human "R-N links issue #n which no longer exists (deleted/transferred) — unlink or relink?")))
+    (report "created R-x..R-y / title n / status m / orphans (above)")))
+
+(def status<-issue                                ; GitHub state → Requirement status
+  {"OPEN" "active", ["CLOSED" "COMPLETED"] "done", ["CLOSED" "NOT_PLANNED"] "cancelled"})
 
 (defn work-on [R-N]                               ; picked up a requirement that has external
   (-> (baton requirement get R-N --json)          ; :external :number → n
@@ -51,19 +68,18 @@ Division of labor — don't cross it:
       (gh issue comment n --body conclusion)      ; progress/conclusion goes back to the issue
       (when human-confirmed-done
         (gh issue close n --comment "...")        ; closing requires a conclusion comment
-        (baton requirement set-status R-N done))))
+        (sync))))                                 ; baton catches up through the one sync path — never hand-set status on linked rows
 
-(defn drift-check []                              ; do this during sync, in passing
-  (doseq [r (filter :external reqs)]
-    (when (and (issue-closed? r) (= (:status r) "active"))
-      (remind-human "issue #n is closed but R-N is still active — advance it?")))) ; never change it yourself
+(defn publish [R-N]                               ; reverse direction, ONLY on explicit request
+  (-> (gh issue create --title (:title r) --body (:body r)) ; "send R-N to GitHub"
+      (baton requirement link R-N issue-url)))
 ```
 
 ## Command surface (everything this skill uses)
 
 | command | purpose |
 |---|---|
-| `gh issue list --state open --json number,title,url` | pull the issue list |
+| `gh issue list --state all --limit 200 --json number,title,url,state,stateReason` | pull the issue list (all states; default limit is 30 — always raise it) |
 | `gh issue view <n> --comments` | live-read body + discussion (mandatory before working) |
 | `gh issue comment <n> --body "..."` | progress / conclusions back to the issue |
 | `gh issue close <n> --comment "..."` | close when done (conclusion comment first) |
@@ -76,7 +92,10 @@ Division of labor — don't cross it:
 
 - The reconciliation key is `external.number`; never guess associations by title.
 - One issue maps to at most one Requirement (a DB unique constraint backstops this; hitting it means the logic is wrong).
+- For linked rows, status lives on GitHub: advance it with `gh issue close` / `reopen`, then run `sync` — **never `baton set-status` a linked row by hand** (one write path, no dual-write drift). Same for titles — edit on GitHub.
 - Tasks decompose freely on the baton side, no forced GitHub counterpart; when one is wanted (e.g. a sub-issue), use `baton task link`.
+- baton → GitHub creation is **explicit only** ("send R-N to GitHub"); sync never auto-publishes local rows.
 - A close needs its conclusion comment first (what was done, which branch/commit); never close someone else's issue on your own.
+- An orphaned link (issue deleted/transferred) is reported, never auto-deleted; the human picks `unlink` or `link <new-url>`.
 - Sync is idempotent: running twice yields the same result; when unsure, run it again instead of patching by hand.
 - When showing issues to a human, lead with the clickable URL (`#N title` + link); don't dump bodies into the terminal — expand only when asked to analyze.
