@@ -12,17 +12,35 @@ export const common = {
   json: { type: 'boolean' as const, description: 'output JSON' },
 }
 
-// Auth precedence: explicit env (BATON_TOKEN / BATON_USER+PASS, handled inside
-// createClient) wins; otherwise fall back to the worker apiToken from the cwd
-// .baton.json — the file a worker drops into every session worktree precisely
-// so bare `baton` calls work there, including against an auth-enabled server
-// (the cookie gate accepts a worker token as Bearer).
+// Auth precedence: explicit env wins, then the cwd .baton.json worker token.
+// - BATON_TOKEN: a user-supplied bearer (handled inside createClient).
+// - BATON_WORKER_TOKEN: injected by the worker daemon into every session child
+//   (daemon.ts), so an agent's bare `baton` calls authenticate as the worker
+//   from ANY cwd — not only the worktree root that happens to hold .baton.json.
+//   Without this the agent 401s the moment it runs `baton` elsewhere (or in an
+//   older session whose worktree predates the .baton.json drop).
+// - .baton.json worker.apiToken: the file the worker drops into each worktree so
+//   bare `baton` calls work there even when no token env is set.
+// All three authenticate against an auth-enabled server (the cookie gate accepts
+// a worker token as Bearer).
+// Pure resolution of the auth bearer, in precedence order. 'cookie' means defer
+// to createClient's BATON_USER/PASS login; undefined means no auth at all.
+type AuthChoice = { bearer: string } | 'cookie' | undefined
+export const resolveAuth = (
+  env: NodeJS.ProcessEnv,
+  fileToken: string | undefined,
+): AuthChoice => {
+  const envBearer = env.BATON_TOKEN ?? env.BATON_WORKER_TOKEN
+  if (envBearer) return { bearer: envBearer }
+  if (env.BATON_USER && env.BATON_PASS) return 'cookie'
+  return fileToken ? { bearer: fileToken } : undefined
+}
+
 export const clientFor = (args: { url?: string }): ApiClient => {
-  const envAuth = process.env.BATON_TOKEN ?? (process.env.BATON_USER && process.env.BATON_PASS)
-  const cfgToken = envAuth
-    ? undefined
-    : loadProjectConfigOrNull(projectConfigPath())?.worker?.apiToken
-  return createClient(resolveBaseUrl(args.url), cfgToken ? { bearer: cfgToken } : undefined)
+  const baseUrl = resolveBaseUrl(args.url)
+  const fileToken = loadProjectConfigOrNull(projectConfigPath())?.worker?.apiToken
+  const auth = resolveAuth(process.env, fileToken)
+  return createClient(baseUrl, auth && auth !== 'cookie' ? auth : undefined)
 }
 
 // Resolve `--project <id>` against the cwd `.baton.json`. Throws when neither
