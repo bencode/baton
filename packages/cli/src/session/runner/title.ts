@@ -3,9 +3,15 @@ import { claudeExecutable } from './sdk-env.ts'
 
 // Auto-title a fresh session from its first exchange (user ask + assistant
 // reply). We ask claude for a short title in a throwaway `--print` call (no
-// session id, plain text out). When there isn't enough to title meaningfully we
-// return null (decline) rather than inventing a junk name — the session keeps
-// its `session-<id>` placeholder and the caller can retry on a later turn.
+// session id, plain text out). Outcomes are kept distinct so the daemon can
+// log honestly: `declined` (exchange too thin / model said NONE — keep the
+// `session-<id>` placeholder, retry later) vs `error` (the SDK call itself
+// failed — timeout, proxy, auth — with the reason for the worker log).
+
+export type TitleOutcome =
+  | { kind: 'titled'; title: string }
+  | { kind: 'declined' }
+  | { kind: 'error'; reason: string }
 
 // Keep each side of the exchange bounded so the title prompt stays small.
 const clip = (s: string, max: number): string => (s.length > max ? s.slice(0, max) : s)
@@ -30,35 +36,43 @@ export const sanitizeTitle = (raw: string): string =>
     .replace(/[\s。．，,、；;：:!！?？.]+$/, '') // trailing punctuation
     .trim()
 
-const TITLE_TIMEOUT_MS = 30_000
+// reclaude/proxy cold spawns routinely take >30s (config sync + TLS); a title
+// is worthless if it costs a minute, but a too-tight timeout silently kills
+// every attempt — 90s errs on the side of getting one.
+const TITLE_TIMEOUT_MS = 90_000
 
-// Run a throwaway SDK query in the worktree (no session id — this isn't part of
-// the conversation) and return its sanitized result as a title, or null when the
-// exchange is too thin (no content, model declined with NONE, empty output).
-// Never throws; an aborted timeout or SDK error yields ''.
-export const generateTitle = async (input: {
-  worktreePath: string
-  userText: string
-  assistantText: string
-  queryFn: QueryFn
-}): Promise<string | null> => {
-  const { worktreePath, userText, assistantText, queryFn } = input
-  // Nothing meaningful to summarize → decline without calling claude.
-  if (`${userText}${assistantText}`.trim().length < 4) return null
+const buildPrompt = (userText: string, assistantText: string): string => {
   const exchange = [
     `User: ${clip(userText, 800)}`,
     assistantText ? `Assistant: ${clip(assistantText, 800)}` : '',
   ]
     .filter(Boolean)
     .join('\n')
-  const prompt = `Reply with ONLY a short title for this session: a noun phrase like a filename — at most 6 words or ~12 Chinese characters. It must NOT be a sentence, no punctuation, no markdown, no quotes, and never an opener like "好的"/"收到"/"I'll". If it is too thin or generic to title meaningfully, reply with exactly NONE.\n\n${exchange}`
+  return `Reply with ONLY a short title for this session: a noun phrase like a filename — at most 6 words or ~12 Chinese characters. It must NOT be a sentence, no punctuation, no markdown, no quotes, and never an opener like "好的"/"收到"/"I'll". If it is too thin or generic to title meaningfully, reply with exactly NONE.\n\n${exchange}`
+}
+
+// Run a throwaway SDK query in the worktree (no session id — this isn't part
+// of the conversation). Never throws; failures come back as `error` outcomes
+// carrying the SDK error / result subtype / a stderr tail.
+export const generateTitle = async (input: {
+  worktreePath: string
+  userText: string
+  assistantText: string
+  queryFn: QueryFn
+}): Promise<TitleOutcome> => {
+  const { worktreePath, userText, assistantText, queryFn } = input
+  // Nothing meaningful to summarize → decline without calling claude.
+  if (`${userText}${assistantText}`.trim().length < 4) return { kind: 'declined' }
   const exe = claudeExecutable()
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), TITLE_TIMEOUT_MS)
+  const stderrTail: string[] = []
   let out = ''
+  let resultSeen = false
+  let failure = ''
   try {
     const messages = queryFn({
-      prompt,
+      prompt: buildPrompt(userText, assistantText),
       options: {
         cwd: worktreePath,
         // Don't load the worktree's CLAUDE.md / project settings — they steer the
@@ -68,18 +82,33 @@ export const generateTitle = async (input: {
         allowedTools: [],
         includePartialMessages: false,
         abortController: abort,
+        stderr: line => {
+          if (line.trim()) stderrTail.push(line.trim().slice(0, 200))
+          if (stderrTail.length > 3) stderrTail.shift()
+        },
         ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),
       },
     })
     for await (const m of messages) {
-      if (m.type === 'result' && typeof (m as { result?: unknown }).result === 'string')
-        out = (m as { result: string }).result
+      if (m.type !== 'result') continue
+      resultSeen = true
+      const r = m as { subtype?: string; result?: unknown }
+      if (r.subtype === 'success' && typeof r.result === 'string') out = r.result
+      else
+        failure = `result ${r.subtype ?? 'unknown'}${typeof r.result === 'string' ? `: ${r.result.slice(0, 200)}` : ''}`
     }
-  } catch {
-    return null
+  } catch (e) {
+    failure = abort.signal.aborted
+      ? `timeout after ${TITLE_TIMEOUT_MS / 1000}s`
+      : String(e).slice(0, 300)
   } finally {
     clearTimeout(timer)
   }
+  if (!failure && !resultSeen) failure = 'stream ended without a result message'
+  if (failure) {
+    const tail = stderrTail.length > 0 ? ` | stderr: ${stderrTail.join(' / ')}` : ''
+    return { kind: 'error', reason: `${failure}${tail}` }
+  }
   const title = sanitizeTitle(out)
-  return !title || isDeclined(title) ? null : title
+  return !title || isDeclined(title) ? { kind: 'declined' } : { kind: 'titled', title }
 }

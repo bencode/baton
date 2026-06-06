@@ -34,26 +34,55 @@ describe('generateTitle', () => {
   }
   test('uses claude result when present', async () => {
     const t = await generateTitle({ ...base, queryFn: fakeQuery('  Curl Health Check  ') })
-    assert.equal(t, 'Curl Health Check')
+    assert.deepEqual(t, { kind: 'titled', title: 'Curl Health Check' })
   })
-  test('declines (null) when the model replies NONE', async () => {
-    assert.equal(await generateTitle({ ...base, queryFn: fakeQuery('NONE') }), null)
+  test('declines when the model replies NONE', async () => {
+    assert.deepEqual(await generateTitle({ ...base, queryFn: fakeQuery('NONE') }), {
+      kind: 'declined',
+    })
   })
-  test('declines (null) when claude emits nothing', async () => {
-    assert.equal(await generateTitle({ ...base, queryFn: fakeQuery('') }), null)
+  test('declines when claude emits nothing', async () => {
+    assert.deepEqual(await generateTitle({ ...base, queryFn: fakeQuery('') }), {
+      kind: 'declined',
+    })
   })
-  test('declines (null) for a too-thin exchange without calling claude', async () => {
+  test('declines for a too-thin exchange without calling claude', async () => {
     const spy: QueryFn = () => {
       throw new Error('should not call claude for a trivial exchange')
     }
-    assert.equal(
+    assert.deepEqual(
       await generateTitle({
         worktreePath: '/tmp',
         userText: 'hi',
         assistantText: '',
         queryFn: spy,
       }),
-      null,
+      { kind: 'declined' },
     )
+  })
+  test('reports an error result subtype instead of declining', async () => {
+    const erroring: QueryFn = () =>
+      (async function* () {
+        yield { type: 'result', subtype: 'error_during_execution', is_error: true } as never
+      })()
+    const t = await generateTitle({ ...base, queryFn: erroring })
+    assert.equal(t.kind, 'error')
+    assert.match((t as { reason: string }).reason, /error_during_execution/)
+  })
+  test('reports a thrown SDK error with its message', async () => {
+    const throwing: QueryFn = () => ({
+      [Symbol.asyncIterator]: () => ({
+        next: () => Promise.reject(new Error('spawn reclaude ENOENT')),
+      }),
+    })
+    const t = await generateTitle({ ...base, queryFn: throwing })
+    assert.equal(t.kind, 'error')
+    assert.match((t as { reason: string }).reason, /spawn reclaude ENOENT/)
+  })
+  test('reports a stream that ends without a result message', async () => {
+    const silent: QueryFn = () => (async function* () {})()
+    const t = await generateTitle({ ...base, queryFn: silent })
+    assert.equal(t.kind, 'error')
+    assert.match((t as { reason: string }).reason, /without a result/)
   })
 })

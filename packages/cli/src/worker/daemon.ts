@@ -157,16 +157,20 @@ export const runWorkerDaemon = async (
   ): Promise<void> => {
     const exchange = readFirstExchange(agentSessionId)
     if (!exchange) return log(`title #${sessionId}: no transcript yet, skipping`)
-    const title = await generateTitle({
+    const outcome = await generateTitle({
       worktreePath,
       userText: exchange.userText,
       assistantText: exchange.assistantText,
       queryFn: query,
     })
+    // The claude call itself failed — surface why instead of folding it into
+    // the decline message (that masking is how titles silently died once).
+    if (outcome.kind === 'error') return log(`title #${sessionId} failed: ${outcome.reason}`)
     // Declined: not enough to title yet — leave the placeholder, retry later.
-    if (!title) return log(`title #${sessionId}: not enough to title yet, skipping`)
-    await client.sessions.setName(sessionId, title, cfg.apiToken)
-    log(`✎ titled session #${sessionId} → ${title}`)
+    if (outcome.kind === 'declined')
+      return log(`title #${sessionId}: not enough to title yet, skipping`)
+    await client.sessions.setName(sessionId, outcome.title, cfg.apiToken)
+    log(`✎ titled session #${sessionId} → ${outcome.title}`)
   }
 
   // On (re)connect, kill any child whose session no longer exists server-side —
