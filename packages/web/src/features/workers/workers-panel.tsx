@@ -95,6 +95,8 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open, close }: Wor
         className={`flex items-center gap-2 px-1 text-xs ${dim ? 'text-gray-400' : 'text-gray-700'}`}
       >
         <PresenceDot online={alive} />
+        {/* W-N: the global worker handle (same convention as R-N / T-N codes). */}
+        <span className="shrink-0 font-mono text-gray-400">W-{worker.id}</span>
         <span className="font-semibold tracking-wide">{worker.name}</span>
         {worker.hostname !== worker.name && (
           <span className="font-mono text-[10px] text-gray-400">{worker.hostname}</span>
