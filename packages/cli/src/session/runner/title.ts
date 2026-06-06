@@ -48,7 +48,7 @@ const buildPrompt = (userText: string, assistantText: string): string => {
   ]
     .filter(Boolean)
     .join('\n')
-  return `Reply with ONLY a short title for this session: a noun phrase like a filename — at most 6 words or ~12 Chinese characters. It must NOT be a sentence, no punctuation, no markdown, no quotes, and never an opener like "好的"/"收到"/"I'll". If it is too thin or generic to title meaningfully, reply with exactly NONE.\n\n${exchange}`
+  return `Reply with ONLY a short title for this session: a noun phrase like a filename — at most 6 words or ~12 Chinese characters. It must NOT be a sentence, no punctuation, no markdown, no quotes, and never an opener like "好的"/"收到"/"I'll". Only if the exchange below has no real content at all (e.g. just a greeting or a test ping), reply with exactly NONE.\n\n${exchange}`
 }
 
 // Run a throwaway SDK query in the worktree (no session id — this isn't part
@@ -75,6 +75,11 @@ export const generateTitle = async (input: {
       prompt: buildPrompt(userText, assistantText),
       options: {
         cwd: worktreePath,
+        // A one-shot summarizer, not an agent: replace the ~18k-token Claude
+        // Code preset system prompt. Inside the agent harness the model
+        // routinely answers NONE to this ask (verified against reclaude);
+        // a plain summarizer persona titles reliably — and ~100× cheaper.
+        systemPrompt: 'You title chat sessions.',
         // Don't load the worktree's CLAUDE.md / project settings — they steer the
         // model into verbose summaries instead of a terse title.
         settingSources: [],
