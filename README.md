@@ -58,3 +58,7 @@ baton worker run
 ```bash
 pnpm check   # biome + typecheck + tests, all packages
 ```
+
+## License
+
+[MIT](LICENSE)
