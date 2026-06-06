@@ -31,12 +31,15 @@ model.
 
 ```clojure
 (defn list-workers []                       ; "which workers are there?"
-  (baton worker ls --json)                  ; this project: [{id, name, hostname, alive…}]
-  ;; all projects (discovery chain):
-  (baton workspace ls --json)
-  (baton project ls --workspace <wid> --json)
-  (baton worker ls --project <pid> --json)
-  (reply "list with W-<id> handles; mark alive=false as offline"))
+  ;; Default scope = the CURRENT WORKSPACE (not the whole site): resolve your
+  ;; own project's workspace, then sweep its projects. Only go site-wide
+  ;; (workspace ls → every workspace) when the user explicitly says
+  ;; "所有/全部 workspace" / "all workspaces".
+  (def my-project (-> (slurp ".baton.json") :project))
+  (def wid (-> (baton project get <my-project> --json) :workspaceId))
+  (doseq [p (baton project ls --workspace <wid> --json)]
+    (baton worker ls --project (:id p) --json))
+  (reply "grouped by project, W-<id> handles; mark alive=false as offline"))
 
 (defn delegate [target task]
   ;; 1. resolve target → W-N (int id or name, from `worker ls`)
