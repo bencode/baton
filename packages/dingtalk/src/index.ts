@@ -66,23 +66,25 @@ const main = (): void => {
     )
     try {
       const { id: sessionId, active } = await ensureSession(client, bindings, cfg.route, key)
-      const prompt = applyTemplate(cfg.promptTemplate, msg.sender, msg.text)
-      const attachments = await collectImages(client, cfg, sessionId, msg.imageCodes, log)
-      const ev = await client.sendMessage(sessionId, prompt, attachments)
       if (!active) {
-        // Worker not attached yet (offline / stream reconnecting): the message
-        // is queued server-side. Link the session now instead of holding the
-        // chat hostage to a 10-minute turn wait — the user watches it there.
+        // Worker didn't attach within the grace window (offline, or a very slow
+        // cold spawn). The server rejects messages to inactive sessions (409),
+        // so be honest: this message was NOT delivered — point at the web page
+        // (which can resume/send once the worker returns) instead of dropping
+        // the failure silently.
         const view = await client.getSession(sessionId)
         const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
         await reply(
           msg.sessionWebhook,
-          `⏳ worker 暂未就绪，消息已排队，处理后可在链接查看：\n[查看详情 #${sessionId}](${link})`,
+          `⚠️ worker 未就绪（可能离线），这条消息未送达 — 请稍后重发，或点链接在网页继续：\n[查看详情 #${sessionId}](${link})`,
           'baton',
         )
-        log(`→ queued on session #${sessionId} (worker not attached) ${link}`)
+        log(`→ not delivered, session #${sessionId} never attached ${link}`)
         return
       }
+      const prompt = applyTemplate(cfg.promptTemplate, msg.sender, msg.text)
+      const attachments = await collectImages(client, cfg, sessionId, msg.imageCodes, log)
+      const ev = await client.sendMessage(sessionId, prompt, attachments)
       log(
         `→ delivered to session #${sessionId} (msg ${ev.id}, ${attachments.length} img), waiting…`,
       )

@@ -68,22 +68,23 @@ const main = (): void => {
         log(`→ new session #${sessionId} (bare /new) ${link}`)
         return
       }
-      const prompt = applyTemplate(cfg.promptTemplate, senderName, cmd.text)
-      const ev = await client.sendMessage(sessionId, prompt)
       if (!active) {
-        // Worker not attached yet (offline / slow cold spawn): the message is
-        // queued server-side. Link the session now instead of holding the chat
-        // hostage to a 10-minute turn wait — the user watches it there.
+        // Worker didn't attach within the grace window (offline, or a very slow
+        // cold spawn). The server rejects messages to inactive sessions (409),
+        // so be honest: this message was NOT delivered — point at the web page
+        // (which can resume/send once the worker returns).
         const view = await client.getSession(sessionId)
         const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
         await reply(
           lark,
           msg.conversationId,
-          `⏳ worker 暂未就绪，消息已排队：详情 #${sessionId}: ${link}`,
+          `⚠️ worker 未就绪（可能离线），这条消息未送达 — 请稍后重发，或点链接在网页继续：详情 #${sessionId}: ${link}`,
         )
-        log(`→ queued on session #${sessionId} (worker not attached) ${link}`)
+        log(`→ not delivered, session #${sessionId} never attached ${link}`)
         return
       }
+      const prompt = applyTemplate(cfg.promptTemplate, senderName, cmd.text)
+      const ev = await client.sendMessage(sessionId, prompt)
       log(`→ delivered to session #${sessionId} (msg ${ev.id}), waiting…`)
       // `?since` bounds the replay to our message onward — no full-history re-read.
       const { outcome, text } = await waitForTurn(

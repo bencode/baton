@@ -37,11 +37,16 @@ export BATON_TOKEN=$(node -e 'console.log(require("./.baton.json").worker.apiTok
   ;; 1. resolve target: int id or name, from `worker ls` output
   ;; 2. create the session ON that worker (name it after the task, short)
   (def s (baton session create "<task-slug>" --worker <id> --json))
-  ;; 3. send a SELF-CONTAINED brief — the other worker has NONE of your
+  ;; 3. WAIT for attached before sending — the server 409s messages to a
+  ;;    session whose child hasn't subscribed yet, and a cold spawn takes
+  ;;    ~10-30s. Poll `session get` until attached (give up after ~60s):
+  ;;    until baton session get <s.id> --json | grep -q '"attached": true'
+  ;;      do sleep 5; done
+  ;; 4. send a SELF-CONTAINED brief — the other worker has NONE of your
   ;;    conversation context. Include: goal, repo paths (its add-dirs may
   ;;    differ from yours), acceptance criteria, and any refs (R-N/T-N/files).
   (baton session send <s.id> "<brief>")
-  ;; 4. reply with the link, do NOT wait for completion
+  ;; 5. reply with the link, do NOT wait for completion
   (reply (str "已交给 " target " — https://baton.fmap.dev/s/" (:shareToken s))))
 
 (defn check-progress [session-id]           ; 用户追问"做得怎么样了"
