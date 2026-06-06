@@ -6,6 +6,10 @@ export type ActiveWaitOpts = {
   tries?: number
   intervalMs?: number
   sleep?: (ms: number) => Promise<void>
+  // Skip the bound-session reuse and always create a fresh session (the /new
+  // command) — the old binding is overwritten, so later plain messages continue
+  // the new session while the old one stays reachable from the web.
+  forceNew?: boolean
 }
 
 const realSleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
@@ -40,7 +44,7 @@ export const ensureSession = async (
   key: string,
   opts: ActiveWaitOpts = {},
 ): Promise<Id> => {
-  const existing = bindings.get(key)
+  const existing = opts.forceNew ? undefined : bindings.get(key)
   if (existing !== undefined) {
     const s = await client.getSession(existing).catch(() => null)
     // Reuse only an active (attached) session. Stopped / auto-stopped ones fall

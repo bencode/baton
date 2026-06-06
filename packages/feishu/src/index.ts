@@ -1,6 +1,7 @@
 import * as Lark from '@larksuiteoapi/node-sdk'
 import { createBindingStore } from './bindings.ts'
 import { authedFetch, createBatonClient } from './client.ts'
+import { parseNewCommand } from './commands.ts'
 import { applyTemplate, type FeishuConfig, loadConfig } from './config.ts'
 import { ensureSession } from './ensure-session.ts'
 import { resolveSenderName } from './names.ts'
@@ -55,8 +56,19 @@ const main = (): void => {
     // whole turn, cleared once we reply (or time out / error).
     const reactionId = await addReaction(lark, msg.messageId)
     try {
-      const sessionId = await ensureSession(client, bindings, cfg.route, key)
-      const prompt = applyTemplate(cfg.promptTemplate, senderName, msg.text)
+      const cmd = parseNewCommand(msg.text)
+      const sessionId = await ensureSession(client, bindings, cfg.route, key, {
+        forceNew: cmd.forceNew,
+      })
+      if (cmd.forceNew && !cmd.text) {
+        // Bare "/new": session created + bound; nothing to ask the agent yet.
+        const view = await client.getSession(sessionId)
+        const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
+        await reply(lark, msg.conversationId, `🆕 已开新会话 #${sessionId}: ${link}`)
+        log(`→ new session #${sessionId} (bare /new) ${link}`)
+        return
+      }
+      const prompt = applyTemplate(cfg.promptTemplate, senderName, cmd.text)
       const ev = await client.sendMessage(sessionId, prompt)
       log(`→ delivered to session #${sessionId} (msg ${ev.id}), waiting…`)
       // `?since` bounds the replay to our message onward — no full-history re-read.
