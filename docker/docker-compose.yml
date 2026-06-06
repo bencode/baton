@@ -66,10 +66,30 @@ services:
     env_file: .env
     environment:
       - BATON_PROJECT_ID=3
-      - BATON_WORKER_ID=3
+      - BATON_WORKER_ID=4
       - BATON_FEISHU_BINDINGS=/data/feishu-bindings.json
     volumes:
       - feishu_data:/data
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Second Feishu bridge — the personal/general account → the rooma worker.
+  # Same image as `feishu`; its own app creds (FEISHU2_* in .env) and its own
+  # bindings volume so the two apps never share user→session state.
+  feishu2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.feishu
+    env_file: .env
+    environment:
+      - FEISHU_APP_ID=${FEISHU2_APP_ID}
+      - FEISHU_APP_SECRET=${FEISHU2_APP_SECRET}
+      - BATON_PROJECT_ID=4
+      - BATON_WORKER_ID=3
+      - BATON_FEISHU_BINDINGS=/data/feishu-bindings.json
+    volumes:
+      - feishu2_data:/data
     depends_on:
       - backend
     restart: unless-stopped
@@ -81,3 +101,4 @@ volumes:
   baton_data:
   bridge_data:
   feishu_data:
+  feishu2_data:
