@@ -50,11 +50,42 @@ export const runWorkerDaemon = async (
   const children = new Map<Id, { child: ChildProcess; worktreePath: string }>()
   const log = (m: string): void => console.log(`[worker #${cfg.workerId} ${cfg.name}] ${m}`)
 
-  const ping = (): void => {
-    void client.workers.heartbeat(cfg.machineId).catch(e => log(`heartbeat failed: ${String(e)}`))
+  // The heartbeat is both the liveness signal AND the worker's self-watchdog.
+  // When the server flaps (e.g. a 502 window) the heartbeat loop and command
+  // stream can wedge while the process stays alive — so `restart: unless-stopped`
+  // (docker) / KeepAlive (launchd) never fire and the worker goes silently
+  // offline. After a sustained outage we tear down and exit non-zero so the
+  // supervisor respawns a clean worker that reconnects. The timeout makes a
+  // *hung* server count as a failure too (fetch has no timeout of its own).
+  const HEARTBEAT_MS = 30_000
+  const HEARTBEAT_TIMEOUT_MS = 15_000
+  const MAX_HEARTBEAT_FAILURES = 5
+  let heartbeatFailures = 0
+  let fatal = false
+  let stop: () => void = () => {}
+
+  const ping = async (): Promise<void> => {
+    try {
+      await Promise.race([
+        client.workers.heartbeat(cfg.machineId),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('heartbeat timeout')), HEARTBEAT_TIMEOUT_MS),
+        ),
+      ])
+      heartbeatFailures = 0
+    } catch (e) {
+      heartbeatFailures += 1
+      log(`heartbeat failed (${heartbeatFailures}/${MAX_HEARTBEAT_FAILURES}): ${String(e)}`)
+      if (heartbeatFailures >= MAX_HEARTBEAT_FAILURES) {
+        const downSec = (MAX_HEARTBEAT_FAILURES * HEARTBEAT_MS) / 1000
+        log(`heartbeat down ~${downSec}s — exiting so the supervisor restarts a clean worker`)
+        fatal = true
+        stop()
+      }
+    }
   }
-  ping()
-  const hb = setInterval(ping, 30_000)
+  void ping()
+  const hb = setInterval(() => void ping(), HEARTBEAT_MS)
 
   // Kill the child AND its descendants. The bin shim re-execs tsx, so the child
   // is a small process tree; `detached` makes it a process-group leader and a
@@ -220,10 +251,13 @@ export const runWorkerDaemon = async (
   log(`listening for commands (server ${cfg.server}, repo ${repo})`)
 
   await new Promise<void>(resolve => {
+    stop = resolve
     if (signal.aborted) return resolve()
     signal.addEventListener('abort', () => resolve(), { once: true })
   })
   es.close()
   clearInterval(hb)
   for (const { child } of children.values()) killChild(child)
+  // Watchdog exit: cleanup ran above, now hand a non-zero code to the supervisor.
+  if (fatal) process.exit(1)
 }
