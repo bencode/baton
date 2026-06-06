@@ -12,8 +12,18 @@ export const common = {
   json: { type: 'boolean' as const, description: 'output JSON' },
 }
 
-export const clientFor = (args: { url?: string }): ApiClient =>
-  createClient(resolveBaseUrl(args.url))
+// Auth precedence: explicit env (BATON_TOKEN / BATON_USER+PASS, handled inside
+// createClient) wins; otherwise fall back to the worker apiToken from the cwd
+// .baton.json — the file a worker drops into every session worktree precisely
+// so bare `baton` calls work there, including against an auth-enabled server
+// (the cookie gate accepts a worker token as Bearer).
+export const clientFor = (args: { url?: string }): ApiClient => {
+  const envAuth = process.env.BATON_TOKEN ?? (process.env.BATON_USER && process.env.BATON_PASS)
+  const cfgToken = envAuth
+    ? undefined
+    : loadProjectConfigOrNull(projectConfigPath())?.worker?.apiToken
+  return createClient(resolveBaseUrl(args.url), cfgToken ? { bearer: cfgToken } : undefined)
+}
 
 // Resolve `--project <id>` against the cwd `.baton.json`. Throws when neither
 // flag nor config is available — callers shouldn't call this without expecting

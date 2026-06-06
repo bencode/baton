@@ -1,0 +1,63 @@
+---
+name: delegate
+description: >
+  Dispatch work to ANOTHER baton worker — list the project's workers, open a
+  session on a chosen worker, hand it a self-contained brief, and reply with
+  the session link. Use when the user says "交给 X worker / 让强力 worker 来 /
+  用 daily-pro 做 / 看看有哪些 worker / 开个 session 给 X 干活 / delegate this",
+  or when a task clearly exceeds this session's worker (heavy multi-step
+  builds, long research) and a stronger worker exists in the project.
+---
+
+# delegate — hand work to another worker
+
+You are one session on one worker. Other workers in the same project may be
+stronger (different model/auth), or sit on different machines with different
+repos. Delegation = create a session **on that worker** and send it a brief.
+Everything goes through the `baton` CLI (already on PATH; `.baton.json` in your
+worktree scopes server/project automatically).
+
+## 鉴权（CLI ≤0.1.x 需要；新版 clientFor 自动回退后可省）
+
+The server gates reads behind auth; your worktree's `.baton.json` carries the
+worker apiToken. Export it once per shell before the baton calls below:
+
+```bash
+export BATON_TOKEN=$(node -e 'console.log(require("./.baton.json").worker.apiToken)')
+```
+
+## 流程
+
+```clojure
+(defn list-workers []                       ; "有哪些 worker?"
+  (baton worker ls --json)                  ; [{id, name, hostname, alive…}]
+  (reply "worker 列表 + 哪个适合干什么"))   ; alive=false 的标注"离线"
+
+(defn delegate [target task]
+  ;; 1. resolve target: int id or name, from `worker ls` output
+  ;; 2. create the session ON that worker (name it after the task, short)
+  (def s (baton session create "<task-slug>" --worker <id> --json))
+  ;; 3. send a SELF-CONTAINED brief — the other worker has NONE of your
+  ;;    conversation context. Include: goal, repo paths (its add-dirs may
+  ;;    differ from yours), acceptance criteria, and any refs (R-N/T-N/files).
+  (baton session send <s.id> "<brief>")
+  ;; 4. reply with the link, do NOT wait for completion
+  (reply (str "已交给 " target " — https://baton.fmap.dev/s/" (:shareToken s))))
+
+(defn check-progress [session-id]           ; 用户追问"做得怎么样了"
+  (baton session get <session-id> --json)   ; busy=true → 还在干
+  (reply "状态 + 链接"))
+```
+
+## 纪律
+
+- **Brief 必须自包含**：对方 session 是冷启动，没有你的上下文。目标 / 路径 /
+  验收标准 / 引用一次说清，宁长勿缺。
+- **不要等结果**：send 是 fire-and-forget。回复用户链接即可；追问进度再
+  `session get`（`busy` 字段）。
+- **不要替离线 worker 接单**：`alive: false` 的 worker 照样能建 session（消息
+  排队），但要在回复里说明"该 worker 当前离线，消息已排队"。
+- **同 worker 不算 delegation**：用户只是要新会话时（"重新开一个"），那是
+  bridge 的 `/new`，不是这个 skill。
+- 复杂任务优先选项目里的强力 worker（如 daily 项目的 `daily-pro`，跑
+  reclaude）；不确定就 `worker ls` 后问用户。
