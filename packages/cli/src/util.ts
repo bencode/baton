@@ -45,6 +45,13 @@ export const resolveWorkspaceId = (args: { workspace?: string | number }): Id =>
   )
 }
 
+// Parse a worker handle into its global int id: "7" / "W-7" / "w-7" → 7.
+// Returns null for anything else (callers fall back to a name lookup).
+export const parseWorkerHandle = (handle: string): Id | null => {
+  const m = handle.trim().match(/^(?:[wW]-)?(\d+)$/)
+  return m ? Number(m[1]) : null
+}
+
 // Parse a GitHub issue URL into the light ExternalRef association. Accepts
 // https://github.com/<owner>/<repo>/issues/<n> (trailing query/fragment tolerated).
 export const parseIssueUrl = (url: string): ExternalRef => {

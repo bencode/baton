@@ -18,9 +18,11 @@ export const fmtComment = (c: TaskComment): string =>
   `${c.workerId !== undefined ? `worker#${c.workerId}` : 'you'}  ${c.body}`
 export const fmtSession = (s: SessionView): string =>
   `${s.id}  ${s.name}  ${s.attached ? '[active]' : '[inactive]'}  ${s.worktreePath ?? '(pending)'}`
+// Workers wear a global W-N handle (the int id with a prefix) — unlike R-N/T-N
+// these are NOT per-project: W-7 means the same worker from anywhere.
 export const fmtWorker = (w: WorkerView): string => {
   const offline = w.alive === false ? '  [offline]' : ''
-  return `${w.id}  ${w.name}  ${w.hostname}${offline}`
+  return `W-${w.id}  ${w.name}  ${w.hostname}${offline}`
 }
 
 export const renderOne = <T>(item: T, fmt: (x: T) => string, json: boolean): string =>

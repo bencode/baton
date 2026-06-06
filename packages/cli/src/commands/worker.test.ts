@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { ApiClient, WorkerRegisterOutput } from '../client.ts'
+import { parseWorkerHandle } from '../util.ts'
 import { readOrCreateMachineId } from '../worker/machine-id.ts'
 import { registerWorker } from './worker.ts'
 
@@ -76,5 +77,17 @@ describe('worker helpers', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('parseWorkerHandle', () => {
+  test('accepts W-N / w-N / bare int; rejects names', () => {
+    assert.equal(parseWorkerHandle('7'), 7)
+    assert.equal(parseWorkerHandle('W-7'), 7)
+    assert.equal(parseWorkerHandle('w-12'), 12)
+    assert.equal(parseWorkerHandle(' W-3 '), 3)
+    assert.equal(parseWorkerHandle('daily-pro'), null)
+    assert.equal(parseWorkerHandle('W-'), null)
+    assert.equal(parseWorkerHandle(''), null)
   })
 })

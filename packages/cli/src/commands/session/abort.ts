@@ -7,7 +7,10 @@ import { resolveSession } from './shared.ts'
 // current SDK query but keeps the session, worktree, and conversation; the next
 // message resumes. No-op when no turn is running.
 export const sessionAbortCommand = defineCommand({
-  meta: { name: 'abort', description: 'interrupt the in-flight turn (like Esc); keeps the session' },
+  meta: {
+    name: 'abort',
+    description: 'interrupt the in-flight turn (like Esc); keeps the session',
+  },
   args: {
     session: { type: 'positional', required: true, description: 'session int id or name' },
     project: { type: 'string', description: 'project id (overrides .baton.json)' },

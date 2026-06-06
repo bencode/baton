@@ -7,7 +7,10 @@ import { resolveSession } from './shared.ts'
 // but keep the session, worktree, and url. The running child is restarted with an
 // empty conversation; code in the worktree is preserved.
 export const sessionClearCommand = defineCommand({
-  meta: { name: 'clear', description: 'reset the conversation context (keeps the session + worktree)' },
+  meta: {
+    name: 'clear',
+    description: 'reset the conversation context (keeps the session + worktree)',
+  },
   args: {
     session: { type: 'positional', required: true, description: 'session int id or name' },
     project: { type: 'string', description: 'project id (overrides .baton.json)' },

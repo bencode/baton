@@ -55,14 +55,20 @@ export BATON_TOKEN=$(node -e 'console.log(require("./.baton.json").worker.apiTok
   (reply "状态 + 链接"))
 
 (defn delegate-cross-project [hint task]    ; 目标 worker 不在你的项目里
-  ;; 你的 .baton.json 只锚定自己的项目；其它项目用显式 --project 寻址。
+  ;; Worker 编号 W-N 是全局的（不像 R-N/T-N 按项目重新编号）——拿到编号
+  ;; 就是完整地址：`session create --worker W-N` 会自动落到该 worker 自己
+  ;; 的项目，无需 --project（CLI ≥0.2.5）。
   ;; 发现链（用户只给了模糊指向如"baton 项目的那个 worker"时）：
   (baton workspace ls --json)               ; → workspace ids
   (baton project ls --workspace <wid> --json)
-  (baton worker ls --project <pid> --json)
-  ;; 然后与 delegate 完全相同，但每条命令都带 --project <pid>：
-  (def s (baton session create "<task-slug>" --worker <id> --project <pid> --json))
-  ;; wait attached → send --project <pid> → reply link（流程同上）
+  (baton worker ls --project <pid> --json)  ; → 报给用户时用 W-<id> 称呼
+  (def s (baton session create "<task-slug>" --worker W-<id> --json))
+  ;; 后续 send/get 仍带 --project <pid>（从 create 返回的 projectId 读）。
+  ;; 旧版 CLI（≤0.2.4）：create 也显式带 --project <pid>。
+  ;;
+  ;; 边界注记：今天没有任何权限边界，跨 workspace 派活畅通无阻；将来
+  ;; workspace 成为权限边界后，跨 workspace 的 delegation 需要显式授权，
+  ;; 同 workspace 内保持自由。报告里跨 workspace 时点一句去向即可。
   )
 ```
 

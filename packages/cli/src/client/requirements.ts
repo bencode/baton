@@ -1,4 +1,11 @@
-import type { Code, ExternalRef, Id, Requirement, RequirementStatus, ResourceRef } from '@baton/shared'
+import type {
+  Code,
+  ExternalRef,
+  Id,
+  Requirement,
+  RequirementStatus,
+  ResourceRef,
+} from '@baton/shared'
 import { fetchItemByCode } from './items.ts'
 import { request } from './request.ts'
 

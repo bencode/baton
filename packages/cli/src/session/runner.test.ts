@@ -52,7 +52,14 @@ describe('runTurn', () => {
     const code1 = await runTurn(
       cfg,
       worker,
-      { id: 99, sessionId: 1, sequence: 0, type: 'user_message', payload: { text: 'hi' }, createdAt: 0 },
+      {
+        id: 99,
+        sessionId: 1,
+        sequence: 0,
+        type: 'user_message',
+        payload: { text: 'hi' },
+        createdAt: 0,
+      },
       false,
       qf,
     )
@@ -72,7 +79,14 @@ describe('runTurn', () => {
     await runTurn(
       cfg,
       worker,
-      { id: 100, sessionId: 1, sequence: 5, type: 'user_message', payload: { text: 'again' }, createdAt: 0 },
+      {
+        id: 100,
+        sessionId: 1,
+        sequence: 5,
+        type: 'user_message',
+        payload: { text: 'again' },
+        createdAt: 0,
+      },
       true,
       qf,
     )

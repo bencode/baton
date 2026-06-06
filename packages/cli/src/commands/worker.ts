@@ -11,19 +11,20 @@ import {
   setWorker,
   viewWorker,
 } from '../project-config.ts'
-import { clientFor, common, resolveProjectId } from '../util.ts'
+import { clientFor, common, parseWorkerHandle, resolveProjectId } from '../util.ts'
 import { runWorkerDaemon } from '../worker/daemon.ts'
 import { machineIdPath, readOrCreateMachineId } from '../worker/machine-id.ts'
 
-// Resolve a worker positional arg: int id first, then name lookup.
+// Resolve a worker positional arg: global id ("7" / "W-7") first, then a
+// project-scoped name lookup.
 const resolveWorker = async (
   client: ApiClient,
   projectId: Id,
   handle: string,
 ): Promise<{ id: Id; name: string }> => {
-  const asInt = Number(handle)
-  if (Number.isInteger(asInt) && asInt > 0) {
-    const byId = await client.workers.get(asInt).catch(() => null)
+  const asId = parseWorkerHandle(handle)
+  if (asId !== null) {
+    const byId = await client.workers.get(asId).catch(() => null)
     if (byId) return { id: byId.id, name: byId.name }
   }
   const byName = await client.workers.findByName(projectId, handle)
