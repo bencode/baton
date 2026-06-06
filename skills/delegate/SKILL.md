@@ -18,14 +18,8 @@ repos. Delegation = create a session **on that worker** and send it a brief.
 Everything goes through the `baton` CLI (already on PATH; `.baton.json` in your
 worktree scopes server/project automatically).
 
-## 鉴权（CLI ≤0.1.x 需要；新版 clientFor 自动回退后可省）
-
-The server gates reads behind auth; your worktree's `.baton.json` carries the
-worker apiToken. Export it once per shell before the baton calls below:
-
-```bash
-export BATON_TOKEN=$(node -e 'console.log(require("./.baton.json").worker.apiToken)')
-```
+Auth is automatic (CLI ≥0.2.5): bare commands pick up the worker apiToken from
+the cwd `.baton.json` — no env setup.
 
 ## 流程
 
@@ -57,14 +51,13 @@ export BATON_TOKEN=$(node -e 'console.log(require("./.baton.json").worker.apiTok
 (defn delegate-cross-project [hint task]    ; 目标 worker 不在你的项目里
   ;; Worker 编号 W-N 是全局的（不像 R-N/T-N 按项目重新编号）——拿到编号
   ;; 就是完整地址：`session create --worker W-N` 会自动落到该 worker 自己
-  ;; 的项目，无需 --project（CLI ≥0.2.5）。
+  ;; 的项目，无需 --project。
   ;; 发现链（用户只给了模糊指向如"baton 项目的那个 worker"时）：
   (baton workspace ls --json)               ; → workspace ids
   (baton project ls --workspace <wid> --json)
   (baton worker ls --project <pid> --json)  ; → 报给用户时用 W-<id> 称呼
   (def s (baton session create "<task-slug>" --worker W-<id> --json))
-  ;; 后续 send/get 仍带 --project <pid>（从 create 返回的 projectId 读）。
-  ;; 旧版 CLI（≤0.2.4）：create 也显式带 --project <pid>。
+  ;; 后续 send/get 带 --project <pid>（从 create 返回的 projectId 读）。
   ;;
   ;; 边界注记：今天没有任何权限边界，跨 workspace 派活畅通无阻；将来
   ;; workspace 成为权限边界后，跨 workspace 的 delegation 需要显式授权，
