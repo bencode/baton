@@ -10,7 +10,11 @@
 FROM node:26-bookworm-slim
 
 ARG CLAUDE_CODE_VERSION=2.1.159
-ARG BATON_CLI_VERSION=0.2.7
+ARG BATON_CLI_VERSION=0.2.8
+# Set to a non-empty value to bake in the reclaude CLI (a claude wrapper that
+# routes through the reclaude.ai gateway). Point BATON_CLAUDE_BIN at it in .env
+# to drive claude through reclaude instead of an Anthropic-compatible endpoint.
+ARG INSTALL_RECLAUDE=
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates curl ripgrep jq less python3 procps \
@@ -39,6 +43,16 @@ RUN mkdir -p /home/baton/.npm-global \
       esbuild \
     && claude --version && command -v baton >/dev/null && command -v esbuild >/dev/null
 
+# reclaude (optional, ARG INSTALL_RECLAUDE) — a claude wrapper that authenticates
+# via the reclaude.ai gateway. Installs the binary to ~/.local/bin/reclaude; the
+# claude CLI it drives is fetched at first runtime into ~/.reclaude/claude-cli
+# (persisted on the .reclaude volume, so it downloads once). Device login is a
+# one-time interactive step against that volume — see README.
+RUN if [ -n "$INSTALL_RECLAUDE" ]; then \
+      curl -fsSL https://reclaude.ai/install.sh | bash \
+      && test -x /home/baton/.local/bin/reclaude; \
+    fi
+
 # erda-cli — for trantor-fe-mr (erda.cloud merge requests). install.sh only
 # ships linux/amd64 today; on arm64 there's no release, so this is BEST-EFFORT
 # (skip, don't fail the build). On arm64 hosts the MR-create step runs
@@ -62,7 +76,7 @@ RUN git config --global user.name "baton" \
 # mount point is created root-owned and the non-root user can't write
 # (EACCES on ~/.local/share/baton/machine-id).
 # Seed claude settings too (no Co-Authored-By trailer); fresh volume copies it in.
-RUN mkdir -p /home/baton/.claude /home/baton/.local/share/baton \
+RUN mkdir -p /home/baton/.claude /home/baton/.local/share/baton /home/baton/.reclaude \
     && printf '{\n  "includeCoAuthoredBy": false,\n  "theme": "dark"\n}\n' \
       > /home/baton/.claude/settings.json
 

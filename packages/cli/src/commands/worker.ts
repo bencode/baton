@@ -5,6 +5,7 @@ import { type ApiClient, createClient, type WorkerRegisterOutput } from '../clie
 import { resolveBaseUrlOrNull } from '../config.ts'
 import { fmtWorker, renderList, renderOne, toJson } from '../output.ts'
 import {
+  configPathFromArgs,
   loadProjectConfig,
   projectConfigPath,
   saveProjectConfig,
@@ -81,6 +82,10 @@ export const worker = defineCommand({
       args: {
         project: { type: 'string', description: 'project id (overrides .baton.json)' },
         name: { type: 'string', description: 'worker display name (default: hostname)' },
+        config: {
+          type: 'string',
+          description: 'path to the worker config file (default: ./.baton.json)',
+        },
         ...common,
       },
       run: async ({ args }) => {
@@ -95,13 +100,17 @@ export const worker = defineCommand({
         const hostname = osHostname()
         const machineId = readOrCreateMachineId()
         const name = args.name ?? hostname
-        const { out, configPath } = await registerWorker(c, {
-          projectId: resolveProjectId(args),
-          name,
-          server,
-          hostname,
-          machineId,
-        })
+        const { out, configPath } = await registerWorker(
+          c,
+          {
+            projectId: resolveProjectId(args),
+            name,
+            server,
+            hostname,
+            machineId,
+          },
+          configPathFromArgs(args),
+        )
         if (args.json) {
           console.log(toJson({ ...out, configPath, machineIdPath: machineIdPath() }))
           return
@@ -119,9 +128,15 @@ export const worker = defineCommand({
         description:
           'run the persistent worker daemon (listens for session create/delete commands)',
       },
-      args: { ...common },
-      run: async () => {
-        const cfg = viewWorker(loadProjectConfig(projectConfigPath()))
+      args: {
+        config: {
+          type: 'string',
+          description: 'path to the worker config file (default: ./.baton.json)',
+        },
+        ...common,
+      },
+      run: async ({ args }) => {
+        const cfg = viewWorker(loadProjectConfig(configPathFromArgs(args)))
         const client = createClient(cfg.server, { bearer: cfg.apiToken })
         const ac = new AbortController()
         const stop = (): void => ac.abort()
@@ -190,11 +205,17 @@ export const worker = defineCommand({
     }),
     whoami: defineCommand({
       meta: { name: 'whoami', description: 'show local worker config from .baton.json' },
-      args: { ...common },
+      args: {
+        config: {
+          type: 'string',
+          description: 'path to the worker config file (default: ./.baton.json)',
+        },
+        ...common,
+      },
       run: ({ args }) => {
         const cfg = (() => {
           try {
-            return loadProjectConfig(projectConfigPath())
+            return loadProjectConfig(configPathFromArgs(args))
           } catch {
             return null
           }

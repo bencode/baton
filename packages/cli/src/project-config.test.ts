@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import {
+  configPathFromArgs,
   loadProjectConfig,
   loadProjectConfigOrNull,
   projectConfigPath,
@@ -41,6 +42,11 @@ describe('project-config', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+
+  test('configPathFromArgs: --config wins, else cwd default', () => {
+    assert.equal(configPathFromArgs({ config: '/tmp/custom-baton.json' }), '/tmp/custom-baton.json')
+    assert.equal(configPathFromArgs({}, '/some/cwd'), join('/some/cwd', '.baton.json'))
   })
 
   test('worktreeConfig is the inverse of viewWorker', () => {

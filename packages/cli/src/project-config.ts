@@ -9,8 +9,11 @@ import type { Id } from '@baton/shared'
 // session metadata on demand and authenticates every session write with its own
 // worker apiToken.
 //
-// Lookup is strictly cwd-only (no upward walk). `--config <path>` is the single
-// escape hatch when the user runs from a different directory.
+// Lookup is strictly cwd-only (no upward walk). The worker commands' `--config`
+// flag is the single escape hatch: point it at an explicit path to run two
+// workers from the same directory (each daemon owns a distinct config file →
+// distinct identity). Flags don't propagate to child processes, so the agent's
+// bare `baton` calls in a worktree still resolve from cwd.
 export const PROJECT_CONFIG_NAME = '.baton.json'
 
 export type WorkerEntry = {
@@ -50,9 +53,14 @@ export type SessionConfig = {
   worktreePath: string
 }
 
-// Pure path join; no fs touch. Override via --config flag, else default to cwd.
+// Pure path join; no fs touch. Default config location: `.baton.json` in cwd.
 export const projectConfigPath = (cwd: string = process.cwd()): string =>
   join(cwd, PROJECT_CONFIG_NAME)
+
+// Resolve the worker commands' `--config` flag: an explicit path wins, else the
+// cwd default. Shared by `worker register/run/whoami` so they agree.
+export const configPathFromArgs = (args: { config?: string }, cwd?: string): string =>
+  args.config ?? projectConfigPath(cwd)
 
 export const loadProjectConfig = (path: string): ProjectConfig => {
   try {

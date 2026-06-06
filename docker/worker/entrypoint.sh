@@ -7,11 +7,16 @@ set -e
 : "${BATON_URL:?set BATON_URL in .env}"
 : "${BATON_PROJECT_ID:?set BATON_PROJECT_ID in .env}"
 
-if [ ! -f .baton.json ]; then
+# BATON_WORKER_CONFIG (optional, entrypoint-only) is translated into the CLI's
+# `--config` flag — needed when a second worker shares this repo dir (cwd=/repo),
+# so the two daemons own distinct identity files instead of fighting over
+# ./.baton.json. The baton CLI itself does not read this env, only the flag.
+cfg="${BATON_WORKER_CONFIG:-.baton.json}"
+if [ ! -f "$cfg" ]; then
   name="${WORKER_NAME:-$(hostname)}"
   echo "[baton] registering worker (project ${BATON_PROJECT_ID}, name ${name}) against ${BATON_URL}..."
-  baton worker register --url "$BATON_URL" --project "$BATON_PROJECT_ID" --name "$name"
+  baton worker register --config "$cfg" --url "$BATON_URL" --project "$BATON_PROJECT_ID" --name "$name"
 fi
 
 echo "[baton] worker run..."
-exec baton worker run
+exec baton worker run --config "$cfg"

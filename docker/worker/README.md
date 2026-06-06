@@ -56,6 +56,33 @@ project's workers on https://baton.fmap.dev .
   every session — install/edit on the host, no rebuild. Skills that shell out to
   external CLIs (e.g. `tcollab`, `erda-cli`) only work if those CLIs are also
   installed in the image.
+- **second worker, same repo**: a repo dir holds one `.baton.json` (one worker
+  identity). To run a second worker against the same repo, copy this dir and in
+  the copy's `.env` set `COMPOSE_PROJECT_NAME` (distinct volumes + container
+  names → a fresh `machineId` → a distinct worker) **and** `BATON_WORKER_CONFIG`
+  (entrypoint.sh passes it to the CLI as `--config`, pointing at a config file on
+  the `baton_state` volume, e.g. `/home/baton/.local/share/baton/config.json`,
+  instead of `/repo/.baton.json`). Without it the two daemons would fight over
+  `/repo/.baton.json`. The `--config` flag does not propagate to child processes,
+  so the session children and the agent's bare `baton` calls still resolve their
+  worktree's own `.baton.json`.
+- **claude via reclaude (baked into the image)**: reclaude is a `claude` wrapper
+  that authenticates through the reclaude.ai gateway (subscription-style access).
+  Routing the stock claude through reclaude's *proxy* does NOT work — the gateway
+  only accepts genuine reclaude-CLI traffic — so install the reclaude binary into
+  the image instead and drive it as the claude executable:
+  1. Build with `--build-arg INSTALL_RECLAUDE=1` (installs `reclaude` to
+     `~/.local/bin`; the image pre-creates `~/.reclaude` so a volume mounted
+     there is baton-owned and writable).
+  2. Mount a named volume at `/home/baton/.reclaude` (holds the device login +
+     reclaude's own claude CLI cache, downloaded once on first run, ~245 MB).
+  3. In `.env` set `BATON_CLAUDE_BIN=/home/baton/.local/bin/reclaude` (and drop
+     the `ANTHROPIC_*` vars). No proxy/CA needed — the container reaches
+     reclaude.ai directly.
+  4. One-time device login inside the running container (login state persists on
+     the `.reclaude` volume, survives restarts):
+     `docker compose -f worker-compose.yml exec worker reclaude login` — open the
+     printed URL, approve, done. Verify with a `reclaude -p ping` exec.
 - **reference repos**: to let the agent read (not modify) other repos, put them
   in a host dir, give colima a read-only mount (`--mount <dir>:r`), bind it to
   `/resources:ro`, and set `BATON_ADD_DIRS` in `.env` to those absolute paths

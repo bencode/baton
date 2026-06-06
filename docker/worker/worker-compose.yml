@@ -1,3 +1,10 @@
+# Project name (and thus the named-volume prefix + container names) defaults to
+# `baton-worker`. To run a SECOND worker from this same repo dir, copy this dir
+# and set COMPOSE_PROJECT_NAME in that .env (e.g. baton-worker-pro) — it gets its
+# own baton_state volume (→ distinct machineId → distinct worker) and its own
+# container names. Pair it with BATON_WORKER_CONFIG in .env (translated to the
+# CLI's --config flag by entrypoint.sh) so the two daemons own distinct
+# .baton.json identity files even though cwd=/repo is shared.
 name: baton-worker
 
 services:
@@ -5,7 +12,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    container_name: baton-worker
     restart: unless-stopped
     working_dir: /repo
     # All runtime config (baton wiring + claude auth) comes from .env.
@@ -32,6 +38,11 @@ services:
       # bypassPermissions.) The host dir also needs a colima read-only mount:
       # `--mount <dir>:r`. e.g. in .env: BATON_ADD_DIRS=/resources/engine-shell
       # - /Users/you/baton-resources:/resources:ro
+      # Uncomment to drive claude through reclaude (built with INSTALL_RECLAUDE=1):
+      # a named volume holds the device login + reclaude's claude cache. Pair with
+      # BATON_CLAUDE_BIN in .env. See README "claude via reclaude (baked into the
+      # image)". (declare `reclaude_state` under top-level volumes:)
+      # - reclaude_state:/home/baton/.reclaude
       # Uncomment to let the agent `git push` (credential.helper store reads a
       # `credentials` file inside this directory). Directory mount, not a single
       # file — a file bind pins an inode and breaks git's atomic rewrite.
