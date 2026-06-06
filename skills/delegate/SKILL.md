@@ -1,12 +1,13 @@
 ---
 name: delegate
 description: >
-  Dispatch work to ANOTHER baton worker — list the project's workers, open a
-  session on a chosen worker, hand it a self-contained brief, and reply with
-  the session link. Use when the user says "交给 X worker / 让强力 worker 来 /
-  用 daily-pro 做 / 看看有哪些 worker / 开个 session 给 X 干活 / delegate this",
-  or when a task clearly exceeds this session's worker (heavy multi-step
-  builds, long research) and a stronger worker exists in the project.
+  Dispatch work to ANOTHER baton worker — same project or any other project
+  (--project addressing): list workers, open a session on a chosen worker,
+  hand it a self-contained brief, and reply with the session link. Use when
+  the user says "交给 X worker / 让强力 worker 来 / 用 daily-pro 做 / 看看有
+  哪些 worker / 列一下所有项目的 worker / 在 baton 项目开个 session 干活 /
+  delegate this", or when a task clearly exceeds this session's worker and a
+  stronger worker exists.
 ---
 
 # delegate — hand work to another worker
@@ -52,6 +53,17 @@ export BATON_TOKEN=$(node -e 'console.log(require("./.baton.json").worker.apiTok
 (defn check-progress [session-id]           ; 用户追问"做得怎么样了"
   (baton session get <session-id> --json)   ; busy=true → 还在干
   (reply "状态 + 链接"))
+
+(defn delegate-cross-project [hint task]    ; 目标 worker 不在你的项目里
+  ;; 你的 .baton.json 只锚定自己的项目；其它项目用显式 --project 寻址。
+  ;; 发现链（用户只给了模糊指向如"baton 项目的那个 worker"时）：
+  (baton workspace ls --json)               ; → workspace ids
+  (baton project ls --workspace <wid> --json)
+  (baton worker ls --project <pid> --json)
+  ;; 然后与 delegate 完全相同，但每条命令都带 --project <pid>：
+  (def s (baton session create "<task-slug>" --worker <id> --project <pid> --json))
+  ;; wait attached → send --project <pid> → reply link（流程同上）
+  )
 ```
 
 ## 纪律
