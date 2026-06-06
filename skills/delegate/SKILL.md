@@ -21,6 +21,12 @@ Workers wear a **global W-N handle** (unlike R-N/T-N, which restart per
 project): W-7 means the same worker from anywhere, so a number alone is a
 complete address.
 
+**Your token reaches everything.** The worker token authenticates site-wide —
+`workspace ls`, `project ls --workspace N`, `worker ls --project N` all work
+from any session. Do NOT assume cross-project reads are forbidden; if a
+command fails, report the actual error instead of inventing a permission
+model.
+
 ## Flows
 
 ```clojure
