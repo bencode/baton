@@ -1,9 +1,11 @@
+import type { Attachment } from '@baton/shared'
 import * as Lark from '@larksuiteoapi/node-sdk'
 import { createBindingStore } from './bindings.ts'
-import { authedFetch, createBatonClient } from './client.ts'
+import { authedFetch, type BatonClient, createBatonClient } from './client.ts'
 import { parseNewCommand } from './commands.ts'
 import { applyTemplate, type FeishuConfig, loadConfig } from './config.ts'
 import { ensureSession } from './ensure-session.ts'
+import { downloadImage } from './media.ts'
 import { resolveSenderName } from './names.ts'
 import { addReaction, removeReaction } from './reactions.ts'
 import { reply } from './reply.ts'
@@ -32,6 +34,30 @@ const replyText = (sessionId: number, link: string, text: string): string => {
   return `${shown}\n\n${linkLine}`
 }
 
+// Resolve Feishu image_keys → uploaded session attachments, best-effort: a
+// failed image is logged and skipped, never blocking the text. Mirrors the
+// DingTalk bridge's collectImages.
+const collectImages = async (
+  client: BatonClient,
+  lark: Lark.Client,
+  sessionId: number,
+  messageId: string,
+  keys: string[],
+  log: (m: string) => void,
+): Promise<Attachment[]> => {
+  const out: Attachment[] = []
+  for (const [i, key] of keys.entries()) {
+    try {
+      out.push(
+        await client.uploadAttachment(sessionId, await downloadImage(lark, messageId, key, i)),
+      )
+    } catch (e) {
+      log(`image ${i} failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  return out
+}
+
 const main = (): void => {
   const cfg: FeishuConfig = loadConfig()
   const client = createBatonClient(cfg.server, { token: cfg.token, creds: cfg.creds })
@@ -39,7 +65,7 @@ const main = (): void => {
   const bindings = createBindingStore()
 
   const onMessage = async (msg: InboundMessage): Promise<void> => {
-    const imgNote = msg.imageCodes.length > 0 ? ` [+${msg.imageCodes.length} img, skipped]` : ''
+    const imgNote = msg.imageCodes.length > 0 ? ` [+${msg.imageCodes.length} img]` : ''
     // Per-user session: key by conversation AND sender so each person in a group
     // gets an isolated context (a 1-on-1 chat is one sender anyway).
     const key = `${msg.conversationId}:${msg.senderId}`
@@ -47,11 +73,7 @@ const main = (): void => {
     // agent knows who's talking. Cached per chat.
     const senderName = await resolveSenderName(lark, msg.conversationId, msg.senderId)
     log(`← ${senderName}: ${msg.text}${imgNote}  (chat ${msg.conversationId})`)
-    if (!msg.text) {
-      // v0 forwards text only; an image-only message has nothing to relay yet.
-      await reply(lark, msg.conversationId, '（暂只支持文本消息，图片稍后支持）').catch(() => {})
-      return
-    }
+    if (!msg.text && msg.imageCodes.length === 0) return // nothing to relay
     // "Seen + on it" — show a processing reaction on the user's message for the
     // whole turn, cleared once we reply (or time out / error).
     const reactionId = await addReaction(lark, msg.messageId)
@@ -84,8 +106,18 @@ const main = (): void => {
         return
       }
       const prompt = applyTemplate(cfg.promptTemplate, senderName, cmd.text)
-      const ev = await client.sendMessage(sessionId, prompt)
-      log(`→ delivered to session #${sessionId} (msg ${ev.id}), waiting…`)
+      const attachments = await collectImages(
+        client,
+        lark,
+        sessionId,
+        msg.messageId,
+        msg.imageCodes,
+        log,
+      )
+      const ev = await client.sendMessage(sessionId, prompt, attachments)
+      log(
+        `→ delivered to session #${sessionId} (msg ${ev.id}, ${attachments.length} img), waiting…`,
+      )
       // `?since` bounds the replay to our message onward — no full-history re-read.
       const { outcome, text } = await waitForTurn(
         `${client.streamUrl(sessionId)}?since=${ev.sequence}`,

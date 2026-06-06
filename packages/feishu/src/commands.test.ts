@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import type { BatonClient } from './client.ts'
 import { parseNewCommand } from './commands.ts'
 import { ensureSession } from './ensure-session.ts'
+import { extFromContentType } from './media.ts'
 
 test('parseNewCommand: /new with and without a message', () => {
   assert.deepEqual(parseNewCommand('/new 帮我看个 bug'), { forceNew: true, text: '帮我看个 bug' })
@@ -38,4 +39,10 @@ test('ensureSession: forceNew skips the bound active session and rebinds', async
   })
   assert.deepEqual(fresh, { id: 101, active: true })
   assert.equal(map.get('k'), 101)
+})
+
+test('extFromContentType: maps content-type to filename extension', () => {
+  assert.equal(extFromContentType('image/jpeg'), 'jpeg')
+  assert.equal(extFromContentType('image/png; charset=binary'), 'png')
+  assert.equal(extFromContentType('weird'), 'png')
 })
