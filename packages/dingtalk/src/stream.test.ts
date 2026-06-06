@@ -17,7 +17,12 @@ test('parseInbound: plain text message', () => {
 })
 
 test('parseInbound: senderId prefers senderStaffId over nick', () => {
-  const m = parseInbound({ ...base, senderStaffId: 'u123', msgtype: 'text', text: { content: 'hi' } })
+  const m = parseInbound({
+    ...base,
+    senderStaffId: 'u123',
+    msgtype: 'text',
+    text: { content: 'hi' },
+  })
   assert.equal(m?.senderId, 'u123')
   assert.equal(m?.sender, 'alice')
 })

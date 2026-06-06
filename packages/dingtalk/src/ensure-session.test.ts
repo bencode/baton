@@ -41,8 +41,8 @@ describe('ensureSession', () => {
       uploadAttachment: async () => att(),
     }
     const bindings = memBindings()
-    const id = await ensureSession(client, bindings, route, 'conv-A', fast)
-    assert.equal(id, 7)
+    const r = await ensureSession(client, bindings, route, 'conv-A', fast)
+    assert.deepEqual(r, { id: 7, active: true })
     assert.equal(bindings.get('conv-A'), 7)
     assert.ok(calls.includes('create'))
   })
@@ -63,8 +63,8 @@ describe('ensureSession', () => {
       streamUrl: () => '',
       uploadAttachment: async () => att(),
     }
-    const id = await ensureSession(client, memBindings({ 'conv-B': 5 }), route, 'conv-B', fast)
-    assert.equal(id, 5)
+    const r = await ensureSession(client, memBindings({ 'conv-B': 5 }), route, 'conv-B', fast)
+    assert.equal(r.id, 5)
     assert.deepEqual(calls, [])
   })
 
@@ -86,13 +86,13 @@ describe('ensureSession', () => {
       uploadAttachment: async () => att(),
     }
     const bindings = memBindings({ 'conv-C': 8 })
-    const id = await ensureSession(client, bindings, route, 'conv-C', fast)
-    assert.equal(id, 20) // a fresh session, not the stopped 8
+    const r = await ensureSession(client, bindings, route, 'conv-C', fast)
+    assert.equal(r.id, 20) // a fresh session, not the stopped 8
     assert.equal(bindings.get('conv-C'), 20) // rebound to the new one
     assert.deepEqual(calls, ['create']) // created, never resumed
   })
 
-  test('never active: throws after the bounded wait', async () => {
+  test('never active: returns active=false after the bounded wait (still bound — messages queue)', async () => {
     const client: BatonClient = {
       createSession: async () => view(3, false),
       getSession: async id => view(id, false),
@@ -101,14 +101,14 @@ describe('ensureSession', () => {
       streamUrl: () => '',
       uploadAttachment: async () => att(),
     }
-    await assert.rejects(
-      ensureSession(client, memBindings(), route, 'conv-D', {
-        tries: 3,
-        intervalMs: 0,
-        sleep: async () => {},
-      }),
-      /did not become active/,
-    )
+    const bindings = memBindings()
+    const r = await ensureSession(client, bindings, route, 'conv-D', {
+      tries: 3,
+      intervalMs: 0,
+      sleep: async () => {},
+    })
+    assert.deepEqual(r, { id: 3, active: false })
+    assert.equal(bindings.get('conv-D'), 3)
   })
 
   test('bound session gone server-side: creates a fresh one', async () => {
@@ -128,8 +128,8 @@ describe('ensureSession', () => {
       uploadAttachment: async () => att(),
     }
     const bindings = memBindings({ 'conv-E': 4 })
-    const id = await ensureSession(client, bindings, route, 'conv-E', fast)
-    assert.equal(id, 12)
+    const r = await ensureSession(client, bindings, route, 'conv-E', fast)
+    assert.equal(r.id, 12)
     assert.equal(bindings.get('conv-E'), 12)
     assert.ok(calls.includes('create'))
   })

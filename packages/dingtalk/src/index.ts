@@ -61,12 +61,28 @@ const main = (): void => {
     // Per-user session: key by conversation AND sender so each person in a group
     // gets an isolated context (a 1-on-1 chat is one sender anyway).
     const key = `${msg.conversationId}:${msg.senderId}`
-    log(`← ${msg.sender}: ${msg.text}${imgNote}  (conv ${msg.conversationId}, sender ${msg.senderId})`)
+    log(
+      `← ${msg.sender}: ${msg.text}${imgNote}  (conv ${msg.conversationId}, sender ${msg.senderId})`,
+    )
     try {
-      const sessionId = await ensureSession(client, bindings, cfg.route, key)
+      const { id: sessionId, active } = await ensureSession(client, bindings, cfg.route, key)
       const prompt = applyTemplate(cfg.promptTemplate, msg.sender, msg.text)
       const attachments = await collectImages(client, cfg, sessionId, msg.imageCodes, log)
       const ev = await client.sendMessage(sessionId, prompt, attachments)
+      if (!active) {
+        // Worker not attached yet (offline / stream reconnecting): the message
+        // is queued server-side. Link the session now instead of holding the
+        // chat hostage to a 10-minute turn wait — the user watches it there.
+        const view = await client.getSession(sessionId)
+        const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
+        await reply(
+          msg.sessionWebhook,
+          `⏳ worker 暂未就绪，消息已排队，处理后可在链接查看：\n[查看详情 #${sessionId}](${link})`,
+          'baton',
+        )
+        log(`→ queued on session #${sessionId} (worker not attached) ${link}`)
+        return
+      }
       log(
         `→ delivered to session #${sessionId} (msg ${ev.id}, ${attachments.length} img), waiting…`,
       )
@@ -86,6 +102,12 @@ const main = (): void => {
       log(`→ replied (${outcome}, ${text.length} chars) ${link}`)
     } catch (e) {
       log(`failed: ${e instanceof Error ? e.message : String(e)}`)
+      // Tell the user — a silent drop reads as "the bot ignored me".
+      await reply(
+        msg.sessionWebhook,
+        `处理失败：${e instanceof Error ? e.message : String(e)}`,
+        'baton',
+      ).catch(() => {})
     }
   }
 

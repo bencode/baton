@@ -57,7 +57,7 @@ const main = (): void => {
     const reactionId = await addReaction(lark, msg.messageId)
     try {
       const cmd = parseNewCommand(msg.text)
-      const sessionId = await ensureSession(client, bindings, cfg.route, key, {
+      const { id: sessionId, active } = await ensureSession(client, bindings, cfg.route, key, {
         forceNew: cmd.forceNew,
       })
       if (cmd.forceNew && !cmd.text) {
@@ -70,6 +70,20 @@ const main = (): void => {
       }
       const prompt = applyTemplate(cfg.promptTemplate, senderName, cmd.text)
       const ev = await client.sendMessage(sessionId, prompt)
+      if (!active) {
+        // Worker not attached yet (offline / slow cold spawn): the message is
+        // queued server-side. Link the session now instead of holding the chat
+        // hostage to a 10-minute turn wait — the user watches it there.
+        const view = await client.getSession(sessionId)
+        const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
+        await reply(
+          lark,
+          msg.conversationId,
+          `⏳ worker 暂未就绪，消息已排队：详情 #${sessionId}: ${link}`,
+        )
+        log(`→ queued on session #${sessionId} (worker not attached) ${link}`)
+        return
+      }
       log(`→ delivered to session #${sessionId} (msg ${ev.id}), waiting…`)
       // `?since` bounds the replay to our message onward — no full-history re-read.
       const { outcome, text } = await waitForTurn(
