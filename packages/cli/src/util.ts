@@ -1,4 +1,4 @@
-import type { ExternalRef, Id } from '@baton/shared'
+import type { Id } from '@baton/shared'
 import { type ApiClient, createClient } from './client.ts'
 import { resolveBaseUrl } from './config.ts'
 import { loadProjectConfigOrNull, projectConfigPath } from './project-config.ts'
@@ -68,15 +68,6 @@ export const resolveWorkspaceId = (args: { workspace?: string | number }): Id =>
 export const parseWorkerHandle = (handle: string): Id | null => {
   const m = handle.trim().match(/^(?:[wW]-)?(\d+)$/)
   return m ? Number(m[1]) : null
-}
-
-// Parse a GitHub issue URL into the light ExternalRef association. Accepts
-// https://github.com/<owner>/<repo>/issues/<n> (trailing query/fragment tolerated).
-export const parseIssueUrl = (url: string): ExternalRef => {
-  const m = url.match(/^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+)/)
-  if (!m)
-    throw new Error(`expected a GitHub issue url (https://github.com/o/r/issues/N), got "${url}"`)
-  return { source: 'github', number: Number(m[1]), url: url.split(/[?#]/)[0] }
 }
 
 // Parse a comma-separated flag value into a trimmed string list (undefined when absent).

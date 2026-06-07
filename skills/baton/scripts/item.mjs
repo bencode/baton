@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 // item.mjs — work-item sensor: lint / verify / close (ported from relay.py semantics).
 //
-// One entry point for both sides of the bridge; the ref decides the source:
+// One entry point for two independent tracks; the ref decides the source:
 //   #12 | 12 | https://github.com/o/r/issues/12  → GitHub issue (via gh)
-//   R-2 | T-3                                    → baton row (via baton CLI);
-//                                                  linked rows follow external.url to the issue body
+//   R-2 | T-3                                    → baton row (via baton CLI)
+// The two tracks never cross — a baton row's body is its own; GitHub issues are
+// their own. (GitHub-side labels/lifecycle follow the relay convention.)
 // lint   — body has ## Goal / ## Verification / ## Refs, with one ```bash block
 //          immediately after the Verification heading (strict position: that is
 //          what makes extraction deterministic).
 // verify — lint, then run the bash block (set -e) in cwd. The block IS the
 //          formal definition of "done"; agents never self-report completion.
 // close  — lint → verify → only then: close the issue (completed) with the
-//          verification output + cc the creator + baton:needs-verification
-//          label; or, for local-only rows, result comment + set-status done.
+//          verification output + cc the creator + state:needs-verification
+//          label; or, for a baton row, result comment + set-status done.
 //
 // Node ≥20, stdlib only. Requires gh (authed, repo cwd) and baton on PATH.
 
@@ -78,14 +79,13 @@ const baton = (...args) => must(BATON[0], [...BATON.slice(1), ...args])
 
 const ISSUE_FIELDS = 'number,body,author,assignees,labels,url'
 
-// Resolve a ref to { body, issue?, local? } — the body is wherever the spec
-// lives (linked rows keep only the link locally, so we follow it).
+// Resolve a ref to { body, issue?, local? } — the spec lives in the row/issue
+// itself; the two tracks never cross (a baton row uses its own body).
 const loadItem = refStr => {
   const ref = classifyRef(refStr)
   if (ref.kind === 'issue') return issuePart(ref.selector)
   const kind = ref.code.startsWith('R-') ? 'requirement' : 'task'
   const item = JSON.parse(baton(kind, 'get', ref.code, '--json'))
-  if (item.external?.url) return { ...issuePart(item.external.url), local: { kind, code: ref.code } }
   return { body: item.body ?? '', issue: null, local: { kind, code: ref.code } }
 }
 const issuePart = selector => {
@@ -134,17 +134,16 @@ const workerId = () => {
 }
 
 const closeIssue = (it, output) => {
-  ghTry('label', 'create', 'baton:needs-verification', '--color', '1d76db')
+  ghTry('label', 'create', 'state:needs-verification', '--color', '1d76db')
   const author = it.issue.author?.login
   const assignees = (it.issue.assignees ?? []).map(a => a.login)
   const cc = author && !assignees.includes(author) ? `\n\ncc @${author} please verify` : ''
   const n = String(it.issue.number)
   const comment = `✓ Verification passed\n\n\`\`\`\n${output.trim() || '(no stdout)'}\n\`\`\`${cc}`
   gh('issue', 'close', n, '--reason', 'completed', '--comment', comment)
-  ghTry('issue', 'edit', n, '--remove-label', 'baton:blocked')
-  gh('issue', 'edit', n, '--add-label', 'baton:needs-verification')
+  ghTry('issue', 'edit', n, '--remove-label', 'state:in-progress')
+  gh('issue', 'edit', n, '--add-label', 'state:needs-verification')
   console.log(`\n✓ closed: ${it.issue.url}${cc ? `\n  cc'd creator @${author} for acceptance` : ''}`)
-  if (it.local) console.log('  now run a github sync so the baton mirror converges')
 }
 
 const closeLocal = (it, output) => {

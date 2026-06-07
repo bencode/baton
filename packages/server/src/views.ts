@@ -13,17 +13,6 @@ export const intParam = (s: string): Id => Number(s)
 export const isUniqueViolation = (e: unknown): boolean =>
   typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002'
 
-// Validate an incoming external association. Any HTTP client can send one
-// (only the CLI runs parseIssueUrl), and the (projectId, source, number)
-// unique constraint is meaningless when number is missing — so writes must
-// carry the full shape. Routes 400 on `external` values that fail this.
-export const isExternalRef = (e: unknown): boolean => {
-  if (typeof e !== 'object' || e === null) return false
-  const r = e as Record<string, unknown>
-  const numberOk = typeof r.number === 'number' && Number.isInteger(r.number) && r.number > 0
-  return r.source === 'github' && numberOk && (r.url === undefined || typeof r.url === 'string')
-}
-
 export type AppEnv = { Variables: AuthVars }
 
 // Merge a Session record with derived runtime view + the worker it belongs to.

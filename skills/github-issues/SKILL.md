@@ -3,123 +3,193 @@ name: github-issues
 description: >-
   Operate GitHub issues from the current repo via the gh CLI — list what's
   open, see who's working on what, view an issue with its discussion, create
-  or edit issues, comment progress, claim or hand off, close (completed /
-  not planned) and reopen. Use when asked "看看有哪些 issue / what's open",
-  "我的盘子 / what's on my plate", "看下 #12 / show me issue 12", "评论一下 /
-  comment on it", "建个 issue / file an issue", "这个不做了 / cancel it",
-  "关掉 #12 / close it", "认领 / take this", "转给 X / hand it to X", or any
-  direct issue operation. Mirroring issues into baton R/T is the sibling
-  skill github-sync; this one is the raw issue toolbox.
+  or edit issues, comment progress, claim or hand off, and drive the labeled
+  lifecycle (in-progress → needs-verification → verified) to close. Use when
+  asked "看看有哪些 issue / what's open", "我的盘子 / what's on my plate",
+  "看下 #12 / show me issue 12", "评论一下 / comment on it", "建个 issue /
+  file an issue", "这个不做了 / cancel it", "关掉 #12 / close it", "认领 /
+  take this", "转给 X / hand it to X", or any direct issue operation. The
+  GitHub track is independent of baton Requirement/Task (the baton skill) —
+  the two never cross-link.
 ---
 
 # github-issues
 
-GitHub issues are the source of truth for product discussion; this skill is the
-toolbox for operating them directly. Everything goes through `gh` in the repo
-cwd — origin repo and local auth are picked up automatically, **zero config**.
-No lifecycle labels, no bots: native semantics carry the state — assignee =
-claimed and being worked, closed + state_reason = outcome, comments = progress.
+GitHub Issues are the source of truth for the GitHub collaboration track. Single-step
+actions go through `gh` (repo + auth auto-detected from the git remote, **zero config**);
+the multi-step **lint → verify → close** gate goes through the bundled sensor
+`item.mjs` (shared with the baton skill). This track follows the **relay convention**:
+labels carry the lifecycle, and "done" is a machine-run Verification block, not a self-report.
+
+## First-time setup (per repo)
+
+Create the 7 labels once (idempotent; never overwrites existing ones):
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/init-labels.sh"
+```
 
 ## Output style (default behavior)
 
-When showing issues to a human, lead with the clickable URL; don't dump bodies
-into the terminal:
+When showing issues to a human, lead with the clickable URL; don't dump bodies:
 
 ```
-#12  Support unlinking the external ref  [open]  @bencode
-     https://github.com/<owner>/<repo>/issues/12
+#42  Extract shared validation helper  [state:in-progress]  @bencode
+     https://github.com/<owner>/<repo>/issues/42
 ```
 
-Expand the body/discussion only when asked to analyze, summarize, or when you
+Expand the body/discussion only when asked to analyze, summarize, compare, or when you
 are about to start working on it.
 
-## Command surface
+## Required issue body (3 sections)
 
-| group | command | purpose |
+Every issue body carries the same spec the baton track uses — the Verification block is
+the **formal definition of done** (a sensor, not prose). `item.mjs lint` enforces it; an
+issue that fails lint cannot be closed.
+
+```markdown
+## Goal
+
+Quantified outcome — "after this, the system has state X". Not "improve X".
+
+## Verification
+
+​```bash
+test -f src/lib/validate.ts
+pnpm test src/lib/validate.test.ts --silent
+​```
+
+## Refs
+
+- doc: docs/xxx.md / file paths / #N
+```
+
+Rules: the ```bash block sits **immediately after** the `## Verification` heading (blank
+lines only — strict position keeps extraction deterministic); exactly one block;
+executable, repeatable commands only — never `# manual: ...`.
+
+## Labels (the contract — names matter, descriptions are cosmetic)
+
+| label | meaning | added / removed by |
 |---|---|---|
-| inventory | `gh issue list --state open --limit 200 --json number,title,url,assignees` | what's open (default page is 30 — always raise it) |
-| inventory | `gh issue list --assignee @me --state open` | my plate |
-| inventory | `gh issue list --assignee <user>` / `--label <x>` | who's on what / by label |
-| inventory | `gh issue list --state closed --search "closed:>2026-06-01 keyword"` | recently closed / keyword search |
-| inspect | `gh issue view <n> --comments` | full context: body + discussion (read before working) |
-| inspect | `gh issue view <n> --json number,title,body,state,stateReason,assignees,labels,comments,url` | structured (for reconciliation/scripts) |
-| create | `gh issue create --title "..." --body-file /tmp/body.md [--assignee <u>] [--label <x>]` | file an issue (body via file — no shell-escaping accidents) |
-| edit | `gh issue edit <n> --title/--body/--add-label/--remove-label` | adjust fields |
-| communicate | `gh issue comment <n> --body "..."` | progress / conclusions / questions (`#N` cross-links, `@user` mentions) |
-| lifecycle | `gh issue close <n> --comment "..."` | done (state_reason: completed) |
-| lifecycle | `gh issue close <n> --reason "not planned" --comment "..."` | cancelled / won't do (also: `--reason duplicate`) |
-| lifecycle | `gh issue reopen <n>` | not actually done — reopen, then comment why |
-| ownership | `gh issue edit <n> --add-assignee @me` | claim before starting work |
-| ownership | `gh issue edit <n> --remove-assignee <old> --add-assignee <new>` | hand off (+ a hand-over comment) |
+| `actor:claude-code` / `actor:helm-agent` / `actor:scheduled` | who is meant to execute (a label, not an assignee) | whoever routes it |
+| `state:in-progress` | assignee is working | assignee adds; `item.mjs close` removes it |
+| `state:needs-clarification` | waiting on the creator for info | assignee adds / removes |
+| `state:needs-verification` | closed, awaiting the creator's in-person acceptance | `item.mjs close` adds it; creator removes on accept |
+| `state:verified` | creator has personally verified | creator adds when satisfied |
+
+- **assignee** = the GitHub user primarily responsible (a real handle, 0-N). Nickname
+  call-outs go in the body, never as the assignee.
+- Issues are decoupled from git branches — never switch branches because a label changed.
+
+## State semantics
+
+| open/closed | label | meaning |
+|---|---|---|
+| open | none | assigned, not started |
+| open | `state:in-progress` | assignee working |
+| open | `state:needs-clarification` | waiting on creator |
+| closed | `state:needs-verification` | awaiting creator acceptance |
+| closed | `state:verified` | verified, fully done |
+| closed | no lifecycle label | anomaly (process incomplete / legacy) |
+
+## The sensor (lint / verify / close)
+
+`item.mjs` lives in the sibling baton skill; ref = `#N` / issue url.
+
+```bash
+S="${CLAUDE_SKILL_DIR}/../baton/scripts/item.mjs"
+node "$S" lint   <#N>   # structure gate
+node "$S" verify <#N>   # run the Verification block ("is it done?") without closing
+node "$S" close  <#N>   # lint → verify → close (completed) + state:needs-verification + cc creator
+```
+
+`close` is the ONLY way to close a structured issue: it lints, runs the Verification block
+(`set -e`), and only a passing run closes it — removing `state:in-progress`, adding
+`state:needs-verification`, and cc'ing the creator. Any failing step refuses the close.
+Never bare `gh issue close` a structured issue (that bypasses verify = self-reporting done);
+a `--reason "not planned"` cancellation is the exception (no verify gate — see flows).
+
+## Command surface (single-step gh)
+
+| group | command |
+|---|---|
+| inventory | `gh issue list --state open --limit 200 --json number,title,url,assignees,labels` |
+| my plate | `gh issue list --assignee @me --state open` |
+| by actor | `gh issue list --label actor:claude-code --state open` |
+| awaiting my accept | `gh issue list --author @me --state closed --label state:needs-verification` |
+| inspect | `gh issue view <n> --comments` (read before working) |
+| create | `gh issue create --title "..." --body-file /tmp/body.md [--assignee <u>] [--label actor:claude-code]` |
+| start | `gh issue edit <n> --add-label state:in-progress` |
+| clarify | `gh issue comment <n> --body "..."` + `gh issue edit <n> --add-label state:needs-clarification` |
+| comment | `gh issue comment <n> --body "..."` (`#N` cross-links, `@user` mentions) |
+| cancel | `gh issue close <n> --reason "not planned" --comment why` |
+| reopen | `gh issue reopen <n>` (then comment why) |
+| claim / hand off | `gh issue edit <n> --add-assignee @me` / `--remove-assignee <old> --add-assignee <new>` |
 
 ## Flows
 
 ```clojure
 (defn inventory []                                ; "what's open?" / "my plate?"
-  (-> (gh issue list --state open --limit 200 --json number,title,url,assignees)
-      (render :url-first)))                       ; numbers + links + owners, no bodies
+  (-> (gh issue list --state open --limit 200 --json number,title,url,assignees,labels)
+      (render :url-first :group-by-state)))
 
-(defn inspect [n]                                 ; "看下 #12" / before working
-  (gh issue view n --comments))                   ; live-read; never paste whole bodies back
-
-(defn file-issue [title body]                     ; "建个 issue"
-  (-> (confirm-with-human title body)             ; outward-facing: confirm wording first
+(defn file-issue [title body]                     ; "建个 issue" — outward-facing
+  (-> (confirm-with-human title body)             ; Goal/Verification/Refs; confirm wording first
       (write-file "/tmp/issue-body.md" body)
-      (gh issue create --title title --body-file "/tmp/issue-body.md")
-      (reply url)))                               ; lead with the link
+      (gh issue create --title title --body-file "/tmp/issue-body.md" --assignee who --label actor)
+      (item.mjs lint <#N>)                         ; re-check structure
+      (reply url)))
 
-(defn claim [n]                                   ; before starting work — visible ownership
-  (gh issue edit n --add-assignee "@me"))
+(defn start [n]                                   ; before working — visible ownership
+  (-> (gh issue edit n --add-assignee "@me")
+      (gh issue edit n --add-label state:in-progress)))
 
-(defn report [n conclusion]                       ; progress or findings, any time
-  (gh issue comment n --body conclusion))         ; conclusion + refs (commit/branch/files)
+(defn clarify [n question]                        ; need info from the creator
+  (-> (gh issue comment n --body question)
+      (gh issue edit n --add-label state:needs-clarification)))  ; remove + re-add in-progress on answer
 
-(defn finish [n conclusion]                       ; only after the human confirms done
-  (gh issue close n --comment conclusion))        ; conclusion comment is mandatory
+(defn finish [n]                                  ; the only close for a structured issue
+  (item.mjs close n))                             ; lint → verify → close + needs-verification + cc creator
 
-(defn cancel [n reason]                           ; "这个不做了" — never close silently
-  (gh issue close n --reason "not planned" --comment reason))
+(defn accept [n]                                  ; creator, satisfied after in-person check
+  (gh issue edit n --remove-label state:needs-verification --add-label state:verified))
 
-(defn not-done [n reason]                         ; acceptance failed
+(defn reject [n reason]                           ; creator, not satisfied
   (-> (gh issue reopen n)
+      (gh issue edit n --remove-label state:needs-verification --add-label state:in-progress)
       (gh issue comment n --body reason)))
 
-(defn hand-off [n from to context]                ; transfer ownership with a baton pass
+(defn cancel [n reason]                           ; "这个不做了" — no verify gate
+  (gh issue close n --reason "not planned" --comment reason))
+
+(defn hand-off [n from to context]
   (-> (gh issue edit n --remove-assignee from --add-assignee to)
       (gh issue comment n --body context)))       ; where it stands, what's left, gotchas
 ```
 
 ## Discipline
 
-- Read before acting: `gh issue view <n> --comments` is mandatory before working on or
-  commenting about an issue.
-- Claim before working (`--add-assignee @me`) so others can see who's on it; hand off with
-  a context comment, never by silently swapping assignees.
-- A close carries its conclusion (what was done, which branch/commit, how it was verified);
-  cancellations use `--reason "not planned"` + why — never close silently, never close an
-  issue you didn't create without the creator's go-ahead.
-- Comments carry conclusions + references, not big spec or diff dumps.
+- Read before acting: `gh issue view <n> --comments` before working on or commenting about an issue.
+- Claim + `state:in-progress` before working, so others see you're on it; hand off with a context comment.
+- Close a structured issue only via `item.mjs close` (verify gate); cancellations use
+  `--reason "not planned"` + why — never close silently, never close an issue you didn't create
+  without the creator's go-ahead.
+- Creator acceptance is a real step: `state:needs-verification` → (creator) `state:verified`.
+  Closed with no lifecycle label is an anomaly.
+- Comments carry conclusions + references (commit/branch/files), not big spec or diff dumps.
 - Creating an issue is outward-facing: confirm title/body wording with the human first.
-- If the repo has its own issue conventions (lifecycle labels, automation bots, required
-  body sections), follow them — this skill defines defaults, not overrides.
-- Labels in the `baton:*` namespace belong to the github-sync bridge (mirror markers,
-  blocked/acceptance signals); don't add or remove them from here.
-- Issues in the baton workflow (mirrored or `baton:*`-labeled) close through the baton
-  skill's `item.mjs close` gate (lint → verify → close), not a bare `gh issue close`;
-  plain issues outside the workflow are unrestricted.
-- Issues linked to baton R/T: title/status flow through the github-sync skill's sync pass;
-  don't hand-edit the baton side.
+- This track does not touch baton Requirement/Task — no mirroring, no linking. For local
+  work items use the baton skill instead.
 
 ## Appendix: sub-issues (optional)
 
-Decomposition normally lives on the baton side (tasks, free-form). When a human explicitly
-wants GitHub-side hierarchy, the sub-issues API is reachable via `gh api` (no native gh
-subcommand yet); note it takes the child's numeric **id**, not its #number:
+When a human explicitly wants GitHub-side hierarchy, the sub-issues API is reachable via
+`gh api` (no native gh subcommand yet); it takes the child's numeric **id**, not its #number:
 
 ```bash
 gh api repos/{owner}/{repo}/issues/{n}/sub_issues                        # list children
 gh api -X POST repos/{owner}/{repo}/issues/{n}/sub_issues \
   -F sub_issue_id="$(gh api repos/{owner}/{repo}/issues/<child-n> --jq .id)"  # attach a child
-# careful: the numeric REST id (gh api ... --jq .id), NOT the #number, and not
-# the GraphQL node id that `gh issue view --json id` returns
+# careful: the numeric REST id (gh api ... --jq .id), NOT the #number or the GraphQL node id
 ```

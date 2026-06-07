@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
-import { externalColumnsPatch, toExternalColumns, toRequirement } from '../mappers.ts'
+import { toRequirement } from '../mappers.ts'
 import type { Store } from '../types.ts'
 import { nextCode } from './codec.ts'
 
@@ -16,7 +16,6 @@ export const prismaRequirements = (prisma: PrismaClient): Store['requirements'] 
           body: input.body,
           resources: JSON.stringify(input.resources ?? []),
           status: input.status ?? 'active',
-          ...(input.external ? toExternalColumns(input.external) : {}),
         },
       })
       return toRequirement(r)
@@ -43,7 +42,6 @@ export const prismaRequirements = (prisma: PrismaClient): Store['requirements'] 
           body: patch.body,
           resources: patch.resources ? JSON.stringify(patch.resources) : undefined,
           status: patch.status,
-          ...externalColumnsPatch(patch.external),
         },
       }),
     ),

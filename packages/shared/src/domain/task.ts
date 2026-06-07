@@ -1,4 +1,3 @@
-import type { ExternalRef } from './github.ts'
 import type { Code, Id } from './ids.ts'
 
 // Execution dimension. `blocked` is stored and means "waiting on a human"
@@ -18,7 +17,6 @@ export type Task = {
   body?: string // detailed task content (Markdown); rendered with the shared Markdown component
   dependsOn: Id[] // prerequisite task ids (int FKs); presentation layers translate to codes
   status: TaskStatus
-  external?: ExternalRef // light link to the external record this mirrors (e.g. GitHub issue)
   createdAt: number
   updatedAt: number
 }

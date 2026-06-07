@@ -1,4 +1,4 @@
-import type { Code, ExternalRef, Id, Task, TaskComment, TaskStatus } from '@baton/shared'
+import type { Code, Id, Task, TaskComment, TaskStatus } from '@baton/shared'
 import { fetchItemByCode } from './items.ts'
 import { request } from './request.ts'
 
@@ -7,11 +7,9 @@ export type TaskInput = {
   title: string
   body?: string
   dependsOn?: Id[]
-  external?: ExternalRef
 }
 
-// external: null clears the association (unlink)
-export type TaskUpdate = Partial<{ title: string; body: string; external: ExternalRef | null }>
+export type TaskUpdate = Partial<{ title: string; body: string }>
 
 export type TaskClient = {
   create(input: TaskInput): Promise<Task>

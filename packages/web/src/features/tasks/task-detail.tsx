@@ -1,6 +1,5 @@
 import { type Code, type Id, isReady } from '@baton/shared'
 import { useMemo } from 'react'
-import { GithubLink } from '../../components/github-link'
 import { Markdown } from '../../components/markdown'
 import { StatusBadge } from '../../components/status-badge'
 import { TaskComments } from './task-comments'
@@ -30,7 +29,6 @@ export const TaskDetail = ({ projectId, code }: TaskDetailProps) => {
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold tracking-tight text-gray-900">{task.title}</h2>
         <StatusBadge status={task.status} />
-        <GithubLink external={task.external} />
       </div>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 rounded-md border border-gray-100 bg-gray-50/60 p-3 text-sm text-gray-700">
         <dt className="text-gray-400">ready</dt>

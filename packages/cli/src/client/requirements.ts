@@ -1,11 +1,4 @@
-import type {
-  Code,
-  ExternalRef,
-  Id,
-  Requirement,
-  RequirementStatus,
-  ResourceRef,
-} from '@baton/shared'
+import type { Code, Id, Requirement, RequirementStatus, ResourceRef } from '@baton/shared'
 import { fetchItemByCode } from './items.ts'
 import { request } from './request.ts'
 
@@ -15,14 +8,12 @@ export type RequirementInput = {
   description?: string
   body?: string
   resources?: ResourceRef[]
-  external?: ExternalRef
 }
 
 export type RequirementUpdate = Partial<{
   title: string
   description: string
   body: string
-  external: ExternalRef | null // null clears the association (unlink)
 }>
 
 export type RequirementClient = {

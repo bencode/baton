@@ -45,8 +45,8 @@ Project ─► Requirement (R-N)   status: active → done | cancelled   (produc
 ## What kind to create
 
 - **A new problem / bug / idea / need = a Requirement** — any size; a one-line bug is a valid
-  work item (in a GitHub repo, github-sync's `create-work-item` makes it an issue + linked
-  mirror in one step). If one sitting finishes it, don't decompose at all.
+  work item. (Working GitHub issues directly instead? That's the separate github-issues skill —
+  the two tracks don't cross.) If one sitting finishes it, don't decompose at all.
 - **Tasks exist only as decomposition** of a Requirement (`plan-and-decompose`).
 - **A task with no natural parent** goes under the project's standing **`Inbox`** Requirement:
   find it by exact title `Inbox`; if missing, create it once
@@ -81,8 +81,8 @@ Rules: the ```bash block sits **immediately after** the `## Verification`
 heading (blank lines only — strict position keeps extraction deterministic);
 exactly one block; executable, repeatable commands only — never `# manual: ...`.
 
-The sensor tool (bundled with this skill; ref = `#N` / issue url / `R-N` / `T-N`,
-linked rows follow their issue link for the body):
+The sensor tool (bundled with this skill; ref = `R-N` / `T-N` for a baton row,
+or `#N` / issue url for a GitHub issue — the two tracks are independent):
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/item.mjs" lint   <ref>  # structure gate
@@ -90,9 +90,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/item.mjs" verify <ref>  # run the bash block (
 node "${CLAUDE_SKILL_DIR}/scripts/item.mjs" close  <ref>  # lint → verify → close/done + report
 ```
 
-`close` is the ONLY exit to done: issues get closed (completed) with the verify
-output + `baton:needs-verification` + cc to the creator; local rows get a result
-comment + `set-status done`. Any failing step refuses the close.
+`close` is the ONLY exit to done: a baton row gets a result comment + `set-status done`;
+a GitHub issue gets closed (completed) with the verify output + `state:needs-verification`
++ cc to the creator. Any failing step refuses the close.
 
 ## Command surface
 
@@ -136,13 +136,10 @@ comment + `set-status done`. Any failing step refuses the close.
 
 (defn stuck [T-N]                              ; need a human: a decision, a credential, missing context
   (-> (baton task comment add T-N "blocked: <what's stuck> / need <who> to <answer what> / tried <...>" --worker id)
-      (baton task set-status T-N blocked)
-      (when (linked? T-N or its R-N)           ; GitHub-linked → mirror the ask (github-sync skill)
-        (github-sync block-mirror))))          ; issue comment + baton:blocked label + optional assignee
+      (baton task set-status T-N blocked)))
 
-(defn resume [T-N]                             ; the human answered (baton comment or issue reply)
+(defn resume [T-N]                             ; the human answered (baton comment)
   (-> (baton task set-status T-N in_progress)
-      (when linked (github-sync unblock-mirror)) ; remove baton:blocked
       (continue)))
 ```
 

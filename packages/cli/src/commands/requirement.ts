@@ -1,9 +1,9 @@
-import type { ExternalRef, Id, RequirementStatus } from '@baton/shared'
+import type { Id, RequirementStatus } from '@baton/shared'
 import { defineCommand } from 'citty'
 import type { RequirementUpdate } from '../client/requirements.ts'
 import type { ApiClient } from '../client.ts'
 import { fmtRequirement, removed, renderList, renderOne } from '../output.ts'
-import { clientFor, common, parseIssueUrl, resolveProjectId } from '../util.ts'
+import { clientFor, common, resolveProjectId } from '../util.ts'
 
 export const createRequirement = (
   c: ApiClient,
@@ -12,7 +12,6 @@ export const createRequirement = (
     title: string
     description?: string
     body?: string
-    external?: ExternalRef
   },
   json: boolean,
 ): Promise<string> => c.requirements.create(input).then(r => renderOne(r, fmtRequirement, json))
@@ -54,7 +53,6 @@ export const requirement = defineCommand({
         project: { type: 'string', description: 'project id (overrides .baton.json)' },
         desc: { type: 'string', description: 'description' },
         body: { type: 'string', description: 'requirement body (markdown)' },
-        github: { type: 'string', description: 'link a GitHub issue url (light association)' },
         ...common,
       },
       run: async ({ args }) => {
@@ -66,7 +64,6 @@ export const requirement = defineCommand({
               title: args.title,
               description: args.desc,
               body: args.body,
-              external: args.github ? parseIssueUrl(args.github) : undefined,
             },
             Boolean(args.json),
           ),
@@ -91,41 +88,6 @@ export const requirement = defineCommand({
         const c = clientFor(args)
         const id = await resolveByCode(c, resolveProjectId(args), args.code)
         console.log(await updateRequirement(c, id, patch, Boolean(args.json)))
-      },
-    }),
-    link: defineCommand({
-      meta: { name: 'link', description: 'link a requirement to a GitHub issue url' },
-      args: {
-        code: { type: 'positional', required: true, description: 'requirement code (R-N)' },
-        // Named `issue` (not `url`) — `url` would collide with the common --url flag.
-        issue: { type: 'positional', required: true, description: 'GitHub issue url' },
-        project: { type: 'string', description: 'project id (overrides .baton.json)' },
-        ...common,
-      },
-      run: async ({ args }) => {
-        const c = clientFor(args)
-        const id = await resolveByCode(c, resolveProjectId(args), args.code)
-        console.log(
-          await updateRequirement(
-            c,
-            id,
-            { external: parseIssueUrl(args.issue) },
-            Boolean(args.json),
-          ),
-        )
-      },
-    }),
-    unlink: defineCommand({
-      meta: { name: 'unlink', description: 'clear a requirement’s GitHub issue association' },
-      args: {
-        code: { type: 'positional', required: true, description: 'requirement code (R-N)' },
-        project: { type: 'string', description: 'project id (overrides .baton.json)' },
-        ...common,
-      },
-      run: async ({ args }) => {
-        const c = clientFor(args)
-        const id = await resolveByCode(c, resolveProjectId(args), args.code)
-        console.log(await updateRequirement(c, id, { external: null }, Boolean(args.json)))
       },
     }),
     ls: defineCommand({
