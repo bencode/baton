@@ -28,20 +28,20 @@ export const ActivityGroupView = ({ group }: { group: ActivityGroup }) => {
       <button
         type="button"
         onClick={() => setChoice(!open)}
-        className="flex items-center gap-2 self-start rounded-md px-1 py-0.5 text-left font-mono text-xs text-gray-400 hover:text-gray-600"
+        className="flex max-w-full min-w-0 items-center gap-2 self-start rounded-md px-1 py-0.5 text-left font-mono text-xs text-gray-400 hover:text-gray-600"
       >
         <Caret open={open} />
-        <span>
+        <span className="shrink-0">
           {steps} step{steps === 1 ? '' : 's'}
         </span>
-        {parts.length > 0 && <span className="text-gray-300">· {parts.join(' · ')}</span>}
+        {parts.length > 0 && <span className="min-w-0 truncate text-gray-300">· {parts.join(' · ')}</span>}
         {failed > 0 && (
-          <span className="flex items-center gap-1 text-red-600">
+          <span className="flex shrink-0 items-center gap-1 text-red-600">
             <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-red-500" />
             {failed} failed
           </span>
         )}
-        {group.live && <span className="text-blue-500">running…</span>}
+        {group.live && <span className="shrink-0 text-blue-500">running…</span>}
       </button>
       {open && (
         <div className="relative flex min-w-0 flex-col gap-0.5 pl-4">

@@ -12,7 +12,7 @@ type EventStreamProps = {
 }
 
 export const EventStream = ({ items, scrollRef, working = false }: EventStreamProps) => (
-  <div ref={scrollRef} className="flex-1 overflow-auto bg-white px-3 py-4 sm:px-6">
+  <div ref={scrollRef} className="min-w-0 flex-1 overflow-auto bg-white px-3 py-4 sm:px-6">
     {items.length === 0 ? (
       <p className="text-sm text-gray-400">no events yet — say something below.</p>
     ) : (

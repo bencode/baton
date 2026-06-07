@@ -112,18 +112,18 @@ export const ToolBlock = ({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-2 self-start text-left font-mono text-xs ${chrome}`}
+        className={`flex max-w-full min-w-0 items-center gap-2 self-start text-left font-mono text-xs ${chrome}`}
       >
         <Caret open={open} />
-        <span className="font-semibold text-gray-800">{name}</span>
-        {summary && <span className="truncate text-gray-500">{summary}</span>}
+        <span className="shrink-0 font-semibold text-gray-800">{name}</span>
+        {summary && <span className="min-w-0 truncate text-gray-500">{summary}</span>}
         {lines !== null && (
-          <span className="text-[10px] text-gray-400">
+          <span className="shrink-0 text-[10px] text-gray-400">
             {lines} line{lines === 1 ? '' : 's'}
           </span>
         )}
         {isError && (
-          <span className="rounded bg-red-50 px-1 text-[10px] text-red-700 ring-1 ring-inset ring-red-200/60">
+          <span className="shrink-0 rounded bg-red-50 px-1 text-[10px] text-red-700 ring-1 ring-inset ring-red-200/60">
             error
           </span>
         )}

@@ -37,7 +37,7 @@ export const SessionPage = () => {
           {title}
         </span>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1">
         <SessionDetail sessionId={data.session.id} />
       </div>
     </div>

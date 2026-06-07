@@ -158,7 +158,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const working = (sending || isAgentWorking(events)) && session.attached
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-w-0 flex-col">
       <SessionHeader
         session={session}
         active={session.attached}
