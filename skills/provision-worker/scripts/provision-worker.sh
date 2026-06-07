@@ -73,6 +73,22 @@ else
   git clone "$REPO" "$DIR" || die "git clone failed"
 fi
 
+# 3b) an empty repo (unborn HEAD, e.g. a brand-new GitHub repo) can't host git
+#     worktrees — sessions would fail with "invalid reference". Seed an initial
+#     empty commit and push it (push is best-effort: the local commit alone
+#     already unblocks worktrees).
+if ! git -C "$DIR" rev-parse --verify -q HEAD >/dev/null; then
+  info "repo is empty (no commits) — seeding an initial commit"
+  git -C "$DIR" commit --allow-empty -m "chore: initialize repository" \
+    || die "initial commit failed (git config user.name/user.email set on this host?)"
+  if git -C "$DIR" push -u origin HEAD 2>/tmp/pw-push.err; then
+    ok "pushed initial commit to origin"
+  else
+    printf '\033[33m!\033[0m initial push failed (%s). worker still works; push it yourself:\n  git -C %s push -u origin HEAD\n' \
+      "$(tr -d '\n' </tmp/pw-push.err)" "$DIR" >&2
+  fi
+fi
+
 # 4) register with an isolated identity (own machineId + worktrees)
 mkdir -p "$STATE/baton"
 info "registering worker '$NAME' on project $PROJECT (state: $STATE)"

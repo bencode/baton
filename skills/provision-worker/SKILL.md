@@ -57,6 +57,9 @@ What it does (idempotent; refuses if the plist already exists):
 - **Default model = reclaude** — the host must already be `reclaude login`'d. For
   a different model, point `--claude-bin` at another wrapper, or hand-edit the
   plist's `EnvironmentVariables` to add `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`.
+- **Empty repos are seeded:** a brand-new repo with zero commits can't host git
+  worktrees (sessions would fail with `invalid reference`), so the script
+  creates an initial empty commit and pushes it to origin (push is best-effort).
 - **Name uniqueness:** the name must be unused in the target project (server
   enforces `(project, name)` unique). A collision aborts with a hint.
 - **launchctl-from-launchd risk:** bootstrapping a sibling agent from inside a
