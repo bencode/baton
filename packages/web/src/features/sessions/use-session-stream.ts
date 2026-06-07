@@ -40,6 +40,10 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     lastSeqRef.current = 0
     let alive = true
     let opened = false
+    // True once a full (since=0) backfill has succeeded. Until then a reconnect
+    // must re-pull everything — resuming from lastSeqRef would permanently hide
+    // the history below the live tail's sequences.
+    let loaded = false
     const apply = (incoming: SessionEvent[]) =>
       setEvents(prev => {
         const next = mergeEvents(prev, incoming)
@@ -57,16 +61,31 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     const backfill = (since: number) =>
       api.sessions
         .listEvents(sessionId, since)
-        .then(history => alive && apply(history))
-        .catch(() => {})
+        .then(history => {
+          if (!alive) return
+          apply(history)
+          if (since === 0) loaded = true
+          // A failed backfill parks status on 'error'; if the tail is still up,
+          // a later successful load means we are genuinely live again.
+          if (es.readyState === EventSource.OPEN) setStatus('open')
+        })
+        .catch((err: unknown) => {
+          if (!alive) return
+          // A failed backfill means the transcript has a hole — keep the
+          // "connection lost" banner up rather than lie with 'open'. The resume
+          // point did not advance, so the next reconnect retries the same gap.
+          console.error('[session-stream] history backfill failed', err)
+          setStatus('error')
+        })
     // Live tail first (so nothing created during the history fetch is missed —
     // the merge dedupes any overlap by id), then load history.
     const es = new EventSource(api.sessionStreamUrl(sessionId))
     es.onopen = () => {
       setStatus('open')
       // First open is covered by the initial backfill below; later opens are
-      // reconnects, where only the gap since the last seen sequence is re-pulled.
-      if (opened) backfill(lastSeqRef.current)
+      // reconnects, where only the gap since the last seen sequence is re-pulled
+      // — unless the full transcript never loaded, then pull it all.
+      if (opened) backfill(loaded ? lastSeqRef.current : 0)
       opened = true
     }
     es.onmessage = e => {
