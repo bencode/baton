@@ -34,10 +34,27 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     setEvents([])
     setStatus('connecting')
     let alive = true
+    let opened = false
+    // The live tail is `?live=1` (no server replay) and EventSource auto-retries
+    // on a drop, so anything created during a disconnect is absent from both the
+    // post-reconnect tail and the one-shot history GET below. Re-fetch history on
+    // every (re)open and merge — mergeEvents dedupes by id, so this backfills the
+    // gap idempotently instead of silently losing messages until a manual reload.
+    const backfill = () =>
+      api.sessions
+        .listEvents(sessionId)
+        .then(history => alive && setEvents(prev => mergeEvents(prev, history)))
+        .catch(() => {})
     // Live tail first (so nothing created during the history fetch is missed —
     // the merge dedupes any overlap by id), then load history in one shot.
     const es = new EventSource(api.sessionStreamUrl(sessionId))
-    es.onopen = () => setStatus('open')
+    es.onopen = () => {
+      setStatus('open')
+      // First open is covered by the initial backfill below; later opens are
+      // reconnects, where the gap must be re-pulled.
+      if (opened) backfill()
+      opened = true
+    }
     es.onmessage = e => {
       try {
         const ev = JSON.parse(e.data) as SessionEvent
@@ -47,10 +64,7 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
       }
     }
     es.onerror = () => setStatus('error')
-    api.sessions
-      .listEvents(sessionId)
-      .then(history => alive && setEvents(prev => mergeEvents(prev, history)))
-      .catch(() => {})
+    backfill()
     return () => {
       alive = false
       es.close()
