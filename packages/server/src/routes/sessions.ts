@@ -305,12 +305,17 @@ export const registerSessionRoutes = (
 
   // Transcript history (persisted log) as a plain JSON list — the web loads this
   // once on open instead of replaying the whole transcript over SSE (which cost
-  // one re-render per event → O(n²) on long sessions). Gated like other reads.
+  // one re-render per event → O(n²) on long sessions). `?since=<seq>` bounds it
+  // to events at/after a sequence so the web can backfill just the gap after an
+  // SSE reconnect instead of re-pulling the whole transcript. Gated like other
+  // reads.
   app.get('/sessions/:id/events', async c => {
     const id = intParam(c.req.param('id'))
     const exists = await store.sessions.get(id)
     if (!exists) return c.json({ error: 'not found' }, 404)
-    return c.json(await store.sessions.listEvents(id))
+    const since = Number(c.req.query('since'))
+    const all = await store.sessions.listEvents(id)
+    return c.json(Number.isFinite(since) ? all.filter(e => e.sequence >= since) : all)
   })
 
   // Transcript stream: replays the persisted log then tails live. `?live=1` skips
