@@ -131,8 +131,9 @@ export type Api = {
     ): Promise<SessionEvent>
     uploadAttachment(id: Id, file: File): Promise<Attachment>
     // Persisted transcript history, fetched once on open (the stream then only
-    // tails live) — avoids replaying the whole log over SSE.
-    listEvents(id: Id): Promise<SessionEvent[]>
+    // tails live) — avoids replaying the whole log over SSE. `since` bounds the
+    // result to events at/after a sequence, so a reconnect can pull just the gap.
+    listEvents(id: Id, since?: number): Promise<SessionEvent[]>
   }
   workers: {
     listByProject(projectId: Id): Promise<WorkerView[]>
@@ -237,7 +238,8 @@ export const createApi = (base: string = API_BASE): Api => {
         if (!r.ok) throw new Error(`POST ${url} → ${r.status}: ${await r.text()}`)
         return (await r.json()) as Attachment
       },
-      listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
+      listEvents: (id, since) =>
+        request(u(`/sessions/${id}/events${since ? `?since=${since}` : ''}`), { method: 'GET' }),
     },
     workers: {
       listByProject: projectId => request(u(`/projects/${projectId}/workers`), { method: 'GET' }),

@@ -175,6 +175,17 @@ describe('server HTTP — sessions + chat protocol', () => {
       got.filter(e => e.type === 'user_message').map(e => e.payload.text),
       ['one', 'two'],
     )
+
+    // ?since=<seq> bounds the history to events at/after a sequence — the web
+    // uses this to backfill only the gap after an SSE reconnect. 'two' is at
+    // sequence 1, so since=1 drops 'one' (sequence 0).
+    const sinceRes = await app.request(`/sessions/${session.id}/events?since=1`)
+    assert.equal(sinceRes.status, 200)
+    const sinceGot = (await sinceRes.json()) as Array<{ type: string; payload: { text?: string } }>
+    assert.deepEqual(
+      sinceGot.filter(e => e.type === 'user_message').map(e => e.payload.text),
+      ['two'],
+    )
     assert.equal((await app.request('/sessions/999999/events')).status, 404)
   })
 
