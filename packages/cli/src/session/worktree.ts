@@ -13,6 +13,16 @@ export const createWorktree = (input: {
 }): void => {
   if (existsSync(input.worktreePath))
     throw new Error(`worktree path already exists: ${input.worktreePath}`)
+  // An unborn HEAD (repo with zero commits) makes `git worktree add` fail with
+  // a cryptic "invalid reference" — surface the real cause instead.
+  const head = spawnSync('git', ['-C', input.repo, 'rev-parse', '--verify', '-q', 'HEAD'], {
+    stdio: 'pipe',
+    encoding: 'utf8',
+  })
+  if (head.status !== 0)
+    throw new Error(
+      `repo has no commits (unborn HEAD) — create an initial commit before starting sessions`,
+    )
   mkdirSync(dirname(input.worktreePath), { recursive: true })
   const branch = `baton/${input.sessionCode}`
   const r = spawnSync(

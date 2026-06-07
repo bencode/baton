@@ -4,7 +4,28 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { ensureExcluded } from './worktree.ts'
+import { createWorktree, ensureExcluded } from './worktree.ts'
+
+describe('createWorktree', () => {
+  test('empty repo (unborn HEAD) throws a clear error, not "invalid reference"', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'baton-wt-empty-'))
+    try {
+      execFileSync('git', ['-C', dir, 'init', '-q'])
+      assert.throws(
+        () =>
+          createWorktree({
+            repo: dir,
+            worktreePath: join(dir, 'wt'),
+            sessionCode: 'abc12345',
+            base: 'main',
+          }),
+        /repo has no commits/,
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
 
 describe('ensureExcluded', () => {
   test('appends once; second call is a no-op; non-git repo does not throw', () => {
