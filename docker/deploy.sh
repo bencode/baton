@@ -17,5 +17,11 @@ echo "[deploy] build + (re)start backend, bridge, feishu bridges & caddy"
 docker compose build backend bridge feishu feishu2
 docker compose up -d caddy backend bridge feishu feishu2
 
+# Caddyfile is bind-mounted, so `up -d` won't restart caddy when only the file
+# changed — reload it explicitly (fall back to a restart if reload fails).
+echo "[deploy] reload caddy (picks up Caddyfile changes)"
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
+  || docker compose restart caddy
+
 echo "[deploy] done."
 docker compose ps

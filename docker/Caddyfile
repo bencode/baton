@@ -6,13 +6,29 @@
 	# e.g. /sessions, /auth — the dev Vite proxy strips it too). flush_interval -1
 	# keeps SSE / streaming responses unbuffered.
 	handle_path /api/* {
-		reverse_proxy backend:3280 {
-			flush_interval -1
+		# SSE streams (paths ending in /stream): proxy as-is, NEVER compress —
+		# `encode` buffers, which would break the real-time flush `flush_interval -1`
+		# exists to preserve.
+		@stream path */stream
+		handle @stream {
+			reverse_proxy backend:3280 {
+				flush_interval -1
+			}
+		}
+		# Everything else (incl. the multi-MB /sessions/:id/events transcript):
+		# gzip/zstd. Session JSON is highly repetitive ⇒ ~10:1.
+		handle {
+			encode zstd gzip
+			reverse_proxy backend:3280 {
+				flush_interval -1
+			}
 		}
 	}
 
 	# SPA: serve built assets, fall back to index.html for client-side routes.
+	# Compress the JS/CSS bundle too for a faster first paint.
 	handle {
+		encode zstd gzip
 		root * /srv/web
 		try_files {path} /index.html
 		file_server
