@@ -42,6 +42,10 @@ export const startQuery = (
   const options: Options = {
     cwd: config.worktreePath,
     permissionMode: planMode ? 'plan' : 'bypassPermissions',
+    // Headless relay: no TTY/TUI can answer an interactive ask, so AskUserQuestion
+    // would fail the whole turn. Block it — the model asks in plain text instead,
+    // which the human reads in web/Feishu and replies to as a new turn.
+    disallowedTools: ['AskUserQuestion'],
     includePartialMessages: false,
     abortController,
     stderr: line => log(`[claude] ${line.trimEnd()}`),

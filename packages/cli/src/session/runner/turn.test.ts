@@ -125,4 +125,20 @@ describe('runTurn', () => {
     await runTurn(cfg, collector().worker, userMsg(), false, capture, () => {})
     assert.equal(seen.mode, 'bypassPermissions')
   })
+
+  // Headless relay can't answer interactive asks, so AskUserQuestion is blocked
+  // (Issue #9 Track A): the SDK options must always disallow it.
+  test('AskUserQuestion is disallowed in SDK options', async () => {
+    const seen: { disallowed?: unknown } = {}
+    const capture: QueryFn = params => {
+      seen.disallowed = (
+        params.options as { disallowedTools?: unknown } | undefined
+      )?.disallowedTools
+      return (async function* () {
+        yield { type: 'result', subtype: 'success', is_error: false, result: 'ok' } as never
+      })()
+    }
+    await runTurn(cfg, collector().worker, userMsg(), false, capture, () => {})
+    assert.deepEqual(seen.disallowed, ['AskUserQuestion'])
+  })
 })
