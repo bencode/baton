@@ -13,15 +13,17 @@ echo "[deploy] build web (SPA → web-dist volume)"
 docker compose --profile build build web-build
 docker compose --profile build run --rm web-build
 
-echo "[deploy] build + (re)start backend, bridge, feishu bridges & caddy"
+echo "[deploy] build + (re)start backend, bridge, feishu bridges"
 docker compose build backend bridge feishu feishu2
-docker compose up -d caddy backend bridge feishu feishu2
+docker compose up -d backend bridge feishu feishu2
 
-# Caddyfile is bind-mounted, so `up -d` won't restart caddy when only the file
-# changed — reload it explicitly (fall back to a restart if reload fails).
-echo "[deploy] reload caddy (picks up Caddyfile changes)"
-docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
-  || docker compose restart caddy
+# The Caddyfile is a single-FILE bind mount. `git pull` replaces it with a new
+# inode, but a running container stays bound to the OLD inode — so `caddy reload`
+# (and even `restart`, which keeps the container) would re-read the stale config.
+# Force-recreate so caddy re-binds the current Caddyfile. (`up -d` alone is a
+# no-op here: the service definition is unchanged.)
+echo "[deploy] recreate caddy (re-bind the updated Caddyfile)"
+docker compose up -d --force-recreate caddy
 
 echo "[deploy] done."
 docker compose ps
