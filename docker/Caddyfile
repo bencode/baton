@@ -2,33 +2,23 @@
 # One listener serves the SPA and proxies the API. The outer caddy reverse-proxies
 # baton.fmap.dev → this container's published ${CADDY_HOST_PORT}.
 :80 {
+	# Compress the API JSON (multi-MB session transcripts) and the SPA bundle —
+	# EXCEPT SSE streams (paths ending in /stream): `encode` buffers, which would
+	# break the real-time flush that `flush_interval -1` exists to preserve.
+	@compressible not path */stream
+	encode @compressible zstd gzip
+
 	# /api/* → backend. `handle_path` STRIPS the /api prefix (baton routes are flat,
 	# e.g. /sessions, /auth — the dev Vite proxy strips it too). flush_interval -1
 	# keeps SSE / streaming responses unbuffered.
 	handle_path /api/* {
-		# SSE streams (paths ending in /stream): proxy as-is, NEVER compress —
-		# `encode` buffers, which would break the real-time flush `flush_interval -1`
-		# exists to preserve.
-		@stream path */stream
-		handle @stream {
-			reverse_proxy backend:3280 {
-				flush_interval -1
-			}
-		}
-		# Everything else (incl. the multi-MB /sessions/:id/events transcript):
-		# gzip/zstd. Session JSON is highly repetitive ⇒ ~10:1.
-		handle {
-			encode zstd gzip
-			reverse_proxy backend:3280 {
-				flush_interval -1
-			}
+		reverse_proxy backend:3280 {
+			flush_interval -1
 		}
 	}
 
 	# SPA: serve built assets, fall back to index.html for client-side routes.
-	# Compress the JS/CSS bundle too for a faster first paint.
 	handle {
-		encode zstd gzip
 		root * /srv/web
 		try_files {path} /index.html
 		file_server
