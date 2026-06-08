@@ -22,6 +22,7 @@ import {
   removeWorktree,
   repoHeadBranch,
 } from '../session/worktree.ts'
+import { stale, streamWedged } from './watchdog.ts'
 
 // The persistent, lightweight worker process. It owns no Claude state itself —
 // it listens on the server→worker command stream and supervises one child
@@ -50,19 +51,33 @@ export const runWorkerDaemon = async (
   const children = new Map<Id, { child: ChildProcess; worktreePath: string }>()
   const log = (m: string): void => console.log(`[worker #${cfg.workerId} ${cfg.name}] ${m}`)
 
-  // The heartbeat is both the liveness signal AND the worker's self-watchdog.
-  // When the server flaps (e.g. a 502 window) the heartbeat loop and command
-  // stream can wedge while the process stays alive — so `restart: unless-stopped`
-  // (docker) / KeepAlive (launchd) never fire and the worker goes silently
-  // offline. After a sustained outage we tear down and exit non-zero so the
-  // supervisor respawns a clean worker that reconnects. The timeout makes a
-  // *hung* server count as a failure too (fetch has no timeout of its own).
+  // The worker has TWO independent liveness signals, each its own self-watchdog:
+  // the heartbeat POST proves the machine is reachable; the command stream (SSE)
+  // is how resume/create/stop commands actually arrive. After a server flap
+  // either can wedge while the process stays alive — so the supervisor (docker
+  // `restart` / launchd KeepAlive) never fires and the worker goes silently
+  // offline (commands dropped ⇒ "resume doesn't work"). We judge each by a TIME
+  // WINDOW against its last-OK timestamp and, once either is stale, exit non-zero
+  // so a clean worker respawns and re-subscribes. Time-windows (not a
+  // consecutive-failure count) so a *flapping* server — 502, 200, 502 — can't
+  // keep resetting the watchdog and stall forever. The per-ping timeout makes a
+  // *hung* server count as silence too (fetch has no timeout of its own).
   const HEARTBEAT_MS = 30_000
   const HEARTBEAT_TIMEOUT_MS = 15_000
-  const MAX_HEARTBEAT_FAILURES = 5
-  let heartbeatFailures = 0
+  const HEARTBEAT_DEAD_MS = 150_000 // ~5 missed beats with no real recovery
+  const STREAM_STALE_MS = 90_000 // stuck not-OPEN this long ⇒ wedged
+  const ES_OPEN = 1 // WHATWG EventSource.readyState: 0 CONNECTING, 1 OPEN, 2 CLOSED
+  let heartbeatOkAt = Date.now()
+  let streamOkAt = Date.now()
   let fatal = false
   let stop: () => void = () => {}
+
+  const trip = (reason: string): void => {
+    if (fatal) return
+    log(`${reason} — exiting so the supervisor restarts a clean worker`)
+    fatal = true
+    stop()
+  }
 
   const ping = async (): Promise<void> => {
     try {
@@ -72,20 +87,11 @@ export const runWorkerDaemon = async (
           setTimeout(() => reject(new Error('heartbeat timeout')), HEARTBEAT_TIMEOUT_MS),
         ),
       ])
-      heartbeatFailures = 0
+      heartbeatOkAt = Date.now()
     } catch (e) {
-      heartbeatFailures += 1
-      log(`heartbeat failed (${heartbeatFailures}/${MAX_HEARTBEAT_FAILURES}): ${String(e)}`)
-      if (heartbeatFailures >= MAX_HEARTBEAT_FAILURES) {
-        const downSec = (MAX_HEARTBEAT_FAILURES * HEARTBEAT_MS) / 1000
-        log(`heartbeat down ~${downSec}s — exiting so the supervisor restarts a clean worker`)
-        fatal = true
-        stop()
-      }
+      log(`heartbeat failed: ${String(e)}`)
     }
   }
-  void ping()
-  const hb = setInterval(() => void ping(), HEARTBEAT_MS)
 
   // Kill the child AND its descendants. The bin shim re-execs tsx, so the child
   // is a small process tree; `detached` makes it a process-group leader and a
@@ -231,8 +237,12 @@ export const runWorkerDaemon = async (
         },
       }),
   })
-  es.onopen = () => void reconcile().catch(err => log(`reconcile failed: ${String(err)}`))
+  es.onopen = () => {
+    streamOkAt = Date.now()
+    void reconcile().catch(err => log(`reconcile failed: ${String(err)}`))
+  }
   es.onmessage = e => {
+    streamOkAt = Date.now()
     try {
       const cmd = JSON.parse(e.data) as WorkerCommand
       if (cmd.cmd === 'session.start')
@@ -249,6 +259,21 @@ export const runWorkerDaemon = async (
   }
   es.onerror = () => log('command stream error (eventsource will retry)')
   log(`listening for commands (server ${cfg.server}, repo ${repo})`)
+
+  // Single 30s tick: heartbeat, then evaluate both watchdogs. `es` is in scope
+  // now, so streamWedged can read its live readyState.
+  const watchdog = (): void => {
+    const now = Date.now()
+    if (stale(heartbeatOkAt, now, HEARTBEAT_DEAD_MS))
+      trip(`heartbeat down ~${HEARTBEAT_DEAD_MS / 1000}s`)
+    else if (streamWedged(es.readyState === ES_OPEN, streamOkAt, now, STREAM_STALE_MS))
+      trip(`command stream wedged ~${STREAM_STALE_MS / 1000}s`)
+  }
+  void ping()
+  const hb = setInterval(() => {
+    void ping()
+    watchdog()
+  }, HEARTBEAT_MS)
 
   await new Promise<void>(resolve => {
     stop = resolve
