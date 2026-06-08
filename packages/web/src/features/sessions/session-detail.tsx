@@ -9,7 +9,7 @@ import { ConnectionBanner } from './session-detail/connection-banner'
 import { EventStream } from './session-detail/event-stream'
 import { QueuedMessages } from './session-detail/queued-messages'
 import { SessionHeader } from './session-detail/session-header'
-import { atBottom } from './session-detail/stick-to-bottom'
+import { useTranscriptScroll } from './session-detail/use-transcript-scroll'
 import { WorkingIndicator } from './session-detail/working-indicator'
 import { useSessionStream } from './use-session-stream'
 import { useSession, useSessions } from './use-sessions'
@@ -39,7 +39,9 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const projectId = sessionShallow?.projectId ?? null
   const { data: liveSessions } = useSessions(projectId)
   const session = liveSessions?.find(s => s.id === sessionId) ?? sessionShallow
-  const { events, status } = useSessionStream(session?.id ?? null)
+  const { events, status, hasOlder, loadingOlder, loadOlder } = useSessionStream(
+    session?.id ?? null,
+  )
   const items = useMemo(() => reduceEvents(events), [events])
   const queued = useMemo(() => pendingMessages(events), [events])
   const [draft, setDraft] = useState('')
@@ -50,41 +52,16 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const [sendError, setSendError] = useState<string | null>(null)
   const [showHelp, setShowHelp] = useState(false)
 
-  // Auto-scroll to the bottom as new items arrive, but only while pinned: once
-  // the user scrolls up to read earlier messages, streaming events must not yank
-  // the view back down. `stick` is a ref (not state) so the frequent scroll
-  // handler never re-renders; `pinned` mirrors it for the jump-to-latest button
-  // and flips only on a threshold crossing.
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-  const stick = useRef(true)
-  const [pinned, setPinned] = useState(true)
-  const onScroll = () => {
-    const el = scrollRef.current
-    if (!el) return
-    const next = atBottom(el.scrollHeight, el.scrollTop, el.clientHeight)
-    stick.current = next
-    setPinned(prev => (prev === next ? prev : next))
+  // Stick-to-bottom + jump-to-latest + load-earlier scroll handling (see hook).
+  const { scrollRef, pinned, onScroll, jumpToBottom, markPrepend } = useTranscriptScroll(
+    sessionId,
+    items.length,
+  )
+  // Record the reading position before fetching older events so it doesn't jump.
+  const onLoadOlder = () => {
+    markPrepend()
+    loadOlder()
   }
-  const jumpToBottom = () => {
-    const el = scrollRef.current
-    if (!el) return
-    el.scrollTop = el.scrollHeight
-    stick.current = true
-    setPinned(true)
-  }
-  // A newly opened session starts pinned to its latest message.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on session switch only
-  useEffect(() => {
-    stick.current = true
-    setPinned(true)
-  }, [sessionId])
-  // biome-ignore lint/correctness/useExhaustiveDependencies: items.length is the intended trigger
-  useEffect(() => {
-    if (!stick.current) return
-    const el = scrollRef.current
-    if (!el) return
-    el.scrollTop = el.scrollHeight
-  }, [items.length])
 
   // Auto-title trigger: while the session is still a placeholder, ask the worker
   // to title it after each completed turn (it reads its own transcript and may
@@ -202,6 +179,9 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         onScroll={onScroll}
         pinned={pinned}
         onJumpToBottom={jumpToBottom}
+        hasOlder={hasOlder}
+        loadingOlder={loadingOlder}
+        onLoadOlder={onLoadOlder}
       />
       {working && <WorkingIndicator />}
       <QueuedMessages queued={queued} />

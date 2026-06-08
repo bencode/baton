@@ -13,6 +13,10 @@ type EventStreamProps = {
   // Pinned to the bottom — when false (and there are events) the jump button shows.
   pinned?: boolean
   onJumpToBottom?: () => void
+  // Older history exists above the loaded window — show a "load earlier" button.
+  hasOlder?: boolean
+  loadingOlder?: boolean
+  onLoadOlder?: () => void
 }
 
 export const EventStream = ({
@@ -22,6 +26,9 @@ export const EventStream = ({
   onScroll,
   pinned = true,
   onJumpToBottom,
+  hasOlder = false,
+  loadingOlder = false,
+  onLoadOlder,
 }: EventStreamProps) => (
   // `relative` wrapper so the jump button anchors to the viewport, not the
   // scrolled content; the inner div is the actual scroll container.
@@ -35,6 +42,18 @@ export const EventStream = ({
         <p className="text-sm text-gray-400">no events yet — say something below.</p>
       ) : (
         <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-3">
+          {hasOlder && (
+            <div className="flex justify-center pb-1">
+              <button
+                type="button"
+                onClick={onLoadOlder}
+                disabled={loadingOlder}
+                className="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-500 text-xs hover:bg-gray-50 disabled:opacity-60"
+              >
+                {loadingOlder ? '加载中…' : '↑ 加载更早的消息'}
+              </button>
+            </div>
+          )}
           {groupRenderItems(items, working).map(item =>
             item.kind === 'activity-group' ? (
               <ActivityGroupView key={item.key} group={item} />

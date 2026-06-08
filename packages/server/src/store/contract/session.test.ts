@@ -77,6 +77,28 @@ describe('Store contract — sessions', () => {
     assert.deepEqual(events[0]?.payload, { text: 'hi' })
   })
 
+  test('listEventWindow: most-recent n, ascending; before pages older; clamps + empties', async () => {
+    const { project } = await seedReq(ctx)
+    const workerId = await seedWorker(ctx, project)
+    const s = await ctx.store.sessions.create({
+      projectId: project,
+      workerId,
+      mode: 'worker',
+      name: 's',
+      agentKind: 'claude-code',
+    })
+    for (let i = 0; i < 5; i++) await ctx.store.sessions.appendEvent(s.id, 'system', { i })
+    const seqs = async (o: { before?: number; limit: number }) =>
+      (await ctx.store.sessions.listEventWindow(s.id, o)).map(e => e.sequence)
+    // most recent 2, returned ascending
+    assert.deepEqual(await seqs({ limit: 2 }), [3, 4])
+    // page the 2 immediately before sequence 3
+    assert.deepEqual(await seqs({ before: 3, limit: 2 }), [1, 2])
+    // limit past the start clamps to what exists; before the start is empty
+    assert.deepEqual(await seqs({ limit: 99 }), [0, 1, 2, 3, 4])
+    assert.deepEqual(await seqs({ before: 0, limit: 2 }), [])
+  })
+
   test('session destroy: row disappears and its transcript cascades away', async () => {
     const { project } = await seedReq(ctx)
     const workerId = await seedWorker(ctx, project)

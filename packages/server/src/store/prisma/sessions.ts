@@ -86,4 +86,16 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
     (
       await prisma.sessionEvent.findMany({ where: { sessionId }, orderBy: { sequence: 'asc' } })
     ).map(toSessionEvent),
+  // Take the newest `limit` (optionally below `before`) by reading desc, then
+  // reverse to the ascending order the rest of the pipeline expects.
+  listEventWindow: async (sessionId, { before, limit }) =>
+    (
+      await prisma.sessionEvent.findMany({
+        where: { sessionId, ...(before === undefined ? {} : { sequence: { lt: before } }) },
+        orderBy: { sequence: 'desc' },
+        take: limit,
+      })
+    )
+      .map(toSessionEvent)
+      .reverse(),
 })

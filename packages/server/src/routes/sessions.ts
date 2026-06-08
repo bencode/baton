@@ -25,6 +25,13 @@ import { type AppEnv, intParam, sessionWithView } from '../views.ts'
 // still hurts everyone subscribed to the live stream.
 const MAX_IMAGE_DATA_URL = 8_000_000
 
+// Parse an optional finite numeric query param; undefined when absent/blank/NaN.
+const numQuery = (v: string | undefined): number | undefined => {
+  if (v === undefined || v === '') return undefined
+  const n = Number(v)
+  return Number.isFinite(n) ? n : undefined
+}
+
 export const registerSessionRoutes = (
   app: Hono<AppEnv>,
   store: Store,
@@ -303,19 +310,24 @@ export const registerSessionRoutes = (
     return c.json(ev, 201)
   })
 
-  // Transcript history (persisted log) as a plain JSON list — the web loads this
-  // once on open instead of replaying the whole transcript over SSE (which cost
-  // one re-render per event → O(n²) on long sessions). `?since=<seq>` bounds it
-  // to events at/after a sequence so the web can backfill just the gap after an
-  // SSE reconnect instead of re-pulling the whole transcript. Gated like other
-  // reads.
+  // Transcript history (persisted log) as a plain JSON list. The web loads a
+  // bounded window on open instead of the whole transcript (long sessions reach
+  // multiple MB). `?limit=<n>` returns the most recent n events; add `?before=<seq>`
+  // to page older ones ("load earlier"). `?since=<seq>` (no limit) returns events
+  // at/after a sequence — used by the SSE-reconnect/bridge backfill, kept as-is.
+  // Gated like other reads.
   app.get('/sessions/:id/events', async c => {
     const id = intParam(c.req.param('id'))
     const exists = await store.sessions.get(id)
     if (!exists) return c.json({ error: 'not found' }, 404)
-    const since = Number(c.req.query('since'))
+    const limit = numQuery(c.req.query('limit'))
+    if (limit !== undefined) {
+      const before = numQuery(c.req.query('before'))
+      return c.json(await store.sessions.listEventWindow(id, { before, limit }))
+    }
+    const since = numQuery(c.req.query('since'))
     const all = await store.sessions.listEvents(id)
-    return c.json(Number.isFinite(since) ? all.filter(e => e.sequence >= since) : all)
+    return c.json(since !== undefined ? all.filter(e => e.sequence >= since) : all)
   })
 
   // Transcript stream: replays the persisted log then tails live. `?live=1` skips

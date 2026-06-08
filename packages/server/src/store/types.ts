@@ -150,6 +150,13 @@ export type Store = {
     // listEvents returns the full history in order (for SSE replay).
     appendEvent(sessionId: Id, type: SessionEventType, payload: unknown): Promise<SessionEvent>
     listEvents(sessionId: Id): Promise<SessionEvent[]>
+    // A contiguous suffix window of the transcript, ascending: the most recent
+    // `limit` events, or the `limit` events immediately before `before` (for the
+    // web's "load earlier" paging). Avoids reading the whole transcript.
+    listEventWindow(
+      sessionId: Id,
+      opts: { before?: number; limit: number },
+    ): Promise<SessionEvent[]>
   }
   workers: {
     // Idempotent register following the rule 1 / 2a / 2b / 2c algorithm.

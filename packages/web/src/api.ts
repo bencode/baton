@@ -56,6 +56,10 @@ export type TaskInput = {
   dependsOn?: Id[]
 }
 
+// Transcript window query: `limit` = most recent n (open), `+ before` pages older,
+// `since` = reconnect-gap backfill (events at/after a sequence). All optional.
+export type EventQuery = { since?: number; before?: number; limit?: number }
+
 // web's own HTTP client (browser fetch), mirroring the server routes; types from @baton/shared.
 export type Api = {
   health(): Promise<{ ok: boolean }>
@@ -130,10 +134,11 @@ export type Api = {
       planMode?: boolean,
     ): Promise<SessionEvent>
     uploadAttachment(id: Id, file: File): Promise<Attachment>
-    // Persisted transcript history, fetched once on open (the stream then only
-    // tails live) — avoids replaying the whole log over SSE. `since` bounds the
-    // result to events at/after a sequence, so a reconnect can pull just the gap.
-    listEvents(id: Id, since?: number): Promise<SessionEvent[]>
+    // Persisted transcript history (the stream then only tails live) — avoids
+    // replaying the whole log over SSE. The web opens with a bounded window
+    // (`limit` = most recent n) and pages older with `before`; `since` (events
+    // at/after a sequence) is the reconnect-gap backfill. See EventQuery.
+    listEvents(id: Id, query?: EventQuery): Promise<SessionEvent[]>
   }
   workers: {
     listByProject(projectId: Id): Promise<WorkerView[]>
@@ -238,8 +243,13 @@ export const createApi = (base: string = API_BASE): Api => {
         if (!r.ok) throw new Error(`POST ${url} → ${r.status}: ${await r.text()}`)
         return (await r.json()) as Attachment
       },
-      listEvents: (id, since) =>
-        request(u(`/sessions/${id}/events${since ? `?since=${since}` : ''}`), { method: 'GET' }),
+      listEvents: (id, query) => {
+        const qs = new URLSearchParams()
+        for (const k of ['limit', 'before', 'since'] as const)
+          if (query?.[k] !== undefined) qs.set(k, String(query[k]))
+        const suffix = qs.toString()
+        return request(u(`/sessions/${id}/events${suffix ? `?${suffix}` : ''}`), { method: 'GET' })
+      },
     },
     workers: {
       listByProject: projectId => request(u(`/projects/${projectId}/workers`), { method: 'GET' }),
