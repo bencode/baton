@@ -34,6 +34,7 @@ test('Shell renders the top bar, a resize separator and empty states with no dat
   const api = {
     health: vi.fn(async () => ({ ok: true })),
     workspaces: { list: vi.fn(async () => []) },
+    auth: { me: vi.fn(async () => ({ authRequired: false, user: null })) },
   } as unknown as Api
   const { container } = render(
     <ApiContext.Provider value={api}>

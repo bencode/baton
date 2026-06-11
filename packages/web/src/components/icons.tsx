@@ -18,3 +18,39 @@ export const PencilIcon = () => (
     <path d="M9.8 3.7l2.2 2.2" />
   </svg>
 )
+
+export const ChevronDownIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="13"
+    height="13"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path d="M4 6l4 4 4-4" />
+  </svg>
+)
+
+export const LogoutIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="13"
+    height="13"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path d="M6 14H3.5A1.5 1.5 0 0 1 2 12.5v-9A1.5 1.5 0 0 1 3.5 2H6" />
+    <path d="M10.5 11l3-3-3-3" />
+    <path d="M13.5 8H6" />
+  </svg>
+)

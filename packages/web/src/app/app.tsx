@@ -4,6 +4,7 @@ import { Route, Routes, useNavigate } from 'react-router-dom'
 import { createApi } from '../api'
 import { LoginPage } from '../features/auth/login-page'
 import { RequireAuth } from '../features/auth/require-auth'
+import { UserMenu } from '../features/auth/user-menu'
 import { DingtalkHelpPage } from '../features/help/dingtalk-help-page'
 import { useProject, useProjects } from '../features/projects/use-projects'
 import { RequirementDetail } from '../features/requirements/requirement-detail'
@@ -117,7 +118,10 @@ export const Shell = () => {
           <span aria-hidden className="h-5 w-px bg-gray-200" />
           <WorkspaceSwitcher activeWorkspaceId={workspaceId} />
         </div>
-        <HealthBadge />
+        <div className="flex items-center gap-3">
+          <HealthBadge />
+          <UserMenu />
+        </div>
       </header>
       <Group
         orientation="horizontal"
