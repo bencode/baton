@@ -7,7 +7,12 @@ import type { Store, UserRecord } from '../store/types.ts'
 import type { AppEnv } from '../views.ts'
 
 // Strip the password hash before anything leaves the server.
-const toView = (u: UserRecord): User => ({ id: u.id, username: u.username, createdAt: u.createdAt })
+const toView = (u: UserRecord): User => ({
+  id: u.id,
+  username: u.username,
+  isAdmin: u.isAdmin,
+  createdAt: u.createdAt,
+})
 
 const setSession = (c: Context<AppEnv>, userId: number): Promise<void> =>
   setSignedCookie(c, COOKIE_NAME, String(userId), authSecret(), {

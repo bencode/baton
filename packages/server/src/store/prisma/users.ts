@@ -24,4 +24,18 @@ export const prismaUsers = (prisma: PrismaClient): Store['users'] => ({
     return r ? toUserRecord(r) : null
   },
   count: () => prisma.user.count(),
+  workspaceIds: async userId =>
+    (await prisma.userWorkspace.findMany({ where: { userId }, select: { workspaceId: true } })).map(
+      r => r.workspaceId,
+    ),
+  bindWorkspace: async (userId, workspaceId) => {
+    await prisma.userWorkspace.upsert({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      create: { userId, workspaceId },
+      update: {},
+    })
+  },
+  unbindWorkspace: async (userId, workspaceId) => {
+    await prisma.userWorkspace.deleteMany({ where: { userId, workspaceId } })
+  },
 })

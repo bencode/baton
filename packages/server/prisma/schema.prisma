@@ -24,8 +24,12 @@ model User {
   // out-of-band (seed-token script); null until generated. 32-byte random ⇒
   // effectively unique; @@index (not @unique) keeps migrate non-interactive.
   apiToken     String?
+  // Admin sees every workspace (bypasses domain scope). Non-admins see only the
+  // workspaces they're bound to via UserWorkspace. Seed users are created admin.
+  isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
+  workspaces UserWorkspace[]
   @@index([apiToken])
 }
 
@@ -35,6 +39,21 @@ model Workspace {
   createdAt DateTime @default(now())
 
   projects Project[]
+  members  UserWorkspace[]
+}
+
+// User ↔ Workspace membership (the domain-isolation binding). Pure membership,
+// no role. Composite PK is the uniqueness constraint; both sides cascade.
+model UserWorkspace {
+  userId      Int
+  workspaceId Int
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, workspaceId])
+  @@index([workspaceId])
 }
 
 model Project {

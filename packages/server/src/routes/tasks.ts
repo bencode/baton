@@ -1,5 +1,6 @@
 import type { Id, TaskStatus } from '@baton/shared'
 import type { Hono } from 'hono'
+import { assertProjectAccess, loadScopedTask } from '../middleware/domain-scope.ts'
 import type { ProjectBus } from '../project-bus.ts'
 import type { Store, TaskPatch } from '../store/types.ts'
 import { type AppEnv, intParam } from '../views.ts'
@@ -16,21 +17,28 @@ export const registerTaskRoutes = (app: Hono<AppEnv>, store: Store, projects: Pr
     if (!reqBody.requirementId || !reqBody.title)
       return c.json({ error: 'requirementId and title required' }, 400)
     const { requirementId, title, body, dependsOn, status } = reqBody
+    // Scope via the parent requirement's project.
+    const parent = await store.requirements.get(requirementId)
+    if (!parent) return c.json({ error: 'not found' }, 404)
+    const denied = await assertProjectAccess(c, store, parent.projectId)
+    if (denied) return denied
     return c.json(await store.tasks.create({ requirementId, title, body, dependsOn, status }), 201)
   })
   app.get('/tasks/:id', async c => {
-    const t = await store.tasks.get(intParam(c.req.param('id')))
-    return t ? c.json(t) : c.json({ error: 'not found' }, 404)
+    const t = await loadScopedTask(c, store, intParam(c.req.param('id')))
+    return t instanceof Response ? t : c.json(t)
   })
   app.patch('/tasks/:id', async c => {
     const id = intParam(c.req.param('id'))
-    if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
+    const t = await loadScopedTask(c, store, id)
+    if (t instanceof Response) return t
     const patch = (await c.req.json()) as TaskPatch
     return c.json(await store.tasks.update(id, patch))
   })
   app.delete('/tasks/:id', async c => {
     const id = intParam(c.req.param('id'))
-    if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
+    const t = await loadScopedTask(c, store, id)
+    if (t instanceof Response) return t
     await store.tasks.delete(id)
     return c.body(null, 204)
   })
@@ -40,13 +48,14 @@ export const registerTaskRoutes = (app: Hono<AppEnv>, store: Store, projects: Pr
   // clients refetch (no bespoke SSE; reuses the { resource: 'tasks' } signal).
   app.get('/tasks/:id/comments', async c => {
     const id = intParam(c.req.param('id'))
-    if (!(await store.tasks.get(id))) return c.json({ error: 'not found' }, 404)
+    const t = await loadScopedTask(c, store, id)
+    if (t instanceof Response) return t
     return c.json(await store.taskComments.listByTask(id))
   })
   app.post('/tasks/:id/comments', async c => {
     const id = intParam(c.req.param('id'))
-    const task = await store.tasks.get(id)
-    if (!task) return c.json({ error: 'not found' }, 404)
+    const task = await loadScopedTask(c, store, id)
+    if (task instanceof Response) return task
     const input = (await c.req.json()) as { body?: string; workerId?: Id }
     if (!input.body) return c.json({ error: 'body required' }, 400)
     const comment = await store.taskComments.create({

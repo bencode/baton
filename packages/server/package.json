@@ -10,6 +10,8 @@
     "seed": "tsx src/seed.ts",
     "seed:user": "tsx src/seed-user.ts",
     "token": "tsx src/seed-token.ts",
+    "bind": "tsx src/user-bind.ts bind",
+    "unbind": "tsx src/user-bind.ts unbind",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test 'src/**/*.test.ts'",
     "db:migrate": "prisma migrate dev",

@@ -3,6 +3,7 @@ import type { Hono } from 'hono'
 import type { CommandBus } from '../command-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
+import { assertProjectAccess } from '../middleware/domain-scope.ts'
 import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
@@ -82,7 +83,10 @@ export const registerWorkerRoutes = (
   app.get('/workers/:id', async c => {
     const id = intParam(c.req.param('id'))
     const w = await store.workers.get(id)
-    return w ? c.json(workerWithView(w, liveness)) : c.json({ error: 'not found' }, 404)
+    if (!w) return c.json({ error: 'not found' }, 404)
+    const denied = await assertProjectAccess(c, store, w.projectId)
+    if (denied) return denied
+    return c.json(workerWithView(w, liveness))
   })
 
   // Heartbeat is unauth in v0: the caller asserts a machineId. Single-tenant
@@ -100,6 +104,8 @@ export const registerWorkerRoutes = (
     const id = intParam(c.req.param('id'))
     const w = await store.workers.get(id)
     if (!w) return c.json({ error: 'not found' }, 404)
+    const denied = await assertProjectAccess(c, store, w.projectId)
+    if (denied) return denied
     await store.workers.destroy(id)
     liveness.forget(w.machineId)
     projects.publish(w.projectId, { resource: 'workers' })

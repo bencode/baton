@@ -7,5 +7,7 @@ import type { Id } from './ids.ts'
 export type User = {
   id: Id
   username: string
+  // Admin sees every workspace; non-admins are scoped to their bound workspaces.
+  isAdmin: boolean
   createdAt: number
 }

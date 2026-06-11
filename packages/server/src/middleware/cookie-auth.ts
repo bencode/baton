@@ -42,7 +42,13 @@ export const cookieAuth =
         c.set('userId', user.id)
         return next()
       }
-      if (await store.workers.getByToken(bearer)) return next()
+      const worker = await store.workers.getByToken(bearer)
+      if (worker) {
+        // Mark the request as a worker principal so domain scope exempts it (the
+        // daemon reads its own sessions' events/stream/attachments via the gate).
+        c.set('workerId', worker.id)
+        return next()
+      }
     }
     return c.json({ error: 'unauthorized' }, 401)
   }

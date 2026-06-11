@@ -81,7 +81,11 @@ describe('server HTTP — cookie auth gate', () => {
   test('share-token login: 200 + cookie on a valid token, 404 on garbage', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
-    await ctx.store.users.create({ username: 'admin', passwordHash: hashPassword('pw') })
+    await ctx.store.users.create({
+      username: 'admin',
+      passwordHash: hashPassword('pw'),
+      isAdmin: true,
+    })
     const full = (await (
       await app.request(`/sessions/${session.id}`, {
         headers: {

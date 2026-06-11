@@ -46,6 +46,7 @@ export const seedSession = async (app: ReturnType<typeof createApp>) => {
     alive: boolean
     attached: boolean
     busy: boolean
+    planMode: boolean
   }
   return { projectId, workerId, workerToken, session: s }
 }

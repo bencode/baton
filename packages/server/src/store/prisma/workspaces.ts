@@ -9,6 +9,13 @@ export const prismaWorkspaces = (prisma: PrismaClient): Store['workspaces'] => (
     return r ? toWorkspace(r) : null
   },
   list: async () => (await prisma.workspace.findMany()).map(toWorkspace),
+  listForUser: async userId =>
+    (
+      await prisma.workspace.findMany({
+        where: { members: { some: { userId } } },
+        orderBy: { id: 'asc' },
+      })
+    ).map(toWorkspace),
   update: async (id, patch) =>
     toWorkspace(await prisma.workspace.update({ where: { id }, data: { name: patch.name } })),
   delete: async id => {

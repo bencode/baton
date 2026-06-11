@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs'
 import { Readable } from 'node:stream'
 import type { Hono } from 'hono'
 import type { AttachmentStore } from '../attachments.ts'
+import { loadScopedSession } from '../middleware/domain-scope.ts'
 import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam } from '../views.ts'
 
@@ -30,8 +31,8 @@ export const registerSessionAttachmentRoutes = (
   // the file's media type rides content-type. Returns the Attachment descriptor.
   app.post('/sessions/:id/attachments', async c => {
     const sessionId = intParam(c.req.param('id'))
-    const session = await store.sessions.get(sessionId)
-    if (!session) return c.json({ error: 'not found' }, 404)
+    const session = await loadScopedSession(c, store, sessionId)
+    if (session instanceof Response) return session
     const meta = await attachments.put(sessionId, {
       filename: c.req.query('filename') || 'file',
       contentType: c.req.header('content-type') || 'application/octet-stream',
@@ -45,6 +46,8 @@ export const registerSessionAttachmentRoutes = (
   // worktree, and later by the web UI for preview.
   app.get('/sessions/:id/attachments/:attId', async c => {
     const sessionId = intParam(c.req.param('id'))
+    const scoped = await loadScopedSession(c, store, sessionId)
+    if (scoped instanceof Response) return scoped
     const found = await attachments.get(sessionId, c.req.param('attId'))
     if (!found) return c.json({ error: 'not found' }, 404)
     c.header('content-type', found.meta.contentType)

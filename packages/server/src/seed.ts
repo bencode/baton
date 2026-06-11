@@ -22,8 +22,12 @@ const seedPassword = process.env.BATON_SEED_PASS ?? 'admin'
 if (await store.users.getByUsername(seedUsername)) {
   console.log(`login user "${seedUsername}" already exists; left as-is`)
 } else {
-  await store.users.create({ username: seedUsername, passwordHash: hashPassword(seedPassword) })
-  console.log(`created login user "${seedUsername}" — auth is now enforced (dev == prod)`)
+  await store.users.create({
+    username: seedUsername,
+    passwordHash: hashPassword(seedPassword),
+    isAdmin: true, // bootstrap owner: sees every workspace (domain scope bypass)
+  })
+  console.log(`created admin login user "${seedUsername}" — auth is now enforced (dev == prod)`)
 }
 
 const existing = await store.workspaces.list()

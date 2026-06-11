@@ -14,6 +14,7 @@ import type { CommandBus } from '../command-bus.ts'
 import type { EventBus } from '../event-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
+import { assertProjectAccess, loadScopedSession } from '../middleware/domain-scope.ts'
 import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
@@ -73,6 +74,8 @@ export const registerSessionRoutes = (
     }
     if (!body.projectId || !body.workerId)
       return c.json({ error: 'projectId, workerId required' }, 400)
+    const denied = await assertProjectAccess(c, store, body.projectId)
+    if (denied) return denied
     const worker = await store.workers.get(body.workerId)
     if (!worker || worker.projectId !== body.projectId)
       return c.json({ error: 'worker not found in project' }, 404)
@@ -94,8 +97,8 @@ export const registerSessionRoutes = (
   })
 
   app.get('/sessions/:id', async c => {
-    const s = await store.sessions.get(intParam(c.req.param('id')))
-    if (!s) return c.json({ error: 'not found' }, 404)
+    const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
+    if (s instanceof Response) return s
     return c.json(await toView(s))
   })
 
@@ -141,14 +144,14 @@ export const registerSessionRoutes = (
   // Resume (start) / stop a session — control ops. resume re-spawns the child for
   // an existing session; stop kills it but keeps the row + worktree (→ inactive).
   app.post('/sessions/:id/resume', async c => {
-    const s = await store.sessions.get(intParam(c.req.param('id')))
-    if (!s) return c.json({ error: 'not found' }, 404)
+    const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
+    if (s instanceof Response) return s
     commands.publish(s.workerId, { cmd: 'session.start', sessionId: s.id, name: s.name })
     return c.json(await toView(s))
   })
   app.post('/sessions/:id/stop', async c => {
-    const s = await store.sessions.get(intParam(c.req.param('id')))
-    if (!s) return c.json({ error: 'not found' }, 404)
+    const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
+    if (s instanceof Response) return s
     commands.publish(s.workerId, { cmd: 'session.stop', sessionId: s.id })
     return c.json(await toView(s))
   })
@@ -161,8 +164,8 @@ export const registerSessionRoutes = (
   // it in the transcript. Materialized sessions only — a fresh one has nothing
   // to clear.
   app.post('/sessions/:id/clear', async c => {
-    const s = await store.sessions.get(intParam(c.req.param('id')))
-    if (!s) return c.json({ error: 'not found' }, 404)
+    const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
+    if (s instanceof Response) return s
     let view = s
     if (s.agentSessionId && s.worktreePath) {
       view = await store.sessions.materialize(s.id, {
@@ -192,8 +195,8 @@ export const registerSessionRoutes = (
   // value. A 'system' event records the switch in the transcript; bump() so the
   // rail/detail refetch the new flag.
   app.post('/sessions/:id/mode', async c => {
-    const s = await store.sessions.get(intParam(c.req.param('id')))
-    if (!s) return c.json({ error: 'not found' }, 404)
+    const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
+    if (s instanceof Response) return s
     const body = (await c.req.json().catch(() => ({}))) as { planMode?: unknown }
     const planMode = body.planMode === true
     const updated = await store.sessions.setPlanMode(s.id, planMode)
@@ -207,8 +210,8 @@ export const registerSessionRoutes = (
   // the worker's session child catches to abort the current SDK query. Session,
   // worktree, transcript, and binding all stay — the next message resumes.
   app.post('/sessions/:id/abort', async c => {
-    const s = await store.sessions.get(intParam(c.req.param('id')))
-    if (!s) return c.json({ error: 'not found' }, 404)
+    const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
+    if (s instanceof Response) return s
     const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'interrupt' })
     bus.publish(s.id, ev)
     return c.json(await toView(s))
@@ -220,8 +223,8 @@ export const registerSessionRoutes = (
   // once the session is materialized (the worker needs the transcript). The
   // worker reads its own transcript for context and PATCHes a name back.
   app.post('/sessions/:id/autotitle', async c => {
-    const s = await store.sessions.get(intParam(c.req.param('id')))
-    if (!s) return c.json({ error: 'not found' }, 404)
+    const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
+    if (s instanceof Response) return s
     if (/^session-\d+$/.test(s.name) && s.agentSessionId && s.worktreePath)
       commands.publish(s.workerId, {
         cmd: 'session.title',
@@ -236,8 +239,8 @@ export const registerSessionRoutes = (
   // pending auto-title can't override the user's choice. No worker command —
   // the name is collaboration metadata; the running child doesn't care.
   app.post('/sessions/:id/rename', async c => {
-    const s = await store.sessions.get(intParam(c.req.param('id')))
-    if (!s) return c.json({ error: 'not found' }, 404)
+    const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
+    if (s instanceof Response) return s
     const body = (await c.req.json()) as { name?: string }
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     if (!name) return c.json({ error: 'name required' }, 400)
@@ -250,8 +253,8 @@ export const registerSessionRoutes = (
   // worktree, then drop the row. Browser-side events live in IndexedDB.
   app.delete('/sessions/:id', async c => {
     const id = intParam(c.req.param('id'))
-    const s = await store.sessions.get(id)
-    if (!s) return c.json({ error: 'not found' }, 404)
+    const s = await loadScopedSession(c, store, id)
+    if (s instanceof Response) return s
     commands.publish(s.workerId, {
       cmd: 'session.delete',
       sessionId: id,
@@ -293,8 +296,8 @@ export const registerSessionRoutes = (
   // and any client replays it from the transcript on (re)connect.
   app.post('/sessions/:id/messages', async c => {
     const sessionId = intParam(c.req.param('id'))
-    const session = await store.sessions.get(sessionId)
-    if (!session) return c.json({ error: 'not found' }, 404)
+    const session = await loadScopedSession(c, store, sessionId)
+    if (session instanceof Response) return session
     // Messages only go to an active session (a live worker child is subscribed).
     // Otherwise there's no one to receive it — reject rather than drop silently.
     if (!runtime.isActive(sessionId))
@@ -337,8 +340,8 @@ export const registerSessionRoutes = (
   // Gated like other reads.
   app.get('/sessions/:id/events', async c => {
     const id = intParam(c.req.param('id'))
-    const exists = await store.sessions.get(id)
-    if (!exists) return c.json({ error: 'not found' }, 404)
+    const exists = await loadScopedSession(c, store, id)
+    if (exists instanceof Response) return exists
     const limit = numQuery(c.req.query('limit'))
     if (limit !== undefined) {
       const before = numQuery(c.req.query('before'))
@@ -356,8 +359,8 @@ export const registerSessionRoutes = (
   // bridge passes its message's sequence so it doesn't re-read the whole history.
   app.get('/sessions/:id/stream', async c => {
     const id = intParam(c.req.param('id'))
-    const exists = await store.sessions.get(id)
-    if (!exists) return c.json({ error: 'not found' }, 404)
+    const exists = await loadScopedSession(c, store, id)
+    if (exists instanceof Response) return exists
     const live = c.req.query('live') === '1'
     const since = Number(c.req.query('since'))
     const load = async (): Promise<SessionEvent[]> => {
