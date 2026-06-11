@@ -15,12 +15,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'help', kind: 'help', desc: 'show available commands' },
   { name: 'clear', kind: 'clear', desc: 'reset the conversation (keeps session + code)' },
   { name: 'abort', kind: 'abort', desc: 'interrupt the running turn (like Esc)' },
-  {
-    name: 'plan',
-    kind: 'plan',
-    desc: 'read-only planning — propose a plan, no file edits',
-    takesArgs: true,
-  },
+  { name: 'plan', kind: 'plan', desc: 'toggle read-only plan mode (no file edits)' },
 ]
 
 // Parse the draft as "/name args". null when it isn't a slash line.

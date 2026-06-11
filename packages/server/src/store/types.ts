@@ -137,6 +137,8 @@ export type Store = {
     materialize(id: Id, input: SessionMaterialize): Promise<Session>
     // Human rename — sets name + locks it against auto-title.
     rename(id: Id, name: string): Promise<Session>
+    // Toggle the session-wide read-only plan mode (idempotent explicit set).
+    setPlanMode(id: Id, planMode: boolean): Promise<Session>
     // Non-locking, guarded set (placeholder + auto-title). null when locked.
     autoTitle(id: Id, name: string): Promise<Session | null>
     // Bump lastActiveAt to now — called on each inbound user message.

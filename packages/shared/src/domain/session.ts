@@ -37,6 +37,10 @@ export type Session = {
   // Last time someone sent this session a message — the honest "last active"
   // for the rail (updatedAt only bumps on row writes: rename/materialize).
   lastActiveAt: number
+  // Read-only "plan mode": when true the worker runs each turn with the SDK's
+  // permissionMode:'plan' (propose a plan, no edits). Toggled via /plan or
+  // Shift+Tab; persisted, so it survives reloads and syncs across clients.
+  planMode: boolean
 }
 
 // Server read endpoints return record + runtime view. The worker object is

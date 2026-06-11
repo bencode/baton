@@ -225,6 +225,9 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
         items.push({ kind: 'system-notice', text: 'context cleared — fresh conversation', key })
       } else if (action === 'interrupt') {
         items.push({ kind: 'system-notice', text: 'interrupted', key })
+      } else if (action === 'plan_mode') {
+        const on = isRecord(e.payload) && e.payload.planMode === true
+        items.push({ kind: 'system-notice', text: on ? 'entered plan mode' : 'exited plan mode', key })
       } else {
         items.push({ kind: 'raw', payload: e.payload, key })
       }

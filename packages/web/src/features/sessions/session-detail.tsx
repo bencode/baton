@@ -117,13 +117,13 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     // The orphaned server blob is transient (cascade-cleaned on session destroy); fine for v0.
     setAttachments(prev => prev.filter(a => a.id !== id))
 
-  const send = async (textOverride?: string, planMode = false) => {
+  const send = async (textOverride?: string) => {
     const text = (textOverride ?? draft).trim()
     if (!text && attachments.length === 0) return
     setSending(true)
     setSendError(null)
     try {
-      await api.sessions.sendMessage(sessionId, text, attachments, planMode)
+      await api.sessions.sendMessage(sessionId, text, attachments)
       setDraft('')
       setAttachments([])
     } catch (e) {
@@ -146,15 +146,21 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   // Rename propagates back via the project stream (rail/tab/header all refetch).
   const rename = (name: string) => void api.sessions.rename(sessionId, name).catch(() => {})
 
+  // Toggle the session-wide read-only plan mode. Persisted server-side; the new
+  // flag rides back over the project stream (session.planMode), so the badge and
+  // every client stay in sync. Shift+Tab in the composer hits the same path.
+  const togglePlanMode = () =>
+    void api.sessions.setMode(sessionId, !session.planMode).catch(() => {})
+
   // Slash command from the composer. /clear resets context (the server appends a
-  // notice the transcript renders); /help opens the command list; /plan sends the
-  // task as a read-only planning turn (server flags it → worker runs the SDK in
-  // permissionMode:'plan', so the agent proposes a plan without touching files).
-  const runCommand = (command: SlashCommand, args: string) => {
+  // notice the transcript renders); /help opens the command list; /plan toggles
+  // read-only plan mode (server persists it → worker runs each turn in the SDK's
+  // permissionMode:'plan' until toggled back).
+  const runCommand = (command: SlashCommand) => {
     if (command.kind === 'clear') void api.sessions.clear(sessionId).catch(() => {})
     else if (command.kind === 'abort') void api.sessions.abort(sessionId).catch(() => {})
     else if (command.kind === 'help') setShowHelp(true)
-    else if (command.kind === 'plan' && args) void send(args, true)
+    else if (command.kind === 'plan') togglePlanMode()
   }
 
   // Show the breathing indicator while a turn is open. `sending` covers the brief
@@ -203,6 +209,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         sendError={sendError}
         onSend={() => void send()}
         onCommand={runCommand}
+        planMode={session.planMode}
+        onTogglePlanMode={togglePlanMode}
       />
     </div>
   )

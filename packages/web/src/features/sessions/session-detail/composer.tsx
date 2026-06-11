@@ -29,6 +29,9 @@ type ComposerProps = {
   onSend: () => void
   // Run a slash command (/clear, /help, /plan …) instead of sending a message.
   onCommand: (command: SlashCommand, args: string) => void
+  // Session-wide read-only plan mode + its toggle (/plan command, Shift+Tab).
+  planMode: boolean
+  onTogglePlanMode: () => void
 }
 
 // One rounded input card: pending attachments + textarea stacked over a bottom
@@ -50,11 +53,13 @@ export const Composer = ({
   sendError,
   onSend,
   onCommand,
+  planMode,
+  onTogglePlanMode,
 }: ComposerProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [dragging, setDragging] = useState(false)
-  const slash = useSlashCommands(draft, setDraft, onCommand)
+  const slash = useSlashCommands(draft, setDraft, onCommand, onTogglePlanMode)
   useAutosize(textareaRef, draft)
   const busy = sending || uploading
   const canSend = active && !busy && (draft.trim().length > 0 || attachments.length > 0)
@@ -88,6 +93,16 @@ export const Composer = ({
         }}
         className={`mx-auto min-w-0 max-w-5xl rounded-xl border px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'} ${active ? 'bg-white' : 'bg-gray-50'}`}
       >
+        {planMode && (
+          <button
+            type="button"
+            onClick={onTogglePlanMode}
+            className="mb-2 flex w-full items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-left text-xs font-medium text-amber-700 ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
+          >
+            📋 PLAN MODE · 只读规划，不改文件
+            <span className="ml-auto text-amber-500">Shift+Tab 退出</span>
+          </button>
+        )}
         {attachments.length > 0 && (
           <AttachmentStrip
             attachments={attachments}

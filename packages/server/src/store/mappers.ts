@@ -93,6 +93,7 @@ export const toSession = (r: DbSession): Session => ({
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),
   lastActiveAt: r.lastActiveAt.getTime(),
+  planMode: r.planMode,
 })
 
 export const toSessionEvent = (r: DbSessionEvent): SessionEvent => ({

@@ -37,6 +37,9 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
     const s = await prisma.session.update({ where: { id }, data: { name, nameLocked: true } })
     return toSession(s)
   },
+  // Toggle the session-wide read-only plan mode. Idempotent (explicit value).
+  setPlanMode: async (id, planMode) =>
+    toSession(await prisma.session.update({ where: { id }, data: { planMode } })),
   // Non-locking set, guarded: applies only while the name is unlocked. Used for
   // the `session-<id>` placeholder and the worker's auto-title. Returns the
   // updated session, or null when a human has already locked the name.

@@ -184,6 +184,25 @@ export const registerSessionRoutes = (
     return c.json(await toView(view))
   })
 
+  // Toggle the session-wide read-only plan mode (web /plan or Shift+Tab). The
+  // flag is persisted on the session, so it survives reloads and syncs across
+  // clients; the worker never reads it directly — the server stamps each
+  // user_message with the session's planMode (below), and the runner runs that
+  // turn with permissionMode:'plan'. Idempotent: the body carries the target
+  // value. A 'system' event records the switch in the transcript; bump() so the
+  // rail/detail refetch the new flag.
+  app.post('/sessions/:id/mode', async c => {
+    const s = await store.sessions.get(intParam(c.req.param('id')))
+    if (!s) return c.json({ error: 'not found' }, 404)
+    const body = (await c.req.json().catch(() => ({}))) as { planMode?: unknown }
+    const planMode = body.planMode === true
+    const updated = await store.sessions.setPlanMode(s.id, planMode)
+    const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'plan_mode', planMode })
+    bus.publish(s.id, ev)
+    bump(s.projectId)
+    return c.json(await toView(updated))
+  })
+
   // Interrupt the in-flight turn (web /abort, like Esc): emit an `interrupt`
   // the worker's session child catches to abort the current SDK query. Session,
   // worktree, transcript, and binding all stay — the next message resumes.
@@ -284,7 +303,6 @@ export const registerSessionRoutes = (
       text?: string
       images?: unknown
       attachments?: unknown
-      planMode?: unknown
     }
     const text = typeof body.text === 'string' ? body.text : ''
     const images = Array.isArray(body.images)
@@ -299,8 +317,9 @@ export const registerSessionRoutes = (
       text,
       ...(images.length > 0 ? { images } : {}),
       ...(atts.length > 0 ? { attachments: atts } : {}),
-      // /plan: run this turn read-only (SDK permissionMode:'plan'); the worker reads it.
-      ...(body.planMode === true ? { planMode: true } : {}),
+      // Stamp the turn with the session's current plan mode (toggled via /plan or
+      // Shift+Tab). The runner reads payload.planMode → permissionMode:'plan'.
+      ...(session.planMode ? { planMode: true } : {}),
     }
     const ev = await store.sessions.appendEvent(sessionId, 'user_message', payload)
     // Mark the session as just-active (drives the rail's "last active" time).

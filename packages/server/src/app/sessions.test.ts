@@ -143,6 +143,36 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
   })
 
+  test('plan mode: /mode toggle persists on the view + stamps subsequent messages', async () => {
+    const app = createApp(ctx.store)
+    const { session, workerToken } = await seedSession(app)
+    const auth = { authorization: `Bearer ${workerToken}` }
+    await postJson(app, `/sessions/${session.id}/status`, { active: true }, auth)
+
+    // Fresh session is not in plan mode; a message carries no planMode flag.
+    assert.equal(session.planMode, false)
+    const m0 = (await (
+      await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
+    ).json()) as { payload: { planMode?: boolean } }
+    assert.equal(m0.payload.planMode, undefined)
+
+    // Enter plan mode → view reflects it, and the next message is stamped.
+    const on = await postJson(app, `/sessions/${session.id}/mode`, { planMode: true })
+    assert.equal(((await on.json()) as { planMode: boolean }).planMode, true)
+    const m1 = (await (
+      await postJson(app, `/sessions/${session.id}/messages`, { text: 'plan it' })
+    ).json()) as { payload: { planMode?: boolean } }
+    assert.equal(m1.payload.planMode, true)
+
+    // Exit plan mode → view flips back, messages stop carrying the flag.
+    const off = await postJson(app, `/sessions/${session.id}/mode`, { planMode: false })
+    assert.equal(((await off.json()) as { planMode: boolean }).planMode, false)
+    const m2 = (await (
+      await postJson(app, `/sessions/${session.id}/messages`, { text: 'go' })
+    ).json()) as { payload: { planMode?: boolean } }
+    assert.equal(m2.payload.planMode, undefined)
+  })
+
   test('messages are persisted + replayable via GET history (store-backed)', async () => {
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)

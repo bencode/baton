@@ -33,12 +33,8 @@ describe('resolveCommand', () => {
     expect(resolveCommand('just text')).toBeNull()
   })
 
-  test('an args-taking command needs args (bare /plan → null, falls through)', () => {
-    expect(resolveCommand('/plan')).toBeNull()
-    expect(resolveCommand('/plan ')).toBeNull()
-    expect(resolveCommand('/plan do X')).toEqual({
-      command: expect.objectContaining({ kind: 'plan' }),
-      args: 'do X',
-    })
+  test('bare /plan resolves — it is a no-arg toggle now (any trailing text ignored)', () => {
+    expect(resolveCommand('/plan')?.command.kind).toBe('plan')
+    expect(resolveCommand('/plan ')?.command.kind).toBe('plan')
   })
 })

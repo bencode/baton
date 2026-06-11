@@ -123,16 +123,13 @@ export type Api = {
     abort(id: Id): Promise<SessionView>
     // Human rename — locks the name against auto-title.
     rename(id: Id, name: string): Promise<SessionView>
+    // Toggle the session-wide read-only plan mode (/plan or Shift+Tab).
+    setMode(id: Id, planMode: boolean): Promise<SessionView>
     // Ask the worker to auto-title this session (no-op unless still unnamed).
     autotitle(id: Id): Promise<SessionView>
     // Delete the session (worker tears down its child + worktree; row dropped).
     remove(id: Id): Promise<void>
-    sendMessage(
-      id: Id,
-      text: string,
-      attachments?: Attachment[],
-      planMode?: boolean,
-    ): Promise<SessionEvent>
+    sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
     uploadAttachment(id: Id, file: File): Promise<Attachment>
     // Persisted transcript history (the stream then only tails live) — avoids
     // replaying the whole log over SSE. The web opens with a bounded window
@@ -217,15 +214,16 @@ export const createApi = (base: string = API_BASE): Api => {
       abort: id => request(u(`/sessions/${id}/abort`), { method: 'POST' }),
       rename: (id, name) =>
         request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
+      setMode: (id, planMode) =>
+        request(u(`/sessions/${id}/mode`), { method: 'POST', body: { planMode } }),
       autotitle: id => request(u(`/sessions/${id}/autotitle`), { method: 'POST' }),
       remove: id => request(u(`/sessions/${id}`), { method: 'DELETE' }),
-      sendMessage: (id, text, attachments, planMode) =>
+      sendMessage: (id, text, attachments) =>
         request(u(`/sessions/${id}/messages`), {
           method: 'POST',
           body: {
             text,
             ...(attachments && attachments.length > 0 ? { attachments } : {}),
-            ...(planMode ? { planMode: true } : {}),
           },
         }),
       // Raw-body upload (the JSON `request` helper can't carry binary): the File

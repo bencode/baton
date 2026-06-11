@@ -160,6 +160,10 @@ model Session {
   // updatedAt only bumps on row writes (rename/materialize) and can't be set
   // manually (@updatedAt); this is the honest "last active" for the rail.
   lastActiveAt   DateTime  @default(now())
+  // Session-wide read-only "plan mode" toggle. When true the worker runs each
+  // turn with the SDK's permissionMode:'plan' (propose, no edits). Persisted so
+  // it survives reloads and stays in sync across clients; surfaced on SessionView.
+  planMode       Boolean   @default(false)
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)
