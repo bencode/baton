@@ -24,6 +24,19 @@ describe('sanitizeTitle', () => {
     assert.equal(sanitizeTitle('- 发货反馈字段排查。'), '发货反馈字段排查')
     assert.equal(sanitizeTitle('1. 移动端 RecordActions'), '移动端 RecordActions')
   })
+
+  test('collapses a sentence to its leading clause instead of a mid-word stub', () => {
+    // The screenshot regression: a full sentence hard-cut at 30 chars left a
+    // dangling 「。仓库」. Now we keep only the leading clause.
+    assert.equal(
+      sanitizeTitle('material-ui 仓库已经是最新代码，无需更新。仓库已是最新'),
+      'material-ui 仓库已经是最新代码',
+    )
+    assert.equal(sanitizeTitle('Repo is up to date. No update needed'), 'Repo is up to date')
+    // sentence-final punctuation cuts, but in-word dots (versions, files) do not
+    assert.equal(sanitizeTitle('v1.2 升级排查'), 'v1.2 升级排查')
+    assert.equal(sanitizeTitle('title.ts 重构'), 'title.ts 重构')
+  })
 })
 
 describe('generateTitle', () => {

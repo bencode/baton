@@ -1,6 +1,6 @@
 {
   "name": "@lesscap/baton-cli",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "license": "MIT",
   "type": "module",
   "description": "baton CLI — register/run a worker, manage projects/requirements/tasks/sessions",

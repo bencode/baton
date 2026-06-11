@@ -32,6 +32,12 @@ export const sanitizeTitle = (raw: string): string =>
     .replace(/^\s*(?:[-*•]|\d+[.)、])\s+/, '') // leading list marker
     .replace(/\s+/g, ' ')
     .trim()
+    // When the model returns a sentence anyway, keep only the leading clause so
+    // we get a noun phrase, not a mid-word `slice(0,30)` stub. CJK punctuation
+    // never belongs in a title; ASCII .!?; only when sentence-final (so 1.2 and
+    // file.ts survive).
+    .replace(/(?:[。．！？，、；；]|[.!?;](?=\s|$)).*$/s, '')
+    .trim()
     .slice(0, 30)
     .replace(/[\s。．，,、；;：:!！?？.]+$/, '') // trailing punctuation
     .trim()
@@ -48,7 +54,23 @@ const buildPrompt = (userText: string, assistantText: string): string => {
   ]
     .filter(Boolean)
     .join('\n')
-  return `Reply with ONLY a short title for this session: a noun phrase like a filename — at most 6 words or ~12 Chinese characters. It must NOT be a sentence, no punctuation, no markdown, no quotes, and never an opener like "好的"/"收到"/"I'll". Only if the exchange below has no real content at all (e.g. just a greeting or a test ping), reply with exactly NONE.\n\n${exchange}`
+  return [
+    'Name the TOPIC of this chat session — what it is ABOUT — as a short title:',
+    'a noun phrase like a filename, at most 6 words or ~12 Chinese characters.',
+    'Name the subject, do NOT restate the conclusion or the answer.',
+    'No sentence, no punctuation at all (including Chinese ，。、；！？), no markdown,',
+    'no quotes, and never an opener like "好的"/"收到"/"I\'ll".',
+    '',
+    'Examples (exchange → title):',
+    'User asks whether the material-ui repo needs updating; assistant says it is',
+    'already up to date → material-ui 仓库更新检查',
+    'User: curl the health endpoint and report status → 健康检查接口排查',
+    '',
+    'Only if the exchange below has no real content at all (just a greeting or a',
+    'test ping) reply with exactly NONE. Otherwise reply with ONLY the title.',
+    '',
+    exchange,
+  ].join('\n')
 }
 
 // Run a throwaway SDK query in the worktree (no session id — this isn't part
