@@ -8,6 +8,12 @@ import { useApi } from '../../app/api-context'
 // the user starts pinned to the bottom. Older events page in on demand via
 // loadOlder; the live tail and reconnect-gap (`since`) backfill are unchanged.
 const HISTORY_WINDOW = 200
+// "Load earlier" pages a bigger block than the initial window: the window counts
+// raw events, and a tool-heavy turn is dozens of sdk_events that fold into one
+// activity group — so 200 events can be just a few message bubbles. A larger
+// page means fewer clicks to walk back the conversation. Open stays lean (the
+// user starts pinned to the bottom); only paging upward pulls the big block.
+const OLDER_PAGE = 600
 
 export type StreamState = {
   events: SessionEvent[]
@@ -61,7 +67,7 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     loadingOlderRef.current = true
     setLoadingOlder(true)
     try {
-      const older = await api.sessions.listEvents(sessionId, { before, limit: HISTORY_WINDOW })
+      const older = await api.sessions.listEvents(sessionId, { before, limit: OLDER_PAGE })
       if (boundSidRef.current === sessionId) apply(older)
     } catch (err) {
       console.error('[session-stream] load older failed', err)
