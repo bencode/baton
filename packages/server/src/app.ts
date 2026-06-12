@@ -6,6 +6,7 @@ import { createEventBus, type EventBus } from './event-bus.ts'
 import { createLiveness, type LivenessTracker } from './liveness.ts'
 import { cookieAuth } from './middleware/cookie-auth.ts'
 import { createProjectBus, type ProjectBus } from './project-bus.ts'
+import { registerAdminRoutes } from './routes/admin.ts'
 import { registerAuthRoutes } from './routes/auth.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
 import { registerRequirementRoutes } from './routes/requirements.ts'
@@ -53,6 +54,7 @@ export const createApp = (
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store, projects)
   registerWorkerRoutes(app, store, workerLiveness, commands, runtime, projects)
+  registerAdminRoutes(app, store, workerLiveness, runtime, busyTracker)
   registerSessionRoutes(
     app,
     store,

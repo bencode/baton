@@ -65,6 +65,7 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
     (await prisma.session.findMany({ where: { projectId }, orderBy: { id: 'asc' } })).map(
       toSession,
     ),
+  listAll: async () => (await prisma.session.findMany({ orderBy: { id: 'asc' } })).map(toSession),
   destroy: async id => {
     await prisma.session.delete({ where: { id } })
   },

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import { Route, Routes, useNavigate } from 'react-router-dom'
 import { createApi } from '../api'
+import { OpsPage } from '../features/admin/ops-page'
 import { LoginPage } from '../features/auth/login-page'
 import { RequireAuth } from '../features/auth/require-auth'
 import { UserMenu } from '../features/auth/user-menu'
@@ -170,6 +171,15 @@ export const App = () => (
       <Route path="/s/:token" element={<SessionPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/help/dingtalk" element={<DingtalkHelpPage />} />
+      {/* Admin ops board — full-bleed (no Shell); the server 403s non-admins. */}
+      <Route
+        path="/ops"
+        element={
+          <RequireAuth>
+            <OpsPage />
+          </RequireAuth>
+        }
+      />
       <Route
         path="*"
         element={

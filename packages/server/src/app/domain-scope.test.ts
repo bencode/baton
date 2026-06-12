@@ -131,6 +131,33 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     )
   })
 
+  test('/admin/overview: admin-only fleet snapshot across workspaces', async () => {
+    const app = createApp(ctx.store)
+    const a = await seedWorkspace('wsX')
+    const b = await seedWorkspace('wsY')
+    const alice = await seedUser('alice', false)
+    const root = await seedUser('root', true)
+    await ctx.store.users.bindWorkspace(alice.id, a.ws.id)
+
+    // Non-admin (even bound to a workspace) → 403; admin → the whole fleet.
+    assert.equal((await app.request('/admin/overview', { headers: as(alice.token) })).status, 403)
+    const r = await app.request('/admin/overview', { headers: as(root.token) })
+    assert.equal(r.status, 200)
+    const o = (await r.json()) as {
+      workspaces: unknown[]
+      projects: unknown[]
+      workers: { alive: boolean }[]
+      sessions: { id: number; attached: boolean; busy: boolean }[]
+    }
+    assert.equal(o.workspaces.length, 2)
+    assert.equal(o.projects.length, 2)
+    assert.equal(o.workers.length, 2)
+    assert.deepEqual(o.sessions.map(s => s.id).sort(), [a.session.id, b.session.id].sort())
+    // Fresh app instance: nothing pinged liveness, nothing attached → all idle.
+    assert.ok(o.workers.every(w => w.alive === false))
+    assert.ok(o.sessions.every(s => !s.attached && !s.busy))
+  })
+
   test('worker token is exempt from user scope', async () => {
     const app = createApp(ctx.store)
     const a = await seedWorkspace('wsW')

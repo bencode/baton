@@ -63,6 +63,7 @@ export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
   },
   listByProject: async projectId =>
     (await prisma.worker.findMany({ where: { projectId }, orderBy: { id: 'asc' } })).map(toWorker),
+  listAll: async () => (await prisma.worker.findMany({ orderBy: { id: 'asc' } })).map(toWorker),
   destroy: async id => {
     await prisma.worker.delete({ where: { id } })
   },

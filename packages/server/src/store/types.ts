@@ -109,6 +109,8 @@ export type Store = {
     create(input: ProjectCreate): Promise<Project>
     get(id: Id): Promise<Project | null>
     listByWorkspace(workspaceId: Id): Promise<Project[]>
+    // Cross-workspace (admin overview only — callers must gate on requireAdmin).
+    listAll(): Promise<Project[]>
     update(id: Id, patch: ProjectPatch): Promise<Project>
     delete(id: Id): Promise<void>
   }
@@ -150,6 +152,8 @@ export type Store = {
     get(id: Id): Promise<Session | null>
     getByShareToken(token: string): Promise<Session | null>
     listByProject(projectId: Id): Promise<Session[]>
+    // Cross-workspace (admin overview only — callers must gate on requireAdmin).
+    listAll(): Promise<Session[]>
     // DELETE the row. Irreversible. Transcript events cascade away with it (FK).
     destroy(id: Id): Promise<void>
     // Append-only transcript. appendEvent assigns the next per-session sequence;
@@ -171,6 +175,8 @@ export type Store = {
     getByToken(token: string): Promise<Worker | null>
     findByMachine(projectId: Id, machineId: string): Promise<Worker | null>
     listByProject(projectId: Id): Promise<Worker[]>
+    // Cross-workspace (admin overview only — callers must gate on requireAdmin).
+    listAll(): Promise<Worker[]>
     // DELETE the row (cascade Session). Irreversible.
     destroy(id: Id): Promise<void>
   }

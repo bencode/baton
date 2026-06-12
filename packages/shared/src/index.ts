@@ -1,3 +1,4 @@
+export * from './domain/admin.ts'
 export * from './domain/attachment.ts'
 export * from './domain/derive.ts'
 export * from './domain/ids.ts'

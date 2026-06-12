@@ -1,4 +1,5 @@
 import type {
+  AdminOverview,
   Attachment,
   Code,
   Id,
@@ -143,6 +144,10 @@ export type Api = {
     listByProject(projectId: Id): Promise<WorkerView[]>
     get(id: Id): Promise<WorkerView>
   }
+  admin: {
+    // Fleet-wide snapshot for the ops board (/ops). 403 for non-admins.
+    overview(): Promise<AdminOverview>
+  }
   // SSE URL for a session's transcript (EventSource sends the cookie same-origin).
   sessionStreamUrl(id: Id): string
 }
@@ -256,6 +261,9 @@ export const createApi = (base: string = API_BASE): Api => {
     workers: {
       listByProject: projectId => request(u(`/projects/${projectId}/workers`), { method: 'GET' }),
       get: id => request(u(`/workers/${id}`), { method: 'GET' }),
+    },
+    admin: {
+      overview: () => request(u('/admin/overview'), { method: 'GET' }),
     },
     // Live-only — history comes from sessions.listEvents (one fetch), so the
     // stream never replays the whole transcript.

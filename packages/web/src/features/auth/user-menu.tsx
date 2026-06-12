@@ -80,6 +80,20 @@ export const UserMenu = () => {
             )}
           </div>
           <div className="my-1 h-px bg-gray-100" />
+          {user.isAdmin && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                navigate('/ops')
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+            >
+              <span className="text-gray-400">📺</span>
+              运行大屏
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"
