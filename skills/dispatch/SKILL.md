@@ -68,6 +68,19 @@ on PATH; baton auth comes from the cwd `.baton.json`).
   (reply (render-report plan)))
 ```
 
+## Commands (exact — don't guess variants)
+
+```bash
+gh issue list --label "<label>" --state open --limit 100 \
+  --json number,title,body,url,labels,assignees
+baton worker ls --project <pid> --json        # `ls`, not `list`
+baton session create "<slug>" [--worker W-N] --json
+baton session get <id> --project <pid> --json # poll .attached
+baton session send <id> "<brief>" --project <pid>
+gh issue edit <n> --add-label "state:in-progress"
+gh issue comment <n> --body "dispatched → <share-link>"
+```
+
 ## The brief
 
 The target session cold-starts with zero context — the brief is everything it
