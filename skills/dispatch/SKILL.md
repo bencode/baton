@@ -41,10 +41,10 @@ on PATH; baton auth comes from the cwd `.baton.json`).
   (def plan (group-by-affinity pending))
 
   ;; 5. CONFIRM GATE (hard rule): present the plan as a table
-  ;;    (组 | issues | worker | 思路) and STOP — end the turn, wait for the
-  ;;    user. They may merge/split/drop groups or retarget workers. Never
-  ;;    dispatch without an explicit go-ahead.
-  (reply (render-plan plan) "确认后我就开 session 派发；要调整直接说。")
+  ;;    (group | issues | worker | approach) and STOP — end the turn, wait
+  ;;    for the user. They may merge/split/drop groups or retarget workers.
+  ;;    Never dispatch without an explicit go-ahead.
+  (reply (render-plan plan) "confirm and I dispatch; ask for any adjustment")
 
   ;; ===== next turn, after the user confirms (possibly with edits) =====
 
@@ -63,8 +63,9 @@ on PATH; baton auth comes from the cwd `.baton.json`).
       (gh issue comment (:number i)
         --body (str "dispatched → https://baton.fmap.dev/s/" (:shareToken s)))))
 
-  ;; 7. report — one line per group with its share link, then end the turn
-  (reply "每组一行：组名 → issues → session 链接；失败的组单独列出原因"))
+  ;; 7. report — one line per group (name, issues, session share link);
+  ;;    failed groups listed separately with the reason. Then end the turn.
+  (reply (render-report plan)))
 ```
 
 ## The brief
