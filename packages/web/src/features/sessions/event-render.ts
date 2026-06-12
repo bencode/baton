@@ -227,7 +227,18 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
         items.push({ kind: 'system-notice', text: 'interrupted', key })
       } else if (action === 'plan_mode') {
         const on = isRecord(e.payload) && e.payload.planMode === true
-        items.push({ kind: 'system-notice', text: on ? 'entered plan mode' : 'exited plan mode', key })
+        items.push({
+          kind: 'system-notice',
+          text: on ? 'entered plan mode' : 'exited plan mode',
+          key,
+        })
+      } else if (action === 'model') {
+        const m = isRecord(e.payload) ? str(e.payload.model) : undefined
+        items.push({
+          kind: 'system-notice',
+          text: m ? `model → ${m}` : 'model reset to default',
+          key,
+        })
       } else {
         items.push({ kind: 'raw', payload: e.payload, key })
       }

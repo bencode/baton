@@ -24,14 +24,20 @@ export const useSlashCommands = (
     setDismissed(false)
   }
 
-  // A command with args (/plan) just fills the input so you keep typing; a no-arg
-  // command (/clear, /help) runs immediately.
+  // Picking runs or fills depending on the entry. An arg suggestion ("model
+  // sonnet") runs with its args. A takesArgs command fills the draft so you
+  // keep typing — unless its full name is already typed, where Enter means
+  // "run it bare" (bare /model = reset). Everything else runs immediately.
+  // Highlight state resets — the menu re-derives from the new draft (a fill
+  // opens the arg-suggestion menu, which must start at the top).
   const pick = (cmd: SlashCommand): void => {
-    if (cmd.takesArgs) {
+    setIndex(0)
+    setDismissed(false)
+    if (cmd.args === undefined && cmd.takesArgs && draft.trim() !== `/${cmd.name}`) {
       setDraft(`/${cmd.name} `)
       return
     }
-    onCommand(cmd, '')
+    onCommand(cmd, cmd.args ?? '')
     setDraft('')
   }
 

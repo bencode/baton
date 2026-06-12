@@ -125,6 +125,8 @@ export type Api = {
     rename(id: Id, name: string): Promise<SessionView>
     // Toggle the session-wide read-only plan mode (/plan or Shift+Tab).
     setMode(id: Id, planMode: boolean): Promise<SessionView>
+    // Set the session's model override (/model <name>; null resets to default).
+    setModel(id: Id, model: string | null): Promise<SessionView>
     // Ask the worker to auto-title this session (no-op unless still unnamed).
     autotitle(id: Id): Promise<SessionView>
     // Delete the session (worker tears down its child + worktree; row dropped).
@@ -216,6 +218,8 @@ export const createApi = (base: string = API_BASE): Api => {
         request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
       setMode: (id, planMode) =>
         request(u(`/sessions/${id}/mode`), { method: 'POST', body: { planMode } }),
+      setModel: (id, model) =>
+        request(u(`/sessions/${id}/model`), { method: 'POST', body: { model } }),
       autotitle: id => request(u(`/sessions/${id}/autotitle`), { method: 'POST' }),
       remove: id => request(u(`/sessions/${id}`), { method: 'DELETE' }),
       sendMessage: (id, text, attachments) =>

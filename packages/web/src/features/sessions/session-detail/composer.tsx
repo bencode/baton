@@ -7,6 +7,38 @@ import { PaperclipIcon, SendIcon, Spinner } from './icons'
 import { useAutosize } from './use-autosize'
 import { useSlashCommands } from './use-slash-commands'
 
+// Session-wide status chips above the textarea (plan mode, model override):
+// one full-width click target whose click toggles/resets the state. Tones are
+// full literal class strings so Tailwind's scanner sees them.
+const CHIP_TONES = {
+  amber: {
+    chip: 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100',
+    hint: 'text-amber-500',
+  },
+  indigo: {
+    chip: 'bg-indigo-50 text-indigo-700 ring-indigo-200 hover:bg-indigo-100',
+    hint: 'text-indigo-400',
+  },
+} as const
+
+type StatusChipProps = {
+  tone: keyof typeof CHIP_TONES
+  label: string
+  hint: string
+  onClick: () => void
+}
+
+const StatusChip = ({ tone, label, hint, onClick }: StatusChipProps) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`mb-2 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium ring-1 transition-colors ${CHIP_TONES[tone].chip}`}
+  >
+    {label}
+    <span className={`ml-auto ${CHIP_TONES[tone].hint}`}>{hint}</span>
+  </button>
+)
+
 // Pull image files out of a paste/clipboard synchronously (getAsFile must run
 // inside the event).
 const extractImageFiles = (items: DataTransferItemList): File[] =>
@@ -32,6 +64,10 @@ type ComposerProps = {
   // Session-wide read-only plan mode + its toggle (/plan command, Shift+Tab).
   planMode: boolean
   onTogglePlanMode: () => void
+  // Session-wide model override (/model <name>); null = default. Clicking the
+  // chip resets, same as a bare /model.
+  model: string | null
+  onResetModel: () => void
 }
 
 // One rounded input card: pending attachments + textarea stacked over a bottom
@@ -55,6 +91,8 @@ export const Composer = ({
   onCommand,
   planMode,
   onTogglePlanMode,
+  model,
+  onResetModel,
 }: ComposerProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -94,14 +132,20 @@ export const Composer = ({
         className={`mx-auto min-w-0 max-w-5xl rounded-xl border px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'} ${active ? 'bg-white' : 'bg-gray-50'}`}
       >
         {planMode && (
-          <button
-            type="button"
+          <StatusChip
+            tone="amber"
+            label="📋 PLAN MODE · 只读规划，不改文件"
+            hint="Shift+Tab 退出"
             onClick={onTogglePlanMode}
-            className="mb-2 flex w-full items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-left text-xs font-medium text-amber-700 ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
-          >
-            📋 PLAN MODE · 只读规划，不改文件
-            <span className="ml-auto text-amber-500">Shift+Tab 退出</span>
-          </button>
+          />
+        )}
+        {model && (
+          <StatusChip
+            tone="indigo"
+            label={`🧠 MODEL · ${model}`}
+            hint="点击重置为默认"
+            onClick={onResetModel}
+          />
         )}
         {attachments.length > 0 && (
           <AttachmentStrip

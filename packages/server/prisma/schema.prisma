@@ -183,6 +183,9 @@ model Session {
   // turn with the SDK's permissionMode:'plan' (propose, no edits). Persisted so
   // it survives reloads and stays in sync across clients; surfaced on SessionView.
   planMode       Boolean   @default(false)
+  // Model override for this session's turns (web /model). Passed verbatim to
+  // the SDK's options.model; null = the CLI default model.
+  model          String?
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)

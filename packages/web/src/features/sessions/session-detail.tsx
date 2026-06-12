@@ -152,15 +152,23 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const togglePlanMode = () =>
     void api.sessions.setMode(sessionId, !session.planMode).catch(() => {})
 
+  // Set/reset the session's model override. Persisted server-side like planMode;
+  // rides back over the project stream (session.model), and the server stamps it
+  // onto each user_message → the runner passes it to the SDK's options.model.
+  const setModel = (model: string | null) =>
+    void api.sessions.setModel(sessionId, model).catch(err => console.error('set model', err))
+
   // Slash command from the composer. /clear resets context (the server appends a
   // notice the transcript renders); /help opens the command list; /plan toggles
   // read-only plan mode (server persists it → worker runs each turn in the SDK's
-  // permissionMode:'plan' until toggled back).
-  const runCommand = (command: SlashCommand) => {
+  // permissionMode:'plan' until toggled back); /model <name> overrides the model
+  // (bare /model resets to the default).
+  const runCommand = (command: SlashCommand, args: string) => {
     if (command.kind === 'clear') void api.sessions.clear(sessionId).catch(() => {})
     else if (command.kind === 'abort') void api.sessions.abort(sessionId).catch(() => {})
     else if (command.kind === 'help') setShowHelp(true)
     else if (command.kind === 'plan') togglePlanMode()
+    else if (command.kind === 'model') setModel(args || null)
   }
 
   // Show the breathing indicator while a turn is open. `sending` covers the brief
@@ -211,6 +219,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         onCommand={runCommand}
         planMode={session.planMode}
         onTogglePlanMode={togglePlanMode}
+        model={session.model}
+        onResetModel={() => setModel(null)}
       />
     </div>
   )

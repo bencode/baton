@@ -141,6 +141,8 @@ export type Store = {
     rename(id: Id, name: string): Promise<Session>
     // Toggle the session-wide read-only plan mode (idempotent explicit set).
     setPlanMode(id: Id, planMode: boolean): Promise<Session>
+    // Set the session's model override (null = reset to the CLI default).
+    setModel(id: Id, model: string | null): Promise<Session>
     // Non-locking, guarded set (placeholder + auto-title). null when locked.
     autoTitle(id: Id, name: string): Promise<Session | null>
     // Bump lastActiveAt to now — called on each inbound user message.

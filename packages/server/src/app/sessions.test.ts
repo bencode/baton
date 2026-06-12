@@ -173,6 +173,29 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(m2.payload.planMode, undefined)
   })
 
+  test('model: /model set persists on the view + stamps subsequent messages; empty resets', async () => {
+    const app = createApp(ctx.store)
+    const { session, workerToken } = await seedSession(app)
+    const auth = { authorization: `Bearer ${workerToken}` }
+    await postJson(app, `/sessions/${session.id}/status`, { active: true }, auth)
+
+    // Set an override → view reflects it, and the next message is stamped.
+    const on = await postJson(app, `/sessions/${session.id}/model`, { model: ' opus ' })
+    assert.equal(((await on.json()) as { model: string | null }).model, 'opus') // trimmed
+    const m1 = (await (
+      await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
+    ).json()) as { payload: { model?: string } }
+    assert.equal(m1.payload.model, 'opus')
+
+    // Bare /model (empty body) resets → messages stop carrying it.
+    const off = await postJson(app, `/sessions/${session.id}/model`, {})
+    assert.equal(((await off.json()) as { model: string | null }).model, null)
+    const m2 = (await (
+      await postJson(app, `/sessions/${session.id}/messages`, { text: 'go' })
+    ).json()) as { payload: { model?: string } }
+    assert.equal(m2.payload.model, undefined)
+  })
+
   test('messages are persisted + replayable via GET history (store-backed)', async () => {
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)

@@ -41,6 +41,10 @@ export type Session = {
   // permissionMode:'plan' (propose a plan, no edits). Toggled via /plan or
   // Shift+Tab; persisted, so it survives reloads and syncs across clients.
   planMode: boolean
+  // Model override for this session's turns (web /model <name>; bare /model
+  // resets). Passed through verbatim to the SDK's options.model — no server-side
+  // validation (gateway model ids vary). null = the CLI default model.
+  model: string | null
 }
 
 // Server read endpoints return record + runtime view. The worker object is

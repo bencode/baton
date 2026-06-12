@@ -206,6 +206,23 @@ export const registerSessionRoutes = (
     return c.json(await toView(updated))
   })
 
+  // Set the session's model override (web /model <name>; bare /model resets).
+  // Same shape as /mode: persisted on the session, stamped onto each
+  // user_message (below), and the runner passes it to the SDK's options.model.
+  // The name is passed through verbatim — no whitelist (gateway model ids
+  // vary); a bad name surfaces as a turn_error in the transcript.
+  app.post('/sessions/:id/model', async c => {
+    const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
+    if (s instanceof Response) return s
+    const body = (await c.req.json().catch(() => ({}))) as { model?: unknown }
+    const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : null
+    const updated = await store.sessions.setModel(s.id, model)
+    const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'model', model })
+    bus.publish(s.id, ev)
+    bump(s.projectId)
+    return c.json(await toView(updated))
+  })
+
   // Interrupt the in-flight turn (web /abort, like Esc): emit an `interrupt`
   // the worker's session child catches to abort the current SDK query. Session,
   // worktree, transcript, and binding all stay — the next message resumes.
@@ -323,6 +340,9 @@ export const registerSessionRoutes = (
       // Stamp the turn with the session's current plan mode (toggled via /plan or
       // Shift+Tab). The runner reads payload.planMode → permissionMode:'plan'.
       ...(session.planMode ? { planMode: true } : {}),
+      // Same for the model override (/model): the runner reads payload.model →
+      // SDK options.model. Unset = the CLI default model.
+      ...(session.model ? { model: session.model } : {}),
     }
     const ev = await store.sessions.appendEvent(sessionId, 'user_message', payload)
     // Mark the session as just-active (drives the rail's "last active" time).

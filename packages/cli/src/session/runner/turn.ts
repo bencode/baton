@@ -75,10 +75,16 @@ export const runTurn = async (
   externalSignal?: AbortSignal,
 ): Promise<number> => {
   await worker.emitEvent('turn_start', { messageId: msg.id })
-  const payload = msg.payload as { text?: unknown; attachments?: Attachment[]; planMode?: unknown }
+  const payload = msg.payload as {
+    text?: unknown
+    attachments?: Attachment[]
+    planMode?: unknown
+    model?: unknown
+  }
   const rawText = typeof payload?.text === 'string' ? payload.text : ''
   const attachments = Array.isArray(payload?.attachments) ? payload.attachments : []
   const planMode = payload?.planMode === true
+  const model = typeof payload?.model === 'string' ? payload.model : undefined
   if (rawText.length === 0 && attachments.length === 0) {
     await worker.emitEvent('turn_error', { message: 'user_message missing text and attachments' })
     return -1
@@ -108,7 +114,11 @@ export const runTurn = async (
   })
 
   try {
-    const messages = startQuery(config, text, resuming, queryFn, abort, log, envOverlay, planMode)
+    const messages = startQuery(config, text, resuming, queryFn, abort, log, {
+      envOverlay,
+      planMode,
+      model,
+    })
     const consume = streamSdkEvents(messages, worker)
     void consume.catch(() => {}) // abort below may make it reject; handled via race
     const outcome = await Promise.race([consume, timeout, interrupted])
