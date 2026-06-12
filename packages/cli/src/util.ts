@@ -26,10 +26,7 @@ export const common = {
 // Pure resolution of the auth bearer, in precedence order. 'cookie' means defer
 // to createClient's BATON_USER/PASS login; undefined means no auth at all.
 type AuthChoice = { bearer: string } | 'cookie' | undefined
-export const resolveAuth = (
-  env: NodeJS.ProcessEnv,
-  fileToken: string | undefined,
-): AuthChoice => {
+export const resolveAuth = (env: NodeJS.ProcessEnv, fileToken: string | undefined): AuthChoice => {
   const envBearer = env.BATON_TOKEN ?? env.BATON_WORKER_TOKEN
   if (envBearer) return { bearer: envBearer }
   if (env.BATON_USER && env.BATON_PASS) return 'cookie'

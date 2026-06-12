@@ -34,7 +34,9 @@ export const ActivityGroupView = ({ group }: { group: ActivityGroup }) => {
         <span className="shrink-0">
           {steps} step{steps === 1 ? '' : 's'}
         </span>
-        {parts.length > 0 && <span className="min-w-0 truncate text-gray-300">· {parts.join(' · ')}</span>}
+        {parts.length > 0 && (
+          <span className="min-w-0 truncate text-gray-300">· {parts.join(' · ')}</span>
+        )}
         {failed > 0 && (
           <span className="flex shrink-0 items-center gap-1 text-red-600">
             <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-red-500" />

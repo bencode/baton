@@ -14,8 +14,7 @@ export type Attachment = {
   createdAt: number
 }
 
-export const isImageAttachment = (att: Attachment): boolean =>
-  att.contentType.startsWith('image/')
+export const isImageAttachment = (att: Attachment): boolean => att.contentType.startsWith('image/')
 
 // Short, stable reference labels (image-1, image-2, file-1, …) keyed off type
 // and position. Attachment order is preserved end-to-end — composer array →

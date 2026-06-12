@@ -29,7 +29,10 @@ describe('lintBody', () => {
     assert.deepEqual(r.missing, ['Verification', 'Refs'])
   })
   test('flags a misplaced bash block (prose before it)', () => {
-    const body = GOOD.replace('## Verification\n\n```bash', '## Verification\n\nrun this:\n\n```bash')
+    const body = GOOD.replace(
+      '## Verification\n\n```bash',
+      '## Verification\n\nrun this:\n\n```bash',
+    )
     const r = lintBody(body)
     assert.equal(r.ok, false)
     assert.equal(r.misplaced, true)

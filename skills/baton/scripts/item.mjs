@@ -55,7 +55,8 @@ export const classifyRef = ref => {
 export const renderLint = r => {
   if (r.ok) return '✓ lint passed'
   const lines = ['✗ lint failed']
-  if (r.missing.length) lines.push(`  missing sections: ${r.missing.map(s => `## ${s}`).join(', ')}`)
+  if (r.missing.length)
+    lines.push(`  missing sections: ${r.missing.map(s => `## ${s}`).join(', ')}`)
   if (!r.hasBlock && !r.missing.includes('Verification'))
     lines.push(
       r.misplaced
@@ -143,7 +144,9 @@ const closeIssue = (it, output) => {
   gh('issue', 'close', n, '--reason', 'completed', '--comment', comment)
   ghTry('issue', 'edit', n, '--remove-label', 'state:in-progress')
   gh('issue', 'edit', n, '--add-label', 'state:needs-verification')
-  console.log(`\n✓ closed: ${it.issue.url}${cc ? `\n  cc'd creator @${author} for acceptance` : ''}`)
+  console.log(
+    `\n✓ closed: ${it.issue.url}${cc ? `\n  cc'd creator @${author} for acceptance` : ''}`,
+  )
 }
 
 const closeLocal = (it, output) => {
