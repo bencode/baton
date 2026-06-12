@@ -38,9 +38,13 @@ const StatusDot = ({ session }: { session: OpsSession }) => {
   return <span className="h-2 w-2 shrink-0 rounded-full bg-gray-700" />
 }
 
+// Plain <a> + _blank (not router Link): the board is a wall display — drilling
+// into a session must not navigate the wall away.
 const SessionRow = ({ session }: { session: OpsSession }) => (
-  <Link
-    to={`/proj/${session.projectId}/session/${session.id}`}
+  <a
+    href={`/proj/${session.projectId}/session/${session.id}`}
+    target="_blank"
+    rel="noreferrer"
     className="flex items-center gap-2 rounded px-1.5 py-1 text-sm transition-colors hover:bg-gray-800"
   >
     <StatusDot session={session} />
@@ -58,7 +62,7 @@ const SessionRow = ({ session }: { session: OpsSession }) => (
     <span className="ml-auto shrink-0 text-xs text-gray-600">
       {relativeTime(session.lastActiveAt)}
     </span>
-  </Link>
+  </a>
 )
 
 const WorkerCard = ({
