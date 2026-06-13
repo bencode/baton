@@ -1,8 +1,24 @@
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { RelayMessage } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { relayClient } from '../client/relay.ts'
 import { resolveBaseUrl } from '../config.ts'
 import { toJson } from '../output.ts'
 import { common } from '../util.ts'
+
+// Long messages must NOT be inlined into the live conversation: the harness caps
+// how much of a single event it surfaces (~600 chars), so a big body gets clipped
+// on the receiver. listen spills each message to a file and surfaces only a short
+// preview + path; the agent Reads the file on demand for the full text.
+const PREVIEW = 280
+
+const readStdin = async (): Promise<string> => {
+  const chunks: Buffer[] = []
+  for await (const c of process.stdin) chunks.push(c as Buffer)
+  return Buffer.concat(chunks).toString('utf8')
+}
 
 // Ready-to-paste invite the host hands to a peer. Carries the connection params
 // plus the raw CLI fallback so a peer without the `hotline` skill can still join.
@@ -41,16 +57,24 @@ const sendCommand = defineCommand({
   meta: { name: 'send', description: 'post one message to a relay channel' },
   args: {
     channel: { type: 'positional', required: true, description: 'channel id' },
-    text: { type: 'positional', required: true, description: 'message text' },
+    text: { type: 'positional', required: false, description: 'message text (short one-liner)' },
     token: { type: 'string', required: true, description: 'channel token' },
     from: { type: 'string', description: 'your participant name (default: peer)' },
+    file: { type: 'string', description: 'read message body from this file (for large content)' },
     ...common,
   },
   run: async ({ args }) => {
     const url = resolveBaseUrl(args.url)
+    // Large content goes via --file or stdin to dodge CLI arg limits + shell
+    // quoting; the positional text stays for short one-liners.
+    let text = args.text
+    if (text === undefined && args.file) text = readFileSync(args.file, 'utf8')
+    if (text === undefined && !process.stdin.isTTY) text = await readStdin()
+    if (text === undefined || text === '')
+      throw new Error('nothing to send: provide text, --file <path>, or pipe stdin')
     const msg = await relayClient(url).send(args.channel, args.token, {
       from: args.from ?? 'peer',
-      text: args.text,
+      text,
     })
     if (args.json) console.log(toJson(msg))
     else console.log(`sent (seq ${msg.seq})`)
@@ -78,6 +102,27 @@ const listenCommand = defineCommand({
     const emit = (o: unknown): void => {
       process.stdout.write(`${JSON.stringify(o)}\n`)
     }
+    // Spill full text to disk; surface a compact line. Short messages carry their
+    // whole text in `preview` (truncated=false → no read needed); long ones set
+    // truncated=true so the agent Reads `file` for the complete body.
+    const spillDir = join(tmpdir(), 'hotline', args.channel)
+    mkdirSync(spillDir, { recursive: true })
+    const surface = (m: RelayMessage): void => {
+      const text = typeof m.text === 'string' ? m.text : ''
+      const file = join(spillDir, `${m.seq}.txt`)
+      writeFileSync(file, text)
+      const truncated = text.length > PREVIEW
+      emit({
+        type: 'relay.message',
+        seq: m.seq,
+        from: m.from,
+        ts: m.ts,
+        chars: text.length,
+        truncated,
+        preview: truncated ? `${text.slice(0, PREVIEW)} …` : text,
+        file,
+      })
+    }
     // The eventsource error event carries http status as `.code` (e.g. 401 bad
     // token, 404 channel gone) — surface it so a stale invite is diagnosable.
     const describe = (e: unknown): string => {
@@ -88,7 +133,7 @@ const listenCommand = defineCommand({
       since: args.since ? Number(args.since) : 0,
       // Skip our own messages (they come back over the same channel).
       onMessage: m => {
-        if (m.from !== me) emit({ type: 'relay.message', ...m })
+        if (m.from !== me) surface(m)
       },
       onError: e => emit({ type: 'relay.error', error: describe(e) }),
     })

@@ -23,6 +23,14 @@ process** prints one JSON line per peer message, and you tail it with the
 **Monitor tool** so each message arrives live in this conversation. You send with
 a one-shot `baton relay send`.
 
+**Big messages go through files, not the conversation.** The live event surface
+caps how much of a single message it shows (~600 chars), so `listen` spills every
+message's full text to a file and emits only `{seq, from, chars, truncated,
+preview, file}`. When `truncated` is true, **Read `file` to get the complete
+text** before acting. To SEND something large, write it to a temp file and use
+`baton relay send <ch> --token T --from N --file <path>` (don't cram a long body
+into the positional text).
+
 **Pick a distinct name** for each side (`--from`). Self-messages echo back over
 the channel and are filtered by name — if both sides use the same name, you'll
 swallow the peer's messages too.
@@ -73,10 +81,11 @@ If the hotline skill isn't installed, run instead:
 
 ## Two modes
 
-**relay (default) — human in the loop.** Each `relay.message` event: surface it
-to your user verbatim (`peer: …`), then wait. When your user dictates a reply,
-`send` it. One message at a time, both sides human-driven. This is "let the two
-people talk through their agents".
+**relay (default) — human in the loop.** Each `relay.message` event: resolve its
+text (Read `file` if `truncated`, else use `preview`), surface it to your user
+(`peer: …`), then wait. When your user dictates a reply, `send` it. One message at
+a time, both sides human-driven. This is "let the two people talk through their
+agents".
 
 **autopilot — let the agents talk, BOUNDED.** Only when the user explicitly hands
 off ("let them talk / 你俩自己聊清楚 X / sort it out with the peer"). Then, on each
