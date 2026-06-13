@@ -1,5 +1,13 @@
 import { expect, test } from 'vitest'
-import { closeTab, MAX_TABS, neighborTab, openTab, type Tab } from './tabs-model'
+import {
+  closeOthers,
+  closeTab,
+  closeToRight,
+  MAX_TABS,
+  neighborTab,
+  openTab,
+  type Tab,
+} from './tabs-model'
 
 const ids = (tabs: Tab[]) => tabs.map(t => t.id)
 
@@ -40,4 +48,25 @@ test('closeTab removes by id; neighborTab picks the positional fallback', () => 
   expect(neighborTab(s, '/t/c')?.id).toBe('/t/b')
   expect(neighborTab(s, '/t/x')).toBeNull()
   expect(ids(closeTab(s, '/t/b'))).toEqual(['/t/a', '/t/c'])
+})
+
+test('closeOthers keeps only the anchor tab', () => {
+  const s: Tab[] = [
+    { id: '/t/a', title: 'a', lastActiveAt: 1 },
+    { id: '/t/b', title: 'b', lastActiveAt: 2 },
+    { id: '/t/c', title: 'c', lastActiveAt: 3 },
+  ]
+  expect(ids(closeOthers(s, '/t/b'))).toEqual(['/t/b'])
+  expect(ids(closeOthers(s, '/t/x'))).toEqual([]) // unknown anchor → all gone
+})
+
+test('closeToRight keeps up to and including the anchor; no-op on unknown / last', () => {
+  const s: Tab[] = [
+    { id: '/t/a', title: 'a', lastActiveAt: 1 },
+    { id: '/t/b', title: 'b', lastActiveAt: 2 },
+    { id: '/t/c', title: 'c', lastActiveAt: 3 },
+  ]
+  expect(ids(closeToRight(s, '/t/b'))).toEqual(['/t/a', '/t/b'])
+  expect(ids(closeToRight(s, '/t/c'))).toEqual(['/t/a', '/t/b', '/t/c']) // last → unchanged
+  expect(ids(closeToRight(s, '/t/x'))).toEqual(['/t/a', '/t/b', '/t/c']) // unknown → unchanged
 })

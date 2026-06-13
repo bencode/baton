@@ -30,6 +30,17 @@ const evictLru = (tabs: Tab[], keepId: string): Tab[] => {
 
 export const closeTab = (tabs: Tab[], id: string): Tab[] => tabs.filter(t => t.id !== id)
 
+// Batch closes (Edge-style tab context menu). All pure list filters; the
+// controller handles re-navigation when the active tab is among those removed.
+export const closeOthers = (tabs: Tab[], keepId: string): Tab[] => tabs.filter(t => t.id === keepId)
+
+// Keep tabs up to and including `id`; drop everything to its right. Unknown id
+// leaves the list untouched.
+export const closeToRight = (tabs: Tab[], id: string): Tab[] => {
+  const idx = tabs.findIndex(t => t.id === id)
+  return idx === -1 ? tabs : tabs.slice(0, idx + 1)
+}
+
 // The tab to activate after closing `id`: its positional neighbor (next, else previous).
 export const neighborTab = (tabs: Tab[], id: string): Tab | null => {
   const idx = tabs.findIndex(t => t.id === id)

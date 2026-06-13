@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { isItemRoute } from '../route'
-import { closeTab, neighborTab, openTab, type Tab } from './tabs-model'
+import {
+  closeOthers as closeOthersModel,
+  closeTab,
+  closeToRight,
+  neighborTab,
+  openTab,
+  type Tab,
+} from './tabs-model'
 
 const STORAGE_KEY = 'baton.tabs'
 
@@ -24,6 +31,11 @@ export type TabsController = {
   activeId: string
   open: (id: string, title: string) => void
   close: (id: string) => void
+  // Edge-style batch closes from the tab context menu. Each keeps the menu's
+  // anchor tab and re-navigates only when the active tab was among those closed.
+  closeOthers: (id: string) => void
+  closeRight: (id: string) => void
+  closeAll: () => void
   // Update an open tab's label in place (e.g. a session got auto-titled/renamed).
   retitle: (id: string, title: string) => void
 }
@@ -69,6 +81,31 @@ export const useTabs = (): TabsController => {
     [tabs, activeId, navigate],
   )
 
+  // Keep only `id`; focus it (it's the sole survivor) unless already active.
+  const closeOthers = useCallback(
+    (id: string) => {
+      setTabs(prev => closeOthersModel(prev, id))
+      if (activeId !== id) navigate(id)
+    },
+    [activeId, navigate],
+  )
+
+  // Drop everything right of `id`; re-navigate to `id` only if the active tab
+  // was one of the closed (i.e. no longer present after the cut).
+  const closeRight = useCallback(
+    (id: string) => {
+      const survivors = closeToRight(tabs, id)
+      setTabs(survivors)
+      if (!survivors.some(t => t.id === activeId)) navigate(id)
+    },
+    [tabs, activeId, navigate],
+  )
+
+  const closeAll = useCallback(() => {
+    setTabs([])
+    navigate('/')
+  }, [navigate])
+
   const retitle = useCallback((id: string, title: string) => {
     setTabs(prev => {
       const t = prev.find(x => x.id === id)
@@ -77,5 +114,5 @@ export const useTabs = (): TabsController => {
     })
   }, [])
 
-  return { tabs, activeId, open, close, retitle }
+  return { tabs, activeId, open, close, closeOthers, closeRight, closeAll, retitle }
 }

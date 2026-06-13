@@ -73,7 +73,7 @@ const EmptyMain = () => (
 
 export const Shell = () => {
   const navigate = useNavigate()
-  const { tabs, activeId, open, close, retitle } = useTabs()
+  const { tabs, activeId, open, close, closeOthers, closeRight, closeAll, retitle } = useTabs()
   const route = parseRoute(activeId)
   const routeProjectId = activeProjectId(activeId)
   // Keep session tab labels in sync with the live (auto-titled/renamed) name.
@@ -147,6 +147,9 @@ export const Shell = () => {
               activeId={activeId}
               onSelect={id => open(id, tabs.find(t => t.id === id)?.title ?? id)}
               onClose={close}
+              onCloseOthers={closeOthers}
+              onCloseRight={closeRight}
+              onCloseAll={closeAll}
             />
             <TabViewer
               tabs={tabs}
