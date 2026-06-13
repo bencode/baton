@@ -6,9 +6,11 @@ import { createEventBus, type EventBus } from './event-bus.ts'
 import { createLiveness, type LivenessTracker } from './liveness.ts'
 import { cookieAuth } from './middleware/cookie-auth.ts'
 import { createProjectBus, type ProjectBus } from './project-bus.ts'
+import { createRelayBus, type RelayBus } from './relay-bus.ts'
 import { registerAdminRoutes } from './routes/admin.ts'
 import { registerAuthRoutes } from './routes/auth.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
+import { registerRelayRoutes } from './routes/relay.ts'
 import { registerRequirementRoutes } from './routes/requirements.ts'
 import { registerSessionAttachmentRoutes } from './routes/session-attachments.ts'
 import { registerSessionRoutes } from './routes/sessions.ts'
@@ -41,13 +43,16 @@ export const createApp = (
   attachments: AttachmentStore = createAttachmentStore(defaultAttachmentDir()),
   commands: CommandBus = createCommandBus(),
   projects: ProjectBus = createProjectBus(),
+  relay: RelayBus = createRelayBus(),
 ): Hono<AppEnv> => {
   const app = new Hono<AppEnv>()
   app.get('/health', c => c.json({ ok: true }))
-  // /health + /auth are registered before the gate (and isExempt) so they stay
-  // public; everything below is behind the cookie gate (enforced iff a user
-  // exists), except the worker-bearer routes isExempt carves out.
+  // /health + /auth + /relay are registered before the gate so they stay public;
+  // everything below is behind the cookie gate (enforced iff a user exists),
+  // except the worker-bearer routes isExempt carves out. Relay self-authenticates
+  // with a per-channel token — its own auth domain, decoupled from baton's.
   registerAuthRoutes(app, store)
+  registerRelayRoutes(app, relay)
   app.use('*', cookieAuth(store))
   registerWorkspaceRoutes(app, store)
   registerProjectRoutes(app, store, workerLiveness, runtime, busyTracker, projects, commands)
