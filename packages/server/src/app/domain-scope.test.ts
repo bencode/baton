@@ -146,15 +146,16 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     const o = (await r.json()) as {
       workspaces: unknown[]
       projects: unknown[]
-      workers: { alive: boolean }[]
+      workers: { alive: boolean; connected: boolean }[]
       sessions: { id: number; attached: boolean; busy: boolean }[]
     }
     assert.equal(o.workspaces.length, 2)
     assert.equal(o.projects.length, 2)
     assert.equal(o.workers.length, 2)
     assert.deepEqual(o.sessions.map(s => s.id).sort(), [a.session.id, b.session.id].sort())
-    // Fresh app instance: nothing pinged liveness, nothing attached → all idle.
-    assert.ok(o.workers.every(w => w.alive === false))
+    // Fresh app instance: nothing pinged liveness, no command stream open,
+    // nothing attached → every worker idle AND not connected.
+    assert.ok(o.workers.every(w => w.alive === false && w.connected === false))
     assert.ok(o.sessions.every(s => !s.attached && !s.busy))
   })
 

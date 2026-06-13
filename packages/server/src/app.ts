@@ -50,11 +50,11 @@ export const createApp = (
   registerAuthRoutes(app, store)
   app.use('*', cookieAuth(store))
   registerWorkspaceRoutes(app, store)
-  registerProjectRoutes(app, store, workerLiveness, runtime, busyTracker, projects)
+  registerProjectRoutes(app, store, workerLiveness, runtime, busyTracker, projects, commands)
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store, projects)
   registerWorkerRoutes(app, store, workerLiveness, commands, runtime, projects)
-  registerAdminRoutes(app, store, workerLiveness, runtime, busyTracker)
+  registerAdminRoutes(app, store, workerLiveness, runtime, busyTracker, commands)
   registerSessionRoutes(
     app,
     store,

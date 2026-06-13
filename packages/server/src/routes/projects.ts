@@ -1,6 +1,7 @@
 import type { Id } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { BusyTracker } from '../busy.ts'
+import type { CommandBus } from '../command-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { assertProjectAccess, assertWorkspaceAccess } from '../middleware/domain-scope.ts'
 import type { ProjectBus } from '../project-bus.ts'
@@ -22,6 +23,7 @@ export const registerProjectRoutes = (
   runtime: SessionRuntime,
   busyTracker: BusyTracker,
   projects: ProjectBus,
+  commands: CommandBus,
 ): void => {
   app.post('/projects', async c => {
     const body = (await c.req.json()) as {
@@ -64,7 +66,7 @@ export const registerProjectRoutes = (
     const denied = await assertProjectAccess(c, store, id)
     if (denied) return denied
     const list = await store.workers.listByProject(id)
-    return c.json(list.map(w => workerWithView(w, workerLiveness)))
+    return c.json(list.map(w => workerWithView(w, workerLiveness, commands.has(w.id))))
   })
   // Project change stream: lightweight invalidation signals so the web client
   // refetches the affected query (sessions / workers / tasks) instead of

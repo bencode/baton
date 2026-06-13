@@ -1,6 +1,7 @@
 import type { AdminOverview } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { BusyTracker } from '../busy.ts'
+import type { CommandBus } from '../command-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
 import { requireAdmin } from '../middleware/domain-scope.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
@@ -17,6 +18,7 @@ export const registerAdminRoutes = (
   workerLiveness: LivenessTracker,
   runtime: SessionRuntime,
   busyTracker: BusyTracker,
+  commands: CommandBus,
 ): void => {
   app.get('/admin/overview', async c => {
     const denied = await requireAdmin(c, store)
@@ -30,7 +32,7 @@ export const registerAdminRoutes = (
     const overview: AdminOverview = {
       workspaces,
       projects,
-      workers: workers.map(w => workerWithView(w, workerLiveness)),
+      workers: workers.map(w => workerWithView(w, workerLiveness, commands.has(w.id))),
       // No per-session worker join (unlike sessionWithView) — the workers list
       // above already carries alive, and the client groups by workerId.
       sessions: sessions.map(s => {

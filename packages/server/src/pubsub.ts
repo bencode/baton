@@ -8,6 +8,10 @@ type Subscriber<T> = (item: T) => void
 export type PubSub<T> = {
   publish(key: Id, item: T): void
   subscribe(key: Id, cb: Subscriber<T>): () => void
+  // Does this key have at least one live subscriber? For the command bus this
+  // answers "is this worker's daemon currently streaming" — a per-worker
+  // signal, unlike machineId liveness which is shared across same-machine workers.
+  has(key: Id): boolean
 }
 
 export const createPubSub = <T>(label: string): PubSub<T> => {
@@ -37,6 +41,9 @@ export const createPubSub = <T>(label: string): PubSub<T> => {
         s.delete(cb)
         if (s.size === 0) subs.delete(key)
       }
+    },
+    has(key) {
+      return (subs.get(key)?.size ?? 0) > 0
     },
   }
 }

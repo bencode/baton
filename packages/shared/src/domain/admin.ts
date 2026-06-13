@@ -11,6 +11,6 @@ import type { Workspace } from './workspace.ts'
 export type AdminOverview = {
   workspaces: Workspace[]
   projects: Project[]
-  workers: (Worker & { alive: boolean })[]
+  workers: (Worker & { alive: boolean; connected: boolean })[]
   sessions: (Session & { attached: boolean; busy: boolean })[]
 }

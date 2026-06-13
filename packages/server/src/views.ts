@@ -52,10 +52,15 @@ const unknownWorker = (workerId: Id, projectId: Id): Worker => ({
   createdAt: 0,
 })
 
+// connected = this worker's daemon is streaming right now (commands.has(id)),
+// the per-worker truth; alive is the shared machineId heartbeat. Callers pass
+// connected explicitly so this stays free of the command-bus dependency.
 export const workerWithView = (
   worker: Worker,
   liveness: LivenessTracker,
-): Worker & { alive: boolean } => ({
+  connected: boolean,
+): Worker & { alive: boolean; connected: boolean } => ({
   ...worker,
   alive: liveness.isAlive(worker.machineId),
+  connected,
 })

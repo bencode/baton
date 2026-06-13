@@ -131,7 +131,10 @@ export const OpsPage = () => {
   const forbidden = error?.includes('403') ?? false
   const busy = data?.sessions.filter(s => s.busy).length ?? 0
   const idle = (data?.sessions.filter(s => s.attached).length ?? 0) - busy
-  const offline = data?.workers.filter(w => !w.alive).length ?? 0
+  // `connected` = this worker's daemon is streaming now (per-worker), unlike
+  // `alive` which is the shared machineId heartbeat. The board reports the
+  // per-worker truth so a registered-but-not-running worker reads as offline.
+  const offline = data?.workers.filter(w => !w.connected).length ?? 0
 
   return (
     <div className="min-h-screen bg-black px-6 py-5 font-mono text-gray-300">
@@ -172,7 +175,7 @@ export const OpsPage = () => {
                   {sec.workers.map(w => (
                     <span key={w.id} className="flex items-center gap-1">
                       <span
-                        className={`h-1.5 w-1.5 rounded-full ${w.alive ? 'bg-emerald-500' : 'bg-gray-700'}`}
+                        className={`h-1.5 w-1.5 rounded-full ${w.connected ? 'bg-emerald-500' : 'bg-gray-700'}`}
                       />
                       {w.name}
                     </span>

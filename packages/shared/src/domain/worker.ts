@@ -16,8 +16,13 @@ export type Worker = {
   createdAt: number
 }
 
-// Server merges DB row + in-memory liveness when serving over HTTP.
-export type WorkerView = Worker & { alive: boolean }
+// Server merges DB row + in-memory runtime signals when serving over HTTP.
+//   alive     — the machine is reachable (heartbeat by machineId, 90s window);
+//               SHARED across workers on the same machine.
+//   connected — THIS worker's daemon is holding its command stream right now
+//               (per-worker, accurate). A registered-but-not-running worker is
+//               connected=false even if a same-machine sibling is alive.
+export type WorkerView = Worker & { alive: boolean; connected: boolean }
 
 // Commands the server pushes to a Worker over its SSE command stream
 // (GET /workers/me/stream). The Worker is a persistent listener that

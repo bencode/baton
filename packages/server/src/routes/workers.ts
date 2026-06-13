@@ -56,7 +56,13 @@ export const registerWorkerRoutes = (
     // apiToken returned on every successful (re)register so the daemon can
     // re-read it after losing local state.
     return c.json(
-      { worker: workerWithView(out.worker, liveness), apiToken: out.apiToken, outcome: out.kind },
+      {
+        // connected=false here: the daemon registers first, then opens its
+        // command stream — subsequent reads flip it true.
+        worker: workerWithView(out.worker, liveness, commands.has(out.worker.id)),
+        apiToken: out.apiToken,
+        outcome: out.kind,
+      },
       201,
     )
   })
@@ -86,7 +92,7 @@ export const registerWorkerRoutes = (
     if (!w) return c.json({ error: 'not found' }, 404)
     const denied = await assertProjectAccess(c, store, w.projectId)
     if (denied) return denied
-    return c.json(workerWithView(w, liveness))
+    return c.json(workerWithView(w, liveness, commands.has(w.id)))
   })
 
   // Heartbeat is unauth in v0: the caller asserts a machineId. Single-tenant
