@@ -46,21 +46,25 @@ const awaitActive = async (
 // messages — they queue until the worker picks the session up, so callers
 // should send regardless and adjust only the reply (link now instead of
 // waiting out the turn).
+//
+// `created` distinguishes a brand-new session from a reused (still-active) one,
+// so the caller can ack a freshly dispatched task immediately instead of making
+// the user wait out the whole turn in silence.
 export const ensureSession = async (
   client: BatonClient,
   bindings: BindingStore,
   route: { projectId: Id; workerId: Id },
   key: string,
   opts: ActiveWaitOpts = {},
-): Promise<{ id: Id; active: boolean }> => {
+): Promise<{ id: Id; active: boolean; created: boolean }> => {
   const existing = opts.forceNew ? undefined : bindings.get(key)
   if (existing !== undefined) {
     const s = await client.getSession(existing).catch(() => null)
     // Reuse only an active (attached) session. Stopped / auto-stopped ones fall
     // through to a fresh session below — don't auto-resume stale context.
-    if (s?.attached) return { id: s.id, active: true }
+    if (s?.attached) return { id: s.id, active: true, created: false }
   }
-  const created = await client.createSession(route.projectId, route.workerId)
-  bindings.set(key, created.id)
-  return { id: created.id, active: await awaitActive(client, created.id, opts) }
+  const fresh = await client.createSession(route.projectId, route.workerId)
+  bindings.set(key, fresh.id)
+  return { id: fresh.id, active: await awaitActive(client, fresh.id, opts), created: true }
 }

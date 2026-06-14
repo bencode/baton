@@ -31,13 +31,13 @@ test('ensureSession: forceNew skips the bound active session and rebinds', async
   map.set('k', 7)
   // Without forceNew the active bound session is reused…
   const reused = await ensureSession(client, bindings, route, 'k', opts)
-  assert.deepEqual(reused, { id: 7, active: true })
+  assert.deepEqual(reused, { id: 7, active: true, created: false })
   // …with forceNew a fresh one is created and the binding moves to it.
   const fresh = await ensureSession(client, bindings, route, 'k', {
     ...opts,
     forceNew: true,
   })
-  assert.deepEqual(fresh, { id: 101, active: true })
+  assert.deepEqual(fresh, { id: 101, active: true, created: true })
   assert.equal(map.get('k'), 101)
 })
 
