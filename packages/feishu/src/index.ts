@@ -79,13 +79,18 @@ const main = (): void => {
     const reactionId = await addReaction(lark, msg.messageId)
     try {
       const cmd = parseNewCommand(msg.text)
-      const { id: sessionId, active } = await ensureSession(client, bindings, cfg.route, key, {
-        forceNew: cmd.forceNew,
-      })
+      const {
+        id: sessionId,
+        active,
+        created,
+      } = await ensureSession(client, bindings, cfg.route, key, { forceNew: cmd.forceNew })
+      // The view link is available the moment the session exists, so resolve it
+      // once up front and reuse it for the creation ack, the not-delivered
+      // notice, and the final reply alike.
+      const view = await client.getSession(sessionId)
+      const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
       if (cmd.forceNew && !cmd.text) {
         // Bare "/new": session created + bound; nothing to ask the agent yet.
-        const view = await client.getSession(sessionId)
-        const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
         await reply(lark, msg.conversationId, `🆕 已开新会话 #${sessionId}: ${link}`)
         log(`→ new session #${sessionId} (bare /new) ${link}`)
         return
@@ -95,8 +100,6 @@ const main = (): void => {
         // cold spawn). The server rejects messages to inactive sessions (409),
         // so be honest: this message was NOT delivered — point at the web page
         // (which can resume/send once the worker returns).
-        const view = await client.getSession(sessionId)
-        const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
         await reply(
           lark,
           msg.conversationId,
@@ -104,6 +107,18 @@ const main = (): void => {
         )
         log(`→ not delivered, session #${sessionId} never attached ${link}`)
         return
+      }
+      if (created) {
+        // Two-message flow: a freshly dispatched task can run for minutes, so
+        // don't leave the user waiting in silence. We already hold the session
+        // link — ack right away; the agent's answer follows as a second message
+        // once the turn finishes below.
+        await reply(
+          lark,
+          msg.conversationId,
+          `🆕 已创建会话 #${sessionId}，正在处理，结果稍后回复 👉 详情 #${sessionId}: ${link}`,
+        )
+        log(`→ ack new session #${sessionId}, processing… ${link}`)
       }
       const prompt = applyTemplate(cfg.promptTemplate, senderName, cmd.text)
       const attachments = await collectImages(
@@ -125,8 +140,6 @@ const main = (): void => {
         TURN_TIMEOUT_MS,
         authedFetch,
       )
-      const view = await client.getSession(sessionId)
-      const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`
       await reply(lark, msg.conversationId, replyText(sessionId, link, text))
       log(`→ replied (${outcome}, ${text.length} chars) ${link}`)
     } catch (e) {
