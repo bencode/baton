@@ -1,5 +1,8 @@
 import ReactMarkdown from 'react-markdown'
+import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import { normalizeMath } from './math-normalize'
 
 // Thin wrapper around react-markdown with @tailwindcss/typography styling.
 //
@@ -30,10 +33,14 @@ export const Markdown = ({ text }: { text: string }) => (
       '[&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5',
       '[&_:not(pre)>code]:font-normal [&_:not(pre)>code]:text-[0.85em]',
       'prose-code:before:hidden prose-code:after:hidden',
+      // KaTeX block math: keep prose density, let long equations scroll sideways
+      // instead of overflowing the bubble.
+      '[&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden',
     ].join(' ')}
   >
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
       components={{
         // Open links in a new tab (the transcript is the app; don't navigate away).
         a: ({ node: _node, ...props }) => (
@@ -41,7 +48,7 @@ export const Markdown = ({ text }: { text: string }) => (
         ),
       }}
     >
-      {text}
+      {normalizeMath(text)}
     </ReactMarkdown>
   </div>
 )
