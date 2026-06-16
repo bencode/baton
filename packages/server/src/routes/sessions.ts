@@ -22,8 +22,8 @@ import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam, sessionWithView } from '../views.ts'
 
 // ~8MB base64 ≈ ~6MB raw image; enough for screenshots, bounded for the SSE
-// stream. We don't persist them anymore (browser does), but a runaway paste
-// still hurts everyone subscribed to the live stream.
+// stream and the persisted user_message payload. A runaway paste still hurts
+// everyone subscribed to the live stream.
 const MAX_IMAGE_DATA_URL = 8_000_000
 
 // Parse an optional finite numeric query param; undefined when absent/blank/NaN.
@@ -267,7 +267,7 @@ export const registerSessionRoutes = (
   })
 
   // Session DELETE (no auth, v0). Tell the owning worker to tear down its child +
-  // worktree, then drop the row. Browser-side events live in IndexedDB.
+  // worktree, then drop the row (its persisted transcript events go with it).
   app.delete('/sessions/:id', async c => {
     const id = intParam(c.req.param('id'))
     const s = await loadScopedSession(c, store, id)
@@ -309,8 +309,10 @@ export const registerSessionRoutes = (
   })
 
   // Chat ingress (UI / CLI, no auth in v0). Persists a user_message then
-  // publishes it; the subscribed daemon (via SSE) picks it up and runs a turn,
-  // and any client replays it from the transcript on (re)connect.
+  // publishes it; the subscribed daemon picks it up live (SSE) and runs a turn.
+  // The persisted row is the authoritative queue: if the daemon misses the live
+  // event (reconnect gap, etc.) it drains it on its next (re)connect, and any
+  // client replays it from the transcript on (re)connect.
   app.post('/sessions/:id/messages', async c => {
     const sessionId = intParam(c.req.param('id'))
     const session = await loadScopedSession(c, store, sessionId)

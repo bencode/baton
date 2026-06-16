@@ -1,4 +1,9 @@
-import type { Attachment, SessionEvent } from '@baton/shared'
+import {
+  type Attachment,
+  type SessionEvent,
+  startedMessageIds,
+  unstartedUserMessages,
+} from '@baton/shared'
 
 // Pure reducer turning session events (sequence-ordered, each carrying a stable
 // server `id`) into a list of RenderItems UI can dispatch over. Tries to read
@@ -136,25 +141,12 @@ const userBubble = (e: SessionEvent): QueuedMessage => {
   return { text, images, attachments, key: String(e.id) }
 }
 
-// Ids of user_messages whose turn has started (turn_start carries messageId). A
-// user_message absent here hasn't been picked up yet → it's queued, not inline.
-const startedMessageIds = (events: SessionEvent[]): Set<number> => {
-  const ids = new Set<number>()
-  for (const e of events) {
-    if (e.type !== 'turn_start') continue
-    const id = isRecord(e.payload) ? e.payload.messageId : undefined
-    if (typeof id === 'number') ids.add(id)
-  }
-  return ids
-}
-
 // User messages still waiting in the queue (no turn_start yet), in send order.
-// State is derived purely from the event stream — no client-side queue to keep
-// in sync — so a message moves out the instant its turn_start arrives.
-export const pendingMessages = (events: SessionEvent[]): QueuedMessage[] => {
-  const started = startedMessageIds(events)
-  return events.filter(e => e.type === 'user_message' && !started.has(e.id)).map(userBubble)
-}
+// Derivation lives in @baton/shared (startedMessageIds / unstartedUserMessages)
+// so the session runner drains the exact same authoritative queue — a message
+// moves out of this zone the instant its turn_start arrives.
+export const pendingMessages = (events: SessionEvent[]): QueuedMessage[] =>
+  unstartedUserMessages(events).map(userBubble)
 
 // --- reducer -----------------------------------------------------------------
 

@@ -41,6 +41,10 @@ export type WorkerClient = {
   // means "ready to receive" (not just "spawned"). Daemon still reports inactive
   // on child exit.
   setActive(active: boolean): Promise<unknown>
+  // Full persisted transcript — the runner reads it on (re)connect to drain the
+  // authoritative pending queue (user_messages with no turn_start yet), so a
+  // missed live SSE delivery can't strand a message.
+  listEvents(): Promise<SessionEvent[]>
 }
 
 // `bearer` → the worker daemon / session child: authenticate every request with
@@ -82,5 +86,7 @@ export const createWorkerClient = (
         body: { active },
         headers: auth,
       }),
+    listEvents: () =>
+      request(u(`/sessions/${sessionId}/events`), { method: 'GET', headers: auth }),
   }
 }

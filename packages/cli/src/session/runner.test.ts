@@ -3,10 +3,11 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import type { SessionEvent } from '@baton/shared'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
 import type { QueryFn } from './runner/query.ts'
-import { runTurn, shouldReap } from './runner.ts'
+import { type EventSourceLike, runDaemon, runTurn, shouldReap } from './runner.ts'
 
 // Build a fake query that records the params it was called with and yields the
 // given SDK messages. `seen` lets a test inspect prompt + options afterwards.
@@ -184,6 +185,96 @@ describe('runTurn', () => {
     } finally {
       rmSync(wt, { recursive: true, force: true })
     }
+  })
+})
+
+// EventSource stub that fires onopen on the next tick (after runDaemon assigns
+// the handler), driving the reconcile-on-connect path without a real stream.
+const openOnConnect = (): new (u: string) => EventSourceLike => {
+  class FakeES {
+    onmessage: ((e: { data: string }) => void) | null = null
+    onerror: (() => void) | null = null
+    onopen: (() => void) | null = null
+    closed = false
+    constructor(public url: string) {
+      setTimeout(() => this.onopen?.(), 0)
+    }
+    close(): void {
+      this.closed = true
+    }
+  }
+  return FakeES as unknown as new (u: string) => EventSourceLike
+}
+
+describe('runDaemon reconcile-on-connect', () => {
+  const cfg: SessionConfig = {
+    server: 'http://srv',
+    sessionId: 1,
+    name: 'x',
+    agentSessionId: 'uuid-without-transcript',
+    worktreePath: '/tmp/wt',
+  }
+
+  test('drains an unstarted user_message from the transcript and runs its turn', async () => {
+    const controller = new AbortController()
+    const calls: Array<{ type: string; payload: unknown }> = []
+    // A stranded message: persisted, but no turn_start ever ran (the bug case).
+    const events: SessionEvent[] = [
+      { id: 7, sessionId: 1, sequence: 0, type: 'user_message', payload: { text: 'stranded' }, createdAt: 0 },
+    ]
+    const worker = {
+      setActive: async () => ({}),
+      listEvents: async () => events,
+      emitEvent: async (type: string, payload: unknown) => {
+        calls.push({ type, payload })
+        if (type === 'turn_complete') controller.abort() // exit once the turn lands
+        return {} as never
+      },
+    } as unknown as WorkerClient
+    const { qf } = recordingQuery([{ type: 'result', subtype: 'success', is_error: false }])
+
+    await runDaemon(
+      cfg,
+      { worker, queryFn: qf, eventSourceImpl: openOnConnect(), log: () => {} },
+      controller.signal,
+    )
+
+    assert.deepEqual(
+      calls.map(c => c.type),
+      ['turn_start', 'sdk_event', 'turn_complete'],
+    )
+    assert.deepEqual(calls[0]?.payload, { messageId: 7 })
+  })
+
+  test('does not re-run a user_message that already has a turn_start', async () => {
+    const controller = new AbortController()
+    const calls: Array<{ type: string }> = []
+    const events: SessionEvent[] = [
+      { id: 7, sessionId: 1, sequence: 0, type: 'user_message', payload: { text: 'done' }, createdAt: 0 },
+      { id: 8, sessionId: 1, sequence: 1, type: 'turn_start', payload: { messageId: 7 }, createdAt: 0 },
+      { id: 9, sessionId: 1, sequence: 2, type: 'turn_complete', payload: {}, createdAt: 0 },
+    ]
+    const worker = {
+      setActive: async () => ({}),
+      listEvents: async () => events,
+      emitEvent: async (type: string) => {
+        calls.push({ type })
+        return {} as never
+      },
+    } as unknown as WorkerClient
+    const qf: QueryFn = () => {
+      throw new Error('should not run a turn for an already-started message')
+    }
+    // Nothing to reconcile → nothing drains; abort shortly so the daemon exits.
+    setTimeout(() => controller.abort(), 20)
+
+    await runDaemon(
+      cfg,
+      { worker, queryFn: qf, eventSourceImpl: openOnConnect(), log: () => {} },
+      controller.signal,
+    )
+
+    assert.deepEqual(calls, [])
   })
 })
 

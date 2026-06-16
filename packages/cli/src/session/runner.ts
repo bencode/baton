@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { SessionEvent } from '@baton/shared'
+import { type SessionEvent, unstartedUserMessages } from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
@@ -109,10 +109,11 @@ const restoreTty = (): void => {
   }
 }
 
-// Long-running loop: subscribe + drain. Server no longer persists events, so
-// daemon state isn't recovered from a server query — `firstSpawnDone` reads
-// the filesystem (claude's own session file) and the message queue starts
-// empty. Messages sent while the daemon is offline are dropped by design.
+// Long-running loop: subscribe + drain. The durable transcript (server DB) is
+// the authoritative queue — on every (re)connect we reconcile against it
+// (reconcile() below) and drain any user_message with no turn_start yet, so a
+// message sent while this daemon was offline / reconnecting isn't stranded.
+// `firstSpawnDone` reads the filesystem (claude's own session file).
 export const runDaemon = async (
   config: SessionConfig,
   deps: RunnerDeps,
@@ -132,6 +133,11 @@ export const runDaemon = async (
   }
   const pendingQueue: SessionEvent[] = []
   let busy = false
+  // True while reconcile() is awaiting the transcript — blocks the idle reaper
+  // so a reconnect that's about to surface queued work can't be reaped mid-fetch
+  // (it would otherwise exit before draining, leaving the message stranded until
+  // the next user action). Idle reaping is otherwise unchanged.
+  let reconciling = false
   let lastActivity = Date.now()
   // The in-flight turn's abort handle, so a session `interrupt` event (web
   // /abort, like Esc) can cancel it without killing the session.
@@ -171,6 +177,34 @@ export const runDaemon = async (
     }
   }
 
+  // Drain the authoritative queue from the durable transcript: enqueue any
+  // user_message with no turn_start yet that we haven't already queued. Runs on
+  // every (re)connect, so a live SSE delivery missed during a reconnect gap,
+  // zombie-worker wedge, or reap→respawn can't strand a message. Idempotent —
+  // the shared `seen` set + the turn_start filter prevent any re-run.
+  const reconcile = async (): Promise<void> => {
+    reconciling = true
+    try {
+      const pending = unstartedUserMessages(await deps.worker.listEvents())
+      let added = 0
+      for (const ev of pending) {
+        if (state.seen.has(ev.sequence)) continue
+        state.seen.add(ev.sequence)
+        pendingQueue.push(ev)
+        added++
+      }
+      if (added > 0) {
+        log(`reconciled ${added} queued message(s) from transcript`)
+        lastActivity = Date.now()
+        void drain()
+      }
+    } catch (e) {
+      log(`reconcile failed: ${String(e)}`)
+    } finally {
+      reconciling = false
+    }
+  }
+
   const es = subscribeStream(
     // live-only: the server now replays history to viewers, but the child must
     // not re-receive (and re-run) past user_messages on connect/resume.
@@ -192,11 +226,14 @@ export const runDaemon = async (
     },
     // Report active only now that we're subscribed — before this, a message
     // sent right after spawn would be missed (no replay on the live stream).
+    // Then reconcile against the durable transcript to pick up anything that
+    // landed while we weren't subscribed (initial spawn or a reconnect gap).
     () => {
       void deps.worker
         .setActive(true)
         .then(() => log('▲ active (subscribed)'))
         .catch(e => log(`status(active) failed: ${String(e)}`))
+      void reconcile()
     },
   )
   // Idle watchdog: self-exit after idleMs of no activity so the worker's process
@@ -207,7 +244,7 @@ export const runDaemon = async (
   const reaped = new Promise<void>(resolve => {
     idleTimer = setInterval(
       () => {
-        if (shouldReap(lastActivity, Date.now(), busy, pendingQueue.length, idleMs)) {
+        if (!reconciling && shouldReap(lastActivity, Date.now(), busy, pendingQueue.length, idleMs)) {
           log('idle — shutting down (resumes on next message)')
           resolve()
         }
