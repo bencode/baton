@@ -38,3 +38,17 @@ export const SendIcon = () => (
 export const Spinner = () => (
   <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
 )
+
+// Filled rounded square: the universal "stop" glyph for the 停止 button.
+export const StopIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="13"
+    height="13"
+    fill="currentColor"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <rect x="3.5" y="3.5" width="9" height="9" rx="2.5" />
+  </svg>
+)

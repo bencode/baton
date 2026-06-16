@@ -143,6 +143,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     void api.sessions.resume(sessionId).catch(() => {})
   }
   const stop = () => void api.sessions.stop(sessionId).catch(() => {})
+  // Interrupt the in-flight turn (the 停止 button + /abort); session stays alive.
+  const abort = () => void api.sessions.abort(sessionId).catch(() => {})
   // Rename propagates back via the project stream (rail/tab/header all refetch).
   const rename = (name: string) => void api.sessions.rename(sessionId, name).catch(() => {})
 
@@ -165,7 +167,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   // (bare /model resets to the default).
   const runCommand = (command: SlashCommand, args: string) => {
     if (command.kind === 'clear') void api.sessions.clear(sessionId).catch(() => {})
-    else if (command.kind === 'abort') void api.sessions.abort(sessionId).catch(() => {})
+    else if (command.kind === 'abort') abort()
     else if (command.kind === 'help') setShowHelp(true)
     else if (command.kind === 'plan') togglePlanMode()
     else if (command.kind === 'model') setModel(args || null)
@@ -197,7 +199,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}
       />
-      {working && <WorkingIndicator />}
+      {working && <WorkingIndicator onAbort={abort} />}
       <QueuedMessages queued={queued} />
       {showHelp && (
         <div className="shrink-0 bg-white px-3">
