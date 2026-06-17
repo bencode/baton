@@ -94,6 +94,26 @@ services:
       - backend
     restart: unless-stopped
 
+  # Third Feishu bridge — the 'future' project (考研复习) → its macmini worker.
+  # Same image as `feishu`; its own app creds (FEISHU3_* in .env) and its own
+  # bindings volume so it never shares user→session state with the others.
+  feishu3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.feishu
+    env_file: .env
+    environment:
+      - FEISHU_APP_ID=${FEISHU3_APP_ID}
+      - FEISHU_APP_SECRET=${FEISHU3_APP_SECRET}
+      - BATON_PROJECT_ID=10
+      - BATON_WORKER_ID=13
+      - BATON_FEISHU_BINDINGS=/data/feishu-bindings.json
+    volumes:
+      - feishu3_data:/data
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   web-dist:
   caddy_data:
@@ -102,3 +122,4 @@ volumes:
   bridge_data:
   feishu_data:
   feishu2_data:
+  feishu3_data:

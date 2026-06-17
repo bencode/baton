@@ -14,8 +14,8 @@ docker compose --profile build build web-build
 docker compose --profile build run --rm web-build
 
 echo "[deploy] build + (re)start backend, bridge, feishu bridges"
-docker compose build backend bridge feishu feishu2
-docker compose up -d backend bridge feishu feishu2
+docker compose build backend bridge feishu feishu2 feishu3
+docker compose up -d backend bridge feishu feishu2 feishu3
 
 # The Caddyfile is a single-FILE bind mount. `git pull` replaces it with a new
 # inode, but a running container stays bound to the OLD inode — so `caddy reload`
