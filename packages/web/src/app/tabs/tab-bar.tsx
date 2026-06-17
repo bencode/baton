@@ -55,6 +55,9 @@ const TabContextMenu = ({
     <div
       role="menu"
       style={{ left: menu.x, top: menu.y }}
+      // The dismiss listener fires on document `mousedown`; stop menu-internal
+      // mousedowns here so it doesn't unmount the menu before an item's onClick.
+      onMouseDown={e => e.stopPropagation()}
       className="fixed z-30 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg shadow-gray-900/10"
     >
       {item('Close', () => onClose(menu.tabId))}
