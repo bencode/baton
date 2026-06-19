@@ -16,8 +16,11 @@ const HELP_PATH = '/channels/help'
 // coupling), so these routes register BEFORE the cookie gate. Messages persist
 // (store.channels); presence (who's online) is in-memory and ephemeral.
 
+// Bearer token from the Authorization header, or the `?token=` query param as a
+// fallback. The query form exists only for the browser EventSource (the web chat
+// UI), which cannot set custom headers; agents and fetch clients use the header.
 const bearer = (c: Context<AppEnv>): string | null =>
-  (c.req.header('authorization') ?? '').match(/^Bearer (.+)$/)?.[1] ?? null
+  (c.req.header('authorization') ?? '').match(/^Bearer (.+)$/)?.[1] ?? c.req.query('token') ?? null
 
 const toInt = (raw: string | undefined, dflt: number): number => {
   const n = Number(raw)

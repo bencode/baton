@@ -70,4 +70,37 @@ describe('server SSE — channel stream', () => {
       await server.stop()
     }
   })
+
+  test('?token= query authorizes the stream (browser EventSource has no header)', async () => {
+    const server = await startServer({ store: ctx.store, port: 0 })
+    try {
+      const base = `http://localhost:${server.port}`
+      const ch = (await (
+        await fetch(`${base}/channels`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{}',
+        })
+      ).json()) as Channel
+      const evt = { accept: 'text/event-stream' } // note: NO Authorization header
+      // Wrong token in the query → still 401.
+      assert.equal(
+        (await fetch(`${base}/channels/${ch.channelId}/stream?token=nope`, { headers: evt })).status,
+        401,
+      )
+      // Correct token in the query → 200, the stream opens.
+      const ctl = new AbortController()
+      try {
+        const res = await fetch(
+          `${base}/channels/${ch.channelId}/stream?token=${ch.token}&as=web&kind=human`,
+          { signal: ctl.signal, headers: evt },
+        )
+        assert.equal(res.status, 200)
+      } finally {
+        ctl.abort()
+      }
+    } finally {
+      await server.stop()
+    }
+  })
 })
