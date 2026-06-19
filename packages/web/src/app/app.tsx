@@ -13,11 +13,16 @@ import { SessionDetail } from '../features/sessions/session-detail'
 import { SessionPage } from '../features/sessions/session-page'
 import { useSessions } from '../features/sessions/use-sessions'
 import { TaskDetail } from '../features/tasks/task-detail'
+import {
+  loadLastPath,
+  resolveLandingPath,
+  saveLastPath,
+} from '../features/workspaces/last-location'
 import { useWorkspaces } from '../features/workspaces/use-workspaces'
 import { WorkspaceSwitcher } from '../features/workspaces/workspace-switcher'
 import { ApiContext, useApi } from './api-context'
 import { LeftPanel } from './left-panel'
-import { activeProjectId, parseRoute, projectPath, workspacePath } from './route'
+import { activeProjectId, parseRoute, projectPath } from './route'
 import { TabBar } from './tabs/tab-bar'
 import { TabViewer } from './tabs/tab-viewer'
 import type { Tab } from './tabs/tabs-model'
@@ -93,11 +98,18 @@ export const Shell = () => {
   const { data: wsProjects } = useProjects(routeWorkspaceId)
   const workspaceId = project?.workspaceId ?? routeWorkspaceId
 
-  // Redirect: home → first workspace; a bare workspace → its first project.
+  // Remember the last meaningful location so a later landing at `/` restores it.
   useEffect(() => {
-    const first = workspaces?.[0]
-    if (route.kind === 'home' && first) navigate(workspacePath(first.id), { replace: true })
+    if (route.kind !== 'home') saveLastPath(activeId)
+  }, [route.kind, activeId])
+
+  // Home → restore the last visited path, else the first workspace.
+  useEffect(() => {
+    if (route.kind !== 'home' || !workspaces?.length) return
+    const target = resolveLandingPath(loadLastPath(), workspaces)
+    if (target) navigate(target, { replace: true })
   }, [route.kind, workspaces, navigate])
+  // A bare workspace → its first project.
   useEffect(() => {
     const first = wsProjects?.[0]
     if (route.kind === 'workspace' && first) navigate(projectPath(first.id), { replace: true })
