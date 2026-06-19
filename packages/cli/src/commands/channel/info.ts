@@ -1,15 +1,12 @@
-import type { ChannelMember } from '@baton/shared'
 import { defineCommand } from 'citty'
-import { channelClient } from '../client/channel.ts'
-import { resolveBaseUrl } from '../config.ts'
-import { toJson } from '../output.ts'
-import { common } from '../util.ts'
+import { channelClient } from '../../client/channel.ts'
+import { resolveBaseUrl } from '../../config.ts'
+import { toJson } from '../../output.ts'
+import { common } from '../../util.ts'
+import { renderRoster } from './shared.ts'
 
-// Read-only "what is this room / how do I use it" commands. Split out of channel.ts
-// to keep that file focused on the create/join/send/listen/close verbs.
-export const renderRoster = (members: ChannelMember[]): string =>
-  members.length ? members.map(m => `  ${m.name} (${m.kind})`).join('\n') : '  (nobody online)'
-
+// Read-only "what is this room / how do I use it" commands, plus `update` for the
+// topic. Kept apart from the create/join/send/listen/close verbs.
 export const aboutCommand = defineCommand({
   meta: { name: 'about', description: "show a channel's manifest (description + online roster)" },
   args: {

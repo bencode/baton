@@ -16,6 +16,44 @@ export const postJson = (
     headers: { 'content-type': 'application/json', ...headers },
   })
 
+// Open a channel and return its id, token, and a ready bearer-auth header — most
+// channel tests start here.
+export type ChannelHandle = { channelId: string; token: string; auth: Record<string, string> }
+export const createChannel = async (
+  app: ReturnType<typeof createApp>,
+  body: Record<string, unknown> = {},
+): Promise<ChannelHandle> => {
+  const ch = (await (await postJson(app, '/channels', body)).json()) as {
+    channelId: string
+    token: string
+  }
+  return { ...ch, auth: { authorization: `Bearer ${ch.token}` } }
+}
+
+// Drain an SSE reader until `n` `data:` frames are seen or `ms` elapses; returns
+// the accumulated text. Used by streaming tests over a real server.
+export const readUntil = async (
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  n: number,
+  ms: number,
+): Promise<string> => {
+  const dec = new TextDecoder()
+  let buf = ''
+  const start = Date.now()
+  while (Date.now() - start < ms) {
+    const r = await Promise.race([
+      reader.read(),
+      new Promise<{ done: true; value?: undefined }>(res =>
+        setTimeout(() => res({ done: true }), ms - (Date.now() - start)),
+      ),
+    ])
+    if (!r || r.done || !r.value) break
+    buf += dec.decode(r.value)
+    if ((buf.match(/^data:/gm) ?? []).length >= n) break
+  }
+  return buf
+}
+
 // Seed workspace → project → worker (registered + alive). Returns the ids plus
 // the worker apiToken so tests can act as the worker (create/materialize/events).
 export const seedWorker = async (

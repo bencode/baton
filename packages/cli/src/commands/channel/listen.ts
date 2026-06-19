@@ -2,7 +2,10 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type ChannelMessage, isMessageFor } from '@baton/shared'
-import { channelClient } from '../client/channel.ts'
+import { defineCommand } from 'citty'
+import { channelClient } from '../../client/channel.ts'
+import { resolveBaseUrl } from '../../config.ts'
+import { common } from '../../util.ts'
 
 // Long messages must NOT be inlined into the live conversation: the harness caps
 // how much of a single event it surfaces (~600 chars), so a big body gets clipped.
@@ -73,3 +76,28 @@ export const runListen = async (o: {
     process.on('SIGTERM', stop)
   })
 }
+
+export const listenCommand = defineCommand({
+  meta: {
+    name: 'listen',
+    description: 'stream a channel: one JSON line per message (for a background subscriber)',
+  },
+  args: {
+    channel: { type: 'positional', required: true, description: 'channel id' },
+    token: { type: 'string', required: true, description: 'channel token' },
+    from: { type: 'string', description: 'your name; your own messages skipped, presence kept fresh' },
+    since: { type: 'string', description: 'replay messages after this seq (default 0 = full)' },
+    for: { type: 'string', description: 'only broadcasts + messages addressed to this name' },
+    ...common,
+  },
+  run: async ({ args }) => {
+    await runListen({
+      url: resolveBaseUrl(args.url),
+      channel: args.channel,
+      token: args.token,
+      from: args.from ?? '',
+      since: args.since ? Number(args.since) : 0,
+      for: args.for,
+    })
+  },
+})
