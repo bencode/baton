@@ -186,6 +186,29 @@ describe('server HTTP — channel room', () => {
     }
   })
 
+  test('JOIN claims a unique name: collision 409, free again after leave', async () => {
+    const app = createApp(ctx.store)
+    const ch = (await (
+      await app.request('/channels', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })
+    ).json()) as Channel
+    const auth = { authorization: `Bearer ${ch.token}`, 'content-type': 'application/json' }
+    const member = (method: string) =>
+      app.request(`/channels/${ch.channelId}/members/alice`, { method, headers: auth, body: '{}' })
+
+    assert.equal((await member('PUT')).status, 200) // first claim wins
+    const dup = await member('PUT')
+    assert.equal(dup.status, 409) // same name, still online → rejected
+    const body = (await dup.json()) as { error: string; members: { name: string }[] }
+    assert.equal(body.error, 'name taken')
+    assert.deepEqual(body.members.map(m => m.name), ['alice']) // roster comes back so caller can pick another
+    assert.equal((await member('DELETE')).status, 204) // alice leaves → name freed
+    assert.equal((await member('PUT')).status, 200) // reclaimable
+  })
+
   test('self-describing: manifest (token-gated) + /channels/help (no auth)', async () => {
     const server = await startServer({ store: ctx.store, port: 0 })
     try {

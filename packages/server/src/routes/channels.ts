@@ -109,13 +109,20 @@ export const registerChannelRoutes = (
     return c.body(null, 204)
   })
 
-  // Join == heartbeat: an idempotent presence touch. Returns the live roster.
+  // Claim a name + go online. Names are unique while online: if someone fresh
+  // already holds it, 409 so the newcomer picks another (the echo filter + roster
+  // are name-keyed — two same-name members would be deaf to each other). Heartbeat
+  // is not this call — it rides ?as= on poll/stream, refreshing a name you already
+  // hold — so claim-on-JOIN doesn't break keep-alive or reconnect.
   app.put('/channels/:id/members/:name', async c => {
     const denied = await guard(c)
     if (denied) return denied
     const id = c.req.param('id') ?? ''
+    const name = c.req.param('name') ?? ''
+    if (presence.isOnline(id, name))
+      return c.json({ error: 'name taken', members: presence.list(id) }, 409)
     const body = await optionalBody<{ kind?: string }>(c)
-    presence.touch(id, c.req.param('name') ?? '', asKind(body.kind))
+    presence.touch(id, name, asKind(body.kind))
     return c.json({ members: presence.list(id) })
   })
 

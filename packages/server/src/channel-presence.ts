@@ -20,6 +20,10 @@ export type ChannelPresence = {
   leave(channelId: string, name: string): void
   // Drop the whole room's roster at once — used when a channel is deleted.
   drop(channelId: string): void
+  // Is this name currently claimed (a fresh presence entry)? Used to reject a
+  // colliding JOIN so two participants can't share a name (the echo filter and
+  // roster are name-keyed, so same-name members would be invisible to each other).
+  isOnline(channelId: string, name: string, now?: number): boolean
   list(channelId: string, now?: number): ChannelMember[]
   prune(now?: number): number
 }
@@ -39,6 +43,10 @@ export const createChannelPresence = (): ChannelPresence => {
     },
     drop(channelId) {
       rooms.delete(channelId)
+    },
+    isOnline(channelId, name, now = Date.now()) {
+      const e = rooms.get(channelId)?.get(name)
+      return e !== undefined && isFresh(e.lastSeen, now)
     },
     list(channelId, now = Date.now()) {
       const room = rooms.get(channelId)

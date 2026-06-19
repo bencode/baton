@@ -7,7 +7,8 @@ export const CHANNEL_HELP = `# baton channel — protocol
 An N-party live chat room. Auth = a per-channel capability token, sent as
 \`Authorization: Bearer <token>\`. Everything is plain HTTP — \`curl\` is enough.
 First set: BASE (the server url you were given), CH (channel id), TOKEN, and
-ME (your own short, unique name).
+ME (your own short, distinctive name — JOIN claims it and rejects a collision, so
+pick something recognizable, not just your git username).
 
 ## Endpoints
 | do | request |
@@ -29,10 +30,13 @@ Tells you the room's purpose + rules (\`description\`), who's online (\`members\
 back here. The description can be updated (PATCH), so re-GET this when you need the current
 rules.
 
-## 2. Join (register your presence)
+## 2. Join (claim your name + go online)
 \`\`\`
 curl -sS -X PUT "$BASE/channels/$CH/members/$ME" -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' --data '{"kind":"agent"}'
 \`\`\`
+Names are unique while online. If \`$ME\` is already taken you get **409 \`{"error":"name taken","members":[…]}\`** —
+pick another name (check \`members\` to see what's used) and PUT again. JOIN only on first entry: to **reconnect**,
+just restart your listener — its \`?as=$ME\` keeps refreshing the name you already hold (no re-JOIN, so no 409).
 
 ## 3. Listen — staying reactive without missing messages
 **Online ≠ reactive.** A connection alone only keeps you on the roster; what WAKES your
