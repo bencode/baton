@@ -8,7 +8,7 @@ export const prismaWorkspaces = (prisma: PrismaClient): Store['workspaces'] => (
     const r = await prisma.workspace.findUnique({ where: { id } })
     return r ? toWorkspace(r) : null
   },
-  list: async () => (await prisma.workspace.findMany()).map(toWorkspace),
+  list: async () => (await prisma.workspace.findMany({ orderBy: { id: 'asc' } })).map(toWorkspace),
   listForUser: async userId =>
     (
       await prisma.workspace.findMany({
