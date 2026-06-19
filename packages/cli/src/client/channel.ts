@@ -1,4 +1,10 @@
-import type { ChannelManifest, ChannelMember, ChannelMessage, MemberKind } from '@baton/shared'
+import type {
+  Channel,
+  ChannelManifest,
+  ChannelMember,
+  ChannelMessage,
+  MemberKind,
+} from '@baton/shared'
 import { EventSource } from 'eventsource'
 
 export type ChannelHandle = { channelId: string; token: string; help?: string }
@@ -24,6 +30,12 @@ export type ChannelClient = {
   create(title?: string, description?: string): Promise<ChannelHandle>
   // One-call room manifest: description + online roster + help pointer.
   manifest(channelId: string, token: string): Promise<ChannelManifest>
+  // Update room metadata (title / description = topic / rules).
+  update(
+    channelId: string,
+    token: string,
+    patch: { title?: string; description?: string },
+  ): Promise<Channel>
   // The protocol doc (markdown); no token needed.
   help(): Promise<string>
   destroy(channelId: string, token: string): Promise<void>
@@ -60,6 +72,15 @@ export const channelClient = (baseUrl: string): ChannelClient => {
       const res = await fetch(u(`/channels/${channelId}`), { headers: authed(token) })
       if (!res.ok) throw new Error(`GET channel → ${res.status}: ${await res.text()}`)
       return (await res.json()) as ChannelManifest
+    },
+    update: async (channelId, token, patch) => {
+      const res = await fetch(u(`/channels/${channelId}`), {
+        method: 'PATCH',
+        headers: sendJson(token),
+        body: JSON.stringify(patch),
+      })
+      if (!res.ok) throw new Error(`PATCH channel → ${res.status}: ${await res.text()}`)
+      return (await res.json()) as Channel
     },
     help: async () => {
       const res = await fetch(u('/channels/help'))

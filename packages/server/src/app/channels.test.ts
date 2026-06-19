@@ -233,6 +233,61 @@ describe('server HTTP — channel room', () => {
     }
   })
 
+  test('PATCH /channels/:id updates topic; token-gated; manifest reflects it', async () => {
+    const server = await startServer({ store: ctx.store, port: 0 })
+    try {
+      const base = `http://localhost:${server.port}`
+      const ch = (await (
+        await fetch(`${base}/channels`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ description: 'old rules' }),
+        })
+      ).json()) as Channel
+      const auth = { authorization: `Bearer ${ch.token}`, 'content-type': 'application/json' }
+      const patch = (body: unknown, headers: Record<string, string>) =>
+        fetch(`${base}/channels/${ch.channelId}`, { method: 'PATCH', body: JSON.stringify(body), headers })
+
+      assert.equal((await patch({ description: 'x' }, { 'content-type': 'application/json' })).status, 401) // no token
+      assert.equal(
+        (await patch({ description: 'x' }, { authorization: 'Bearer nope', 'content-type': 'application/json' }))
+          .status,
+        401, // bad token on an existing channel → forbidden
+      )
+      assert.equal(
+        (
+          await fetch(`${base}/channels/missing-id`, {
+            method: 'PATCH',
+            body: '{"description":"x"}',
+            headers: auth,
+          })
+        ).status,
+        404, // unknown channel
+      )
+      assert.equal((await patch({}, auth)).status, 400) // empty patch
+      const ok = await patch({ title: 'sync', description: 'new rules' }, auth)
+      assert.equal(ok.status, 200)
+      const updated = (await ok.json()) as { description?: string; token?: string }
+      assert.equal(updated.description, 'new rules')
+      assert.equal(updated.token, undefined)
+      // Manifest reflects the update.
+      const m = (await (
+        await fetch(`${base}/channels/${ch.channelId}`, { headers: { authorization: `Bearer ${ch.token}` } })
+      ).json()) as { title?: string; description?: string }
+      assert.equal(m.title, 'sync')
+      assert.equal(m.description, 'new rules')
+      // Updating only one field leaves the other untouched.
+      const t = (await (await patch({ title: 'renamed' }, auth)).json()) as {
+        title?: string
+        description?: string
+      }
+      assert.equal(t.title, 'renamed')
+      assert.equal(t.description, 'new rules')
+    } finally {
+      await server.stop()
+    }
+  })
+
   test('history survives a restart (fresh app, same DB)', async () => {
     const app1 = createApp(ctx.store)
     const created = (await (

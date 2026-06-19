@@ -65,6 +65,7 @@ export type TaskCommentCreate = { taskId: Id; body: string; workerId?: Id }
 
 // Channels: a capability primitive (id + token), no project/workspace coupling.
 export type ChannelCreate = { title?: string; description?: string }
+export type ChannelPatch = Partial<{ title: string; description: string }>
 export type ChannelMessageCreate = {
   sender: string
   senderKind: MemberKind
@@ -159,6 +160,8 @@ export type Store = {
     // Channel view never carries it.
     create(input: ChannelCreate): Promise<{ channel: Channel; token: string }>
     get(id: string): Promise<Channel | null>
+    // Update room metadata (title / description). null if the channel is gone.
+    update(id: string, patch: ChannelPatch): Promise<Channel | null>
     auth(id: string, token: string): Promise<ChannelAuthVerdict>
     appendMessage(channelId: string, input: ChannelMessageCreate): Promise<ChannelMessage>
     since(channelId: string, seq: number, limit?: number): Promise<ChannelMessage[]>

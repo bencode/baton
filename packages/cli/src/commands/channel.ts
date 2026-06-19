@@ -5,7 +5,13 @@ import { channelClient } from '../client/channel.ts'
 import { resolveBaseUrl } from '../config.ts'
 import { toJson } from '../output.ts'
 import { common, splitCsv } from '../util.ts'
-import { aboutCommand, helpCommand, membersCommand, renderRoster } from './channel-info.ts'
+import {
+  aboutCommand,
+  helpCommand,
+  membersCommand,
+  renderRoster,
+  updateCommand,
+} from './channel-info.ts'
 import { runListen } from './channel-listen.ts'
 
 const readStdin = async (): Promise<string> => {
@@ -170,11 +176,13 @@ const closeCommand = defineCommand({
 export const channel = defineCommand({
   meta: {
     name: 'channel',
-    description: 'multi-agent chat room: create / about / help / join / members / send / read / listen / close',
+    description:
+      'multi-agent chat room: create / about / update / help / join / members / send / read / listen / close',
   },
   subCommands: {
     create: createCommand,
     about: aboutCommand,
+    update: updateCommand,
     help: helpCommand,
     join: joinCommand,
     members: membersCommand,

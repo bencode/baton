@@ -85,6 +85,19 @@ export const registerChannelRoutes = (
     return c.json({ ...ch, members: presence.list(id), help: HELP_PATH })
   })
 
+  // Update room metadata (title / description = the room's topic / rules). The
+  // manifest reflects it immediately; participants re-GET it when they need the
+  // current rules (no broadcast).
+  app.patch('/channels/:id', async c => {
+    const denied = await guard(c)
+    if (denied) return denied
+    const body = await optionalBody<{ title?: string; description?: string }>(c)
+    if (body.title === undefined && body.description === undefined)
+      return c.json({ error: 'title or description required' }, 400)
+    const ch = await store.channels.update(c.req.param('id') ?? '', body)
+    return ch ? c.json(ch) : c.json({ error: 'channel not found' }, 404)
+  })
+
   // Delete a channel: removes the row and cascades its messages. Releases the
   // in-memory roster at once (the bus key self-cleans as subscribers drop off).
   app.delete('/channels/:id', async c => {

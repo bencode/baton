@@ -18,6 +18,20 @@ export const prismaChannels = (prisma: PrismaClient): Store['channels'] => ({
     const r = await prisma.channel.findUnique({ where: { id } })
     return r ? toChannel(r) : null
   },
+  // Update only the provided fields. updateMany (not update) so a vanished row
+  // yields count 0 → null, rather than throwing — the route turns that into 404.
+  update: async (id, patch) => {
+    const { count } = await prisma.channel.updateMany({
+      where: { id },
+      data: {
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.description !== undefined ? { description: patch.description } : {}),
+      },
+    })
+    if (count === 0) return null
+    const r = await prisma.channel.findUnique({ where: { id } })
+    return r ? toChannel(r) : null
+  },
   // Resolve existence (unknown) and token match (ok/forbidden) in one read.
   auth: async (id, token) => {
     const r = await prisma.channel.findUnique({ where: { id }, select: { token: true } })
