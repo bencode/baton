@@ -117,23 +117,45 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
       })
     const loadGap = () =>
       runBackfill(api.sessions.listEvents(sessionId, { since: lastSeqRef.current }))
-    const es = new EventSource(api.sessionStreamUrl(sessionId))
-    es.onopen = () => {
-      setStatus('open')
-      if (opened) loaded ? loadGap() : loadInitial()
-      opened = true
-    }
-    es.onmessage = e => {
-      try {
-        apply([JSON.parse(e.data) as SessionEvent])
-      } catch {
-        // ignore malformed payloads
+    // (Re)open the live tail. Every open wires its own handlers; the onopen of a
+    // reopen (opened already true) backfills the gap missed while disconnected.
+    const openStream = (): EventSource => {
+      const stream = new EventSource(api.sessionStreamUrl(sessionId))
+      stream.onopen = () => {
+        setStatus('open')
+        if (opened) loaded ? loadGap() : loadInitial()
+        opened = true
       }
+      stream.onmessage = e => {
+        try {
+          apply([JSON.parse(e.data) as SessionEvent])
+        } catch {
+          // ignore malformed payloads
+        }
+      }
+      stream.onerror = () => setStatus('error')
+      return stream
     }
-    es.onerror = () => setStatus('error')
+    let es = openStream()
+    // Mobile Safari (notably iOS 18) suspends a backgrounded EventSource and can
+    // leave readyState OPEN without ever firing onerror, so the browser never
+    // reconnects on its own and the tail silently dies. On each return to the
+    // foreground we drop the maybe-dead socket and reopen — the fresh onopen
+    // runs loadGap to refill whatever arrived while we were hidden.
+    const reopen = () => {
+      if (!alive) return
+      es.close()
+      es = openStream()
+    }
+    const onVisible = () => document.visibilityState === 'visible' && reopen()
+    const onPageShow = (e: PageTransitionEvent) => e.persisted && reopen()
     loadInitial()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', onPageShow)
     return () => {
       alive = false
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', onPageShow)
       es.close()
       setStatus('closed')
     }
