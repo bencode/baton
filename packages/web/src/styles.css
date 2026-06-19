@@ -7,6 +7,13 @@ body,
   height: 100%;
 }
 
+/* Belt-and-suspenders against a single wide child (code block, table) forcing
+   the whole page to scroll sideways on mobile; nested overflow-x-auto regions
+   keep their own horizontal scroll. */
+body {
+  overflow-x: hidden;
+}
+
 /* Tailwind v4 preflight no longer sets `cursor: pointer` on buttons by default;
    restore it so interactive elements feel clickable. */
 @layer base {

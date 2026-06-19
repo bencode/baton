@@ -118,7 +118,7 @@ export const TabBar = ({
                 setMenu({ tabId: tab.id, x: e.clientX, y: e.clientY })
               }}
               title={tab.title}
-              className={`max-w-[220px] truncate pl-3.5 text-sm ${
+              className={`max-w-[140px] truncate pl-3.5 text-sm sm:max-w-[220px] ${
                 isActive ? 'text-gray-900' : 'text-gray-600'
               }`}
             >
@@ -129,7 +129,7 @@ export const TabBar = ({
               aria-label={`Close ${tab.title}`}
               onClick={() => onClose(tab.id)}
               className={`mr-2 ml-2 rounded px-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 ${
-                isActive ? 'opacity-70' : 'opacity-0 group-hover:opacity-70'
+                isActive ? 'opacity-70' : 'opacity-70 sm:opacity-0 sm:group-hover:opacity-70'
               }`}
             >
               ×

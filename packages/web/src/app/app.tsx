@@ -1,28 +1,24 @@
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
-import { Route, Routes, useNavigate } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import { createApi } from '../api'
+import { MenuIcon } from '../components/icons'
 import { OpsPage } from '../features/admin/ops-page'
 import { LoginPage } from '../features/auth/login-page'
 import { RequireAuth } from '../features/auth/require-auth'
 import { UserMenu } from '../features/auth/user-menu'
 import { DingtalkHelpPage } from '../features/help/dingtalk-help-page'
-import { useProject, useProjects } from '../features/projects/use-projects'
 import { RequirementDetail } from '../features/requirements/requirement-detail'
 import { SessionDetail } from '../features/sessions/session-detail'
 import { SessionPage } from '../features/sessions/session-page'
-import { useSessions } from '../features/sessions/use-sessions'
 import { TaskDetail } from '../features/tasks/task-detail'
-import {
-  loadLastPath,
-  resolveLandingPath,
-  saveLastPath,
-} from '../features/workspaces/last-location'
-import { useWorkspaces } from '../features/workspaces/use-workspaces'
 import { WorkspaceSwitcher } from '../features/workspaces/workspace-switcher'
+import { useIsMobile } from '../hooks/use-media-query'
 import { ApiContext, useApi } from './api-context'
 import { LeftPanel } from './left-panel'
-import { activeProjectId, parseRoute, projectPath } from './route'
+import { MobileDrawer } from './mobile-drawer'
+import { parseRoute } from './route'
+import { useShellRouting } from './shell/use-shell-routing'
 import { TabBar } from './tabs/tab-bar'
 import { TabViewer } from './tabs/tab-viewer'
 import type { Tab } from './tabs/tabs-model'
@@ -76,54 +72,130 @@ const EmptyMain = () => (
   </div>
 )
 
-export const Shell = () => {
-  const navigate = useNavigate()
-  const { tabs, activeId, open, close, closeOthers, closeRight, closeAll, retitle } = useTabs()
-  const route = parseRoute(activeId)
-  const routeProjectId = activeProjectId(activeId)
-  // Keep session tab labels in sync with the live (auto-titled/renamed) name.
-  const { data: sessions } = useSessions(routeProjectId)
-  useEffect(() => {
-    if (!sessions) return
-    for (const tab of tabs) {
-      const r = parseRoute(tab.id)
-      if (r.kind !== 'session') continue
-      const s = sessions.find(x => x.id === r.sessionId)
-      if (s && s.name !== tab.title) retitle(tab.id, s.name)
-    }
-  }, [sessions, tabs, retitle])
-  const routeWorkspaceId = route.kind === 'workspace' ? route.workspaceId : null
-  const { data: project } = useProject(routeProjectId)
-  const { data: workspaces } = useWorkspaces()
-  const { data: wsProjects } = useProjects(routeWorkspaceId)
-  const workspaceId = project?.workspaceId ?? routeWorkspaceId
+type DetailPaneProps = {
+  tabs: Tab[]
+  activeId: string
+  open: (id: string, title: string) => void
+  close: (id: string) => void
+  closeOthers: (id: string) => void
+  closeRight: (id: string) => void
+  closeAll: () => void
+}
 
-  // Remember the last meaningful location so a later landing at `/` restores it.
-  useEffect(() => {
-    if (route.kind !== 'home') saveLastPath(activeId)
-  }, [route.kind, activeId])
+// The right-hand side (tab strip + active view), shared verbatim by the desktop
+// split and the mobile single column.
+const DetailPane = ({
+  tabs,
+  activeId,
+  open,
+  close,
+  closeOthers,
+  closeRight,
+  closeAll,
+}: DetailPaneProps) => (
+  <div className="flex h-full flex-col bg-white">
+    <TabBar
+      tabs={tabs}
+      activeId={activeId}
+      onSelect={id => open(id, tabs.find(t => t.id === id)?.title ?? id)}
+      onClose={close}
+      onCloseOthers={closeOthers}
+      onCloseRight={closeRight}
+      onCloseAll={closeAll}
+    />
+    <TabViewer tabs={tabs} activeId={activeId} renderTab={renderTab} empty={<EmptyMain />} />
+  </div>
+)
 
-  // Home → restore the last visited path, else the first workspace.
-  useEffect(() => {
-    if (route.kind !== 'home' || !workspaces?.length) return
-    const target = resolveLandingPath(loadLastPath(), workspaces)
-    if (target) navigate(target, { replace: true })
-  }, [route.kind, workspaces, navigate])
-  // A bare workspace → its first project.
-  useEffect(() => {
-    const first = wsProjects?.[0]
-    if (route.kind === 'workspace' && first) navigate(projectPath(first.id), { replace: true })
-  }, [route.kind, wsProjects, navigate])
-
+// Desktop: the resizable two-pane split. useDefaultLayout lives here so its
+// stored layout is only read when this pane is actually mounted — phones skip it.
+const DesktopSplit = ({ left, detail }: { left: ReactNode; detail: ReactNode }) => {
   const layout = useDefaultLayout({
     id: 'baton-main-split',
     panelIds: PANEL_IDS,
     storage: localStorage,
   })
   return (
-    <div className="flex h-screen flex-col bg-gray-50 text-gray-900">
+    <Group
+      orientation="horizontal"
+      className="min-h-0 flex-1"
+      defaultLayout={layout.defaultLayout}
+      onLayoutChanged={layout.onLayoutChanged}
+    >
+      <Panel id="resources" defaultSize="22%" minSize="1%" maxSize="50%">
+        {left}
+      </Panel>
+      <Separator className="w-px bg-gray-200 transition-colors hover:bg-gray-300" />
+      <Panel id="detail" minSize="1%">
+        {detail}
+      </Panel>
+    </Group>
+  )
+}
+
+// Phone: single column with the rail tucked behind a slide-in drawer.
+const MobileMain = ({
+  left,
+  detail,
+  drawerOpen,
+  onCloseDrawer,
+}: {
+  left: ReactNode
+  detail: ReactNode
+  drawerOpen: boolean
+  onCloseDrawer: () => void
+}) => (
+  <div className="relative min-h-0 flex-1">
+    {detail}
+    <MobileDrawer open={drawerOpen} onClose={onCloseDrawer}>
+      {left}
+    </MobileDrawer>
+  </div>
+)
+
+export const Shell = () => {
+  const { tabs, activeId, open, close, closeOthers, closeRight, closeAll, retitle } = useTabs()
+  const { routeProjectId, workspaceId } = useShellRouting({ activeId, tabs, retitle })
+  const isMobile = useIsMobile()
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  // Opening a rail item navigates and (on mobile) dismisses the drawer; a no-op
+  // close on desktop where the drawer is never shown.
+  const openItem = (id: string, title: string) => {
+    open(id, title)
+    setDrawerOpen(false)
+  }
+  const left = (
+    <LeftPanel
+      workspaceId={workspaceId}
+      projectId={routeProjectId}
+      activeId={activeId}
+      open={openItem}
+      close={close}
+    />
+  )
+  const detail = (
+    <DetailPane
+      tabs={tabs}
+      activeId={activeId}
+      open={open}
+      close={close}
+      closeOthers={closeOthers}
+      closeRight={closeRight}
+      closeAll={closeAll}
+    />
+  )
+  return (
+    <div className="flex h-dvh flex-col bg-gray-50 text-gray-900">
       <header className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="open menu"
+            className="-ml-1 rounded-md p-1 text-gray-500 transition-colors hover:bg-gray-100 md:hidden"
+          >
+            <MenuIcon />
+          </button>
           <h1 className="flex items-center gap-2 font-mono text-[15px] font-semibold tracking-tight text-gray-900">
             <span className="inline-block h-2 w-2 rotate-45 bg-emerald-500" aria-hidden />
             baton
@@ -132,46 +204,22 @@ export const Shell = () => {
           <WorkspaceSwitcher activeWorkspaceId={workspaceId} />
         </div>
         <div className="flex items-center gap-3">
-          <HealthBadge />
+          <span className="hidden sm:inline-flex">
+            <HealthBadge />
+          </span>
           <UserMenu />
         </div>
       </header>
-      <Group
-        orientation="horizontal"
-        className="min-h-0 flex-1"
-        defaultLayout={layout.defaultLayout}
-        onLayoutChanged={layout.onLayoutChanged}
-      >
-        <Panel id="resources" defaultSize="22%" minSize="1%" maxSize="50%">
-          <LeftPanel
-            workspaceId={workspaceId}
-            projectId={routeProjectId}
-            activeId={activeId}
-            open={open}
-            close={close}
-          />
-        </Panel>
-        <Separator className="w-px bg-gray-200 transition-colors hover:bg-gray-300" />
-        <Panel id="detail" minSize="1%">
-          <div className="flex h-full flex-col bg-white">
-            <TabBar
-              tabs={tabs}
-              activeId={activeId}
-              onSelect={id => open(id, tabs.find(t => t.id === id)?.title ?? id)}
-              onClose={close}
-              onCloseOthers={closeOthers}
-              onCloseRight={closeRight}
-              onCloseAll={closeAll}
-            />
-            <TabViewer
-              tabs={tabs}
-              activeId={activeId}
-              renderTab={renderTab}
-              empty={<EmptyMain />}
-            />
-          </div>
-        </Panel>
-      </Group>
+      {isMobile ? (
+        <MobileMain
+          left={left}
+          detail={detail}
+          drawerOpen={drawerOpen}
+          onCloseDrawer={() => setDrawerOpen(false)}
+        />
+      ) : (
+        <DesktopSplit left={left} detail={detail} />
+      )}
     </div>
   )
 }

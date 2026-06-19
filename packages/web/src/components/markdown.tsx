@@ -36,6 +36,9 @@ export const Markdown = ({ text }: { text: string }) => (
       // KaTeX block math: keep prose density, let long equations scroll sideways
       // instead of overflowing the bubble.
       '[&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden',
+      // GFM tables: a wide table scrolls within the bubble instead of stretching
+      // the column and forcing the whole transcript to scroll sideways on mobile.
+      '[&_table]:block [&_table]:w-max [&_table]:max-w-full [&_table]:overflow-x-auto',
     ].join(' ')}
   >
     <ReactMarkdown

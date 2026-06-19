@@ -23,14 +23,13 @@ export const SessionPage = () => {
     document.title = title
   }, [title])
 
-  if (loading)
-    return <div className="grid h-screen place-items-center text-sm text-gray-400">…</div>
+  if (loading) return <div className="grid h-dvh place-items-center text-sm text-gray-400">…</div>
   if (error || !data)
     return (
-      <div className="grid h-screen place-items-center text-sm text-gray-400">链接无效或已失效</div>
+      <div className="grid h-dvh place-items-center text-sm text-gray-400">链接无效或已失效</div>
     )
   return (
-    <div className="flex h-screen flex-col bg-white text-gray-900">
+    <div className="flex h-dvh flex-col bg-white text-gray-900">
       <div className="flex shrink-0 items-center gap-2 border-b border-gray-200 px-4 py-2">
         <span className="inline-block h-2 w-2 shrink-0 rotate-45 bg-emerald-500" aria-hidden />
         <span className="min-w-0 truncate font-mono text-[13px] font-semibold tracking-tight">

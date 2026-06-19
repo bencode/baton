@@ -36,6 +36,22 @@ export const ChevronDownIcon = () => (
   </svg>
 )
 
+export const MenuIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="16"
+    height="16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
+  </svg>
+)
+
 export const LogoutIcon = () => (
   <svg
     viewBox="0 0 16 16"

@@ -59,7 +59,7 @@ const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) =
           setEditing(false)
         }
       }}
-      className="w-48 rounded border border-gray-300 px-1 text-base font-semibold text-gray-900 focus:border-blue-400 focus:outline-none sm:text-sm"
+      className="w-40 rounded border border-gray-300 px-1 text-base font-semibold text-gray-900 focus:border-blue-400 focus:outline-none sm:w-48 sm:text-sm"
     />
   )
 }
@@ -118,7 +118,7 @@ const ShareButton = ({ shareToken }: { shareToken: string }) => {
       type="button"
       aria-label="share"
       onClick={onShare}
-      className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+      className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 sm:py-1"
     >
       {copied ? 'copied ✓' : 'share'}
     </button>
@@ -128,7 +128,7 @@ const ShareButton = ({ shareToken }: { shareToken: string }) => {
 export const SessionHeader = ({ session, active, onStop, onResume, onRename }: HeaderProps) => {
   const [open, setOpen] = useState(false)
   return (
-    <div className="shrink-0 border-b border-gray-200 bg-white px-6 py-3">
+    <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-3 sm:px-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <SessionName name={session.name} onRename={onRename} />
         {/* Diagnostics (agent kind + session id) duplicate the ⓘ panel below, so
@@ -158,7 +158,7 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
           <button
             type="button"
             onClick={onStop}
-            className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-700"
+            className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-700 sm:py-1"
           >
             stop
           </button>
@@ -167,7 +167,7 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
           <button
             type="button"
             onClick={onResume}
-            className="rounded-md border border-emerald-400 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+            className="rounded-md border border-emerald-400 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 sm:py-1"
           >
             resume
           </button>

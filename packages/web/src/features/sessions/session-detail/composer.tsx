@@ -116,7 +116,7 @@ export const Composer = ({
     })
   }
   return (
-    <div className="shrink-0 border-t border-gray-200 bg-white p-2 sm:p-3">
+    <div className="shrink-0 border-t border-gray-200 bg-white px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3 sm:pt-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone is the whole card */}
       <div
         onDragOver={e => {
@@ -195,7 +195,9 @@ export const Composer = ({
             onClick={() => fileInputRef.current?.click()}
             disabled={!active}
             aria-label="attach files"
-            className="text-gray-400 transition-colors hover:text-gray-700 disabled:opacity-40"
+            // Negative margin grows the tap target to ~28px without nudging the
+            // 16px glyph or the row height — comfortable on touch, unchanged on desktop.
+            className="-m-1.5 p-1.5 text-gray-400 transition-colors hover:text-gray-700 disabled:opacity-40"
           >
             <PaperclipIcon />
           </button>
@@ -214,7 +216,7 @@ export const Composer = ({
             onClick={onSend}
             disabled={!canSend}
             aria-label={busy ? 'sending' : 'send message'}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400"
+            className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 sm:h-8 sm:w-8"
           >
             {busy ? <Spinner /> : <SendIcon />}
           </button>

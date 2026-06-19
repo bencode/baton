@@ -6,7 +6,7 @@ import { StopIcon } from './icons'
 // that interrupts the turn (same as /abort). Visibility is decided by the caller
 // (session-detail) from the turn liveness derived in event-render.
 export const WorkingIndicator = ({ onAbort }: { onAbort: () => void }) => (
-  <div className="shrink-0 bg-white px-6 pt-1 pb-1.5">
+  <div className="shrink-0 bg-white px-3 pt-1 pb-1.5 sm:px-6">
     <div className="mx-auto flex max-w-5xl items-center gap-1.5">
       {/* breathing only on the live indicator, not the button */}
       <span className="animate-breathe flex items-center gap-2">

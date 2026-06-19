@@ -121,7 +121,7 @@ const UserBubble = ({
 // The answer is the hero of the transcript: slightly larger, darker, looser
 // than everything else, line length capped near 70ch for readability.
 const AssistantBubble = ({ text }: { text: string }) => (
-  <div className="max-w-[70ch] text-[15px] leading-relaxed text-gray-900">
+  <div className="max-w-full text-[15px] leading-relaxed text-gray-900 sm:max-w-[70ch]">
     <Markdown text={text} />
   </div>
 )
