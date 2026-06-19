@@ -1,7 +1,10 @@
 import type {
   AgentKind,
+  Channel,
+  ChannelMessage,
   Code,
   Id,
+  MemberKind,
   Project,
   Requirement,
   RequirementStatus,
@@ -59,6 +62,17 @@ export type TaskPatch = Partial<{
 }>
 // Comments are append-only — created one at a time, never updated. No patch type.
 export type TaskCommentCreate = { taskId: Id; body: string; workerId?: Id }
+
+// Channels: a capability primitive (id + token), no project/workspace coupling.
+export type ChannelCreate = { title?: string; description?: string }
+export type ChannelMessageCreate = {
+  sender: string
+  senderKind: MemberKind
+  text: string
+  to?: string[]
+}
+// Token check verdict — same shape as the old relay auth (404 vs 401 distinction).
+export type ChannelAuthVerdict = 'ok' | 'unknown' | 'forbidden'
 
 export type RequirementWithTasks = { requirement: Requirement; tasks: Task[] }
 
@@ -135,6 +149,21 @@ export type Store = {
   taskComments: {
     create(input: TaskCommentCreate): Promise<TaskComment>
     listByTask(taskId: Id): Promise<TaskComment[]>
+  }
+  // N-party chat rooms. `auth` checks a Bearer token against the channel (the
+  // capability), separate from `get` so the token never leaks into the view.
+  // appendMessage assigns the next per-channel seq atomically (tx); `since` is
+  // the replay/poll source (strictly after `seq`, ascending, capped).
+  channels: {
+    // create is the one place the token is returned (it's the capability); the
+    // Channel view never carries it.
+    create(input: ChannelCreate): Promise<{ channel: Channel; token: string }>
+    get(id: string): Promise<Channel | null>
+    auth(id: string, token: string): Promise<ChannelAuthVerdict>
+    appendMessage(channelId: string, input: ChannelMessageCreate): Promise<ChannelMessage>
+    since(channelId: string, seq: number, limit?: number): Promise<ChannelMessage[]>
+    // DELETE the row. Messages cascade away with it (FK onDelete: Cascade).
+    destroy(id: string): Promise<void>
   }
   sessions: {
     create(input: SessionCreate): Promise<Session>

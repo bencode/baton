@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { type AttachmentStore, createAttachmentStore, defaultAttachmentDir } from './attachments.ts'
 import { type BusyTracker, createBusy } from './busy.ts'
+import { type ChannelBus, createChannelBus } from './channel-bus.ts'
+import { type ChannelPresence, createChannelPresence } from './channel-presence.ts'
 import { type CommandBus, createCommandBus } from './command-bus.ts'
 import { createEventBus, type EventBus } from './event-bus.ts'
 import { createLiveness, type LivenessTracker } from './liveness.ts'
@@ -9,6 +11,7 @@ import { createProjectBus, type ProjectBus } from './project-bus.ts'
 import { createRelayBus, type RelayBus } from './relay-bus.ts'
 import { registerAdminRoutes } from './routes/admin.ts'
 import { registerAuthRoutes } from './routes/auth.ts'
+import { registerChannelRoutes } from './routes/channels.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
 import { registerRelayRoutes } from './routes/relay.ts'
 import { registerRequirementRoutes } from './routes/requirements.ts'
@@ -44,15 +47,19 @@ export const createApp = (
   commands: CommandBus = createCommandBus(),
   projects: ProjectBus = createProjectBus(),
   relay: RelayBus = createRelayBus(),
+  channelBus: ChannelBus = createChannelBus(),
+  presence: ChannelPresence = createChannelPresence(),
 ): Hono<AppEnv> => {
   const app = new Hono<AppEnv>()
   app.get('/health', c => c.json({ ok: true }))
-  // /health + /auth + /relay are registered before the gate so they stay public;
-  // everything below is behind the cookie gate (enforced iff a user exists),
-  // except the worker-bearer routes isExempt carves out. Relay self-authenticates
-  // with a per-channel token — its own auth domain, decoupled from baton's.
+  // /health + /auth + /relay + /channels are registered before the gate so they
+  // stay public; everything below is behind the cookie gate (enforced iff a user
+  // exists), except the worker-bearer routes isExempt carves out. Relay and
+  // channels self-authenticate with a per-channel token — their own auth domain,
+  // decoupled from baton's.
   registerAuthRoutes(app, store)
   registerRelayRoutes(app, relay)
+  registerChannelRoutes(app, store, channelBus, presence)
   app.use('*', cookieAuth(store))
   registerWorkspaceRoutes(app, store)
   registerProjectRoutes(app, store, workerLiveness, runtime, busyTracker, projects, commands)

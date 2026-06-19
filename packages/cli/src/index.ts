@@ -1,4 +1,5 @@
 import { defineCommand, runMain } from 'citty'
+import { channel } from './commands/channel.ts'
 import { init } from './commands/init.ts'
 import { project } from './commands/project.ts'
 import { relay } from './commands/relay.ts'
@@ -19,6 +20,7 @@ const main = defineCommand({
     worker,
     session,
     relay,
+    channel,
     workspace,
     project,
     requirement,

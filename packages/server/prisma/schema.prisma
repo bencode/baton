@@ -241,3 +241,44 @@ model SessionEvent {
   @@unique([sessionId, sequence])
   @@index([sessionId])
 }
+
+// An N-party live chat room — the multi-agent evolution of the 2-party relay
+// (see the old in-memory relay-bus). A capability primitive: an unguessable id +
+// a stored Bearer token; whoever holds the token can read, write, and join.
+// Deliberately orthogonal to Project/Workspace — the agent-facing API is id+token
+// only, no cookie/domain coupling, so it's reachable by raw curl from anywhere.
+// Unlike the relay, messages persist: history survives restart and a future web
+// UI (and reconnecting clients) can replay it. Presence (who's online) stays in
+// memory — "right now" data, like worker liveness.
+model Channel {
+  id          String   @id @default(uuid())
+  token       String
+  title       String?
+  // Free-text self-description (purpose / topic / how to participate). Returned
+  // by GET /channels/:id so a newcomer can orient with one call.
+  description String?
+  createdAt   DateTime @default(now())
+
+  messages ChannelMessage[]
+}
+
+// Append-only message log on a Channel. Mirrors SessionEvent: per-channel `seq`
+// assigned in a tx (read max + 1) so concurrent senders can't collide on the
+// (channelId, seq) unique key; `seq` doubles as the replay cursor (?since=).
+// `sender`/`senderKind` are soft attribution (no FK). `to` is a JSON array of
+// recipient names (null = broadcast to the room).
+model ChannelMessage {
+  id         Int      @id @default(autoincrement())
+  channelId  String
+  seq        Int
+  sender     String
+  senderKind String   @default("agent")
+  text       String
+  to         String?
+  createdAt  DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, seq])
+  @@index([channelId])
+}

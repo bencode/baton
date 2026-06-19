@@ -1,6 +1,9 @@
 import type {
   AgentKind,
+  Channel,
+  ChannelMessage,
   Id,
+  MemberKind,
   Project,
   Requirement,
   RequirementStatus,
@@ -16,6 +19,8 @@ import type {
   Workspace,
 } from '@baton/shared'
 import type {
+  Channel as DbChannel,
+  ChannelMessage as DbChannelMessage,
   Project as DbProject,
   Requirement as DbRequirement,
   Session as DbSession,
@@ -113,6 +118,29 @@ export const toUserRecord = (r: DbUser): UserRecord => ({
   apiToken: r.apiToken,
   isAdmin: r.isAdmin,
   createdAt: r.createdAt.getTime(),
+})
+
+// Channel domain view omits `token` — it's a capability, never echoed back to
+// clients (GET /channels/:id must not leak it). Token checks go through the
+// store's `auth`, not this mapper.
+export const toChannel = (r: DbChannel): Channel => ({
+  id: r.id,
+  title: r.title ?? undefined,
+  description: r.description ?? undefined,
+  createdAt: r.createdAt.getTime(),
+})
+
+// DB `sender`/`createdAt` → wire `from`/`ts` (relay-compatible). `to` is stored
+// as a JSON array of names, null = broadcast.
+export const toChannelMessage = (r: DbChannelMessage): ChannelMessage => ({
+  id: r.id,
+  channelId: r.channelId,
+  seq: r.seq,
+  from: r.sender,
+  senderKind: r.senderKind as MemberKind,
+  text: r.text,
+  to: r.to ? parseJson<string[]>(r.to) : undefined,
+  ts: r.createdAt.getTime(),
 })
 
 export const toWorker = (r: DbWorker): Worker => ({
