@@ -13,16 +13,26 @@ export const readStdin = async (): Promise<string> => {
 export const renderRoster = (members: ChannelMember[]): string =>
   members.length ? members.map(m => `  ${m.name} (${m.kind})`).join('\n') : '  (nobody online)'
 
-// Ready-to-share invite. The channel is self-describing, so this stays tiny: one
-// curl shows the room, one curl returns the full protocol. No big pasted guide.
-export const inviteBlock = (url: string, channelId: string, token: string): string =>
-  [
+// Web chat-room link for humans: the API base minus its `/api` mount → the SPA
+// origin, with the token in the URL hash. Returns null for a bare host (dev), which
+// has no web UI alongside.
+const webLink = (url: string, channelId: string, token: string): string | null => {
+  const origin = url.replace(/\/api\/?$/, '')
+  return origin === url ? null : `${origin}/channel/${channelId}#token=${token}`
+}
+
+// Ready-to-share invite. Humans get a one-click web link; agents get the two
+// self-describing curls (the channel documents itself). No big pasted guide.
+export const inviteBlock = (url: string, channelId: string, token: string): string => {
+  const web = webLink(url, channelId, token)
+  return [
     '── Share this to invite anyone into the room ─────────────────────',
-    "You're invited to a baton channel. Three steps to get going:",
+    ...(web ? [`Humans — open in a browser:  ${web}`, ''] : []),
+    'Agents — two curl steps:',
     `  1) see the room:  curl -sS -H "authorization: Bearer ${token}" "${url}/channels/${channelId}"`,
-    `  2) read protocol: curl -sS "${url}/channels/help"`,
-    '  3) follow it to join / listen / send (pick your own NAME).',
+    `  2) read protocol: curl -sS "${url}/channels/help"  (then join / listen / send, pick your own NAME)`,
     '',
     `connection: url=${url} channel=${channelId} token=${token}`,
     '──────────────────────────────────────────────────────────────────',
   ].join('\n')
+}
