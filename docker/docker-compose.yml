@@ -94,7 +94,7 @@ services:
       - backend
     restart: unless-stopped
 
-  # Third Feishu bridge — the 'future' project (考研复习) → its macmini worker.
+  # Third Feishu bridge — the Goat project (考研复习) → its macmini worker.
   # Same image as `feishu`; its own app creds (FEISHU3_* in .env) and its own
   # bindings volume so it never shares user→session state with the others.
   feishu3:
@@ -105,8 +105,8 @@ services:
     environment:
       - FEISHU_APP_ID=${FEISHU3_APP_ID}
       - FEISHU_APP_SECRET=${FEISHU3_APP_SECRET}
-      - BATON_PROJECT_ID=10
-      - BATON_WORKER_ID=13
+      - BATON_PROJECT_ID=11
+      - BATON_WORKER_ID=14
       - BATON_FEISHU_BINDINGS=/data/feishu-bindings.json
     volumes:
       - feishu3_data:/data
