@@ -1,5 +1,6 @@
 import type {
   AgentKind,
+  Attachment,
   Channel,
   ChannelMessage,
   Code,
@@ -71,6 +72,7 @@ export type ChannelMessageCreate = {
   senderKind: MemberKind
   text: string
   to?: string[]
+  attachments?: Attachment[]
 }
 // Token check verdict — same shape as the old relay auth (404 vs 401 distinction).
 export type ChannelAuthVerdict = 'ok' | 'unknown' | 'forbidden'

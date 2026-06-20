@@ -10,7 +10,13 @@ import { EventSource } from 'eventsource'
 
 export type ChannelHandle = { channelId: string; token: string; help?: string }
 
-export type SendInput = { from: string; text: string; to?: string[]; senderKind?: MemberKind }
+export type SendInput = {
+  from: string
+  text: string
+  to?: string[]
+  senderKind?: MemberKind
+  attachments?: Attachment[]
+}
 
 export type ListenOpts = {
   // Replay history strictly after this seq (0 = full history for a late joiner).
@@ -50,6 +56,9 @@ export type ChannelClient = {
     token: string,
     input: { filename: string; contentType: string; body: Blob },
   ): Promise<Attachment>
+  // Download a stored attachment (streamed); returns the raw Response so the
+  // caller writes the body to disk without buffering.
+  downloadAttachment(channelId: string, token: string, attId: string): Promise<Response>
   read(
     channelId: string,
     token: string,
@@ -139,6 +148,13 @@ export const channelClient = (baseUrl: string): ChannelClient => {
       )
       if (!res.ok) throw new Error(`upload attachment → ${res.status}: ${await res.text()}`)
       return (await res.json()) as Attachment
+    },
+    downloadAttachment: async (channelId, token, attId) => {
+      const res = await fetch(u(`/channels/${channelId}/attachments/${attId}`), {
+        headers: authed(token),
+      })
+      if (!res.ok) throw new Error(`download attachment → ${res.status}: ${await res.text()}`)
+      return res
     },
     read: async (channelId, token, opts) => {
       const params = new URLSearchParams({ since: String(opts?.since ?? 0) })

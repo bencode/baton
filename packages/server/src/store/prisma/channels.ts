@@ -56,6 +56,10 @@ export const prismaChannels = (prisma: PrismaClient): Store['channels'] => ({
           senderKind: input.senderKind,
           text: input.text,
           to: input.to && input.to.length > 0 ? JSON.stringify(input.to) : null,
+          attachments:
+            input.attachments && input.attachments.length > 0
+              ? JSON.stringify(input.attachments)
+              : null,
         },
       })
       return toChannelMessage(row)

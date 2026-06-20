@@ -232,4 +232,33 @@ describe('server HTTP — channel room', () => {
     assert.equal(await attachments.get(channelId, meta.id), null) // forgotten after
     await rm(dir, { recursive: true, force: true })
   })
+
+  test('messages carry structured attachments (persist + replay)', async () => {
+    const app = createApp(ctx.store)
+    const { channelId, auth } = await createChannel(app)
+    const msgs = `/channels/${channelId}/messages`
+    const att = {
+      id: 'a1',
+      channelId,
+      filename: 'pic.png',
+      contentType: 'image/png',
+      size: 12,
+      url: `/channels/${channelId}/attachments/a1`,
+      createdAt: 123,
+    }
+    // An attachment-only message (no text) is allowed; text defaults to ''.
+    const posted = await postJson(app, msgs, { from: 'bob', attachments: [att] }, auth)
+    assert.equal(posted.status, 201)
+    const msg = (await posted.json()) as { text: string; attachments?: unknown[] }
+    assert.equal(msg.text, '')
+    assert.deepEqual(msg.attachments, [att])
+    assert.equal((await postJson(app, msgs, { from: 'bob' }, auth)).status, 400) // empty body rejected
+
+    // Replay from a fresh app (same DB) still carries the attachments.
+    const app2 = createApp(ctx.store)
+    const read = (await (await app2.request(`${msgs}?since=0`, { headers: auth })).json()) as {
+      messages: { attachments?: unknown[] }[]
+    }
+    assert.deepEqual(read.messages[0]?.attachments, [att])
+  })
 })

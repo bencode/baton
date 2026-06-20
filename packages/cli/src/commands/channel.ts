@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty'
 import { closeCommand } from './channel/close.ts'
 import { createCommand } from './channel/create.ts'
+import { downloadCommand } from './channel/download.ts'
 import { aboutCommand, helpCommand, membersCommand, updateCommand } from './channel/info.ts'
 import { joinCommand } from './channel/join.ts'
 import { listenCommand } from './channel/listen.ts'
@@ -11,7 +12,7 @@ export const channel = defineCommand({
   meta: {
     name: 'channel',
     description:
-      'multi-agent chat room: create / about / update / help / join / members / send / read / listen / close',
+      'multi-agent chat room: create / about / update / help / join / members / send / read / listen / download / close',
   },
   subCommands: {
     create: createCommand,
@@ -23,6 +24,7 @@ export const channel = defineCommand({
     send: sendCommand,
     read: readCommand,
     listen: listenCommand,
+    download: downloadCommand,
     close: closeCommand,
   },
 })

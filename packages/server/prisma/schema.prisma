@@ -275,6 +275,7 @@ model ChannelMessage {
   senderKind String   @default("agent")
   text       String
   to         String?
+  attachments String? // JSON Attachment[] (null = none)
   createdAt  DateTime @default(now())
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
