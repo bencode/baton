@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 import {
   activeProjectId,
+  emptyTabsPath,
   isItemRoute,
   itemPath,
   parseRoute,
@@ -71,4 +72,12 @@ test('activeProjectId extracts the project for project-scoped paths', () => {
   expect(activeProjectId('/proj/2')).toBe(2)
   expect(activeProjectId('/ws/1')).toBeNull()
   expect(activeProjectId('/')).toBeNull()
+})
+
+test('emptyTabsPath keeps the current project context, else home', () => {
+  expect(emptyTabsPath('/proj/2/R-1')).toBe('/proj/2')
+  expect(emptyTabsPath('/proj/2/session/3')).toBe('/proj/2')
+  expect(emptyTabsPath('/proj/2')).toBe('/proj/2')
+  expect(emptyTabsPath('/ws/1')).toBe('/')
+  expect(emptyTabsPath('/')).toBe('/')
 })

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { isItemRoute } from '../route'
+import { emptyTabsPath, isItemRoute } from '../route'
 import {
   closeOthers as closeOthersModel,
   closeTab,
@@ -76,7 +76,7 @@ export const useTabs = (): TabsController => {
       setTabs(prev => closeTab(prev, id))
       if (id !== activeId) return
       const fallback = neighborTab(tabs, id)
-      navigate(fallback ? fallback.id : '/')
+      navigate(fallback ? fallback.id : emptyTabsPath(activeId))
     },
     [tabs, activeId, navigate],
   )
@@ -103,8 +103,8 @@ export const useTabs = (): TabsController => {
 
   const closeAll = useCallback(() => {
     setTabs([])
-    navigate('/')
-  }, [navigate])
+    navigate(emptyTabsPath(activeId))
+  }, [activeId, navigate])
 
   const retitle = useCallback((id: string, title: string) => {
     setTabs(prev => {
