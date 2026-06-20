@@ -52,6 +52,15 @@ export const runListen = async (o: {
       chars: text.length,
       truncated,
       preview: truncated ? `${text.slice(0, PREVIEW)} …` : text,
+      // BASE-prefixed urls so the subscribing agent can fetch directly.
+      attachments: m.attachments?.length
+        ? m.attachments.map(a => ({
+            filename: a.filename,
+            contentType: a.contentType,
+            size: a.size,
+            url: `${o.url}${a.url}`,
+          }))
+        : undefined,
       file,
     })
   }

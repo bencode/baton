@@ -1,4 +1,4 @@
-import { isMessageFor, type MemberKind } from '@baton/shared'
+import { type Attachment, isMessageFor, type MemberKind } from '@baton/shared'
 import type { Context, Hono } from 'hono'
 import type { AttachmentStore } from '../attachments.ts'
 import type { ChannelBus } from '../channel-bus.ts'
@@ -155,15 +155,19 @@ export const registerChannelRoutes = (
       text?: string
       to?: string[]
       senderKind?: string
+      attachments?: Attachment[]
     }>(c)
-    if (!body.text) return c.json({ error: 'text required' }, 400)
+    // A message needs a body: text, attachments, or both.
+    if (!body.text && !body.attachments?.length)
+      return c.json({ error: 'text or attachments required' }, 400)
     const from = body.from ?? 'peer'
     const senderKind = asKind(body.senderKind)
     const msg = await store.channels.appendMessage(id, {
       sender: from,
       senderKind,
-      text: body.text,
+      text: body.text ?? '',
       to: body.to,
+      attachments: body.attachments,
     })
     presence.touch(id, from, senderKind) // an active sender stays on the roster
     bus.publish(id, msg) // live fan-out; the DB already has it

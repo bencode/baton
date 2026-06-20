@@ -2,6 +2,8 @@
 // 2-party relay. A capability primitive, independent of project/worker/session:
 // an unguessable id + token. Unlike the relay, messages persist (history survives
 // restart, so a web UI can read it); presence (who's online) stays in-memory.
+import type { Attachment } from './attachment.ts'
+
 export type MemberKind = 'agent' | 'human'
 
 export type Channel = {
@@ -36,6 +38,10 @@ export type ChannelMessage = {
   // directed at these names. A recipient treats a message as "for me" iff `to`
   // is empty/absent or includes its own name.
   to?: string[]
+  // Files/images shared with the message. Each carries a reference name
+  // (filename) + a download url; peers fetch by url (human via web, agent via the
+  // GET attachments API). Absent when the message has no attachments.
+  attachments?: Attachment[]
   // Server-stamped epoch milliseconds.
   ts: number
 }

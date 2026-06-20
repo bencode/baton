@@ -1,5 +1,6 @@
 import type {
   AgentKind,
+  Attachment,
   Channel,
   ChannelMessage,
   Id,
@@ -140,6 +141,7 @@ export const toChannelMessage = (r: DbChannelMessage): ChannelMessage => ({
   senderKind: r.senderKind as MemberKind,
   text: r.text,
   to: r.to ? parseJson<string[]>(r.to) : undefined,
+  attachments: r.attachments ? parseJson<Attachment[]>(r.attachments) : undefined,
   ts: r.createdAt.getTime(),
 })
 
