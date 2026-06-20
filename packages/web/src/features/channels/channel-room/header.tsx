@@ -2,12 +2,13 @@ import type { ChannelManifest, ChannelMember } from '@baton/shared'
 import { type KeyboardEvent, useState } from 'react'
 import { StatusDot } from '../../../components/status-dot'
 import type { ChannelStreamState } from '../use-channel-stream'
+import { InviteButton } from './invite-button'
 
 // Connection state → the header dot. open=live (green), error=offline, else busy.
 const dot = (s: ChannelStreamState['status']): 'idle' | 'offline' | 'busy' =>
   s === 'open' ? 'idle' : s === 'error' ? 'offline' : 'busy'
 
-// Inline display-name editor: the "我是 X" affordance turns into a text field on
+// Inline display-name editor: the "You: X" affordance turns into a text field on
 // click. Enter renames in place (claim new → release old, via onRename); a taken
 // name shows a hint without leaving the room; Esc or click-away cancels. No
 // full-screen gate, no self-collision dead-end.
@@ -39,7 +40,7 @@ const NameTag = ({
     const { ok } = await onRename(draft)
     setBusy(false)
     if (ok) setEditing(false)
-    else setError('名字被占用，换一个')
+    else setError('Name taken, try another')
   }
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -58,7 +59,7 @@ const NameTag = ({
         onClick={start}
         className="shrink-0 text-xs text-gray-400 hover:text-gray-700"
       >
-        我是 {me} ✎
+        You: {me} ✎
       </button>
     )
   return (
@@ -74,7 +75,7 @@ const NameTag = ({
         onKeyDown={onKeyDown}
         onBlur={cancel}
         disabled={busy}
-        placeholder="新名字 · Enter 确认 · Esc 取消"
+        placeholder="New name · Enter to confirm · Esc to cancel"
         className="w-44 rounded-md border border-gray-300 px-2 py-0.5 text-xs outline-none focus:border-gray-900"
       />
       {error && <span className="text-[11px] text-red-600">{error}</span>}
@@ -88,17 +89,21 @@ export const ChannelHeader = ({
   me,
   status,
   onRename,
+  invite,
+  webLink,
 }: {
   manifest: ChannelManifest
   members: ChannelMember[]
   me: string
   status: ChannelStreamState['status']
   onRename: (next: string) => Promise<{ ok: boolean }>
+  invite: string
+  webLink: string
 }) => (
   <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-gray-200 px-4 py-2">
     <StatusDot status={dot(status)} />
     <span className="min-w-0 max-w-[40%] truncate font-mono text-[13px] font-semibold tracking-tight">
-      {manifest.title || '聊天室'}
+      {manifest.title || 'Chat room'}
     </span>
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
       {members.map(m => (
@@ -116,6 +121,7 @@ export const ChannelHeader = ({
         </span>
       ))}
     </div>
+    <InviteButton invite={invite} webLink={webLink} />
     <NameTag me={me} onRename={onRename} />
   </header>
 )

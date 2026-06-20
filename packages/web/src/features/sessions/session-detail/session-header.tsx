@@ -1,6 +1,7 @@
 import type { Session } from '@baton/shared'
 import { useState } from 'react'
 import { standaloneSessionPath } from '../../../app/route'
+import { copyText } from '../../../utils/clipboard'
 
 // SessionHeader — one-line identity strip, gritty enough that the rest of the
 // surface stays a quiet reading area. Diagnostic info (cwd, full agent UUID)
@@ -67,21 +68,6 @@ const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) =
 const truncateUuid = (id: string): string => {
   if (id.length <= 12) return id
   return `${id.slice(0, 8)}…${id.slice(-4)}`
-}
-
-// The Clipboard API only exists in secure contexts (HTTPS / localhost); plain-
-// HTTP LAN access (phone testing) gets the hidden-textarea execCommand fallback.
-const copyText = (text: string) => {
-  if (navigator.clipboard) {
-    void navigator.clipboard.writeText(text)
-    return
-  }
-  const ta = document.createElement('textarea')
-  ta.value = text
-  document.body.appendChild(ta)
-  ta.select()
-  document.execCommand('copy')
-  ta.remove()
 }
 
 const CopyButton = ({ text }: { text: string }) => {

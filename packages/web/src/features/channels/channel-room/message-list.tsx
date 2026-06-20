@@ -30,10 +30,10 @@ export const MessageList = ({
     <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
       {messages.length === 0 ? (
         <div className="grid h-full place-items-center text-sm text-gray-300">
-          还没有消息，打个招呼吧。
+          No messages yet — say hi.
         </div>
       ) : (
-        <div className="mx-auto flex max-w-3xl flex-col gap-3">
+        <div className="mx-auto flex max-w-3xl flex-col gap-2">
           {messages.map(m => (
             <MessageItem key={m.seq} msg={m} me={me} attachmentUrl={attachmentUrl} />
           ))}

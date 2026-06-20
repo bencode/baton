@@ -34,7 +34,7 @@ export const MessageItem = ({
       : 'bg-gray-100'
   const atts = msg.attachments ?? []
   return (
-    <div className={`flex flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
+    <div className={`flex flex-col gap-0.5 ${mine ? 'items-end' : 'items-start'}`}>
       <div className="flex items-baseline gap-2 px-2 text-xs text-gray-400">
         <span
           className={`font-semibold ${msg.senderKind === 'agent' ? 'text-violet-600' : 'text-gray-600'}`}
@@ -44,7 +44,7 @@ export const MessageItem = ({
         {directed && <span>→ {(msg.to ?? []).join(', ')}</span>}
         <span>{hhmm(msg.ts)}</span>
       </div>
-      <div className={`max-w-full rounded-2xl px-3 py-1.5 text-sm ${tint}`}>
+      <div className={`max-w-full rounded-2xl px-3 py-1 text-sm ${tint}`}>
         {msg.text && <Markdown text={msg.text} />}
         {atts.length > 0 && (
           <div className={`flex flex-wrap gap-2 ${msg.text ? 'mt-2' : ''}`}>

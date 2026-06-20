@@ -15,12 +15,16 @@ export const ChannelRoom = ({
   manifest,
   me,
   onRename,
+  invite,
+  webLink,
 }: {
   api: ChannelApi
   channelId: string
   manifest: ChannelManifest
   me: string
   onRename: (next: string) => Promise<{ ok: boolean }>
+  invite: string
+  webLink: string
 }) => {
   const { messages, status } = useChannelStream(api, channelId, me, true)
   const members = useChannelRoster(api, channelId, true)
@@ -46,6 +50,8 @@ export const ChannelRoom = ({
         me={me}
         status={status}
         onRename={onRename}
+        invite={invite}
+        webLink={webLink}
       />
       <MessageList messages={messages} me={me} attachmentUrl={api.attachmentUrl} />
       <Composer
