@@ -280,7 +280,7 @@ export const registerSessionRoutes = (
     await store.sessions.destroy(id)
     runtime.forget(id)
     busyTracker.forget(id)
-    await attachments.forgetSession(id)
+    await attachments.forget(String(id))
     bump(s.projectId)
     return c.body(null, 204)
   })
