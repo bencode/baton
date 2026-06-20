@@ -1,3 +1,4 @@
+import { buildAgentInvite } from '@baton/shared'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
@@ -30,9 +31,9 @@ export const ChannelPage = () => {
     document.title = manifest?.title || 'channel'
   }, [manifest?.title])
 
-  if (!token) return <Centered>缺少访问令牌 —— 请用完整的分享链接打开。</Centered>
+  if (!token) return <Centered>Missing access token — open the full share link.</Centered>
   if (loading) return <Centered>…</Centered>
-  if (error || !manifest) return <Centered>链接无效或房间已不存在。</Centered>
+  if (error || !manifest) return <Centered>Invalid link, or the room no longer exists.</Centered>
 
   // Persist the name → we skip the claim PUT on reload (re-PUT would 409 against
   // our own fresh presence); the stream's `?as` keeps us online. Renaming clears it.
@@ -57,5 +58,16 @@ export const ChannelPage = () => {
   }
 
   if (!name) return <NameGate api={api} channelId={id} manifest={manifest} onJoined={join} />
-  return <ChannelRoom api={api} channelId={id} manifest={manifest} me={name} onRename={rename} />
+  const invite = buildAgentInvite({ base: `${window.location.origin}/api`, channelId: id, token })
+  return (
+    <ChannelRoom
+      api={api}
+      channelId={id}
+      manifest={manifest}
+      me={name}
+      onRename={rename}
+      invite={invite}
+      webLink={window.location.href}
+    />
+  )
 }

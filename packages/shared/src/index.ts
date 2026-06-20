@@ -1,6 +1,7 @@
 export * from './domain/admin.ts'
 export * from './domain/attachment.ts'
 export * from './domain/channel.ts'
+export * from './domain/channel-invite.ts'
 export * from './domain/derive.ts'
 export * from './domain/ids.ts'
 export * from './domain/project.ts'
