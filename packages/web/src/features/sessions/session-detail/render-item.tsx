@@ -1,9 +1,9 @@
 import { type Attachment, labelAttachments } from '@baton/shared'
 import { useState } from 'react'
 import { attachmentSrc } from '../../../api'
+import { FileChip, isImage } from '../../../components/attachments/attachment-view'
 import { Markdown } from '../../../components/markdown'
 import type { RateLimitInfo, RenderItem, TurnEndSummary } from '../event-render'
-import { FileChip, isImage } from './attachment-view'
 import { Caret, ToolBlock } from './tool-block'
 
 export const RenderItemView = ({ item }: { item: RenderItem }) => {

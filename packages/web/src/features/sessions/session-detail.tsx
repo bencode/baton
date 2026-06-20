@@ -1,6 +1,7 @@
 import { type Attachment, type Id, isPlaceholderSessionName } from '@baton/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
+import { renamePasted } from '../../utils/attachment'
 import { isAgentWorking, pendingMessages, reduceEvents } from './event-render'
 import { CommandHelp } from './session-detail/command-menu'
 import type { SlashCommand } from './session-detail/commands'
@@ -15,14 +16,6 @@ import { useSessionStream } from './use-session-stream'
 import { useSession, useSessions } from './use-sessions'
 
 type SessionDetailProps = { sessionId: Id }
-
-// Clipboard images arrive as a File with an empty name; give it a stable one
-// (File.name is read-only, so wrap it) so the upload + worktree filename read
-// well. The batch index keeps concurrently-pasted blobs from colliding on name.
-const renamePasted = (file: File, i: number): File => {
-  const ext = file.type.split('/')[1] ?? 'bin'
-  return new File([file], `paste-${Date.now()}-${i}.${ext}`, { type: file.type })
-}
 
 // Auto-title retries on each completed turn while a session is still unnamed —
 // give up after this many so a session that never gains substance isn't asked

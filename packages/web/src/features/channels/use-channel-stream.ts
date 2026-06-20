@@ -35,15 +35,25 @@ export const useChannelStream = (
   const [messages, setMessages] = useState<ChannelMessage[]>([])
   const [status, setStatus] = useState<ChannelStreamState['status']>('connecting')
   const lastSeqRef = useRef(0)
+  // Which room the transcript belongs to — so a rename (which only changes `as`)
+  // reconnects without wiping the history.
+  const roomRef = useRef('')
 
   useEffect(() => {
     if (!active) {
       setStatus('closed')
       return
     }
-    setMessages([])
+    // Reset the transcript only when the room itself changes. A rename switches
+    // `as` to move presence, but must NOT clear + full-reload history; instead
+    // resume in place from the last seq seen (gap replay), so messages don't
+    // flicker and nothing is re-fetched needlessly.
+    if (roomRef.current !== channelId) {
+      roomRef.current = channelId
+      setMessages([])
+      lastSeqRef.current = 0
+    }
     setStatus('connecting')
-    lastSeqRef.current = 0
     let alive = true
     const apply = (m: ChannelMessage) =>
       setMessages(prev => {
