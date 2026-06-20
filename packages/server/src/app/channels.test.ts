@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import { createApp } from '../app.ts'
+import { createAttachmentStore } from '../attachments.ts'
 import { freshStore, type TestStore } from '../store/test-db.ts'
 import { createChannel, postJson } from './test-helpers.ts'
 
@@ -191,5 +195,41 @@ describe('server HTTP — channel room', () => {
     })
     const body = (await res.json()) as { messages: { text: string }[] }
     assert.deepEqual(body.messages.map(m => m.text), ['persisted'])
+  })
+
+  test('attachments: upload → download (token-gated), cleaned on room delete', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'baton-chan-att-'))
+    const attachments = createAttachmentStore(dir)
+    const app = createApp(ctx.store, undefined, undefined, undefined, undefined, attachments)
+    const { channelId, auth } = await createChannel(app)
+    const base = `/channels/${channelId}/attachments`
+
+    // Upload: the raw body IS the file; filename rides ?filename.
+    const up = await app.request(`${base}?filename=hi.txt`, {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'text/plain' },
+      body: 'hello channel',
+    })
+    assert.equal(up.status, 201)
+    const meta = (await up.json()) as { id: string; channelId: string; url: string; filename: string; size: number }
+    assert.equal(meta.channelId, channelId)
+    assert.equal(meta.filename, 'hi.txt')
+    assert.equal(meta.url, `${base}/${meta.id}`)
+    assert.equal(meta.size, Buffer.byteLength('hello channel'))
+    assert.equal((await app.request(`${base}?filename=x`, { method: 'POST', body: 'x' })).status, 401) // upload token-gated
+
+    // Download: streams the bytes back, with the filename in content-disposition.
+    const dl = await app.request(meta.url, { headers: auth })
+    assert.equal(dl.status, 200)
+    assert.match(dl.headers.get('content-disposition') ?? '', /hi\.txt/)
+    assert.equal(await dl.text(), 'hello channel')
+    assert.equal((await app.request(meta.url)).status, 401) // download token-gated
+    assert.equal((await app.request(`${base}/missing`, { headers: auth })).status, 404)
+
+    // Deleting the room cascade-cleans its blobs from disk.
+    assert.notEqual(await attachments.get(channelId, meta.id), null) // present before
+    await app.request(`/channels/${channelId}`, { method: 'DELETE', headers: auth })
+    assert.equal(await attachments.get(channelId, meta.id), null) // forgotten after
+    await rm(dir, { recursive: true, force: true })
   })
 })

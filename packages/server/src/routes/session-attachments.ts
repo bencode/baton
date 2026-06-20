@@ -1,24 +1,9 @@
-import { createReadStream } from 'node:fs'
-import { Readable } from 'node:stream'
 import type { Hono } from 'hono'
 import type { AttachmentStore } from '../attachments.ts'
 import { loadScopedSession } from '../middleware/domain-scope.ts'
 import type { Store } from '../store/types.ts'
 import { type AppEnv, intParam } from '../views.ts'
-
-// RFC 5987 ext-value: encodeURIComponent leaves ' ( ) * literal, but those are
-// not attr-chars, so a strict parser can mis-read them (the apostrophe is the
-// field delimiter). Percent-encode them too.
-const rfc5987 = (s: string): string =>
-  encodeURIComponent(s).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
-
-// HTTP header values are latin1 (ByteString) — a non-ASCII filename (e.g. a
-// Chinese name) throws when set. ASCII-fold the legacy `filename=` fallback and
-// carry the real UTF-8 name in RFC 5987 `filename*`.
-const contentDisposition = (filename: string): string => {
-  const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, "'")
-  return `inline; filename="${ascii}"; filename*=UTF-8''${rfc5987(filename)}`
-}
+import { sendAttachment } from './attachment-download.ts'
 
 export const registerSessionAttachmentRoutes = (
   app: Hono<AppEnv>,
@@ -33,11 +18,15 @@ export const registerSessionAttachmentRoutes = (
     const sessionId = intParam(c.req.param('id'))
     const session = await loadScopedSession(c, store, sessionId)
     if (session instanceof Response) return session
-    const meta = await attachments.put(sessionId, {
-      filename: c.req.query('filename') || 'file',
-      contentType: c.req.header('content-type') || 'application/octet-stream',
-      body: c.req.raw.body,
-    })
+    const meta = await attachments.put(
+      String(sessionId),
+      {
+        filename: c.req.query('filename') || 'file',
+        contentType: c.req.header('content-type') || 'application/octet-stream',
+        body: c.req.raw.body,
+      },
+      base => ({ ...base, sessionId, url: `/sessions/${sessionId}/attachments/${base.id}` }),
+    )
     return c.json(meta, 201)
   })
 
@@ -48,12 +37,8 @@ export const registerSessionAttachmentRoutes = (
     const sessionId = intParam(c.req.param('id'))
     const scoped = await loadScopedSession(c, store, sessionId)
     if (scoped instanceof Response) return scoped
-    const found = await attachments.get(sessionId, c.req.param('attId'))
+    const found = await attachments.get(String(sessionId), c.req.param('attId'))
     if (!found) return c.json({ error: 'not found' }, 404)
-    c.header('content-type', found.meta.contentType)
-    c.header('content-length', String(found.meta.size))
-    c.header('content-disposition', contentDisposition(found.meta.filename))
-    const web = Readable.toWeb(createReadStream(found.path)) as ReadableStream<Uint8Array>
-    return c.body(web)
+    return sendAttachment(c, found)
   })
 }

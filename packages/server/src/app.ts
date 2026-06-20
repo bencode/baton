@@ -59,7 +59,7 @@ export const createApp = (
   // decoupled from baton's.
   registerAuthRoutes(app, store)
   registerRelayRoutes(app, relay)
-  registerChannelRoutes(app, store, channelBus, presence)
+  registerChannelRoutes(app, store, channelBus, presence, attachments)
   app.use('*', cookieAuth(store))
   registerWorkspaceRoutes(app, store)
   registerProjectRoutes(app, store, workerLiveness, runtime, busyTracker, projects, commands)

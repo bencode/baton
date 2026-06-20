@@ -1,10 +1,12 @@
 import { isMessageFor, type MemberKind } from '@baton/shared'
 import type { Context, Hono } from 'hono'
+import type { AttachmentStore } from '../attachments.ts'
 import type { ChannelBus } from '../channel-bus.ts'
 import type { ChannelPresence } from '../channel-presence.ts'
 import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
 import type { AppEnv } from '../views.ts'
+import { sendAttachment } from './attachment-download.ts'
 import { CHANNEL_HELP } from './channel-help.ts'
 
 // Relative path to the protocol doc; clients prepend their own BASE. Returned in
@@ -49,6 +51,7 @@ export const registerChannelRoutes = (
   store: Store,
   bus: ChannelBus,
   presence: ChannelPresence,
+  attachments: AttachmentStore,
 ): void => {
   // The protocol doc (markdown) — no auth, so a freshly-invited agent can read
   // "how to use a channel" with one curl. Registered before /channels/:id so the
@@ -109,6 +112,7 @@ export const registerChannelRoutes = (
     const id = c.req.param('id') ?? ''
     await store.channels.destroy(id)
     presence.drop(id)
+    await attachments.forget(id) // cascade-clean the room's uploaded blobs
     return c.body(null, 204)
   })
 
@@ -177,6 +181,36 @@ export const registerChannelRoutes = (
     if (as) presence.touch(id, as, asKind(c.req.query('kind')))
     const all = await store.channels.since(id, toInt(c.req.query('since'), 0))
     return c.json({ messages: all.filter(relevantTo(c.req.query('for'))) })
+  })
+
+  // Upload an attachment to the room (capability-token auth). The raw body IS the
+  // file — streamed to disk, no multipart, no size cap. filename rides ?filename,
+  // media type rides content-type. Returns the Attachment descriptor; the sender
+  // then cites its `url` in a message so peers can download it.
+  app.post('/channels/:id/attachments', async c => {
+    const denied = await guard(c)
+    if (denied) return denied
+    const id = c.req.param('id') ?? ''
+    const meta = await attachments.put(
+      id,
+      {
+        filename: c.req.query('filename') || 'file',
+        contentType: c.req.header('content-type') || 'application/octet-stream',
+        body: c.req.raw.body,
+      },
+      base => ({ ...base, channelId: id, url: `/channels/${id}/attachments/${base.id}` }),
+    )
+    return c.json(meta, 201)
+  })
+
+  // Download a room attachment (capability-token auth). Streamed from disk so
+  // large files don't get buffered.
+  app.get('/channels/:id/attachments/:attId', async c => {
+    const denied = await guard(c)
+    if (denied) return denied
+    const found = await attachments.get(c.req.param('id') ?? '', c.req.param('attId') ?? '')
+    if (!found) return c.json({ error: 'not found' }, 404)
+    return sendAttachment(c, found)
   })
 
   // SSE: replay seq>since (for-filtered) then tail live. While connected the

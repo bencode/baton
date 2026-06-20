@@ -1,4 +1,5 @@
 import type {
+  Attachment,
   Channel,
   ChannelManifest,
   ChannelMember,
@@ -43,6 +44,12 @@ export type ChannelClient = {
   leave(channelId: string, token: string, name: string): Promise<void>
   members(channelId: string, token: string): Promise<ChannelMember[]>
   send(channelId: string, token: string, msg: SendInput): Promise<ChannelMessage>
+  // Upload a file to the room; cite the returned `url` in a message so peers fetch it.
+  uploadAttachment(
+    channelId: string,
+    token: string,
+    input: { filename: string; contentType: string; body: Blob },
+  ): Promise<Attachment>
   read(
     channelId: string,
     token: string,
@@ -120,6 +127,18 @@ export const channelClient = (baseUrl: string): ChannelClient => {
       })
       if (!res.ok) throw new Error(`POST channel message → ${res.status}: ${await res.text()}`)
       return (await res.json()) as ChannelMessage
+    },
+    uploadAttachment: async (channelId, token, input) => {
+      const res = await fetch(
+        u(`/channels/${channelId}/attachments?filename=${encodeURIComponent(input.filename)}`),
+        {
+          method: 'POST',
+          headers: { 'content-type': input.contentType, ...authed(token) },
+          body: input.body,
+        },
+      )
+      if (!res.ok) throw new Error(`upload attachment → ${res.status}: ${await res.text()}`)
+      return (await res.json()) as Attachment
     },
     read: async (channelId, token, opts) => {
       const params = new URLSearchParams({ since: String(opts?.since ?? 0) })
