@@ -74,3 +74,12 @@ export const activeProjectId = (pathname: string): number | null => {
   const route = parseRoute(pathname)
   return 'projectId' in route ? route.projectId : null
 }
+
+// Where to land when the last tab closes: the current project (so the detail
+// pane shows its empty state while the left tree keeps context), or `/` when
+// there's no project context. Avoids bouncing through `/`, which the shell
+// redirects to a default workspace.
+export const emptyTabsPath = (pathname: string): string => {
+  const projectId = activeProjectId(pathname)
+  return projectId !== null ? projectPath(projectId) : '/'
+}
