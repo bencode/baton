@@ -1,6 +1,7 @@
 import type { Attachment } from '@baton/shared'
 import { useRef, useState } from 'react'
-import { AttachmentStrip } from './attachment-strip'
+import { AttachmentStrip } from '../../../components/attachments/attachment-strip'
+import { extractImageFiles } from '../../../utils/attachment'
 import { CommandMenu } from './command-menu'
 import type { SlashCommand } from './commands'
 import { PaperclipIcon, SendIcon, Spinner } from './icons'
@@ -38,14 +39,6 @@ const StatusChip = ({ tone, label, hint, onClick }: StatusChipProps) => (
     <span className={`ml-auto ${CHIP_TONES[tone].hint}`}>{hint}</span>
   </button>
 )
-
-// Pull image files out of a paste/clipboard synchronously (getAsFile must run
-// inside the event).
-const extractImageFiles = (items: DataTransferItemList): File[] =>
-  Array.from(items)
-    .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
-    .map(it => it.getAsFile())
-    .filter((f): f is File => f !== null)
 
 type ComposerProps = {
   draft: string

@@ -1,9 +1,11 @@
 import { type Attachment, isImageAttachment } from '@baton/shared'
-import { attachmentSrc } from '../../../api'
+import { attachmentSrc } from '../../api'
 
-// Shared attachment presentation, used by both the composer's pending strip and
-// the sent message bubble so the image-vs-file decision and chip styling live
-// in one place.
+// Shared attachment presentation, used by the composer's pending strip and the
+// sent message bubble (sessions + channels) so the image-vs-file decision and
+// chip styling live in one place. `src` resolves an Attachment to a fetchable
+// URL — defaults to the cookie-authed session path; channels pass a token-bearing
+// one (capability auth, no cookie).
 
 // Re-export the shared predicate under the local name kept by call sites.
 export const isImage = isImageAttachment
@@ -25,14 +27,16 @@ export const FileChip = ({
   att,
   download,
   label,
+  src = attachmentSrc,
 }: {
   att: Attachment
   download?: boolean
   label?: string
+  src?: (att: Attachment) => string
 }) =>
   download ? (
     <a
-      href={attachmentSrc(att)}
+      href={src(att)}
       download={att.filename}
       className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
     >

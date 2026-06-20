@@ -1,5 +1,5 @@
 import { type Attachment, labelAttachments } from '@baton/shared'
-import { attachmentSrc } from '../../../api'
+import { attachmentSrc } from '../../api'
 import { FileChip, isImage } from './attachment-view'
 
 const RemoveButton = ({ onRemove }: { onRemove: () => void }) => (
@@ -16,15 +16,18 @@ const RemoveButton = ({ onRemove }: { onRemove: () => void }) => (
 // Pending attachments inside the input card, above the textarea: image previews
 // as thumbnails, other files as labelled chips. Each carries a short {label}
 // (image-1, file-1, …); clicking inserts that token into the draft so the user
-// can reference it in their text. Each is removable before send.
+// can reference it in their text. Each is removable before send. `src` resolves
+// the preview/download URL (cookie default; channels pass a token-bearing one).
 export const AttachmentStrip = ({
   attachments,
   onRemove,
   onInsertLabel,
+  src = attachmentSrc,
 }: {
   attachments: Attachment[]
   onRemove: (id: string) => void
   onInsertLabel: (label: string) => void
+  src?: (att: Attachment) => string
 }) => {
   const labels = labelAttachments(attachments)
   return (
@@ -43,7 +46,7 @@ export const AttachmentStrip = ({
                 <span className="relative block h-16 w-16">
                   {/* biome-ignore lint/a11y/useAltText: uploaded screenshot preview */}
                   <img
-                    src={attachmentSrc(att)}
+                    src={src(att)}
                     className="h-16 w-16 rounded border border-gray-200 object-cover"
                   />
                   <span className="absolute bottom-0 left-0 right-0 rounded-b bg-black/55 px-1 py-0.5 text-center font-mono text-[10px] leading-none text-white">
@@ -51,7 +54,7 @@ export const AttachmentStrip = ({
                   </span>
                 </span>
               ) : (
-                <FileChip att={att} label={label} />
+                <FileChip att={att} label={label} src={src} />
               )}
             </button>
             <RemoveButton onRemove={() => onRemove(att.id)} />

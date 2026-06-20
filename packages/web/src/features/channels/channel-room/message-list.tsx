@@ -1,10 +1,18 @@
-import type { ChannelMessage } from '@baton/shared'
+import type { Attachment, ChannelMessage } from '@baton/shared'
 import { useEffect, useRef } from 'react'
 import { MessageItem } from './message-item'
 
 // Scrollable transcript that stays pinned to the bottom unless the reader has
 // scrolled up to look at history (then new messages don't yank them down).
-export const MessageList = ({ messages, me }: { messages: ChannelMessage[]; me: string }) => {
+export const MessageList = ({
+  messages,
+  me,
+  attachmentUrl,
+}: {
+  messages: ChannelMessage[]
+  me: string
+  attachmentUrl: (att: Attachment) => string
+}) => {
   const ref = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
 
@@ -12,6 +20,7 @@ export const MessageList = ({ messages, me }: { messages: ChannelMessage[]; me: 
     const el = ref.current
     if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
   }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-pin to bottom on new messages
   useEffect(() => {
     const el = ref.current
     if (el && pinnedRef.current) el.scrollTop = el.scrollHeight
@@ -26,7 +35,7 @@ export const MessageList = ({ messages, me }: { messages: ChannelMessage[]; me: 
       ) : (
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
           {messages.map(m => (
-            <MessageItem key={m.seq} msg={m} me={me} />
+            <MessageItem key={m.seq} msg={m} me={me} attachmentUrl={attachmentUrl} />
           ))}
         </div>
       )}

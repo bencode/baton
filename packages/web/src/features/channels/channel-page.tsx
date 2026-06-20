@@ -14,7 +14,9 @@ const tokenFromHash = (): string =>
 const nameKey = (id: string): string => `channel:${id}:name`
 
 const Centered = ({ children }: { children: ReactNode }) => (
-  <div className="grid h-dvh place-items-center px-6 text-center text-sm text-gray-400">{children}</div>
+  <div className="grid h-dvh place-items-center px-6 text-center text-sm text-gray-400">
+    {children}
+  </div>
 )
 
 export const ChannelPage = () => {
@@ -38,9 +40,20 @@ export const ChannelPage = () => {
     localStorage.setItem(nameKey(id), picked)
     setName(picked)
   }
-  const rename = () => {
-    localStorage.removeItem(nameKey(id))
-    setName('')
+  // Rename in place (no return to the gate): claim the new name first
+  // (collision-checked), then release the old one. Same name is a no-op; a taken
+  // name leaves us as we were so the header can prompt for another.
+  const rename = async (next: string): Promise<{ ok: boolean }> => {
+    const picked = next.trim()
+    if (!picked || picked === name) return { ok: true }
+    const { taken } = await api.join(id, picked)
+    if (taken) return { ok: false }
+    // Free the old name so it doesn't linger as a ghost (best-effort; it would
+    // also lapse via the presence TTL).
+    api.leave(id, name).catch(err => console.warn('[channel] release old name failed', err))
+    localStorage.setItem(nameKey(id), picked)
+    setName(picked)
+    return { ok: true }
   }
 
   if (!name) return <NameGate api={api} channelId={id} manifest={manifest} onJoined={join} />
