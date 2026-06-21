@@ -54,6 +54,15 @@ export const registerWorkspaceRoutes = (app: Hono<AppEnv>, store: Store): void =
     })
     return c.json({ channelId: channel.id, token, help: HELP_PATH }, 201)
   })
+  // List this workspace's rooms (membership-gated). Each item carries its token so
+  // a member can open the room — the bridge from the gated list to the id+token
+  // participation layer.
+  app.get('/workspaces/:id/channels', async c => {
+    const id = intParam(c.req.param('id'))
+    const denied = await assertWorkspaceAccess(c, store, id)
+    if (denied) return denied
+    return c.json(await store.channels.listByWorkspace(id))
+  })
   app.patch('/workspaces/:id', async c => {
     const id = intParam(c.req.param('id'))
     const denied = await assertWorkspaceAccess(c, store, id)
