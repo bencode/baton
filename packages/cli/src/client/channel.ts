@@ -34,7 +34,14 @@ export type ListenOpts = {
 // `request` helper / cookie gate: a channel authenticates only with its own token,
 // passed explicitly per call — a self-contained capability auth domain.
 export type ChannelClient = {
-  create(title?: string, description?: string): Promise<ChannelHandle>
+  // Create a room in a workspace. Membership-gated, so it carries a baton Bearer
+  // token (resolveBearer) — unlike the channel-token calls below.
+  create(
+    workspaceId: number,
+    title?: string,
+    description?: string,
+    token?: string,
+  ): Promise<ChannelHandle>
   // One-call room manifest: description + online roster + help pointer.
   manifest(channelId: string, token: string): Promise<ChannelManifest>
   // Update room metadata (title / description = topic / rules).
@@ -75,13 +82,19 @@ export const channelClient = (baseUrl: string): ChannelClient => {
   const member = (channelId: string, name: string): string =>
     u(`/channels/${channelId}/members/${encodeURIComponent(name)}`)
   return {
-    create: async (title, description) => {
-      const res = await fetch(u('/channels'), {
+    create: async (workspaceId, title, description, token) => {
+      const res = await fetch(u(`/workspaces/${workspaceId}/channels`), {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...(title ? { title } : {}), ...(description ? { description } : {}) }),
+        headers: { 'content-type': 'application/json', ...(token ? authed(token) : {}) },
+        body: JSON.stringify({
+          ...(title ? { title } : {}),
+          ...(description ? { description } : {}),
+        }),
       })
-      if (!res.ok) throw new Error(`POST /channels → ${res.status}: ${await res.text()}`)
+      if (!res.ok)
+        throw new Error(
+          `POST /workspaces/${workspaceId}/channels → ${res.status}: ${await res.text()}`,
+        )
       return (await res.json()) as ChannelHandle
     },
     manifest: async (channelId, token) => {

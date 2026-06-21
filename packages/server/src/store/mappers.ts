@@ -126,6 +126,7 @@ export const toUserRecord = (r: DbUser): UserRecord => ({
 // store's `auth`, not this mapper.
 export const toChannel = (r: DbChannel): Channel => ({
   id: r.id,
+  workspaceId: r.workspaceId,
   title: r.title ?? undefined,
   description: r.description ?? undefined,
   createdAt: r.createdAt.getTime(),

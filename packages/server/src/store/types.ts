@@ -64,8 +64,9 @@ export type TaskPatch = Partial<{
 // Comments are append-only — created one at a time, never updated. No patch type.
 export type TaskCommentCreate = { taskId: Id; body: string; workerId?: Id }
 
-// Channels: a capability primitive (id + token), no project/workspace coupling.
-export type ChannelCreate = { title?: string; description?: string }
+// Channels belong to a Workspace (creation/listing gated by membership); the
+// id + token remain the participation capability (no account needed to join).
+export type ChannelCreate = { workspaceId: Id; title?: string; description?: string }
 export type ChannelPatch = Partial<{ title: string; description: string }>
 export type ChannelMessageCreate = {
   sender: string

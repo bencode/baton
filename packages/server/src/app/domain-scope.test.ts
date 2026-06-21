@@ -97,6 +97,40 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     assert.equal((await postJson(app, '/workspaces', { name: 'z' }, as(alice.token))).status, 403)
   })
 
+  test('POST /workspaces/:id/channels: member creates (201 + token), non-member 404', async () => {
+    const app = createApp(ctx.store)
+    const a = await seedWorkspace('wsCh1')
+    const b = await seedWorkspace('wsCh2')
+    const alice = await seedUser('alice', false)
+    const root = await seedUser('root', true)
+    await ctx.store.users.bindWorkspace(alice.id, a.ws.id)
+
+    // Bound member: 201 with a fresh capability token; the room belongs to ws1.
+    const ok = await postJson(
+      app,
+      `/workspaces/${a.ws.id}/channels`,
+      { title: 'sync' },
+      as(alice.token),
+    )
+    assert.equal(ok.status, 201)
+    const created = (await ok.json()) as { channelId: string; token: string; help: string }
+    assert.ok(created.channelId && created.token)
+    assert.equal(created.help, '/channels/help')
+    assert.equal((await ctx.store.channels.get(created.channelId))?.workspaceId, a.ws.id)
+
+    // Non-member can't inject a channel into someone else's workspace: 404 (no leak).
+    assert.equal(
+      (await postJson(app, `/workspaces/${b.ws.id}/channels`, { title: 'x' }, as(alice.token)))
+        .status,
+      404,
+    )
+    // A non-existent workspace 404s even for an admin (existence check, no anon path).
+    assert.equal(
+      (await postJson(app, '/workspaces/999999/channels', {}, as(root.token))).status,
+      404,
+    )
+  })
+
   test('admin bypasses scope; bind/unbind flips visibility', async () => {
     const app = createApp(ctx.store)
     const a = await seedWorkspace('wsA')

@@ -40,6 +40,15 @@ export const clientFor = (args: { url?: string }): ApiClient => {
   return createClient(baseUrl, auth && auth !== 'cookie' ? auth : undefined)
 }
 
+// The resolved Bearer token for baton-authed calls (or undefined). Same precedence
+// as clientFor, exposed for callers that drive a non-ApiClient client — e.g. channel
+// create, which now POSTs to the workspace-scoped (membership-gated) endpoint.
+export const resolveBearer = (): string | undefined => {
+  const fileToken = loadProjectConfigOrNull(projectConfigPath())?.worker?.apiToken
+  const auth = resolveAuth(process.env, fileToken)
+  return auth && auth !== 'cookie' ? auth.bearer : undefined
+}
+
 // Resolve `--project <id>` against the cwd `.baton.json`. Throws when neither
 // flag nor config is available — callers shouldn't call this without expecting
 // a project context.
