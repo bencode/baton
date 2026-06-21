@@ -3,6 +3,7 @@ import { primeLogin } from './client/auth.ts'
 import { type ProjectClient, projectClient } from './client/projects.ts'
 import { request, setAuthHeaders } from './client/request.ts'
 import { type RequirementClient, requirementClient } from './client/requirements.ts'
+import { withRetry } from './client/retry.ts'
 import { type SessionsClient, sessionsClient } from './client/sessions.ts'
 import { type TaskClient, taskClient } from './client/tasks.ts'
 import { type WorkersClient, workersClient } from './client/workers.ts'
@@ -66,6 +67,17 @@ const clientFromBase = (baseUrl: string): ApiClient => ({
   workers: workersClient(baseUrl),
 })
 
+// Turn boundary events are load-bearing: a lost turn_complete strands the turn
+// as "thinking" forever (the server only closes a turn on one of these). They get
+// bounded retries; sdk_event / turn_heartbeat stay best-effort (too frequent, and
+// losing one is harmless — the next refreshes liveness).
+const BOUNDARY_EVENTS: ReadonlySet<SessionEventType> = new Set([
+  'turn_start',
+  'turn_complete',
+  'turn_error',
+])
+const emitRetries = (): number => Number(process.env.BATON_EMIT_RETRIES) || 4
+
 export const createWorkerClient = (
   baseUrl: string,
   workerToken: string,
@@ -74,19 +86,21 @@ export const createWorkerClient = (
   const u = (p: string): string => `${baseUrl}${p}`
   const auth = { authorization: `Bearer ${workerToken}` }
   return {
-    emitEvent: (type, payload) =>
-      request(u(`/sessions/${sessionId}/events`), {
-        method: 'POST',
-        body: { type, payload },
-        headers: auth,
-      }),
+    emitEvent: (type, payload) => {
+      const post = (): Promise<SessionEvent> =>
+        request(u(`/sessions/${sessionId}/events`), {
+          method: 'POST',
+          body: { type, payload },
+          headers: auth,
+        })
+      return BOUNDARY_EVENTS.has(type) ? withRetry(post, { tries: emitRetries() }) : post()
+    },
     setActive: active =>
       request(u(`/sessions/${sessionId}/status`), {
         method: 'POST',
         body: { active },
         headers: auth,
       }),
-    listEvents: () =>
-      request(u(`/sessions/${sessionId}/events`), { method: 'GET', headers: auth }),
+    listEvents: () => request(u(`/sessions/${sessionId}/events`), { method: 'GET', headers: auth }),
   }
 }

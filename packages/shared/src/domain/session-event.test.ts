@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { type SessionEvent, startedMessageIds, unstartedUserMessages } from './session-event.ts'
+import {
+  closesTurn,
+  isAgentWorking,
+  opensTurn,
+  type SessionEvent,
+  startedMessageIds,
+  unstartedUserMessages,
+} from './session-event.ts'
 
 const ev = (id: number, type: SessionEvent['type'], payload: unknown): SessionEvent => ({
   id,
@@ -46,5 +53,37 @@ describe('unstartedUserMessages', () => {
       ev(4, 'turn_start', null),
     ])
     assert.deepEqual([...ids], [1])
+  })
+})
+
+describe('turn liveness predicates', () => {
+  test('opensTurn / closesTurn classify only boundary events', () => {
+    assert.equal(opensTurn(ev(1, 'user_message', {})), true)
+    assert.equal(opensTurn(ev(2, 'turn_start', {})), true)
+    assert.equal(closesTurn(ev(3, 'turn_complete', {})), true)
+    assert.equal(closesTurn(ev(4, 'turn_error', { message: 'x' })), true)
+    // non-boundary events leave the open/closed state untouched
+    assert.equal(opensTurn(ev(5, 'sdk_event', {})), false)
+    assert.equal(closesTurn(ev(5, 'sdk_event', {})), false)
+    assert.equal(opensTurn(ev(6, 'turn_heartbeat', {})), false)
+    assert.equal(closesTurn(ev(6, 'turn_heartbeat', {})), false)
+  })
+
+  test('isAgentWorking: a dangling turn_start is open; a trailing close is not', () => {
+    assert.equal(isAgentWorking([]), false)
+    assert.equal(isAgentWorking([ev(1, 'turn_start', { messageId: 1 })]), true)
+    assert.equal(
+      isAgentWorking([ev(1, 'turn_start', {}), ev(2, 'turn_error', { message: 'x' })]),
+      false,
+    )
+    // sdk_event / turn_heartbeat after a turn_start don't close it
+    assert.equal(
+      isAgentWorking([
+        ev(1, 'turn_start', {}),
+        ev(2, 'sdk_event', {}),
+        ev(3, 'turn_heartbeat', {}),
+      ]),
+      true,
+    )
   })
 })

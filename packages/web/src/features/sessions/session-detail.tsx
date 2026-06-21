@@ -2,7 +2,7 @@ import { type Attachment, type Id, isPlaceholderSessionName } from '@baton/share
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { renamePasted } from '../../utils/attachment'
-import { isAgentWorking, pendingMessages, reduceEvents } from './event-render'
+import { pendingMessages, reduceEvents } from './event-render'
 import { CommandHelp } from './session-detail/command-menu'
 import type { SlashCommand } from './session-detail/commands'
 import { Composer } from './session-detail/composer'
@@ -166,10 +166,12 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     else if (command.kind === 'model') setModel(args || null)
   }
 
-  // Show the breathing indicator while a turn is open. `sending` covers the brief
-  // optimistic window before our user_message round-trips back over SSE; the
-  // attached guard keeps it from sticking if the session detaches mid-turn.
-  const working = (sending || isAgentWorking(events)) && session.attached
+  // Show the breathing indicator while a turn is open. Trust the server's `busy`
+  // — the single source of truth: it already folds in `attached`, an open turn,
+  // AND a liveness TTL, so a dead/wedged worker's turn stops looking busy on its
+  // own (no more "stuck thinking forever"). `sending` covers the brief optimistic
+  // window before our user_message round-trips back over SSE and flips busy true.
+  const working = sending || session.busy
 
   return (
     <div className="flex h-full min-w-0 flex-col">

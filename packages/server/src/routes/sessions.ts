@@ -231,6 +231,15 @@ export const registerSessionRoutes = (
     if (s instanceof Response) return s
     const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'interrupt' })
     bus.publish(s.id, ev)
+    // Drive the authority too, not just the breadcrumb: a healthy runner aborts
+    // its live turn and emits the close (fast path). But if the runner is wedged
+    // or the session stream is dead, the interrupt event never reaches it — so
+    // mark the open turn stale, and the next sweep tick (≤30s) synthesizes the
+    // close. Either way the user's interrupt actually clears the "thinking" state.
+    if (busyTracker.read(s.id)) {
+      busyTracker.markStale(s.id)
+      bump(s.projectId)
+    }
     return c.json(await toView(s))
   })
 
@@ -294,14 +303,18 @@ export const registerSessionRoutes = (
     if ('error' in owned) return owned.error
     const body = (await c.req.json()) as { type?: SessionEventType; payload?: unknown }
     if (!body.type) return c.json({ error: 'type required' }, 400)
-    // Busy toggles drive the rail's pulse dot — bump so subscribers refetch the
-    // session list (sdk_event streams are skipped: far too frequent to signal).
+    // turn_start opens a turn; turn_complete/turn_error close it — these drive the
+    // rail's pulse dot, so bump subscribers to refetch the session list. Every
+    // other event (sdk_event, turn_heartbeat) only refreshes turn liveness so a
+    // long-but-alive turn keeps reading busy; no bump (far too frequent to signal).
     if (body.type === 'turn_start') {
-      busyTracker.set(owned.id, true)
+      busyTracker.open(owned.id)
       bump(owned.session.projectId)
     } else if (body.type === 'turn_complete' || body.type === 'turn_error') {
-      busyTracker.set(owned.id, false)
+      busyTracker.close(owned.id)
       bump(owned.session.projectId)
+    } else {
+      busyTracker.refresh(owned.id)
     }
     const ev = await store.sessions.appendEvent(owned.id, body.type, body.payload ?? null)
     bus.publish(owned.id, ev)

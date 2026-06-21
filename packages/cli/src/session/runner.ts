@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { type SessionEvent, unstartedUserMessages } from '@baton/shared'
+import { isAgentWorking, type SessionEvent, unstartedUserMessages } from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
@@ -177,6 +177,17 @@ export const runDaemon = async (
     }
   }
 
+  // Close a dangling open turn (a turn_start with no trailing close) left by a
+  // prior child that died mid-turn or whose turn_complete was lost. Idempotent:
+  // a no-op when the transcript shows no open turn. A single synthetic turn_error
+  // is enough — the server closes the turn on it (no turn_complete needed).
+  const closeOrphanedTurn = async (reason: string): Promise<void> => {
+    const events = await deps.worker.listEvents()
+    if (!isAgentWorking(events)) return
+    await deps.worker.emitEvent('turn_error', { message: reason, synthetic: true })
+    log(`closed orphaned open turn (${reason})`)
+  }
+
   // Drain the authoritative queue from the durable transcript: enqueue any
   // user_message with no turn_start yet that we haven't already queued. Runs on
   // every (re)connect, so a live SSE delivery missed during a reconnect gap,
@@ -185,7 +196,8 @@ export const runDaemon = async (
   const reconcile = async (): Promise<void> => {
     reconciling = true
     try {
-      const pending = unstartedUserMessages(await deps.worker.listEvents())
+      const events = await deps.worker.listEvents()
+      const pending = unstartedUserMessages(events)
       let added = 0
       for (const ev of pending) {
         if (state.seen.has(ev.sequence)) continue
@@ -197,6 +209,15 @@ export const runDaemon = async (
         log(`reconciled ${added} queued message(s) from transcript`)
         lastActivity = Date.now()
         void drain()
+      } else if (pendingQueue.length === 0 && !busy && !currentTurn && isAgentWorking(events)) {
+        // No work to run, yet the transcript shows an open turn → a prior child
+        // abandoned it. Heal it now (faster than the server's TTL sweep). Guarded
+        // so a real pending message (which opens its own turn) isn't pre-closed.
+        await deps.worker.emitEvent('turn_error', {
+          message: 'turn abandoned — runner restarted',
+          synthetic: true,
+        })
+        log('reconcile: closed orphaned open turn from a prior child')
       }
     } catch (e) {
       log(`reconcile failed: ${String(e)}`)
@@ -222,6 +243,14 @@ export const runDaemon = async (
       if (currentTurn) {
         log('interrupt — aborting current turn')
         currentTurn.abort()
+      } else {
+        // No live turn here, but the transcript may hold a dangling open turn (a
+        // prior child died mid-turn, or its turn_complete was lost). Close it so
+        // the interrupt actually clears "thinking" instead of being a no-op.
+        log('interrupt — no live turn; closing any orphaned open turn')
+        void closeOrphanedTurn('interrupted by user').catch(e =>
+          log(`orphan close failed: ${String(e)}`),
+        )
       }
     },
     // Report active only now that we're subscribed — before this, a message
@@ -244,7 +273,10 @@ export const runDaemon = async (
   const reaped = new Promise<void>(resolve => {
     idleTimer = setInterval(
       () => {
-        if (!reconciling && shouldReap(lastActivity, Date.now(), busy, pendingQueue.length, idleMs)) {
+        if (
+          !reconciling &&
+          shouldReap(lastActivity, Date.now(), busy, pendingQueue.length, idleMs)
+        ) {
           log('idle — shutting down (resumes on next message)')
           resolve()
         }
