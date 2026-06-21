@@ -7,6 +7,7 @@ export const prismaChannels = (prisma: PrismaClient): Store['channels'] => ({
   create: async input => {
     const r = await prisma.channel.create({
       data: {
+        workspaceId: input.workspaceId,
         token: randomBytes(32).toString('hex'),
         title: input.title ?? null,
         description: input.description ?? null,

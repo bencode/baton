@@ -8,6 +8,9 @@ export type MemberKind = 'agent' | 'human'
 
 export type Channel = {
   id: string
+  // The owning workspace. Creation + listing are gated by workspace membership;
+  // participation over the id+token API stays open (the two layers — see schema).
+  workspaceId: number
   title?: string
   // Free-text self-description: what this room is for / how to participate.
   description?: string

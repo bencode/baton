@@ -40,6 +40,7 @@ model Workspace {
 
   projects Project[]
   members  UserWorkspace[]
+  channels Channel[]
 }
 
 // User ↔ Workspace membership (the domain-isolation binding). Pure membership,
@@ -243,15 +244,18 @@ model SessionEvent {
 }
 
 // An N-party live chat room — the multi-agent evolution of the 2-party relay
-// (see the old in-memory relay-bus). A capability primitive: an unguessable id +
-// a stored Bearer token; whoever holds the token can read, write, and join.
-// Deliberately orthogonal to Project/Workspace — the agent-facing API is id+token
-// only, no cookie/domain coupling, so it's reachable by raw curl from anywhere.
-// Unlike the relay, messages persist: history survives restart and a future web
-// UI (and reconnecting clients) can replay it. Presence (who's online) stays in
-// memory — "right now" data, like worker liveness.
+// (see the old in-memory relay-bus). Two layers: it BELONGS to a Workspace
+// (creation + listing are gated by workspace membership, so the back-office can
+// manage its rooms and nothing anonymous can inject channels), but PARTICIPATION
+// stays a capability primitive — an unguessable id + a stored Bearer token; whoever
+// holds the token can read, write, and join over the id+token API, no account
+// needed (that's how an invited outside agent/person joins from anywhere). The
+// token is the bridge: workspace members fetch it from the gated list, outsiders
+// get it from an invite link. Unlike the relay, messages persist (history survives
+// restart and replays into the web UI). Presence (who's online) stays in memory.
 model Channel {
   id          String   @id @default(uuid())
+  workspaceId Int
   token       String
   title       String?
   // Free-text self-description (purpose / topic / how to participate). Returned
@@ -259,7 +263,10 @@ model Channel {
   description String?
   createdAt   DateTime @default(now())
 
-  messages ChannelMessage[]
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages  ChannelMessage[]
+
+  @@index([workspaceId])
 }
 
 // Append-only message log on a Channel. Mirrors SessionEvent: per-channel `seq`

@@ -28,7 +28,9 @@ describe('server SSE — channel stream', () => {
           body: JSON.stringify(body),
           headers: { 'content-type': 'application/json', ...headers },
         })
-      const ch = (await (await post('/channels', {})).json()) as Channel
+      const ws = await ctx.store.workspaces.create({ name: 'ws' })
+      const made = await ctx.store.channels.create({ workspaceId: ws.id })
+      const ch: Channel = { channelId: made.channel.id, token: made.token }
       const auth = { authorization: `Bearer ${ch.token}` }
       const msgs = `/channels/${ch.channelId}/messages`
       await post(msgs, { from: 'bob', text: 'hello all' }, auth) // seq 1, broadcast
@@ -75,17 +77,14 @@ describe('server SSE — channel stream', () => {
     const server = await startServer({ store: ctx.store, port: 0 })
     try {
       const base = `http://localhost:${server.port}`
-      const ch = (await (
-        await fetch(`${base}/channels`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: '{}',
-        })
-      ).json()) as Channel
+      const ws = await ctx.store.workspaces.create({ name: 'ws' })
+      const made = await ctx.store.channels.create({ workspaceId: ws.id })
+      const ch: Channel = { channelId: made.channel.id, token: made.token }
       const evt = { accept: 'text/event-stream' } // note: NO Authorization header
       // Wrong token in the query → still 401.
       assert.equal(
-        (await fetch(`${base}/channels/${ch.channelId}/stream?token=nope`, { headers: evt })).status,
+        (await fetch(`${base}/channels/${ch.channelId}/stream?token=nope`, { headers: evt }))
+          .status,
         401,
       )
       // Correct token in the query → 200, the stream opens.

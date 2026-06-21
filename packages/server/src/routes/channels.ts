@@ -10,8 +10,9 @@ import { sendAttachment } from './attachment-download.ts'
 import { CHANNEL_HELP } from './channel-help.ts'
 
 // Relative path to the protocol doc; clients prepend their own BASE. Returned in
-// manifests + create responses so the API is self-describing.
-const HELP_PATH = '/channels/help'
+// manifests + create responses so the API is self-describing. Exported so the
+// workspace-scoped create route (routes/workspaces.ts) returns the same pointer.
+export const HELP_PATH = '/channels/help'
 
 // Channel: an N-party live chat room (the multi-agent evolution of the relay).
 // Self-authenticating via a per-channel capability token (no cookie/worker/project
@@ -56,18 +57,14 @@ export const registerChannelRoutes = (
   // The protocol doc (markdown) — no auth, so a freshly-invited agent can read
   // "how to use a channel" with one curl. Registered before /channels/:id so the
   // static path wins over the :id param.
-  app.get('/channels/help', c => c.text(CHANNEL_HELP, 200, { 'content-type': 'text/markdown; charset=utf-8' }))
+  app.get('/channels/help', c =>
+    c.text(CHANNEL_HELP, 200, { 'content-type': 'text/markdown; charset=utf-8' }),
+  )
 
-  // Open a fresh room. No auth: the returned token IS the capability, and the id
-  // is unguessable — nothing to protect until a channel exists.
-  app.post('/channels', async c => {
-    const body = await optionalBody<{ title?: string; description?: string }>(c)
-    const { channel, token } = await store.channels.create({
-      title: body.title,
-      description: body.description,
-    })
-    return c.json({ channelId: channel.id, token, help: HELP_PATH }, 201)
-  })
+  // Creating a room is NOT here: a channel belongs to a workspace, so creation is
+  // gated by workspace membership — see POST /workspaces/:id/channels (registered
+  // behind the cookie gate). Everything below authenticates with the channel's own
+  // capability token (id + token), the open participation layer.
 
   // Resolve + authorize from the path id and Bearer token. Async: reads the DB.
   // Returns a ready error Response on failure, or null to proceed.
@@ -241,7 +238,10 @@ export const registerChannelRoutes = (
           if (keep(m)) push(m)
         }),
       {
-        replay: { load: async () => (await store.channels.since(id, since)).filter(keep), keyOf: m => m.seq },
+        replay: {
+          load: async () => (await store.channels.since(id, since)).filter(keep),
+          keyOf: m => m.seq,
+        },
         onClose: () => {
           if (beat) clearInterval(beat)
         },

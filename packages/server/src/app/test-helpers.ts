@@ -17,13 +17,18 @@ export const postJson = (
   })
 
 // Open a channel and return its id, token, and a ready bearer-auth header — most
-// channel tests start here.
+// channel tests start here. Channels now belong to a workspace, so this seeds a
+// fresh one (unique name via a counter) and creates the room under it.
 export type ChannelHandle = { channelId: string; token: string; auth: Record<string, string> }
+let chanWsSeq = 0
 export const createChannel = async (
   app: ReturnType<typeof createApp>,
   body: Record<string, unknown> = {},
 ): Promise<ChannelHandle> => {
-  const ch = (await (await postJson(app, '/channels', body)).json()) as {
+  const w = (await (
+    await postJson(app, '/workspaces', { name: `chan-ws-${++chanWsSeq}` })
+  ).json()) as WithId
+  const ch = (await (await postJson(app, `/workspaces/${w.id}/channels`, body)).json()) as {
     channelId: string
     token: string
   }
