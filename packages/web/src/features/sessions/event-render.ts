@@ -5,6 +5,11 @@ import {
   unstartedUserMessages,
 } from '@baton/shared'
 
+// Re-exported from the shared turn-liveness predicate so existing web callers
+// (and this feature's tests) keep their import path. The session indicator now
+// trusts the server's `busy` instead, but the predicate stays available here.
+export { isAgentWorking } from '@baton/shared'
+
 // Pure reducer turning session events (sequence-ordered, each carrying a stable
 // server `id`) into a list of RenderItems UI can dispatch over. Tries to read
 // Claude stream-json payloads loosely (the SDK's shape evolves); unknown shapes
@@ -99,21 +104,6 @@ const formatToolResult = (raw: unknown): { text: string; isError: boolean } => {
   return { text: JSON.stringify(c ?? ''), isError }
 }
 
-// --- turn liveness -----------------------------------------------------------
-
-// These four events mark a turn's start / end; everything else (sdk_event, …)
-// leaves the state untouched.
-const opensTurn = (e: SessionEvent) => e.type === 'user_message' || e.type === 'turn_start'
-const closesTurn = (e: SessionEvent) => e.type === 'turn_complete' || e.type === 'turn_error'
-
-// Is the agent still working? Look at the last start-or-end event — if it opened
-// a turn, that turn hasn't closed yet. findLast (not some) because order matters:
-// a completed history is full of turn_start events.
-export const isAgentWorking = (events: SessionEvent[]): boolean => {
-  const last = events.findLast(e => opensTurn(e) || closesTurn(e))
-  return last ? opensTurn(last) : false
-}
-
 // --- queued (pending) messages ----------------------------------------------
 
 // A user message sent while a turn is running sits in the worker's queue until
@@ -181,7 +171,8 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       items.push({ kind: 'user-bubble', text, images, attachments, key })
       continue
     }
-    if (e.type === 'turn_start') continue
+    // turn_start opens a turn; turn_heartbeat is a liveness ping — neither renders.
+    if (e.type === 'turn_start' || e.type === 'turn_heartbeat') continue
     if (e.type === 'turn_error') {
       const msg =
         isRecord(e.payload) && typeof e.payload.message === 'string' ? e.payload.message : 'error'

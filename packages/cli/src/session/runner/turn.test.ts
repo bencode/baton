@@ -50,6 +50,7 @@ const hangingQuery: QueryFn = () =>
 
 afterEach(() => {
   delete process.env.BATON_TURN_TIMEOUT_MS
+  delete process.env.BATON_TURN_HEARTBEAT_MS
 })
 
 describe('runTurn', () => {
@@ -106,6 +107,20 @@ describe('runTurn', () => {
     )
     assert.equal(code, -1)
     assert.ok(calls.includes('turn_error'))
+    assert.ok(calls.includes('turn_complete'))
+  })
+
+  // A long single tool call streams no sdk_events, so the turn pings the server
+  // with turn_heartbeat to stay above the liveness TTL. Here a wedged query runs
+  // until the watchdog aborts it; the heartbeat must have fired meanwhile.
+  test('emits turn_heartbeat while a turn runs', async () => {
+    process.env.BATON_TURN_HEARTBEAT_MS = '5'
+    process.env.BATON_TURN_TIMEOUT_MS = '60'
+    const { calls, worker } = collector()
+    const code = await runTurn(cfg, worker, userMsg(), false, hangingQuery, () => {})
+    assert.equal(code, -1) // watchdog aborts the hang
+    assert.equal(calls[0], 'turn_start')
+    assert.ok(calls.includes('turn_heartbeat'), 'should ping at least once')
     assert.ok(calls.includes('turn_complete'))
   })
 

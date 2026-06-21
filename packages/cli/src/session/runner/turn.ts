@@ -11,6 +11,12 @@ import { streamSdkEvents, type TurnResult } from './stream.ts'
 // Overridable; default 30m.
 const turnTimeoutMs = (): number => Number(process.env.BATON_TURN_TIMEOUT_MS) || 30 * 60_000
 
+// How often a running turn pings the server it's still alive. A long SINGLE tool
+// call (e.g. a 10-min Bash) emits no sdk_events, so without this the server's
+// liveness TTL would false-reap an alive turn. 30s = the daemon's heartbeat
+// cadence; TTL (90s) tolerates a couple of missed pings. Overridable.
+const heartbeatMs = (): number => Number(process.env.BATON_TURN_HEARTBEAT_MS) || 30_000
+
 const TIMEOUT = Symbol('turn-timeout')
 const ABORTED = Symbol('turn-aborted')
 
@@ -102,6 +108,7 @@ export const runTurn = async (
   const abort = new AbortController()
   const ceiling = turnTimeoutMs()
   let timer: ReturnType<typeof setTimeout> | undefined
+  let heartbeat: ReturnType<typeof setInterval> | undefined
   const timeout = new Promise<typeof TIMEOUT>(resolve => {
     timer = setTimeout(() => resolve(TIMEOUT), ceiling)
   })
@@ -114,6 +121,12 @@ export const runTurn = async (
   })
 
   try {
+    // Prove the turn is alive while it runs — covers a long single tool call that
+    // streams no sdk_events. Best-effort: a dropped ping is fine (the TTL tolerates
+    // misses), so log rather than swallow but never let it fail the turn.
+    heartbeat = setInterval(() => {
+      void worker.emitEvent('turn_heartbeat', {}).catch(e => log(`[heartbeat] ${String(e)}`))
+    }, heartbeatMs())
     const messages = startQuery(config, text, resuming, queryFn, abort, log, {
       envOverlay,
       planMode,
@@ -147,5 +160,6 @@ export const runTurn = async (
     return -1
   } finally {
     clearTimeout(timer)
+    clearInterval(heartbeat)
   }
 }

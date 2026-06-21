@@ -12,6 +12,10 @@ import type { Id } from './ids.ts'
 //                    planMode=true → worker runs this turn read-only, SDK permissionMode:'plan')
 //   - turn_start:    payload = { messageId?: number }
 //   - sdk_event:     payload = a parsed line from `claude --output-format stream-json`
+//   - turn_heartbeat: payload = {} — periodic liveness ping while a turn runs, so
+//                    the server can tell a live-but-quiet turn (long single tool
+//                    call, no sdk_event) from an abandoned one. Non-rendering,
+//                    non-boundary; only refreshes turn liveness.
 //   - turn_complete: payload = { exitCode: number }
 //   - turn_error:    payload = { message: string }
 //   - system:        payload = arbitrary control metadata
@@ -19,6 +23,7 @@ export type SessionEventType =
   | 'user_message'
   | 'turn_start'
   | 'sdk_event'
+  | 'turn_heartbeat'
   | 'turn_complete'
   | 'turn_error'
   | 'system'
@@ -56,4 +61,23 @@ export const startedMessageIds = (events: readonly SessionEvent[]): Set<Id> => {
 export const unstartedUserMessages = (events: readonly SessionEvent[]): SessionEvent[] => {
   const started = startedMessageIds(events)
   return events.filter(e => e.type === 'user_message' && !started.has(e.id))
+}
+
+// --- turn liveness -----------------------------------------------------------
+
+// These events mark a turn's start / end; everything else (sdk_event,
+// turn_heartbeat, system, …) leaves the open/closed state untouched.
+export const opensTurn = (e: SessionEvent): boolean =>
+  e.type === 'user_message' || e.type === 'turn_start'
+export const closesTurn = (e: SessionEvent): boolean =>
+  e.type === 'turn_complete' || e.type === 'turn_error'
+
+// Is a turn currently open? Look at the last start-or-end event — if it opened a
+// turn, that turn hasn't closed yet. findLast (not some) because order matters: a
+// completed history is full of turn_start events. Shared by the web indicator,
+// the runner's orphan reconcile, and the server's busy sweep so all three agree
+// on "is there a dangling open turn".
+export const isAgentWorking = (events: readonly SessionEvent[]): boolean => {
+  const last = events.findLast(e => opensTurn(e) || closesTurn(e))
+  return last ? opensTurn(last) : false
 }

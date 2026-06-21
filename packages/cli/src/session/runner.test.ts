@@ -190,7 +190,7 @@ describe('runTurn', () => {
 
 // EventSource stub that fires onopen on the next tick (after runDaemon assigns
 // the handler), driving the reconcile-on-connect path without a real stream.
-const openOnConnect = (): new (u: string) => EventSourceLike => {
+const openOnConnect = (): (new (u: string) => EventSourceLike) => {
   class FakeES {
     onmessage: ((e: { data: string }) => void) | null = null
     onerror: (() => void) | null = null
@@ -203,7 +203,41 @@ const openOnConnect = (): new (u: string) => EventSourceLike => {
       this.closed = true
     }
   }
-  return FakeES as unknown as new (u: string) => EventSourceLike
+  return FakeES as unknown as new (
+    u: string,
+  ) => EventSourceLike
+}
+
+// Like openOnConnect, but also exposes `emit` to push a live SSE event after the
+// daemon has subscribed — drives the interrupt path. `opened` resolves on onopen.
+const controllableES = (): {
+  ctor: new (u: string) => EventSourceLike
+  emit: (data: unknown) => void
+  opened: Promise<void>
+} => {
+  let inst: { onmessage: ((e: { data: string }) => void) | null } | null = null
+  let resolveOpened = (): void => {}
+  const opened = new Promise<void>(r => {
+    resolveOpened = r
+  })
+  class FakeES {
+    onmessage: ((e: { data: string }) => void) | null = null
+    onerror: (() => void) | null = null
+    onopen: (() => void) | null = null
+    constructor(public url: string) {
+      inst = this
+      setTimeout(() => {
+        this.onopen?.()
+        resolveOpened()
+      }, 0)
+    }
+    close(): void {}
+  }
+  return {
+    ctor: FakeES as unknown as new (u: string) => EventSourceLike,
+    emit: (data: unknown) => inst?.onmessage?.({ data: JSON.stringify(data) }),
+    opened,
+  }
 }
 
 describe('runDaemon reconcile-on-connect', () => {
@@ -220,7 +254,14 @@ describe('runDaemon reconcile-on-connect', () => {
     const calls: Array<{ type: string; payload: unknown }> = []
     // A stranded message: persisted, but no turn_start ever ran (the bug case).
     const events: SessionEvent[] = [
-      { id: 7, sessionId: 1, sequence: 0, type: 'user_message', payload: { text: 'stranded' }, createdAt: 0 },
+      {
+        id: 7,
+        sessionId: 1,
+        sequence: 0,
+        type: 'user_message',
+        payload: { text: 'stranded' },
+        createdAt: 0,
+      },
     ]
     const worker = {
       setActive: async () => ({}),
@@ -250,8 +291,22 @@ describe('runDaemon reconcile-on-connect', () => {
     const controller = new AbortController()
     const calls: Array<{ type: string }> = []
     const events: SessionEvent[] = [
-      { id: 7, sessionId: 1, sequence: 0, type: 'user_message', payload: { text: 'done' }, createdAt: 0 },
-      { id: 8, sessionId: 1, sequence: 1, type: 'turn_start', payload: { messageId: 7 }, createdAt: 0 },
+      {
+        id: 7,
+        sessionId: 1,
+        sequence: 0,
+        type: 'user_message',
+        payload: { text: 'done' },
+        createdAt: 0,
+      },
+      {
+        id: 8,
+        sessionId: 1,
+        sequence: 1,
+        type: 'turn_start',
+        payload: { messageId: 7 },
+        createdAt: 0,
+      },
       { id: 9, sessionId: 1, sequence: 2, type: 'turn_complete', payload: {}, createdAt: 0 },
     ]
     const worker = {
@@ -275,6 +330,108 @@ describe('runDaemon reconcile-on-connect', () => {
     )
 
     assert.deepEqual(calls, [])
+  })
+
+  test('heals an orphaned open turn (turn_start, no close) left by a prior child', async () => {
+    const controller = new AbortController()
+    const calls: Array<{ type: string; payload: unknown }> = []
+    // A dangling open turn: turn_start with no trailing close (prior child died).
+    const events: SessionEvent[] = [
+      {
+        id: 7,
+        sessionId: 1,
+        sequence: 0,
+        type: 'user_message',
+        payload: { text: 'x' },
+        createdAt: 0,
+      },
+      {
+        id: 8,
+        sessionId: 1,
+        sequence: 1,
+        type: 'turn_start',
+        payload: { messageId: 7 },
+        createdAt: 0,
+      },
+    ]
+    const worker = {
+      setActive: async () => ({}),
+      listEvents: async () => events,
+      emitEvent: async (type: string, payload: unknown) => {
+        calls.push({ type, payload })
+        if (type === 'turn_error') controller.abort() // exit once healed
+        return {} as never
+      },
+    } as unknown as WorkerClient
+    const qf: QueryFn = () => {
+      throw new Error('should not run a turn for an orphaned open turn')
+    }
+
+    await runDaemon(
+      cfg,
+      { worker, queryFn: qf, eventSourceImpl: openOnConnect(), log: () => {} },
+      controller.signal,
+    )
+
+    assert.deepEqual(
+      calls.map(c => c.type),
+      ['turn_error'],
+    )
+    assert.equal((calls[0]?.payload as { synthetic?: boolean }).synthetic, true)
+  })
+
+  test('interrupt with no live turn closes a later-orphaned open turn', async () => {
+    const controller = new AbortController()
+    const calls: Array<{ type: string; payload: unknown }> = []
+    // Empty at connect (reconcile heals nothing); the orphan appears afterwards.
+    let phase = 0
+    const orphan: SessionEvent[] = [
+      {
+        id: 7,
+        sessionId: 1,
+        sequence: 0,
+        type: 'user_message',
+        payload: { text: 'x' },
+        createdAt: 0,
+      },
+      {
+        id: 8,
+        sessionId: 1,
+        sequence: 1,
+        type: 'turn_start',
+        payload: { messageId: 7 },
+        createdAt: 0,
+      },
+    ]
+    const worker = {
+      setActive: async () => ({}),
+      listEvents: async () => (phase === 0 ? [] : orphan),
+      emitEvent: async (type: string, payload: unknown) => {
+        calls.push({ type, payload })
+        if (type === 'turn_error') controller.abort()
+        return {} as never
+      },
+    } as unknown as WorkerClient
+    const qf: QueryFn = () => {
+      throw new Error('should not run a turn')
+    }
+    const es = controllableES()
+    const run = runDaemon(
+      cfg,
+      { worker, queryFn: qf, eventSourceImpl: es.ctor, log: () => {} },
+      controller.signal,
+    )
+    await es.opened
+    await new Promise(r => setTimeout(r, 10)) // let the connect-time reconcile settle (no heal)
+    phase = 1
+    es.emit({ id: 9, sessionId: 1, sequence: 2, type: 'system', payload: { action: 'interrupt' } })
+    await run
+
+    assert.deepEqual(
+      calls.map(c => c.type),
+      ['turn_error'],
+    )
+    assert.equal((calls[0]?.payload as { synthetic?: boolean }).synthetic, true)
   })
 })
 
