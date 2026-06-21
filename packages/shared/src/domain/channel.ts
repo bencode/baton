@@ -18,6 +18,11 @@ export type Channel = {
   createdAt: number
 }
 
+// A channel as listed for a workspace member. Carries the capability `token` so a
+// member can open the room directly — workspace membership authorizes full access
+// (the bridge between the gated list and the open id+token participation layer).
+export type ChannelListItem = Channel & { token: string }
+
 // One-call orientation for a newcomer: the channel's self-description + who is
 // currently online + a pointer to the global protocol help. Returned by
 // GET /channels/:id.

@@ -97,7 +97,7 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     assert.equal((await postJson(app, '/workspaces', { name: 'z' }, as(alice.token))).status, 403)
   })
 
-  test('POST /workspaces/:id/channels: member creates (201 + token), non-member 404', async () => {
+  test('workspace channels: member creates + lists (with token), non-member 404', async () => {
     const app = createApp(ctx.store)
     const a = await seedWorkspace('wsCh1')
     const b = await seedWorkspace('wsCh2')
@@ -117,6 +117,22 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     assert.ok(created.channelId && created.token)
     assert.equal(created.help, '/channels/help')
     assert.equal((await ctx.store.channels.get(created.channelId))?.workspaceId, a.ws.id)
+
+    // The member lists the workspace's rooms — WITH the token, so they can reopen.
+    const listed = (await (
+      await app.request(`/workspaces/${a.ws.id}/channels`, { headers: as(alice.token) })
+    ).json()) as { id: string; title?: string; token: string }[]
+    assert.deepEqual(
+      listed.map(c => c.id),
+      [created.channelId],
+    )
+    assert.equal(listed[0]?.token, created.token)
+    assert.equal(listed[0]?.title, 'sync')
+    // A non-member can't list another workspace's rooms: 404.
+    assert.equal(
+      (await app.request(`/workspaces/${b.ws.id}/channels`, { headers: as(alice.token) })).status,
+      404,
+    )
 
     // Non-member can't inject a channel into someone else's workspace: 404 (no leak).
     assert.equal(

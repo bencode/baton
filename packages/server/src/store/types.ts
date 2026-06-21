@@ -2,6 +2,7 @@ import type {
   AgentKind,
   Attachment,
   Channel,
+  ChannelListItem,
   ChannelMessage,
   Code,
   Id,
@@ -162,6 +163,9 @@ export type Store = {
     // create is the one place the token is returned (it's the capability); the
     // Channel view never carries it.
     create(input: ChannelCreate): Promise<{ channel: Channel; token: string }>
+    // A workspace's rooms, newest first, each with its token (the caller is an
+    // authorized workspace member, so handing over the capability is intended).
+    listByWorkspace(workspaceId: Id): Promise<ChannelListItem[]>
     get(id: string): Promise<Channel | null>
     // Update room metadata (title / description). null if the channel is gone.
     update(id: string, patch: ChannelPatch): Promise<Channel | null>

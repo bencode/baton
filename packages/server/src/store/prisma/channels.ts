@@ -15,6 +15,12 @@ export const prismaChannels = (prisma: PrismaClient): Store['channels'] => ({
     })
     return { channel: toChannel(r), token: r.token }
   },
+  // A workspace's rooms, newest first, each carrying its token (members are
+  // authorized — see GET /workspaces/:id/channels).
+  listByWorkspace: async workspaceId =>
+    (await prisma.channel.findMany({ where: { workspaceId }, orderBy: { createdAt: 'desc' } })).map(
+      r => ({ ...toChannel(r), token: r.token }),
+    ),
   get: async id => {
     const r = await prisma.channel.findUnique({ where: { id } })
     return r ? toChannel(r) : null
