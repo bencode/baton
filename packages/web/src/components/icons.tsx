@@ -52,6 +52,23 @@ export const MenuIcon = () => (
   </svg>
 )
 
+// Horizontal "⋯" — a more-actions affordance. Filled dots (not stroked) so it
+// reads as a kebab menu; inherits color via fill=currentColor.
+export const MoreIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="13"
+    height="13"
+    fill="currentColor"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <circle cx="3.5" cy="8" r="1.3" />
+    <circle cx="8" cy="8" r="1.3" />
+    <circle cx="12.5" cy="8" r="1.3" />
+  </svg>
+)
+
 export const LogoutIcon = () => (
   <svg
     viewBox="0 0 16 16"
