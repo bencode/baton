@@ -1,25 +1,22 @@
-import { randomBytes } from 'node:crypto'
 import type { PrismaClient } from '@prisma/client'
 import { toChannel, toChannelMessage } from '../mappers.ts'
 import type { Store } from '../types.ts'
 
 export const prismaChannels = (prisma: PrismaClient): Store['channels'] => ({
-  create: async input => {
-    const r = await prisma.channel.create({
-      data: {
-        workspaceId: input.workspaceId,
-        token: randomBytes(32).toString('hex'),
-        title: input.title ?? null,
-        description: input.description ?? null,
-      },
-    })
-    return { channel: toChannel(r), token: r.token }
-  },
-  // A workspace's rooms, newest first, each carrying its token (members are
-  // authorized — see GET /workspaces/:id/channels).
+  create: async input =>
+    toChannel(
+      await prisma.channel.create({
+        data: {
+          workspaceId: input.workspaceId,
+          title: input.title ?? null,
+          description: input.description ?? null,
+        },
+      }),
+    ),
+  // A workspace's rooms, newest first (membership-gated at the route).
   listByWorkspace: async workspaceId =>
     (await prisma.channel.findMany({ where: { workspaceId }, orderBy: { createdAt: 'desc' } })).map(
-      r => ({ ...toChannel(r), token: r.token }),
+      toChannel,
     ),
   get: async id => {
     const r = await prisma.channel.findUnique({ where: { id } })
@@ -39,12 +36,8 @@ export const prismaChannels = (prisma: PrismaClient): Store['channels'] => ({
     const r = await prisma.channel.findUnique({ where: { id } })
     return r ? toChannel(r) : null
   },
-  // Resolve existence (unknown) and token match (ok/forbidden) in one read.
-  auth: async (id, token) => {
-    const r = await prisma.channel.findUnique({ where: { id }, select: { token: true } })
-    if (!r) return 'unknown'
-    return r.token === token ? 'ok' : 'forbidden'
-  },
+  // Existence = authorization: the channel uuid IS the participation capability.
+  exists: async id => !!(await prisma.channel.findUnique({ where: { id }, select: { id: true } })),
   // Append with the next per-channel seq. The read-then-insert runs in a tx so
   // concurrent senders can't collide on the (channelId, seq) unique key — the
   // same guard as sessions.appendEvent. seq is 1-based (relay-compatible).

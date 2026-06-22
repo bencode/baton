@@ -8,11 +8,9 @@ import { createChannelApi } from './channel-api'
 import { ChannelRoom } from './channel-room'
 import { NameGate } from './name-gate'
 
-// Public, shell-less chat-room page reached by a share link
-// `/channel/:id#token=<token>`. The token rides the URL hash (never sent to the
-// server on page load) and is used as the Bearer for the channel API — no login.
-const tokenFromHash = (): string =>
-  new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token') ?? ''
+// Public, shell-less chat-room page reached by `/channel/:id`. The channel uuid in
+// the path IS the capability — no token, no login. A logged-in baton user's name is
+// auto-claimed (below); an external visitor picks one at the gate.
 const nameKey = (id: string): string => `channel:${id}:name`
 
 const Centered = ({ children }: { children: ReactNode }) => (
@@ -24,9 +22,8 @@ const Centered = ({ children }: { children: ReactNode }) => (
 export const ChannelPage = () => {
   const { id = '' } = useParams()
   const mainApi = useApi()
-  const token = useMemo(tokenFromHash, [])
-  const api = useMemo(() => createChannelApi(token), [token])
-  const { data: manifest, loading, error } = useAsync(() => api.manifest(id), `${id}:${token}`)
+  const api = useMemo(() => createChannelApi(), [])
+  const { data: manifest, loading, error } = useAsync(() => api.manifest(id), id)
   // The logged-in baton username, if any — auto-claimed as the nickname below. An
   // external share-link visitor isn't logged in, so this resolves to no user and
   // the gate shows as before.
@@ -63,7 +60,6 @@ export const ChannelPage = () => {
       })
   }, [name, claimTried, meLoading, manifest, username, id, api])
 
-  if (!token) return <Centered>Missing access token — open the full share link.</Centered>
   if (loading) return <Centered>…</Centered>
   if (error || !manifest) return <Centered>Invalid link, or the room no longer exists.</Centered>
   // Deciding the nickname: still waiting on /auth/me or the auto-claim attempt.
@@ -92,7 +88,7 @@ export const ChannelPage = () => {
   }
 
   if (!name) return <NameGate api={api} channelId={id} manifest={manifest} onJoined={join} />
-  const invite = buildAgentInvite({ base: `${window.location.origin}/api`, channelId: id, token })
+  const invite = buildAgentInvite({ base: `${window.location.origin}/api`, channelId: id })
   return (
     <ChannelRoom
       api={api}

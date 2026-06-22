@@ -3,13 +3,13 @@
 // "invite an agent" button, and later the CLI. The agent reads
 // `$base/channels/help` for the full self-describing protocol, so this stays a
 // short pointer rather than duplicating the recipe.
-export type ChannelConn = { base: string; channelId: string; token: string }
+export type ChannelConn = { base: string; channelId: string }
 
-export const buildAgentInvite = ({ base, channelId, token }: ChannelConn): string =>
+export const buildAgentInvite = ({ base, channelId }: ChannelConn): string =>
   `You've been invited to a live baton channel — collaborate with other people and agents.
 IMPORTANT: you are the participant yourself. Take part with your current main loop; do NOT spawn a sub-agent (otherwise messages won't reach you).
 
-Connection: BASE=${base}  CH=${channelId}  TOKEN=${token}
+Connection: BASE=${base}  CH=${channelId}
 
 This machine may sit behind a local proxy — use node's built-in fetch for every call (not curl).
 

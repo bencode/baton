@@ -7,7 +7,7 @@ import { readUntil } from './test-helpers.ts'
 // SSE needs a real socket (incremental body reads + live push), so these run over
 // startServer rather than app.request. Non-streaming channel HTTP lives in
 // channels.test.ts.
-type Channel = { channelId: string; token: string }
+type Channel = { channelId: string }
 
 describe('server SSE — channel stream', () => {
   let ctx: TestStore
@@ -18,7 +18,7 @@ describe('server SSE — channel stream', () => {
     await ctx.cleanup()
   })
 
-  test('bad token rejected; two subscribers replay history, then both get live', async () => {
+  test('unknown channel 404s; two subscribers replay history, then both get live', async () => {
     const server = await startServer({ store: ctx.store, port: 0 })
     try {
       const base = `http://localhost:${server.port}`
@@ -30,20 +30,19 @@ describe('server SSE — channel stream', () => {
         })
       const ws = await ctx.store.workspaces.create({ name: 'ws' })
       const made = await ctx.store.channels.create({ workspaceId: ws.id })
-      const ch: Channel = { channelId: made.channel.id, token: made.token }
-      const auth = { authorization: `Bearer ${ch.token}` }
+      const ch: Channel = { channelId: made.id }
       const msgs = `/channels/${ch.channelId}/messages`
-      await post(msgs, { from: 'bob', text: 'hello all' }, auth) // seq 1, broadcast
-      await post(msgs, { from: 'carol', text: 'psst', to: ['alice'] }, auth) // seq 2
+      await post(msgs, { from: 'bob', text: 'hello all' }) // seq 1, broadcast
+      await post(msgs, { from: 'carol', text: 'psst', to: ['alice'] }) // seq 2
 
-      // Bad token is rejected before any streaming happens.
+      // An unknown channel id is rejected before any streaming happens.
       assert.equal(
         (
-          await fetch(`${base}/channels/${ch.channelId}/stream`, {
-            headers: { authorization: 'Bearer nope', accept: 'text/event-stream' },
+          await fetch(`${base}/channels/nope-id/stream`, {
+            headers: { accept: 'text/event-stream' },
           })
         ).status,
-        401,
+        404,
       )
 
       // Two subscribers both replay 'psst' (seq>1), then both receive a live message.
@@ -52,7 +51,7 @@ describe('server SSE — channel stream', () => {
         const open = () =>
           fetch(`${base}/channels/${ch.channelId}/stream?since=1`, {
             signal: ctl.signal,
-            headers: { ...auth, accept: 'text/event-stream' },
+            headers: { accept: 'text/event-stream' },
           })
         const [r1, r2] = await Promise.all([open(), open()])
         assert.equal(r1.status, 200)
@@ -62,7 +61,7 @@ describe('server SSE — channel stream', () => {
         assert.ok(rd1 && rd2)
         assert.match(await readUntil(rd1, 1, 1500), /"text":"psst"/)
         assert.match(await readUntil(rd2, 1, 1500), /"text":"psst"/)
-        await post(msgs, { from: 'bob', text: 'live' }, auth)
+        await post(msgs, { from: 'bob', text: 'live' })
         assert.match(await readUntil(rd1, 2, 1500), /"text":"live"/)
         assert.match(await readUntil(rd2, 2, 1500), /"text":"live"/)
       } finally {
@@ -73,27 +72,23 @@ describe('server SSE — channel stream', () => {
     }
   })
 
-  test('?token= query authorizes the stream (browser EventSource has no header)', async () => {
+  test('the stream opens by id alone (browser EventSource has no header)', async () => {
     const server = await startServer({ store: ctx.store, port: 0 })
     try {
       const base = `http://localhost:${server.port}`
       const ws = await ctx.store.workspaces.create({ name: 'ws' })
       const made = await ctx.store.channels.create({ workspaceId: ws.id })
-      const ch: Channel = { channelId: made.channel.id, token: made.token }
-      const evt = { accept: 'text/event-stream' } // note: NO Authorization header
-      // Wrong token in the query → still 401.
-      assert.equal(
-        (await fetch(`${base}/channels/${ch.channelId}/stream?token=nope`, { headers: evt }))
-          .status,
-        401,
-      )
-      // Correct token in the query → 200, the stream opens.
+      const ch: Channel = { channelId: made.id }
+      const evt = { accept: 'text/event-stream' } // EventSource sets no Authorization header
+      // An unknown channel id → 404.
+      assert.equal((await fetch(`${base}/channels/nope-id/stream`, { headers: evt })).status, 404)
+      // A real channel id → 200, the stream opens (no token needed).
       const ctl = new AbortController()
       try {
-        const res = await fetch(
-          `${base}/channels/${ch.channelId}/stream?token=${ch.token}&as=web&kind=human`,
-          { signal: ctl.signal, headers: evt },
-        )
+        const res = await fetch(`${base}/channels/${ch.channelId}/stream?as=web&kind=human`, {
+          signal: ctl.signal,
+          headers: evt,
+        })
         assert.equal(res.status, 200)
       } finally {
         ctl.abort()

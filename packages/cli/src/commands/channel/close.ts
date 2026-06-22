@@ -8,11 +8,10 @@ export const closeCommand = defineCommand({
   meta: { name: 'close', description: 'delete a channel (removes the room and all its messages)' },
   args: {
     channel: { type: 'positional', required: true, description: 'channel id' },
-    token: { type: 'string', required: true, description: 'channel token' },
     ...common,
   },
   run: async ({ args }) => {
-    await channelClient(resolveBaseUrl(args.url)).destroy(args.channel, args.token)
+    await channelClient(resolveBaseUrl(args.url)).destroy(args.channel)
     console.log(args.json ? toJson({ ok: true, deleted: args.channel }) : `closed ${args.channel}`)
   },
 })

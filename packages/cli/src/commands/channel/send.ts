@@ -15,11 +15,16 @@ export const sendCommand = defineCommand({
   args: {
     channel: { type: 'positional', required: true, description: 'channel id' },
     text: { type: 'positional', required: false, description: 'message text (short one-liner)' },
-    token: { type: 'string', required: true, description: 'channel token' },
     from: { type: 'string', description: 'your participant name (default: peer)' },
-    to: { type: 'string', description: 'direct it at these names (comma-separated); omit = broadcast' },
+    to: {
+      type: 'string',
+      description: 'direct it at these names (comma-separated); omit = broadcast',
+    },
     file: { type: 'string', description: 'read message body from this file (for large content)' },
-    attach: { type: 'string', description: 'attach file(s) (comma-separated paths); uploaded + carried on the message' },
+    attach: {
+      type: 'string',
+      description: 'attach file(s) (comma-separated paths); uploaded + carried on the message',
+    },
     ...common,
   },
   run: async ({ args }) => {
@@ -34,7 +39,7 @@ export const sendCommand = defineCommand({
     const attachments: Attachment[] = []
     for (const path of attachPaths(args.attach)) {
       attachments.push(
-        await client.uploadAttachment(args.channel, args.token, {
+        await client.uploadAttachment(args.channel, {
           filename: basename(path),
           contentType: contentTypeForPath(path),
           body: await openAsBlob(path, { type: contentTypeForPath(path) }),
@@ -42,8 +47,10 @@ export const sendCommand = defineCommand({
       )
     }
     if (!text && attachments.length === 0)
-      throw new Error('nothing to send: provide text, --file <path>, --attach <file>, or pipe stdin')
-    const msg = await client.send(args.channel, args.token, {
+      throw new Error(
+        'nothing to send: provide text, --file <path>, --attach <file>, or pipe stdin',
+      )
+    const msg = await client.send(args.channel, {
       from: args.from ?? 'peer',
       text: text ?? '',
       to: splitCsv(args.to),

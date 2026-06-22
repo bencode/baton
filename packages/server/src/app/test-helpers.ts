@@ -16,10 +16,10 @@ export const postJson = (
     headers: { 'content-type': 'application/json', ...headers },
   })
 
-// Open a channel and return its id, token, and a ready bearer-auth header — most
-// channel tests start here. Channels now belong to a workspace, so this seeds a
-// fresh one (unique name via a counter) and creates the room under it.
-export type ChannelHandle = { channelId: string; token: string; auth: Record<string, string> }
+// Open a channel and return its id (the channel uuid is the capability — no token).
+// `auth` stays as an empty headers object for call-site convenience. Channels belong
+// to a workspace, so this seeds a fresh one (unique name via a counter) first.
+export type ChannelHandle = { channelId: string; auth: Record<string, string> }
 let chanWsSeq = 0
 export const createChannel = async (
   app: ReturnType<typeof createApp>,
@@ -30,9 +30,8 @@ export const createChannel = async (
   ).json()) as WithId
   const ch = (await (await postJson(app, `/workspaces/${w.id}/channels`, body)).json()) as {
     channelId: string
-    token: string
   }
-  return { ...ch, auth: { authorization: `Bearer ${ch.token}` } }
+  return { channelId: ch.channelId, auth: {} }
 }
 
 // Drain an SSE reader until `n` `data:` frames are seen or `ms` elapses; returns

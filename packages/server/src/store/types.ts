@@ -2,7 +2,6 @@ import type {
   AgentKind,
   Attachment,
   Channel,
-  ChannelListItem,
   ChannelMessage,
   Code,
   Id,
@@ -66,7 +65,7 @@ export type TaskPatch = Partial<{
 export type TaskCommentCreate = { taskId: Id; body: string; workerId?: Id }
 
 // Channels belong to a Workspace (creation/listing gated by membership); the
-// id + token remain the participation capability (no account needed to join).
+// channel uuid itself is the participation capability (no token, no account).
 export type ChannelCreate = { workspaceId: Id; title?: string; description?: string }
 export type ChannelPatch = Partial<{ title: string; description: string }>
 export type ChannelMessageCreate = {
@@ -76,8 +75,7 @@ export type ChannelMessageCreate = {
   to?: string[]
   attachments?: Attachment[]
 }
-// Token check verdict — same shape as the old relay auth (404 vs 401 distinction).
-export type ChannelAuthVerdict = 'ok' | 'unknown' | 'forbidden'
+// (No channel auth verdict type — participation is existence-only; the uuid is the capability.)
 
 export type RequirementWithTasks = { requirement: Requirement; tasks: Task[] }
 
@@ -155,21 +153,18 @@ export type Store = {
     create(input: TaskCommentCreate): Promise<TaskComment>
     listByTask(taskId: Id): Promise<TaskComment[]>
   }
-  // N-party chat rooms. `auth` checks a Bearer token against the channel (the
-  // capability), separate from `get` so the token never leaks into the view.
-  // appendMessage assigns the next per-channel seq atomically (tx); `since` is
-  // the replay/poll source (strictly after `seq`, ascending, capped).
+  // N-party chat rooms. Participation auth is existence-only: the channel uuid IS
+  // the capability (`exists`), so there is no token. appendMessage assigns the next
+  // per-channel seq atomically (tx); `since` is the replay/poll source.
   channels: {
-    // create is the one place the token is returned (it's the capability); the
-    // Channel view never carries it.
-    create(input: ChannelCreate): Promise<{ channel: Channel; token: string }>
-    // A workspace's rooms, newest first, each with its token (the caller is an
-    // authorized workspace member, so handing over the capability is intended).
-    listByWorkspace(workspaceId: Id): Promise<ChannelListItem[]>
+    create(input: ChannelCreate): Promise<Channel>
+    // A workspace's rooms, newest first (membership-gated at the route).
+    listByWorkspace(workspaceId: Id): Promise<Channel[]>
     get(id: string): Promise<Channel | null>
     // Update room metadata (title / description). null if the channel is gone.
     update(id: string, patch: ChannelPatch): Promise<Channel | null>
-    auth(id: string, token: string): Promise<ChannelAuthVerdict>
+    // Does this channel exist? (existence = authorization for the id-only API.)
+    exists(id: string): Promise<boolean>
     appendMessage(channelId: string, input: ChannelMessageCreate): Promise<ChannelMessage>
     since(channelId: string, seq: number, limit?: number): Promise<ChannelMessage[]>
     // DELETE the row. Messages cascade away with it (FK onDelete: Cascade).

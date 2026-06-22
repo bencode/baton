@@ -17,7 +17,6 @@ export const readCommand = defineCommand({
   meta: { name: 'read', description: 'poll channel messages once (curl-style, since a cursor)' },
   args: {
     channel: { type: 'positional', required: true, description: 'channel id' },
-    token: { type: 'string', required: true, description: 'channel token' },
     since: { type: 'string', description: 'only messages after this seq (default 0)' },
     from: { type: 'string', description: 'skip messages from this name (no echo)' },
     for: { type: 'string', description: 'only broadcasts + messages addressed to this name' },
@@ -25,7 +24,7 @@ export const readCommand = defineCommand({
   },
   run: async ({ args }) => {
     const url = resolveBaseUrl(args.url)
-    const msgs = await channelClient(url).read(args.channel, args.token, {
+    const msgs = await channelClient(url).read(args.channel, {
       since: args.since ? Number(args.since) : 0,
       for: args.for,
     })

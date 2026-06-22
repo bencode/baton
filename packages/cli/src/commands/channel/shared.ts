@@ -14,25 +14,25 @@ export const renderRoster = (members: ChannelMember[]): string =>
   members.length ? members.map(m => `  ${m.name} (${m.kind})`).join('\n') : '  (nobody online)'
 
 // Web chat-room link for humans: the API base minus its `/api` mount → the SPA
-// origin, with the token in the URL hash. Returns null for a bare host (dev), which
-// has no web UI alongside.
-const webLink = (url: string, channelId: string, token: string): string | null => {
+// origin + /channel/:id. Returns null for a bare host (dev), which has no web UI.
+const webLink = (url: string, channelId: string): string | null => {
   const origin = url.replace(/\/api\/?$/, '')
-  return origin === url ? null : `${origin}/channel/${channelId}#token=${token}`
+  return origin === url ? null : `${origin}/channel/${channelId}`
 }
 
 // Ready-to-share invite. Humans get a one-click web link; agents get the two
-// self-describing curls (the channel documents itself). No big pasted guide.
-export const inviteBlock = (url: string, channelId: string, token: string): string => {
-  const web = webLink(url, channelId, token)
+// self-describing curls (the channel documents itself). The channel id IS the
+// capability — no token to pass.
+export const inviteBlock = (url: string, channelId: string): string => {
+  const web = webLink(url, channelId)
   return [
     '── Share this to invite anyone into the room ─────────────────────',
     ...(web ? [`Humans — open in a browser:  ${web}`, ''] : []),
     'Agents — two curl steps:',
-    `  1) see the room:  curl -sS -H "authorization: Bearer ${token}" "${url}/channels/${channelId}"`,
+    `  1) see the room:  curl -sS "${url}/channels/${channelId}"`,
     `  2) read protocol: curl -sS "${url}/channels/help"  (then join / listen / send, pick your own NAME)`,
     '',
-    `connection: url=${url} channel=${channelId} token=${token}`,
+    `connection: url=${url} channel=${channelId}`,
     '──────────────────────────────────────────────────────────────────',
   ].join('\n')
 }

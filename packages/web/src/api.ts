@@ -1,7 +1,7 @@
 import type {
   AdminOverview,
   Attachment,
-  ChannelListItem,
+  Channel,
   Code,
   Id,
   Project,
@@ -90,14 +90,14 @@ export type Api = {
     update(id: Id, patch: { name?: string; description?: string }): Promise<Project>
     remove(id: Id): Promise<void>
   }
-  // Workspace-scoped chat rooms (membership-gated). The list carries each room's
-  // token so a member can open it; create returns the new room's id + token.
+  // Workspace-scoped chat rooms (membership-gated). A member opens any room by its
+  // id (the channel uuid is the participation capability — no token).
   channels: {
-    listByWorkspace(workspaceId: Id): Promise<ChannelListItem[]>
+    listByWorkspace(workspaceId: Id): Promise<Channel[]>
     create(
       workspaceId: Id,
       input?: { title?: string; description?: string },
-    ): Promise<{ channelId: string; token: string; help: string }>
+    ): Promise<{ channelId: string; help: string }>
   }
   requirements: {
     create(input: RequirementInput): Promise<Requirement>

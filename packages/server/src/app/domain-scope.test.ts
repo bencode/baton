@@ -105,7 +105,7 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     const root = await seedUser('root', true)
     await ctx.store.users.bindWorkspace(alice.id, a.ws.id)
 
-    // Bound member: 201 with a fresh capability token; the room belongs to ws1.
+    // Bound member: 201; the room belongs to ws1 (the channelId is the capability).
     const ok = await postJson(
       app,
       `/workspaces/${a.ws.id}/channels`,
@@ -113,20 +113,19 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
       as(alice.token),
     )
     assert.equal(ok.status, 201)
-    const created = (await ok.json()) as { channelId: string; token: string; help: string }
-    assert.ok(created.channelId && created.token)
+    const created = (await ok.json()) as { channelId: string; help: string }
+    assert.ok(created.channelId)
     assert.equal(created.help, '/channels/help')
     assert.equal((await ctx.store.channels.get(created.channelId))?.workspaceId, a.ws.id)
 
-    // The member lists the workspace's rooms — WITH the token, so they can reopen.
+    // The member lists the workspace's rooms (opened by id — no token in the view).
     const listed = (await (
       await app.request(`/workspaces/${a.ws.id}/channels`, { headers: as(alice.token) })
-    ).json()) as { id: string; title?: string; token: string }[]
+    ).json()) as { id: string; title?: string }[]
     assert.deepEqual(
       listed.map(c => c.id),
       [created.channelId],
     )
-    assert.equal(listed[0]?.token, created.token)
     assert.equal(listed[0]?.title, 'sync')
     // A non-member can't list another workspace's rooms: 404.
     assert.equal(

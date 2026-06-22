@@ -25,19 +25,17 @@ export const createCommand = defineCommand({
   run: async ({ args }) => {
     const url = resolveBaseUrl(args.url)
     const workspaceId = resolveWorkspaceId(args)
-    const { channelId, token } = await channelClient(url).create(
+    const { channelId } = await channelClient(url).create(
       workspaceId,
       args.name,
       args.desc,
       resolveBearer(),
     )
     if (args.json) {
-      console.log(
-        toJson({ channelId, token, url, workspaceId, name: args.name, description: args.desc }),
-      )
+      console.log(toJson({ channelId, url, workspaceId, name: args.name, description: args.desc }))
       return
     }
     console.log(`channel ${channelId} opened in workspace ${workspaceId}\n`)
-    console.log(inviteBlock(url, channelId, token))
+    console.log(inviteBlock(url, channelId))
   },
 })

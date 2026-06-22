@@ -22,21 +22,17 @@ describe('server HTTP — channel room', () => {
     await ctx.cleanup()
   })
 
-  test('auth gating: bearer token + required fields', async () => {
+  test('id-gating: an existing channel needs no token; unknown id 404s; body required', async () => {
     const app = createApp(ctx.store)
-    const { channelId, auth } = await createChannel(app)
+    const { channelId } = await createChannel(app)
     const msgs = `/channels/${channelId}/messages`
-    assert.equal((await postJson(app, msgs, { text: 'x' })).status, 401) // no token
-    assert.equal(
-      (await postJson(app, msgs, { text: 'x' }, { authorization: 'Bearer nope' })).status,
-      401,
-    )
-    assert.equal(
-      (await postJson(app, '/channels/missing/messages', { text: 'x' }, auth)).status,
-      404,
-    )
-    assert.equal((await postJson(app, msgs, {}, auth)).status, 400) // missing text
-    assert.equal((await app.request(`/channels/${channelId}/members`)).status, 401) // no token
+    // A real channel is reachable by id alone (no token) — just needs a body.
+    assert.equal((await postJson(app, msgs, { from: 'a', text: 'x' })).status, 201)
+    assert.equal((await postJson(app, msgs, {})).status, 400) // missing text + attachments
+    assert.equal((await app.request(`/channels/${channelId}/members`)).status, 200)
+    // An unknown channel id is 404 (the id is the capability — no such room).
+    assert.equal((await postJson(app, '/channels/missing/messages', { text: 'x' })).status, 404)
+    assert.equal((await app.request('/channels/missing/members')).status, 404)
   })
 
   test('messages: addressing (?for) + poll (since)', async () => {
@@ -128,23 +124,21 @@ describe('server HTTP — channel room', () => {
     assert.equal((await member('PUT')).status, 200) // reclaimable
   })
 
-  test('DELETE /channels/:id: token-gated, removes the room', async () => {
+  test('DELETE /channels/:id: id-gated, removes the room', async () => {
     const app = createApp(ctx.store)
-    const { channelId, auth } = await createChannel(app)
-    await postJson(app, `/channels/${channelId}/messages`, { from: 'a', text: 'x' }, auth)
-    const del = (headers: Record<string, string>) =>
-      app.request(`/channels/${channelId}`, { method: 'DELETE', headers })
+    const { channelId } = await createChannel(app)
+    await postJson(app, `/channels/${channelId}/messages`, { from: 'a', text: 'x' })
+    const del = () => app.request(`/channels/${channelId}`, { method: 'DELETE' })
 
-    assert.equal((await del({ authorization: 'Bearer nope' })).status, 401) // bad token can't delete
-    assert.equal((await del(auth)).status, 204) // deleted
+    assert.equal((await del()).status, 204) // deleted (the id alone is the capability)
     // Gone: a follow-up GET 404s, and a double-delete 404s (guard rejects first).
-    assert.equal((await app.request(`/channels/${channelId}`, { headers: auth })).status, 404)
-    assert.equal((await del(auth)).status, 404)
+    assert.equal((await app.request(`/channels/${channelId}`)).status, 404)
+    assert.equal((await del()).status, 404)
   })
 
-  test('self-describing: manifest (token-gated) + /channels/help (no auth)', async () => {
+  test('self-describing: manifest (id-gated) + /channels/help (no auth)', async () => {
     const app = createApp(ctx.store)
-    // Protocol help: reachable with NO token (a fresh invitee can read it).
+    // Protocol help: reachable with NO auth (a fresh invitee can read it).
     const help = await app.request('/channels/help')
     assert.equal(help.status, 200)
     assert.match(help.headers.get('content-type') ?? '', /text\/markdown/)
@@ -157,21 +151,20 @@ describe('server HTTP — channel room', () => {
         title: 'sync',
         description: 'where alice + bob plan',
       })
-    ).json()) as { channelId: string; token: string; help: string }
+    ).json()) as { channelId: string; help: string }
     assert.equal(created.help, '/channels/help')
-    const auth = { authorization: `Bearer ${created.token}` }
 
-    assert.equal((await app.request(`/channels/${created.channelId}`)).status, 401) // manifest token-gated
+    // The manifest is reachable by id alone; an unknown id 404s.
+    assert.equal((await app.request(`/channels/${created.channelId}`)).status, 200)
+    assert.equal((await app.request('/channels/nope-id')).status, 404)
 
     // Join, then the manifest reflects description + online roster + help.
     await app.request(`/channels/${created.channelId}/members/alice`, {
       method: 'PUT',
-      headers: { ...auth, ...JSON_CT },
+      headers: JSON_CT,
       body: JSON.stringify({ kind: 'human' }),
     })
-    const m = (await (
-      await app.request(`/channels/${created.channelId}`, { headers: auth })
-    ).json()) as {
+    const m = (await (await app.request(`/channels/${created.channelId}`)).json()) as {
       title?: string
       description?: string
       help: string
@@ -181,47 +174,43 @@ describe('server HTTP — channel room', () => {
     assert.equal(m.title, 'sync')
     assert.equal(m.description, 'where alice + bob plan')
     assert.equal(m.help, '/channels/help')
-    assert.equal(m.token, undefined) // never leak the token
+    assert.equal(m.token, undefined) // the view never carries a token
     assert.deepEqual(
       m.members.map(x => `${x.name}:${x.kind}`),
       ['alice:human'],
     )
   })
 
-  test('PATCH /channels/:id updates topic; token-gated; manifest reflects it', async () => {
+  test('PATCH /channels/:id updates topic (id-gated); manifest reflects it', async () => {
     const app = createApp(ctx.store)
-    const { channelId, auth } = await createChannel(app, { description: 'old rules' })
-    const patch = (body: unknown, headers: Record<string, string>) =>
+    const { channelId } = await createChannel(app, { description: 'old rules' })
+    const patch = (body: unknown) =>
       app.request(`/channels/${channelId}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
-        headers,
+        headers: JSON_CT,
       })
 
-    assert.equal((await patch({ description: 'x' }, JSON_CT)).status, 401) // no token
-    assert.equal(
-      (await patch({ description: 'x' }, { authorization: 'Bearer nope', ...JSON_CT })).status,
-      401,
-    )
+    // Unknown channel 404s; an empty patch 400s.
     assert.equal(
       (
         await app.request('/channels/missing-id', {
           method: 'PATCH',
           body: '{"description":"x"}',
-          headers: { ...auth, ...JSON_CT },
+          headers: JSON_CT,
         })
       ).status,
-      404, // unknown channel
+      404,
     )
-    assert.equal((await patch({}, { ...auth, ...JSON_CT })).status, 400) // empty patch
+    assert.equal((await patch({})).status, 400) // empty patch
 
-    const ok = await patch({ title: 'sync', description: 'new rules' }, { ...auth, ...JSON_CT })
+    const ok = await patch({ title: 'sync', description: 'new rules' })
     assert.equal(ok.status, 200)
     const updated = (await ok.json()) as { description?: string; token?: string }
     assert.equal(updated.description, 'new rules')
     assert.equal(updated.token, undefined)
 
-    const m = (await (await app.request(`/channels/${channelId}`, { headers: auth })).json()) as {
+    const m = (await (await app.request(`/channels/${channelId}`)).json()) as {
       title?: string
       description?: string
     }
@@ -229,7 +218,7 @@ describe('server HTTP — channel room', () => {
     assert.equal(m.description, 'new rules')
 
     // Updating only one field leaves the other untouched.
-    const t = (await (await patch({ title: 'renamed' }, { ...auth, ...JSON_CT })).json()) as {
+    const t = (await (await patch({ title: 'renamed' })).json()) as {
       title?: string
       description?: string
     }
@@ -239,20 +228,11 @@ describe('server HTTP — channel room', () => {
 
   test('history survives a restart (fresh app, same DB)', async () => {
     const app1 = createApp(ctx.store)
-    const { channelId, token } = await createChannel(app1, { title: 't' })
-    await postJson(
-      app1,
-      `/channels/${channelId}/messages`,
-      { from: 'a', text: 'persisted' },
-      {
-        authorization: `Bearer ${token}`,
-      },
-    )
+    const { channelId } = await createChannel(app1, { title: 't' })
+    await postJson(app1, `/channels/${channelId}/messages`, { from: 'a', text: 'persisted' })
     // "Restart": a brand-new app (fresh buses + presence) on the same store/DB.
     const app2 = createApp(ctx.store)
-    const res = await app2.request(`/channels/${channelId}/messages?since=0`, {
-      headers: { authorization: `Bearer ${token}` },
-    })
+    const res = await app2.request(`/channels/${channelId}/messages?since=0`)
     const body = (await res.json()) as { messages: { text: string }[] }
     assert.deepEqual(
       body.messages.map(m => m.text),
@@ -260,17 +240,17 @@ describe('server HTTP — channel room', () => {
     )
   })
 
-  test('attachments: upload → download (token-gated), cleaned on room delete', async () => {
+  test('attachments: upload → download by id (no token), cleaned on room delete', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'baton-chan-att-'))
     const attachments = createAttachmentStore(dir)
     const app = createApp(ctx.store, undefined, undefined, undefined, undefined, attachments)
-    const { channelId, auth } = await createChannel(app)
+    const { channelId } = await createChannel(app)
     const base = `/channels/${channelId}/attachments`
 
     // Upload: the raw body IS the file; filename rides ?filename.
     const up = await app.request(`${base}?filename=hi.txt`, {
       method: 'POST',
-      headers: { ...auth, 'content-type': 'text/plain' },
+      headers: { 'content-type': 'text/plain' },
       body: 'hello channel',
     })
     assert.equal(up.status, 201)
@@ -285,22 +265,19 @@ describe('server HTTP — channel room', () => {
     assert.equal(meta.filename, 'hi.txt')
     assert.equal(meta.url, `${base}/${meta.id}`)
     assert.equal(meta.size, Buffer.byteLength('hello channel'))
-    assert.equal(
-      (await app.request(`${base}?filename=x`, { method: 'POST', body: 'x' })).status,
-      401,
-    ) // upload token-gated
 
-    // Download: streams the bytes back, with the filename in content-disposition.
-    const dl = await app.request(meta.url, { headers: auth })
+    // Download by the bare url — no token (the channel id in the path is the key).
+    const dl = await app.request(meta.url)
     assert.equal(dl.status, 200)
     assert.match(dl.headers.get('content-disposition') ?? '', /hi\.txt/)
     assert.equal(await dl.text(), 'hello channel')
-    assert.equal((await app.request(meta.url)).status, 401) // download token-gated
-    assert.equal((await app.request(`${base}/missing`, { headers: auth })).status, 404)
+    assert.equal((await app.request(`${base}/missing`)).status, 404)
+    // An unknown channel id 404s (existence guard).
+    assert.equal((await app.request('/channels/nope/attachments/x')).status, 404)
 
     // Deleting the room cascade-cleans its blobs from disk.
     assert.notEqual(await attachments.get(channelId, meta.id), null) // present before
-    await app.request(`/channels/${channelId}`, { method: 'DELETE', headers: auth })
+    await app.request(`/channels/${channelId}`, { method: 'DELETE' })
     assert.equal(await attachments.get(channelId, meta.id), null) // forgotten after
     await rm(dir, { recursive: true, force: true })
   })

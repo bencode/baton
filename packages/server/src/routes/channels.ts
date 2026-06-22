@@ -15,15 +15,9 @@ import { CHANNEL_HELP } from './channel-help.ts'
 export const HELP_PATH = '/channels/help'
 
 // Channel: an N-party live chat room (the multi-agent evolution of the relay).
-// Self-authenticating via a per-channel capability token (no cookie/worker/project
-// coupling), so these routes register BEFORE the cookie gate. Messages persist
-// (store.channels); presence (who's online) is in-memory and ephemeral.
-
-// Bearer token from the Authorization header, or the `?token=` query param as a
-// fallback. The query form exists only for the browser EventSource (the web chat
-// UI), which cannot set custom headers; agents and fetch clients use the header.
-const bearer = (c: Context<AppEnv>): string | null =>
-  (c.req.header('authorization') ?? '').match(/^Bearer (.+)$/)?.[1] ?? c.req.query('token') ?? null
+// Participation auth is existence-only: the channel uuid IS the capability (no
+// token, no cookie/worker/project coupling), so these routes register BEFORE the
+// cookie gate. Messages persist (store.channels); presence is in-memory + ephemeral.
 
 const toInt = (raw: string | undefined, dflt: number): number => {
   const n = Number(raw)
@@ -66,16 +60,12 @@ export const registerChannelRoutes = (
   // behind the cookie gate). Everything below authenticates with the channel's own
   // capability token (id + token), the open participation layer.
 
-  // Resolve + authorize from the path id and Bearer token. Async: reads the DB.
-  // Returns a ready error Response on failure, or null to proceed.
-  const guard = async (c: Context<AppEnv>): Promise<Response | null> => {
-    const token = bearer(c)
-    if (!token) return c.json({ error: 'missing bearer token' }, 401)
-    const verdict = await store.channels.auth(c.req.param('id') ?? '', token)
-    if (verdict === 'unknown') return c.json({ error: 'channel not found' }, 404)
-    if (verdict === 'forbidden') return c.json({ error: 'bad channel token' }, 401)
-    return null
-  }
+  // Authorize from the path id alone — the channel uuid IS the capability. 404 if
+  // it doesn't exist; otherwise proceed. Async: reads the DB.
+  const guard = async (c: Context<AppEnv>): Promise<Response | null> =>
+    (await store.channels.exists(c.req.param('id') ?? ''))
+      ? null
+      : c.json({ error: 'channel not found' }, 404)
 
   // Room manifest — one-call orientation for a newcomer: self-description + who's
   // online + a pointer to the protocol help.
