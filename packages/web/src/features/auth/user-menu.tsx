@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
 import { ChevronDownIcon, LogoutIcon } from '../../components/icons'
 import { useAsync } from '../../hooks/use-async'
+import { AccountSettings } from './account-settings'
 
 // Header user menu: the signed-in username with a dropdown to log out. Fetches
 // /auth/me itself (one cheap row — no shared context). Renders nothing when auth
@@ -14,6 +15,7 @@ export const UserMenu = () => {
   const { data } = useAsync(() => api.auth.me(), 'user-menu-me')
   const user = data?.user ?? null
   const [open, setOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
 
   // Close on outside click / Escape while open.
@@ -97,6 +99,18 @@ export const UserMenu = () => {
           <button
             type="button"
             role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              setSettingsOpen(true)
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+          >
+            <span className="text-gray-400">⚙️</span>
+            账户设置
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             onClick={() => void logout()}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
           >
@@ -107,6 +121,7 @@ export const UserMenu = () => {
           </button>
         </div>
       )}
+      {settingsOpen && <AccountSettings onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }

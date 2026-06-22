@@ -73,8 +73,12 @@ export type Api = {
     logout(): Promise<void>
     // Resolves when access is allowed (authRequired:false when no users seeded, or
     // a valid cookie); throws 401 when auth is on and the caller isn't logged in.
-    me(): Promise<{ authRequired: boolean; user: User | null }>
+    me(): Promise<{ authRequired: boolean; user: User | null; hasToken: boolean }>
     shareLogin(token: string): Promise<{ session: Session }>
+    // Self-service account management (the logged-in user, in the web).
+    changePassword(oldPassword: string, newPassword: string): Promise<{ ok: boolean }>
+    // Mint/rotate the personal API token (your CLI/agent's BATON_TOKEN). Shown once.
+    mintToken(): Promise<{ token: string }>
   }
   workspaces: {
     create(input: WorkspaceInput): Promise<Workspace>
@@ -181,6 +185,9 @@ export const createApi = (base: string = API_BASE): Api => {
       logout: () => request(u('/auth/logout'), { method: 'POST' }),
       me: () => request(u('/auth/me'), { method: 'GET' }),
       shareLogin: token => request(u(`/auth/share/${token}`), { method: 'POST' }),
+      changePassword: (oldPassword, newPassword) =>
+        request(u('/auth/password'), { method: 'POST', body: { oldPassword, newPassword } }),
+      mintToken: () => request(u('/auth/token'), { method: 'POST' }),
     },
     workspaces: {
       create: input => request(u('/workspaces'), { method: 'POST', body: input }),
