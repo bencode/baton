@@ -1,7 +1,6 @@
 import type { Id } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { CommandBus } from '../command-bus.ts'
-import type { LivenessTracker } from '../liveness.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
 import { assertProjectAccess } from '../middleware/domain-scope.ts'
 import type { ProjectBus } from '../project-bus.ts'
@@ -13,7 +12,6 @@ import { type AppEnv, intParam, workerWithView } from '../views.ts'
 export const registerWorkerRoutes = (
   app: Hono<AppEnv>,
   store: Store,
-  liveness: LivenessTracker,
   commands: CommandBus,
   runtime: SessionRuntime,
   projects: ProjectBus,
@@ -55,8 +53,6 @@ export const registerWorkerRoutes = (
         409,
       )
     }
-    // First ping seeds liveness so the worker shows alive immediately.
-    liveness.ping(out.worker.machineId)
     projects.publish(out.worker.projectId, { resource: 'workers' })
     // apiToken returned on every successful (re)register so the daemon can
     // re-read it after losing local state.
@@ -64,7 +60,7 @@ export const registerWorkerRoutes = (
       {
         // connected=false here: the daemon registers first, then opens its
         // command stream — subsequent reads flip it true.
-        worker: workerWithView(out.worker, liveness, commands.has(out.worker.id)),
+        worker: workerWithView(out.worker, commands.has(out.worker.id)),
         apiToken: out.apiToken,
         outcome: out.kind,
       },
@@ -97,16 +93,17 @@ export const registerWorkerRoutes = (
     if (!w) return c.json({ error: 'not found' }, 404)
     const denied = await assertProjectAccess(c, store, w.projectId)
     if (denied) return denied
-    return c.json(workerWithView(w, liveness, commands.has(w.id)))
+    return c.json(workerWithView(w, commands.has(w.id)))
   })
 
-  // Heartbeat is unauth in v0: the caller asserts a machineId. Single-tenant
-  // dev environment; M3 adds auth when multi-tenant SaaS lands.
+  // Heartbeat: the worker daemon's self-watchdog pings this and self-exits if it
+  // can't reach the server. It only needs a 2xx and ignores the body — there's no
+  // server-side liveness tracking anymore (`connected` = command-stream presence
+  // is the single "is the worker usable" signal).
   app.post('/workers/heartbeat', async c => {
     const body = (await c.req.json()) as { machineId?: string }
     if (!body.machineId) return c.json({ error: 'machineId required' }, 400)
-    liveness.ping(body.machineId)
-    return c.json({ alive: true })
+    return c.json({ ok: true })
   })
 
   // DELETE worker. Cascades to Session + SessionEvent (FK Cascade). The CLI
@@ -118,7 +115,6 @@ export const registerWorkerRoutes = (
     const denied = await assertProjectAccess(c, store, w.projectId)
     if (denied) return denied
     await store.workers.destroy(id)
-    liveness.forget(w.machineId)
     projects.publish(w.projectId, { resource: 'workers' })
     projects.publish(w.projectId, { resource: 'sessions' })
     return c.body(null, 204)

@@ -13,7 +13,7 @@ describe('server HTTP — workers', () => {
     await ctx.cleanup()
   })
 
-  test('worker register: creates fresh worker + alive=true after first ping', async () => {
+  test('worker register: creates a fresh worker (connected=false until its stream opens)', async () => {
     const app = createApp(ctx.store)
     const w = (await (await postJson(app, '/workspaces', { name: 'w' })).json()) as WithId
     const p = (await (
@@ -27,20 +27,21 @@ describe('server HTTP — workers', () => {
     })
     assert.equal(res.status, 201)
     const body = (await res.json()) as {
-      worker: { id: number; alive: boolean; machineId: string }
+      worker: { id: number; connected: boolean; machineId: string }
       outcome: string
     }
     assert.equal(body.outcome, 'created')
-    assert.equal(body.worker.alive, true)
+    // No command stream open yet → connected=false (the daemon opens it after register).
+    assert.equal(body.worker.connected, false)
     assert.equal(body.worker.machineId, 'mid-1')
 
     // Listed under the project
     const list = (await (await app.request(`/projects/${p.id}/workers`)).json()) as Array<{
       id: number
-      alive: boolean
+      connected: boolean
     }>
     assert.equal(list.length, 1)
-    assert.equal(list[0]?.alive, true)
+    assert.equal(list[0]?.connected, false)
   })
 
   test('worker register: name collision (different machineId) → 409', async () => {

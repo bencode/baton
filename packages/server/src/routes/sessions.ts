@@ -3,7 +3,6 @@ import type { AttachmentStore } from '../attachments.ts'
 import type { BusyTracker } from '../busy.ts'
 import type { CommandBus } from '../command-bus.ts'
 import type { EventBus } from '../event-bus.ts'
-import type { LivenessTracker } from '../liveness.ts'
 import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import type { Store } from '../store/types.ts'
@@ -23,7 +22,6 @@ export const registerSessionRoutes = (
   app: Hono<AppEnv>,
   store: Store,
   bus: EventBus,
-  workerLiveness: LivenessTracker,
   runtime: SessionRuntime,
   busyTracker: BusyTracker,
   attachments: AttachmentStore,
@@ -33,7 +31,6 @@ export const registerSessionRoutes = (
   const ctx = createSessionCtx({
     store,
     bus,
-    workerLiveness,
     runtime,
     busyTracker,
     attachments,

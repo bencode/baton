@@ -18,8 +18,8 @@ describe('server HTTP — sessions + chat protocol', () => {
     const { session } = await seedSession(app)
     assert.equal(typeof session.id, 'number')
     assert.equal(session.busy, false)
-    // alive is true: worker register seeds worker liveness with its first ping.
-    assert.equal(session.alive, true)
+    // connected is false: the worker has no command stream open in this test.
+    assert.equal(session.connected, false)
     // attached is false: the worker hasn't reported a running child yet.
     assert.equal(session.attached, false)
     const full = (await (await app.request(`/sessions/${session.id}`)).json()) as {
@@ -294,8 +294,8 @@ describe('server HTTP — sessions + chat protocol', () => {
   test('busy is driven by busyTracker via turn_start/turn_complete events', async () => {
     // Events are not persisted server-side anymore. busy comes from busyTracker,
     // which is toggled on turn_start (true) and turn_complete/error (false).
-    // Still requires attached=true so a SIGKILL'd daemon (heartbeat stops) falls
-    // back to busy=false within the 90s liveness window.
+    // Still requires attached=true so a SIGKILL'd daemon (its command stream drops
+    // → runtime clears active) falls back to busy=false.
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)
     const auth = { authorization: `Bearer ${workerToken}` }

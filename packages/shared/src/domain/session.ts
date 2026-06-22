@@ -50,13 +50,13 @@ export type Session = {
 // Server read endpoints return record + runtime view. The worker object is
 // inlined so the client can render worker.name/hostname without a 2nd request.
 //
-//   alive    — the worker (= machine) is reachable (liveness ping in last 90s)
-//   attached — THIS session has a daemon process pinging /sessions/me/heartbeat.
-//              Diagnostic only — UI doesn't render this as a session state.
-//   busy     — currently processing a turn (turn_start with no trailing close
-//              event). Treated as a transient event in UI (pulse), not state.
+//   connected — the worker's command stream is open (can take session.start)
+//   attached  — THIS session has a daemon process pinging /sessions/me/heartbeat.
+//               Diagnostic only — UI doesn't render this as a session state.
+//   busy      — currently processing a turn (turn_start with no trailing close
+//               event). Treated as a transient event in UI (pulse), not state.
 export type SessionView = Session & {
-  alive: boolean
+  connected: boolean
   attached: boolean
   busy: boolean
   worker: Worker

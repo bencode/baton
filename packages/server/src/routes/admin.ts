@@ -2,7 +2,6 @@ import type { AdminOverview } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { BusyTracker } from '../busy.ts'
 import type { CommandBus } from '../command-bus.ts'
-import type { LivenessTracker } from '../liveness.ts'
 import { requireAdmin } from '../middleware/domain-scope.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import type { Store } from '../store/types.ts'
@@ -15,7 +14,6 @@ import { type AppEnv, workerWithView } from '../views.ts'
 export const registerAdminRoutes = (
   app: Hono<AppEnv>,
   store: Store,
-  workerLiveness: LivenessTracker,
   runtime: SessionRuntime,
   busyTracker: BusyTracker,
   commands: CommandBus,
@@ -32,9 +30,9 @@ export const registerAdminRoutes = (
     const overview: AdminOverview = {
       workspaces,
       projects,
-      workers: workers.map(w => workerWithView(w, workerLiveness, commands.has(w.id))),
+      workers: workers.map(w => workerWithView(w, commands.has(w.id))),
       // No per-session worker join (unlike sessionWithView) — the workers list
-      // above already carries alive, and the client groups by workerId.
+      // above already carries connected, and the client groups by workerId.
       sessions: sessions.map(s => {
         const attached = runtime.isActive(s.id)
         return { ...s, attached, busy: attached && busyTracker.read(s.id) }

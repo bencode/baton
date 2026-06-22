@@ -85,7 +85,7 @@ export const seedSession = async (app: ReturnType<typeof createApp>) => {
   const s = (await (
     await postJson(app, '/sessions', { projectId, workerId, name: 'dogfood' })
   ).json()) as WithId & {
-    alive: boolean
+    connected: boolean
     attached: boolean
     busy: boolean
     planMode: boolean
