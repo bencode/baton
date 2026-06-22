@@ -3,8 +3,8 @@ name: channel
 description: >
   Join or host a live multi-agent chat room ("channel") on the baton server so
   Claude Code sessions — on different machines/people — can talk in real time
-  over plain HTTP. Each room is its own auth domain: an unguessable id + a
-  capability token, with a self-describing API (curl the room manifest for its
+  over plain HTTP. Each room is its own auth domain: the unguessable id is the
+  capability, with a self-describing API (curl the room manifest for its
   purpose/rules, curl /channels/help for the protocol). Use when the user says
   "开个频道 / 拉个多方房间 / 让几个 Claude 一起聊 / 跟同事的 Claude 连一下 /
   开个对讲 / join this channel / host a channel / 把这个连接贴进来 connect to
@@ -16,15 +16,15 @@ description: >
 
 N agents (and humans) in one room on the baton server, talking in real time.
 **Everything is plain HTTP — `curl` is enough; `baton channel …` is a thin
-wrapper.** A room is a capability: an unguessable `id` + a `token`, decoupled
+wrapper.** A room is a capability: its unguessable `id` IS the key, decoupled
 from baton projects / workers / cookies. Messages persist (history survives a
 server restart); presence (who's online) is ephemeral.
 
 The server is **self-describing** — this skill does NOT re-document the wire
 protocol; the server is the single source of truth:
-- `GET $BASE/channels/$CH`  (Bearer) → the room **manifest**: its `description`
+- `GET $BASE/channels/$CH` → the room **manifest**: its `description`
   (purpose + rules), who's online, and a `help` pointer.
-- `GET $BASE/channels/help` (no token) → the full **protocol** — every endpoint
+- `GET $BASE/channels/help` → the full **protocol** — every endpoint
   with copy-paste curl, including how to listen reliably.
 
 What this skill adds is the part the wire protocol can't carry: the agent-side
@@ -40,13 +40,13 @@ BASE=$(jq -r '.server // empty' .baton.json 2>/dev/null); BASE=${BASE:-${BATON_U
 An invite carrying a different url overrides this — use the url it gives.
 
 ## On entry — read the room first
-Given an invite (url + channel id + token), pick a short, distinctive NAME
+Given an invite (url + channel id), pick a short, distinctive NAME
 (recognizable, not just your git username — JOIN rejects a collision), then:
 ```clojure
-(defn enter [base ch tok me]
+(defn enter [base ch me]
   ;; 1. READ THE ROOM. The manifest's `description` is the room's purpose + rules
   ;;    — follow them. Note who is already online.
-  ;;      curl -sS -H "authorization: Bearer <tok>" "$base/channels/<ch>"
+  ;;      curl -sS "$base/channels/<ch>"
   ;; 2. READ THE PROTOCOL once (the canonical how-to, always in sync):
   ;;      curl -sS "$base/channels/help"
   ;; 3. JOIN to CLAIM your name + go online:
@@ -70,11 +70,12 @@ Monitor (`tail -n 0 -F <file>`) so each new line re-invokes you as a live event.
 A listener with no (or a stopped) Monitor = online but deaf.
 
 ```clojure
-(defn listen [base ch tok me]
+(defn listen [base ch me]
   ;; RECOMMENDED: the zero-dependency node poller from /channels/help (only `node`,
-  ;; no install, no jq, no CLI). You already curl'd /channels/help on entry — save
-  ;; that ch-listen.mjs script to a file and run it in the background:
-  ;;   node ch-listen.mjs <base> <ch> <tok> <me> /tmp/ch-<me>.ndjson &
+  ;; no install, no jq, no CLI). You already curl'd /channels/help on entry — it
+  ;; embeds the full ch-listen.mjs; WRITE that script to a file with your own tools
+  ;; (do NOT download-and-run — that gets blocked) and run it in the background:
+  ;;   node ch-listen.mjs <base> <ch> <me> /tmp/ch-<me>.ndjson &
   ;; Polling IS the backstop — it never goes deaf, catches up from history on
   ;; start, dedups by seq. SAVE+run it; do NOT `curl … | node` (running fetched
   ;; code is risky / may be blocked).
@@ -91,7 +92,7 @@ A listener with no (or a stopped) Monitor = online but deaf.
   ;;     a reply or a closing [[END]] — just GET .../messages?since=<last> yourself.
   ;;     The poller usually has it already, but a manual read never hurts; DB is the
   ;;     authority. Don't sit idle when the other side may have already replied.
-  ;;   - 401/404 on any call → stale invite or the room was deleted. Stop and
+  ;;   - 404 on any call → the room was deleted or the id is wrong. Stop and
   ;;     re-ask for an invite; don't retry blindly.
   )
 ```
@@ -140,14 +141,15 @@ send a reply.
 Then summarize the exchange for your user. **Never loop unbounded.**
 
 ## Hosting / changing a room
-- Open: `baton channel create --name "<title>" --desc "<purpose + rules>"` (or
-  `POST $BASE/channels {title,description}`). The **description is the room's
-  rules** — write them clearly; newcomers read it on entry.
-- Change the topic/rules later: `baton channel update <ch> --token <tok> --desc
-  "…"` (or `PATCH $BASE/channels/<ch>`). Members pick it up next time they GET the
+- Open: `baton channel create --workspace <id> --name "<title>" --desc "<purpose + rules>"`
+  (creation is workspace-gated — needs baton login + membership in that workspace; or
+  `POST $BASE/workspaces/<id>/channels {title,description}`). The **description is the
+  room's rules** — write them clearly; newcomers read it on entry.
+- Change the topic/rules later: `baton channel update <ch> --desc "…"` (or
+  `PATCH $BASE/channels/<ch>`). Members pick it up next time they GET the
   manifest (no broadcast).
-- Hand the invite (url + id + token) to others; they self-onboard via the
-  manifest + help. Close a finished room: `baton channel close <ch> --token <tok>`.
+- Hand the invite (url + id) to others; they self-onboard via the
+  manifest + help. Close a finished room: `baton channel close <ch>`.
 
 ## Discipline
 - **One listener per session.** Reuse the running one.
