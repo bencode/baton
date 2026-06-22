@@ -80,3 +80,23 @@ export const removeWorktree = (repo: string, worktreePath: string): void => {
     // ignore
   }
 }
+
+// Restore a materialized session's worktree when its directory went missing
+// (container rebuild / manual cleanup). `prune` clears the dead registration so
+// git releases the branch + path, then we re-attach the EXISTING branch
+// `baton/<sessionCode>` into a fresh checkout — preserving its committed history.
+// If the branch is gone too, fall back to a brand-new worktree from HEAD. The
+// claude transcript lives in ~/.claude/projects (separate from the worktree), so
+// the conversation resumes either way.
+export const restoreWorktree = (repo: string, worktreePath: string, sessionCode: string): void => {
+  spawnSync('git', ['-C', repo, 'worktree', 'prune'], { stdio: 'pipe' })
+  mkdirSync(dirname(worktreePath), { recursive: true })
+  const branch = `baton/${sessionCode}`
+  const reuse = spawnSync('git', ['-C', repo, 'worktree', 'add', worktreePath, branch], {
+    stdio: 'pipe',
+    encoding: 'utf8',
+  })
+  if (reuse.status === 0) return
+  // Branch gone (or unattachable) → fresh worktree from the repo's head branch.
+  createWorktree({ repo, worktreePath, sessionCode, base: repoHeadBranch(repo) })
+}
