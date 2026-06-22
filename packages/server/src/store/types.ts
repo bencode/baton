@@ -222,6 +222,8 @@ export type Store = {
     getByUsername(username: string): Promise<UserRecord | null>
     getByApiToken(token: string): Promise<UserRecord | null>
     setApiToken(id: Id, token: string): Promise<UserRecord>
+    // Self-service password change (verify-old is done at the route).
+    setPassword(id: Id, passwordHash: string): Promise<UserRecord>
     first(): Promise<UserRecord | null>
     count(): Promise<number>
     // Domain binding (membership). workspaceIds is the scope source; bind/unbind

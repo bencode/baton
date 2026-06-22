@@ -30,6 +30,11 @@ export const registerWorkerRoutes = (
     }
     if (!body.projectId || !body.machineId || !body.name || !body.hostname)
       return c.json({ error: 'projectId, machineId, name, hostname required' }, 400)
+    // Register is gated now (removed from the cookie-gate exempt list): the caller
+    // must be a member of the project's workspace (personal token / cookie). A worker
+    // token re-registering is allowed (domain-scope exempts workers); dev (no users) open.
+    const denied = await assertProjectAccess(c, store, body.projectId)
+    if (denied) return denied
     const out = await store.workers.register({
       projectId: body.projectId,
       machineId: body.machineId,

@@ -146,6 +146,26 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     )
   })
 
+  test('POST /workers register is gated by project access (member / non-member / worker token)', async () => {
+    const app = createApp(ctx.store)
+    const a = await seedWorkspace('wsReg1')
+    const b = await seedWorkspace('wsReg2')
+    const alice = await seedUser('alice', false)
+    await ctx.store.users.bindWorkspace(alice.id, a.ws.id)
+
+    const reg = (projectId: number, headers: Record<string, string>, machineId: string) =>
+      postJson(app, '/workers', { projectId, machineId, name: machineId, hostname: 'h' }, headers)
+
+    // A member's personal token → can add a worker to their workspace's project.
+    assert.equal((await reg(a.project.id, as(alice.token), 'mid-ok')).status, 201)
+    // Non-member → 404 (can't register into another workspace's project).
+    assert.equal((await reg(b.project.id, as(alice.token), 'mid-x')).status, 404)
+    // No auth → 401 (register is no longer exempt from the cookie gate).
+    assert.equal((await reg(a.project.id, {}, 'mid-anon')).status, 401)
+    // A worker token re-registering is allowed (domain-scope exempts worker principals).
+    assert.equal((await reg(a.project.id, as(a.workerToken), 'mid-worker')).status, 201)
+  })
+
   test('admin bypasses scope; bind/unbind flips visibility', async () => {
     const app = createApp(ctx.store)
     const a = await seedWorkspace('wsA')
