@@ -108,4 +108,73 @@ describe('server HTTP — cookie auth gate', () => {
       200,
     )
   })
+
+  test('self-service: change password + mint personal API token', async () => {
+    const app = createApp(ctx.store)
+    await ctx.store.users.create({
+      username: 'alice',
+      passwordHash: hashPassword('pw1'),
+      isAdmin: true,
+    })
+    const cookie = cookieFrom(
+      await postJson(app, '/auth/login', { username: 'alice', password: 'pw1' }),
+    )
+
+    // /auth/me reports hasToken:false before minting one.
+    const me0 = (await (await app.request('/auth/me', { headers: { cookie } })).json()) as {
+      hasToken: boolean
+    }
+    assert.equal(me0.hasToken, false)
+
+    // Change password: wrong old → 401; right old → 200; the old password then fails.
+    assert.equal(
+      (await postJson(app, '/auth/password', { oldPassword: 'no', newPassword: 'pw2' }, { cookie }))
+        .status,
+      401,
+    )
+    assert.equal(
+      (
+        await postJson(
+          app,
+          '/auth/password',
+          { oldPassword: 'pw1', newPassword: 'pw2' },
+          { cookie },
+        )
+      ).status,
+      200,
+    )
+    assert.equal(
+      (await postJson(app, '/auth/login', { username: 'alice', password: 'pw1' })).status,
+      401,
+    )
+    assert.equal(
+      (await postJson(app, '/auth/login', { username: 'alice', password: 'pw2' })).status,
+      200,
+    )
+
+    // Mint a personal API token → it authenticates as the user; /auth/me flips hasToken.
+    const minted = (await (await postJson(app, '/auth/token', {}, { cookie })).json()) as {
+      token: string
+    }
+    assert.ok(minted.token)
+    assert.equal(
+      (
+        await app.request('/workspaces', {
+          headers: { authorization: `Bearer ${minted.token}` },
+        })
+      ).status,
+      200,
+    )
+    const me1 = (await (await app.request('/auth/me', { headers: { cookie } })).json()) as {
+      hasToken: boolean
+    }
+    assert.equal(me1.hasToken, true)
+
+    // Both endpoints require auth (no cookie / token → 401).
+    assert.equal((await postJson(app, '/auth/token', {})).status, 401)
+    assert.equal(
+      (await postJson(app, '/auth/password', { oldPassword: 'pw2', newPassword: 'pw3' })).status,
+      401,
+    )
+  })
 })

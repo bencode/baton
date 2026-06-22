@@ -13,7 +13,7 @@ const isExempt = (method: string, path: string): boolean =>
   path === '/health' ||
   path.startsWith('/auth/') ||
   path === '/workers/me/stream' ||
-  (method === 'POST' && (path === '/workers' || path === '/workers/heartbeat')) ||
+  (method === 'POST' && path === '/workers/heartbeat') ||
   (method === 'PATCH' && /^\/sessions\/[^/]+$/.test(path)) ||
   (method === 'POST' && /^\/sessions\/[^/]+\/(status|events)$/.test(path))
 
