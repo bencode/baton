@@ -44,7 +44,7 @@ export const ProjectMenu = ({ onRename, onDelete }: ProjectMenuProps) => {
     <div ref={ref} className="relative shrink-0">
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => (open ? close() : setOpen(true))}
         aria-expanded={open}
         aria-haspopup="menu"
         title="project actions"

@@ -22,7 +22,9 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
   const rename = async (next: string) => {
     setEditing(false)
     if (!active) return
-    await api.projects.update(active.id, { name: next }).then(bumpLists, () => {})
+    await api.projects
+      .update(active.id, { name: next })
+      .then(bumpLists, err => console.error('[projects] rename failed', err))
   }
   const create = async (name: string) => {
     setCreating(false)
