@@ -7,12 +7,13 @@ import { fmtWorker, renderList, renderOne, toJson } from '../output.ts'
 import {
   configPathFromArgs,
   loadProjectConfig,
+  loadProjectConfigOrNull,
   projectConfigPath,
   saveProjectConfig,
   setWorker,
   viewWorker,
 } from '../project-config.ts'
-import { clientFor, common, parseWorkerHandle, resolveProjectId } from '../util.ts'
+import { clientFor, common, parseWorkerHandle, resolveAuth, resolveProjectId } from '../util.ts'
 import { runWorkerDaemon } from '../worker/daemon.ts'
 import { machineIdPath, readOrCreateMachineId } from '../worker/machine-id.ts'
 
@@ -96,7 +97,14 @@ export const worker = defineCommand({
             'no baton server — pass --url <url> (e.g. https://baton.fmap.dev/api), set BATON_URL, or run `baton init`',
           )
         if (!args.json) console.log(`registering against ${server}`)
-        const c = createClient(server)
+        // Register is server-gated now (assertProjectAccess) — send a Bearer:
+        // BATON_TOKEN/BATON_WORKER_TOKEN env first, else the file worker token (a
+        // re-register from .baton.json). Mirrors clientFor, but reuses the already-
+        // validated `server` + the --config location. No token → 401 from the gate.
+        const cfgPath = configPathFromArgs(args)
+        const fileToken = loadProjectConfigOrNull(cfgPath)?.worker?.apiToken
+        const auth = resolveAuth(process.env, fileToken)
+        const c = createClient(server, auth && auth !== 'cookie' ? auth : undefined)
         const hostname = osHostname()
         const machineId = readOrCreateMachineId()
         const name = args.name ?? hostname
@@ -109,7 +117,7 @@ export const worker = defineCommand({
             hostname,
             machineId,
           },
-          configPathFromArgs(args),
+          cfgPath,
         )
         if (args.json) {
           console.log(toJson({ ...out, configPath, machineIdPath: machineIdPath() }))
