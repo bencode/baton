@@ -15,14 +15,36 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
   const { data: projects } = useProjects(workspaceId)
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
-  if (!projects || projects.length === 0)
-    return <span className="text-sm text-gray-400">no project</span>
-  const active = projects.find(p => p.id === activeProjectId)
+  const [creating, setCreating] = useState(false)
+
+  const active = projects?.find(p => p.id === activeProjectId)
+
   const rename = async (next: string) => {
     setEditing(false)
     if (!active) return
     await api.projects.update(active.id, { name: next }).then(bumpLists, () => {})
   }
+  const create = async (name: string) => {
+    setCreating(false)
+    if (workspaceId === null) return
+    try {
+      const p = await api.projects.create({ workspaceId, name })
+      bumpLists()
+      navigate(projectPath(p.id))
+    } catch (err) {
+      console.error('[projects] create failed', err)
+    }
+  }
+
+  if (creating)
+    return (
+      <InlineRename
+        name=""
+        ariaLabel="new project name"
+        onCommit={create}
+        onCancel={() => setCreating(false)}
+      />
+    )
   if (editing && active)
     return (
       <InlineRename
@@ -32,6 +54,29 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
         onCancel={() => setEditing(false)}
       />
     )
+
+  // "+ new project" — available whenever a workspace is selected, so a member with
+  // an empty workspace can create their first one.
+  const newButton = workspaceId !== null && (
+    <button
+      type="button"
+      title="new project"
+      aria-label="new project"
+      onClick={() => setCreating(true)}
+      className="shrink-0 text-lg leading-none text-gray-400 transition-colors hover:text-gray-700"
+    >
+      ＋
+    </button>
+  )
+
+  if (!projects || projects.length === 0)
+    return (
+      <span className="flex w-full items-center justify-between gap-1">
+        <span className="text-sm text-gray-400">no project</span>
+        {newButton}
+      </span>
+    )
+
   return (
     <span className="flex w-full items-center gap-1">
       <select
@@ -57,11 +102,12 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
           title="rename project"
           aria-label="rename project"
           onClick={() => setEditing(true)}
-          className="text-gray-400 transition-colors hover:text-gray-700"
+          className="shrink-0 text-gray-400 transition-colors hover:text-gray-700"
         >
           <PencilIcon />
         </button>
       )}
+      {newButton}
     </span>
   )
 }
