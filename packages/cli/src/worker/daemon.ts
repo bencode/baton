@@ -21,6 +21,7 @@ import {
   ensureExcluded,
   removeWorktree,
   repoHeadBranch,
+  restoreWorktree,
 } from '../session/worktree.ts'
 import { stale, streamWedged } from './watchdog.ts'
 
@@ -150,6 +151,13 @@ export const runWorkerDaemon = async (
       })
       await client.sessions.materialize(sessionId, { agentSessionId, worktreePath }, cfg.apiToken)
       log(`materialized session #${sessionId} → ${worktreePath}`)
+    } else if (!existsSync(worktreePath)) {
+      // Materialized, but the worktree dir is gone (container rebuild / cleanup) —
+      // spawning into it would instantly fail. Recreate at the same path, keeping
+      // the agentSessionId so the conversation still resumes. No re-PATCH: path and
+      // agentSessionId are unchanged.
+      restoreWorktree(repo, worktreePath, session.agentSessionId.slice(0, 8))
+      log(`recreated session #${sessionId} worktree (was missing) → ${worktreePath}`)
     }
     // Drop the worker's baton context into the worktree so the agent's bare
     // `baton` calls resolve server/project/worker from cwd. Overwrite every
