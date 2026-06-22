@@ -4,7 +4,6 @@ import type { AttachmentStore } from '../../attachments.ts'
 import type { BusyTracker } from '../../busy.ts'
 import type { CommandBus } from '../../command-bus.ts'
 import type { EventBus } from '../../event-bus.ts'
-import type { LivenessTracker } from '../../liveness.ts'
 import { workerBearerAuth } from '../../middleware/auth.ts'
 import type { ProjectBus } from '../../project-bus.ts'
 import type { SessionRuntime } from '../../session-runtime.ts'
@@ -15,7 +14,6 @@ import { type AppEnv, intParam, sessionWithView } from '../../views.ts'
 export type SessionRouteDeps = {
   store: Store
   bus: EventBus
-  workerLiveness: LivenessTracker
   runtime: SessionRuntime
   busyTracker: BusyTracker
   attachments: AttachmentStore
@@ -27,9 +25,9 @@ export type SessionRouteDeps = {
 // route group (registerSessionLifecycle / Control / Io) so the groups carry no
 // wiring. The inferred return type keeps the ownedByWorker union honest.
 export const createSessionCtx = (deps: SessionRouteDeps) => {
-  const { store, workerLiveness, runtime, busyTracker, projects } = deps
+  const { store, commands, runtime, busyTracker, projects } = deps
   const toView = (s: Parameters<typeof sessionWithView>[0]) =>
-    sessionWithView(s, store, workerLiveness, runtime, busyTracker)
+    sessionWithView(s, store, runtime, busyTracker, commands)
   // Tell project subscribers the session list changed so they refetch it.
   const bump = (projectId: Id) => projects.publish(projectId, { resource: 'sessions' })
   // Load a session, 404 if missing, 403 if the bearer worker doesn't own it.

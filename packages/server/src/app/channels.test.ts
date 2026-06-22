@@ -243,7 +243,7 @@ describe('server HTTP — channel room', () => {
   test('attachments: upload → download by id (no token), cleaned on room delete', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'baton-chan-att-'))
     const attachments = createAttachmentStore(dir)
-    const app = createApp(ctx.store, undefined, undefined, undefined, undefined, attachments)
+    const app = createApp(ctx.store, undefined, undefined, undefined, attachments)
     const { channelId } = await createChannel(app)
     const base = `/channels/${channelId}/attachments`
 

@@ -2,7 +2,6 @@ import type { Id } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { BusyTracker } from '../busy.ts'
 import type { CommandBus } from '../command-bus.ts'
-import type { LivenessTracker } from '../liveness.ts'
 import { assertProjectAccess, assertWorkspaceAccess } from '../middleware/domain-scope.ts'
 import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
@@ -19,7 +18,6 @@ import {
 export const registerProjectRoutes = (
   app: Hono<AppEnv>,
   store: Store,
-  workerLiveness: LivenessTracker,
   runtime: SessionRuntime,
   busyTracker: BusyTracker,
   projects: ProjectBus,
@@ -57,7 +55,7 @@ export const registerProjectRoutes = (
     if (denied) return denied
     const list = await store.sessions.listByProject(id)
     const merged = await Promise.all(
-      list.map(s => sessionWithView(s, store, workerLiveness, runtime, busyTracker)),
+      list.map(s => sessionWithView(s, store, runtime, busyTracker, commands)),
     )
     return c.json(merged)
   })
@@ -66,7 +64,7 @@ export const registerProjectRoutes = (
     const denied = await assertProjectAccess(c, store, id)
     if (denied) return denied
     const list = await store.workers.listByProject(id)
-    return c.json(list.map(w => workerWithView(w, workerLiveness, commands.has(w.id))))
+    return c.json(list.map(w => workerWithView(w, commands.has(w.id))))
   })
   // Project change stream: lightweight invalidation signals so the web client
   // refetches the affected query (sessions / workers / tasks) instead of

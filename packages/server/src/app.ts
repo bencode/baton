@@ -5,7 +5,6 @@ import { type ChannelBus, createChannelBus } from './channel-bus.ts'
 import { type ChannelPresence, createChannelPresence } from './channel-presence.ts'
 import { type CommandBus, createCommandBus } from './command-bus.ts'
 import { createEventBus, type EventBus } from './event-bus.ts'
-import { createLiveness, type LivenessTracker } from './liveness.ts'
 import { cookieAuth } from './middleware/cookie-auth.ts'
 import { createProjectBus, type ProjectBus } from './project-bus.ts'
 import { createRelayBus, type RelayBus } from './relay-bus.ts'
@@ -30,7 +29,6 @@ export type { AppEnv } from './views.ts'
 // to the shared Hono app so route paths stay flat (no /v1 prefix gymnastics).
 //
 // In-memory trackers — no DB persistence; all "right now":
-//   workerLiveness — keyed by machineId; pinged by POST /workers/heartbeat.
 //   runtime        — per-session active flag set by the worker via
 //                    POST /sessions/:id/status, cleared on worker-stream drop.
 //                    Source of `attached`.
@@ -40,7 +38,6 @@ export type { AppEnv } from './views.ts'
 export const createApp = (
   store: Store,
   bus: EventBus = createEventBus(),
-  workerLiveness: LivenessTracker = createLiveness(),
   runtime: SessionRuntime = createSessionRuntime(),
   busyTracker: BusyTracker = createBusy(),
   attachments: AttachmentStore = createAttachmentStore(defaultAttachmentDir()),
@@ -62,22 +59,12 @@ export const createApp = (
   registerChannelRoutes(app, store, channelBus, presence, attachments)
   app.use('*', cookieAuth(store))
   registerWorkspaceRoutes(app, store)
-  registerProjectRoutes(app, store, workerLiveness, runtime, busyTracker, projects, commands)
+  registerProjectRoutes(app, store, runtime, busyTracker, projects, commands)
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store, projects)
-  registerWorkerRoutes(app, store, workerLiveness, commands, runtime, projects)
-  registerAdminRoutes(app, store, workerLiveness, runtime, busyTracker, commands)
-  registerSessionRoutes(
-    app,
-    store,
-    bus,
-    workerLiveness,
-    runtime,
-    busyTracker,
-    attachments,
-    commands,
-    projects,
-  )
+  registerWorkerRoutes(app, store, commands, runtime, projects)
+  registerAdminRoutes(app, store, runtime, busyTracker, commands)
+  registerSessionRoutes(app, store, bus, runtime, busyTracker, attachments, commands, projects)
   registerSessionAttachmentRoutes(app, store, attachments)
   return app
 }

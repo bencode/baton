@@ -82,7 +82,7 @@ test('LeftPanel renders the requirement tree (deps + ready) and opens a task on 
 test('rail session row: trash → inline confirm → removes session and closes its tab', async () => {
   const remove = vi.fn(async () => undefined)
   const close = vi.fn()
-  const worker = { id: 1, projectId: 1, name: 'w', hostname: 'h', alive: true }
+  const worker = { id: 1, projectId: 1, name: 'w', hostname: 'h', connected: true }
   const session = {
     id: 7,
     projectId: 1,

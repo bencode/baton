@@ -39,7 +39,6 @@ describe('worker helpers', () => {
                 name: (input as { name: string }).name,
                 hostname: (input as { hostname: string }).hostname,
                 createdAt: 0,
-                alive: true,
                 connected: true,
               },
               apiToken: 'wtok-test',

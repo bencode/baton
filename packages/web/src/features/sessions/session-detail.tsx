@@ -182,7 +182,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         onResume={resume}
         onRename={rename}
       />
-      <ConnectionBanner streamStatus={status} alive={session.alive} attached={session.attached} />
+      <ConnectionBanner streamStatus={status} connected={session.connected} />
       <EventStream
         items={items}
         scrollRef={scrollRef}

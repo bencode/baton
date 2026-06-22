@@ -4,21 +4,15 @@ import { createBusy } from './busy.ts'
 import { startBusySweep } from './busy-sweep.ts'
 import { createChannelPresence, startPresencePrune } from './channel-presence.ts'
 import { createEventBus } from './event-bus.ts'
-import type { LivenessTracker } from './liveness.ts'
 import { createProjectBus } from './project-bus.ts'
 import type { Store } from './store/types.ts'
 
 export type Server = { port: number; stop: () => Promise<void> }
 
 // Run the Hono app on Node via @hono/node-server; stop closes the server, then the
-// Store. workerLiveness is optional — createApp() instantiates its own if omitted.
-// Channel presence is owned here (so its prune sweep is started + stopped with the
-// server lifecycle), then injected into the app.
-export const startServer = (opts: {
-  store: Store
-  port: number
-  workerLiveness?: LivenessTracker
-}): Promise<Server> =>
+// Store. Channel presence is owned here (so its prune sweep is started + stopped
+// with the server lifecycle), then injected into the app.
+export const startServer = (opts: { store: Store; port: number }): Promise<Server> =>
   new Promise(resolve => {
     const presence = createChannelPresence()
     const presencePrune = startPresencePrune(presence)
@@ -31,7 +25,6 @@ export const startServer = (opts: {
     const app = createApp(
       opts.store,
       bus,
-      opts.workerLiveness,
       undefined,
       busy,
       undefined,

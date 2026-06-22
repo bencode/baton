@@ -19,7 +19,7 @@ export type WorkersClient = {
   listByProject(projectId: Id): Promise<WorkerView[]>
   get(id: Id): Promise<WorkerView>
   findByName(projectId: Id, name: string): Promise<WorkerView | null>
-  heartbeat(machineId: string): Promise<{ alive: boolean }>
+  heartbeat(machineId: string): Promise<{ ok: boolean }>
   destroy(id: Id): Promise<void>
 }
 

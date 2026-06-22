@@ -21,7 +21,7 @@ export const fmtSession = (s: SessionView): string =>
 // Workers wear a global W-N handle (the int id with a prefix) — unlike R-N/T-N
 // these are NOT per-project: W-7 means the same worker from anywhere.
 export const fmtWorker = (w: WorkerView): string => {
-  const offline = w.alive === false ? '  [offline]' : ''
+  const offline = w.connected === false ? '  [offline]' : ''
   return `W-${w.id}  ${w.name}  ${w.hostname}${offline}`
 }
 
