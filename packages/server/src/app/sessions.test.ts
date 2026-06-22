@@ -91,7 +91,10 @@ describe('server HTTP — sessions + chat protocol', () => {
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)
     const auth = { authorization: `Bearer ${workerToken}` }
-    // inactive → 409
+    // Inactive AND the worker has no command stream here → 409 (offline, nobody to
+    // serve it). When the worker IS connected, an inactive session auto-resumes
+    // instead (persist + session.start) — covered by the macmini e2e, not unit-
+    // testable without holding an SSE command stream open.
     assert.equal(
       (await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })).status,
       409,

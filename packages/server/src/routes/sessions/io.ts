@@ -19,7 +19,7 @@ const numQuery = (v: string | undefined): number | undefined => {
 // Transcript I/O: the worker-bearer event ingress (which drives busy liveness),
 // chat-message ingress, the bounded history read, and the live SSE stream.
 export const registerSessionIo: RegisterSessionGroup = (app, ctx) => {
-  const { store, bus, runtime, busyTracker, auth, bump, ownedByWorker } = ctx
+  const { store, bus, runtime, busyTracker, auth, bump, ownedByWorker, commands } = ctx
 
   // Session child emits events (worker-bearer, must own session). Persisted to
   // the transcript then published to the bus so subscribed browsers / CLIs
@@ -57,10 +57,14 @@ export const registerSessionIo: RegisterSessionGroup = (app, ctx) => {
     const sessionId = intParam(c.req.param('id'))
     const session = await loadScopedSession(c, store, sessionId)
     if (session instanceof Response) return session
-    // Messages only go to an active session (a live worker child is subscribed).
-    // Otherwise there's no one to receive it — reject rather than drop silently.
-    if (!runtime.isActive(sessionId))
-      return c.json({ error: 'session not active — resume it first' }, 409)
+    // An active session has a live worker child subscribed to receive this live.
+    // Inactive but the owning worker is CONNECTED → auto-resume: persist below,
+    // then publish session.start so the worker spawns the runner, which reconciles
+    // this message from the durable transcript. Only reject when the worker is
+    // offline (genuinely no one to serve it, and the command stream has no replay).
+    const active = runtime.isActive(sessionId)
+    if (!active && !commands.has(session.workerId))
+      return c.json({ error: 'worker offline — resume unavailable' }, 409)
     const body = (await c.req.json()) as {
       text?: string
       images?: unknown
@@ -91,6 +95,11 @@ export const registerSessionIo: RegisterSessionGroup = (app, ctx) => {
     await store.sessions.touch(sessionId).catch(() => {})
     bump(session.projectId)
     bus.publish(sessionId, ev)
+    // Was inactive but the worker is connected → wake it. The runner spawns and
+    // reconciles this just-persisted message from the transcript (the bus.publish
+    // above only reached viewers; the runner isn't subscribed yet).
+    if (!active)
+      commands.publish(session.workerId, { cmd: 'session.start', sessionId, name: session.name })
     return c.json(ev, 201)
   })
 
