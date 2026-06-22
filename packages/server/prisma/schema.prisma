@@ -247,16 +247,14 @@ model SessionEvent {
 // (see the old in-memory relay-bus). Two layers: it BELONGS to a Workspace
 // (creation + listing are gated by workspace membership, so the back-office can
 // manage its rooms and nothing anonymous can inject channels), but PARTICIPATION
-// stays a capability primitive — an unguessable id + a stored Bearer token; whoever
-// holds the token can read, write, and join over the id+token API, no account
-// needed (that's how an invited outside agent/person joins from anywhere). The
-// token is the bridge: workspace members fetch it from the gated list, outsiders
-// get it from an invite link. Unlike the relay, messages persist (history survives
-// restart and replays into the web UI). Presence (who's online) stays in memory.
+// is open on the unguessable id itself — the channel uuid IS the capability: whoever
+// holds it can read, write, and join over the id-only API, no account needed (that's
+// how an invited outside agent/person joins from anywhere). Unlike the relay, messages
+// persist (history survives restart and replays into the web UI). Presence (who's
+// online) stays in memory.
 model Channel {
   id          String   @id @default(uuid())
   workspaceId Int
-  token       String
   title       String?
   // Free-text self-description (purpose / topic / how to participate). Returned
   // by GET /channels/:id so a newcomer can orient with one call.

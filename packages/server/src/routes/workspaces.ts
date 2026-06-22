@@ -37,26 +37,25 @@ export const registerWorkspaceRoutes = (app: Hono<AppEnv>, store: Store): void =
     if (denied) return denied
     return c.json(await store.projects.listByWorkspace(id))
   })
-  // Open a chat room owned by this workspace. Membership-gated like projects; the
-  // returned token is the participation capability — workspace members open the
-  // room with it, and they can hand it (or an invite link) to outside agents/people
-  // who then join over the id+token API with no baton account.
+  // Open a chat room owned by this workspace. Membership-gated like projects. The
+  // returned channelId IS the participation capability — members open the room by
+  // id, and hand the link to outside agents/people who join the id-only API with no
+  // baton account.
   app.post('/workspaces/:id/channels', async c => {
     const id = intParam(c.req.param('id'))
     const denied = await assertWorkspaceAccess(c, store, id)
     if (denied) return denied
     if (!(await store.workspaces.get(id))) return c.json({ error: 'not found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { title?: string; description?: string }
-    const { channel, token } = await store.channels.create({
+    const channel = await store.channels.create({
       workspaceId: id,
       title: body.title,
       description: body.description,
     })
-    return c.json({ channelId: channel.id, token, help: HELP_PATH }, 201)
+    return c.json({ channelId: channel.id, help: HELP_PATH }, 201)
   })
-  // List this workspace's rooms (membership-gated). Each item carries its token so
-  // a member can open the room — the bridge from the gated list to the id+token
-  // participation layer.
+  // List this workspace's rooms (membership-gated). A member opens any room by its
+  // id (the id is the participation capability).
   app.get('/workspaces/:id/channels', async c => {
     const id = intParam(c.req.param('id'))
     const denied = await assertWorkspaceAccess(c, store, id)

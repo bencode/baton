@@ -13,41 +13,40 @@ describe('store channels', () => {
     await ctx.cleanup()
   })
 
-  test('create yields distinct ids + tokens; get round-trips title + description (no token leak)', async () => {
+  test('create yields distinct ids; get round-trips title + description (no token field)', async () => {
     const a = await ctx.store.channels.create({
       workspaceId: wsId,
       title: 'design',
       description: 'design sync room',
     })
     const b = await ctx.store.channels.create({ workspaceId: wsId })
-    assert.notEqual(a.channel.id, b.channel.id)
-    assert.notEqual(a.token, b.token)
-    assert.equal(a.channel.title, 'design')
-    assert.equal(a.channel.description, 'design sync room')
-    assert.equal(b.channel.title, undefined)
-    assert.equal(b.channel.description, undefined)
-    const got = await ctx.store.channels.get(a.channel.id)
+    assert.notEqual(a.id, b.id)
+    assert.equal(a.workspaceId, wsId)
+    assert.equal(a.title, 'design')
+    assert.equal(a.description, 'design sync room')
+    assert.equal(b.title, undefined)
+    assert.equal(b.description, undefined)
+    const got = await ctx.store.channels.get(a.id)
     assert.equal(got?.title, 'design')
     assert.equal(got?.description, 'design sync room')
     assert.equal((got as { token?: string } | null)?.token, undefined)
     assert.equal(await ctx.store.channels.get('missing'), null)
   })
 
-  test('auth verdicts: ok / forbidden / unknown', async () => {
-    const { channel, token } = await ctx.store.channels.create({ workspaceId: wsId })
-    assert.equal(await ctx.store.channels.auth(channel.id, token), 'ok')
-    assert.equal(await ctx.store.channels.auth(channel.id, 'wrong'), 'forbidden')
-    assert.equal(await ctx.store.channels.auth('nope', token), 'unknown')
+  test('exists: true for a real channel, false for a missing one', async () => {
+    const ch = await ctx.store.channels.create({ workspaceId: wsId })
+    assert.equal(await ctx.store.channels.exists(ch.id), true)
+    assert.equal(await ctx.store.channels.exists('nope'), false)
   })
 
   test('appendMessage: 1-based seq; maps from/ts/senderKind/to', async () => {
-    const { channel } = await ctx.store.channels.create({ workspaceId: wsId })
-    const m1 = await ctx.store.channels.appendMessage(channel.id, {
+    const ch = await ctx.store.channels.create({ workspaceId: wsId })
+    const m1 = await ctx.store.channels.appendMessage(ch.id, {
       sender: 'alice',
       senderKind: 'human',
       text: 'hi',
     })
-    const m2 = await ctx.store.channels.appendMessage(channel.id, {
+    const m2 = await ctx.store.channels.appendMessage(ch.id, {
       sender: 'bob',
       senderKind: 'agent',
       text: 'yo',
@@ -63,10 +62,10 @@ describe('store channels', () => {
   })
 
   test('concurrent appends get contiguous, unique seqs (atomic tx)', async () => {
-    const { channel } = await ctx.store.channels.create({ workspaceId: wsId })
+    const ch = await ctx.store.channels.create({ workspaceId: wsId })
     const out = await Promise.all(
       Array.from({ length: 8 }, (_, i) =>
-        ctx.store.channels.appendMessage(channel.id, {
+        ctx.store.channels.appendMessage(ch.id, {
           sender: 'a',
           senderKind: 'agent',
           text: `m${i}`,
@@ -80,31 +79,23 @@ describe('store channels', () => {
   })
 
   test('destroy removes the channel and cascades its messages', async () => {
-    const { channel } = await ctx.store.channels.create({ workspaceId: wsId })
-    await ctx.store.channels.appendMessage(channel.id, {
-      sender: 'a',
-      senderKind: 'agent',
-      text: 'x',
-    })
-    await ctx.store.channels.destroy(channel.id)
-    assert.equal(await ctx.store.channels.get(channel.id), null)
-    assert.deepEqual(await ctx.store.channels.since(channel.id, 0), []) // messages cascaded away
+    const ch = await ctx.store.channels.create({ workspaceId: wsId })
+    await ctx.store.channels.appendMessage(ch.id, { sender: 'a', senderKind: 'agent', text: 'x' })
+    await ctx.store.channels.destroy(ch.id)
+    assert.equal(await ctx.store.channels.get(ch.id), null)
+    assert.deepEqual(await ctx.store.channels.since(ch.id, 0), []) // messages cascaded away
   })
 
   test('since: strictly-after, ascending, capped by limit', async () => {
-    const { channel } = await ctx.store.channels.create({ workspaceId: wsId })
+    const ch = await ctx.store.channels.create({ workspaceId: wsId })
     for (const t of ['1', '2', '3'])
-      await ctx.store.channels.appendMessage(channel.id, {
-        sender: 'a',
-        senderKind: 'agent',
-        text: t,
-      })
+      await ctx.store.channels.appendMessage(ch.id, { sender: 'a', senderKind: 'agent', text: t })
     assert.deepEqual(
-      (await ctx.store.channels.since(channel.id, 1)).map(m => m.text),
+      (await ctx.store.channels.since(ch.id, 1)).map(m => m.text),
       ['2', '3'],
     )
-    assert.deepEqual(await ctx.store.channels.since(channel.id, 3), [])
+    assert.deepEqual(await ctx.store.channels.since(ch.id, 3), [])
     assert.deepEqual(await ctx.store.channels.since('unknown', 0), [])
-    assert.equal((await ctx.store.channels.since(channel.id, 0, 2)).length, 2)
+    assert.equal((await ctx.store.channels.since(ch.id, 0, 2)).length, 2)
   })
 })

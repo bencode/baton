@@ -13,8 +13,8 @@ import { common } from '../../util.ts'
 // the agent Reads the file on demand for the full text.
 const PREVIEW = 280
 
-// The eventsource error event carries http status as `.code` (401 bad token,
-// 404 channel gone) — surface it so a stale invite is diagnosable.
+// The eventsource error event carries http status as `.code` (404 = channel gone)
+// — surface it so a stale invite is diagnosable.
 const describe = (e: unknown): string => {
   const ev = e as { code?: number; message?: string }
   return ev?.code ? `${ev.code}${ev.message ? ` ${ev.message}` : ''}` : String(e)
@@ -26,7 +26,6 @@ const describe = (e: unknown): string => {
 export const runListen = async (o: {
   url: string
   channel: string
-  token: string
   from: string
   since: number
   for?: string
@@ -64,7 +63,7 @@ export const runListen = async (o: {
       file,
     })
   }
-  const close = channelClient(o.url).listen(o.channel, o.token, {
+  const close = channelClient(o.url).listen(o.channel, {
     since: o.since,
     for: o.for,
     as: o.from,
@@ -93,8 +92,10 @@ export const listenCommand = defineCommand({
   },
   args: {
     channel: { type: 'positional', required: true, description: 'channel id' },
-    token: { type: 'string', required: true, description: 'channel token' },
-    from: { type: 'string', description: 'your name; your own messages skipped, presence kept fresh' },
+    from: {
+      type: 'string',
+      description: 'your name; your own messages skipped, presence kept fresh',
+    },
     since: { type: 'string', description: 'replay messages after this seq (default 0 = full)' },
     for: { type: 'string', description: 'only broadcasts + messages addressed to this name' },
     ...common,
@@ -103,7 +104,6 @@ export const listenCommand = defineCommand({
     await runListen({
       url: resolveBaseUrl(args.url),
       channel: args.channel,
-      token: args.token,
       from: args.from ?? '',
       since: args.since ? Number(args.since) : 0,
       for: args.for,

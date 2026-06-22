@@ -11,12 +11,11 @@ export const aboutCommand = defineCommand({
   meta: { name: 'about', description: "show a channel's manifest (description + online roster)" },
   args: {
     channel: { type: 'positional', required: true, description: 'channel id' },
-    token: { type: 'string', required: true, description: 'channel token' },
     ...common,
   },
   run: async ({ args }) => {
     const url = resolveBaseUrl(args.url)
-    const m = await channelClient(url).manifest(args.channel, args.token)
+    const m = await channelClient(url).manifest(args.channel)
     if (args.json) {
       console.log(toJson(m))
       return
@@ -29,7 +28,7 @@ export const aboutCommand = defineCommand({
 })
 
 export const helpCommand = defineCommand({
-  meta: { name: 'help', description: 'print the channel protocol doc (no token needed)' },
+  meta: { name: 'help', description: 'print the channel protocol doc' },
   args: { ...common },
   run: async ({ args }) => {
     console.log(await channelClient(resolveBaseUrl(args.url)).help())
@@ -40,12 +39,11 @@ export const membersCommand = defineCommand({
   meta: { name: 'members', description: "list the channel's online roster" },
   args: {
     channel: { type: 'positional', required: true, description: 'channel id' },
-    token: { type: 'string', required: true, description: 'channel token' },
     ...common,
   },
   run: async ({ args }) => {
     const url = resolveBaseUrl(args.url)
-    const members = await channelClient(url).members(args.channel, args.token)
+    const members = await channelClient(url).members(args.channel)
     console.log(args.json ? toJson(members) : renderRoster(members))
   },
 })
@@ -54,7 +52,6 @@ export const updateCommand = defineCommand({
   meta: { name: 'update', description: "update a channel's title / description (topic + rules)" },
   args: {
     channel: { type: 'positional', required: true, description: 'channel id' },
-    token: { type: 'string', required: true, description: 'channel token' },
     title: { type: 'string', description: 'new title' },
     desc: { type: 'string', description: 'new description (purpose / topic / rules)' },
     ...common,
@@ -63,7 +60,7 @@ export const updateCommand = defineCommand({
     if (args.title === undefined && args.desc === undefined)
       throw new Error('nothing to update: pass --title and/or --desc')
     const url = resolveBaseUrl(args.url)
-    const ch = await channelClient(url).update(args.channel, args.token, {
+    const ch = await channelClient(url).update(args.channel, {
       title: args.title,
       description: args.desc,
     })

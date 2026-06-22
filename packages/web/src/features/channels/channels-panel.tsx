@@ -5,10 +5,9 @@ import { useApi } from '../../app/api-context'
 import { bumpLists } from '../../hooks/use-list-revision'
 import { useChannels } from './use-channels'
 
-// The room's standalone page reads the token from the URL hash (never sent on
-// page load); we already hold it from the gated list, so we pass it straight in.
-const roomPath = (id: string, token: string): string =>
-  `/channel/${id}#token=${encodeURIComponent(token)}`
+// The room's standalone page is keyed on the channel id alone (the uuid is the
+// capability — no token in the link).
+const roomPath = (id: string): string => `/channel/${id}`
 
 // Left-panel section: the current workspace's rooms + a one-field "new channel"
 // create. Clicking a room (or creating one) navigates to the full-page chat — the
@@ -25,13 +24,13 @@ export const ChannelsPanel = ({ workspaceId }: { workspaceId: Id }) => {
     const name = title.trim()
     setCreating(true)
     try {
-      const { channelId, token } = await api.channels.create(
+      const { channelId } = await api.channels.create(
         workspaceId,
         name ? { title: name } : undefined,
       )
       setTitle('')
       bumpLists() // so the list is fresh when the member returns from the room
-      navigate(roomPath(channelId, token))
+      navigate(roomPath(channelId))
     } catch (err) {
       console.error('[channels] create failed', err)
     } finally {
@@ -49,7 +48,7 @@ export const ChannelsPanel = ({ workspaceId }: { workspaceId: Id }) => {
         <button
           key={ch.id}
           type="button"
-          onClick={() => navigate(roomPath(ch.id, ch.token))}
+          onClick={() => navigate(roomPath(ch.id))}
           className="flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-gray-700 hover:bg-gray-100"
         >
           <span className="text-gray-400">#</span>

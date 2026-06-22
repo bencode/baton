@@ -8,7 +8,7 @@ import type {
 } from '@baton/shared'
 import { EventSource } from 'eventsource'
 
-export type ChannelHandle = { channelId: string; token: string; help?: string }
+export type ChannelHandle = { channelId: string; help?: string }
 
 export type SendInput = {
   from: string
@@ -30,12 +30,10 @@ export type ListenOpts = {
   onError?: (e: unknown) => void
 }
 
-// Channel client. Like the relay client, deliberately independent of the shared
-// `request` helper / cookie gate: a channel authenticates only with its own token,
-// passed explicitly per call — a self-contained capability auth domain.
+// Channel client. Participation is keyed on the channel id alone — the channel uuid
+// IS the capability, so no per-call token. (create is the exception: it hits the
+// workspace-gated endpoint with a baton bearer, not a channel token.)
 export type ChannelClient = {
-  // Create a room in a workspace. Membership-gated, so it carries a baton Bearer
-  // token (resolveBearer) — unlike the channel-token calls below.
   create(
     workspaceId: number,
     title?: string,
@@ -43,49 +41,39 @@ export type ChannelClient = {
     token?: string,
   ): Promise<ChannelHandle>
   // One-call room manifest: description + online roster + help pointer.
-  manifest(channelId: string, token: string): Promise<ChannelManifest>
+  manifest(channelId: string): Promise<ChannelManifest>
   // Update room metadata (title / description = topic / rules).
-  update(
-    channelId: string,
-    token: string,
-    patch: { title?: string; description?: string },
-  ): Promise<Channel>
-  // The protocol doc (markdown); no token needed.
+  update(channelId: string, patch: { title?: string; description?: string }): Promise<Channel>
+  // The protocol doc (markdown).
   help(): Promise<string>
-  destroy(channelId: string, token: string): Promise<void>
-  join(channelId: string, token: string, name: string, kind?: MemberKind): Promise<ChannelMember[]>
-  leave(channelId: string, token: string, name: string): Promise<void>
-  members(channelId: string, token: string): Promise<ChannelMember[]>
-  send(channelId: string, token: string, msg: SendInput): Promise<ChannelMessage>
+  destroy(channelId: string): Promise<void>
+  join(channelId: string, name: string, kind?: MemberKind): Promise<ChannelMember[]>
+  leave(channelId: string, name: string): Promise<void>
+  members(channelId: string): Promise<ChannelMember[]>
+  send(channelId: string, msg: SendInput): Promise<ChannelMessage>
   // Upload a file to the room; cite the returned `url` in a message so peers fetch it.
   uploadAttachment(
     channelId: string,
-    token: string,
     input: { filename: string; contentType: string; body: Blob },
   ): Promise<Attachment>
-  // Download a stored attachment (streamed); returns the raw Response so the
-  // caller writes the body to disk without buffering.
-  downloadAttachment(channelId: string, token: string, attId: string): Promise<Response>
-  read(
-    channelId: string,
-    token: string,
-    opts?: { since?: number; for?: string },
-  ): Promise<ChannelMessage[]>
+  // Download a stored attachment (streamed); returns the raw Response so the caller
+  // writes the body to disk without buffering.
+  downloadAttachment(channelId: string, attId: string): Promise<Response>
+  read(channelId: string, opts?: { since?: number; for?: string }): Promise<ChannelMessage[]>
   // EventSource auto-reconnects; a monotonic cursor dedupes replay on reconnect.
-  listen(channelId: string, token: string, opts: ListenOpts): () => void
+  listen(channelId: string, opts: ListenOpts): () => void
 }
 
 export const channelClient = (baseUrl: string): ChannelClient => {
   const u = (p: string): string => `${baseUrl}${p}`
-  const authed = (token: string) => ({ authorization: `Bearer ${token}` })
-  const sendJson = (token: string) => ({ 'content-type': 'application/json', ...authed(token) })
+  const JSON_CT = { 'content-type': 'application/json' }
   const member = (channelId: string, name: string): string =>
     u(`/channels/${channelId}/members/${encodeURIComponent(name)}`)
   return {
     create: async (workspaceId, title, description, token) => {
       const res = await fetch(u(`/workspaces/${workspaceId}/channels`), {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...(token ? authed(token) : {}) },
+        headers: { ...JSON_CT, ...(token ? { authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           ...(title ? { title } : {}),
           ...(description ? { description } : {}),
@@ -97,15 +85,15 @@ export const channelClient = (baseUrl: string): ChannelClient => {
         )
       return (await res.json()) as ChannelHandle
     },
-    manifest: async (channelId, token) => {
-      const res = await fetch(u(`/channels/${channelId}`), { headers: authed(token) })
+    manifest: async channelId => {
+      const res = await fetch(u(`/channels/${channelId}`))
       if (!res.ok) throw new Error(`GET channel → ${res.status}: ${await res.text()}`)
       return (await res.json()) as ChannelManifest
     },
-    update: async (channelId, token, patch) => {
+    update: async (channelId, patch) => {
       const res = await fetch(u(`/channels/${channelId}`), {
         method: 'PATCH',
-        headers: sendJson(token),
+        headers: JSON_CT,
         body: JSON.stringify(patch),
       })
       if (!res.ok) throw new Error(`PATCH channel → ${res.status}: ${await res.text()}`)
@@ -116,80 +104,63 @@ export const channelClient = (baseUrl: string): ChannelClient => {
       if (!res.ok) throw new Error(`GET /channels/help → ${res.status}: ${await res.text()}`)
       return await res.text()
     },
-    destroy: async (channelId, token) => {
-      const res = await fetch(u(`/channels/${channelId}`), {
-        method: 'DELETE',
-        headers: authed(token),
-      })
+    destroy: async channelId => {
+      const res = await fetch(u(`/channels/${channelId}`), { method: 'DELETE' })
       if (!res.ok) throw new Error(`DELETE channel → ${res.status}: ${await res.text()}`)
     },
-    join: async (channelId, token, name, kind) => {
+    join: async (channelId, name, kind) => {
       const res = await fetch(member(channelId, name), {
         method: 'PUT',
-        headers: sendJson(token),
+        headers: JSON_CT,
         body: JSON.stringify({ kind: kind ?? 'agent' }),
       })
       if (!res.ok) throw new Error(`join channel → ${res.status}: ${await res.text()}`)
       return ((await res.json()) as { members: ChannelMember[] }).members
     },
-    leave: async (channelId, token, name) => {
-      const res = await fetch(member(channelId, name), { method: 'DELETE', headers: authed(token) })
+    leave: async (channelId, name) => {
+      const res = await fetch(member(channelId, name), { method: 'DELETE' })
       if (!res.ok) throw new Error(`leave channel → ${res.status}: ${await res.text()}`)
     },
-    members: async (channelId, token) => {
-      const res = await fetch(u(`/channels/${channelId}/members`), { headers: authed(token) })
+    members: async channelId => {
+      const res = await fetch(u(`/channels/${channelId}/members`))
       if (!res.ok) throw new Error(`GET members → ${res.status}: ${await res.text()}`)
       return ((await res.json()) as { members: ChannelMember[] }).members
     },
-    send: async (channelId, token, msg) => {
+    send: async (channelId, msg) => {
       const res = await fetch(u(`/channels/${channelId}/messages`), {
         method: 'POST',
-        headers: sendJson(token),
+        headers: JSON_CT,
         body: JSON.stringify(msg),
       })
       if (!res.ok) throw new Error(`POST channel message → ${res.status}: ${await res.text()}`)
       return (await res.json()) as ChannelMessage
     },
-    uploadAttachment: async (channelId, token, input) => {
+    uploadAttachment: async (channelId, input) => {
       const res = await fetch(
         u(`/channels/${channelId}/attachments?filename=${encodeURIComponent(input.filename)}`),
-        {
-          method: 'POST',
-          headers: { 'content-type': input.contentType, ...authed(token) },
-          body: input.body,
-        },
+        { method: 'POST', headers: { 'content-type': input.contentType }, body: input.body },
       )
       if (!res.ok) throw new Error(`upload attachment → ${res.status}: ${await res.text()}`)
       return (await res.json()) as Attachment
     },
-    downloadAttachment: async (channelId, token, attId) => {
-      const res = await fetch(u(`/channels/${channelId}/attachments/${attId}`), {
-        headers: authed(token),
-      })
+    downloadAttachment: async (channelId, attId) => {
+      const res = await fetch(u(`/channels/${channelId}/attachments/${attId}`))
       if (!res.ok) throw new Error(`download attachment → ${res.status}: ${await res.text()}`)
       return res
     },
-    read: async (channelId, token, opts) => {
+    read: async (channelId, opts) => {
       const params = new URLSearchParams({ since: String(opts?.since ?? 0) })
       if (opts?.for) params.set('for', opts.for)
-      const res = await fetch(u(`/channels/${channelId}/messages?${params}`), {
-        headers: authed(token),
-      })
+      const res = await fetch(u(`/channels/${channelId}/messages?${params}`))
       if (!res.ok) throw new Error(`GET messages → ${res.status}: ${await res.text()}`)
       return ((await res.json()) as { messages: ChannelMessage[] }).messages
     },
-    listen: (channelId, token, opts) => {
+    listen: (channelId, opts) => {
       let cursor = opts.since ?? 0
       const params = new URLSearchParams({ since: String(cursor) })
       if (opts.for) params.set('for', opts.for)
       if (opts.as) params.set('as', opts.as)
-      const es = new EventSource(u(`/channels/${channelId}/stream?${params}`), {
-        fetch: (url, init) =>
-          fetch(url, {
-            ...init,
-            headers: { ...(init?.headers as Record<string, string>), ...authed(token) },
-          }),
-      })
+      const es = new EventSource(u(`/channels/${channelId}/stream?${params}`))
       es.onmessage = e => {
         try {
           const m = JSON.parse(e.data) as ChannelMessage

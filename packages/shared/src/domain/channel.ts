@@ -9,7 +9,7 @@ export type MemberKind = 'agent' | 'human'
 export type Channel = {
   id: string
   // The owning workspace. Creation + listing are gated by workspace membership;
-  // participation over the id+token API stays open (the two layers — see schema).
+  // participation is open on the channel id itself (the uuid is the capability).
   workspaceId: number
   title?: string
   // Free-text self-description: what this room is for / how to participate.
@@ -17,11 +17,6 @@ export type Channel = {
   // Server-stamped epoch milliseconds.
   createdAt: number
 }
-
-// A channel as listed for a workspace member. Carries the capability `token` so a
-// member can open the room directly — workspace membership authorizes full access
-// (the bridge between the gated list and the open id+token participation layer).
-export type ChannelListItem = Channel & { token: string }
 
 // One-call orientation for a newcomer: the channel's self-description + who is
 // currently online + a pointer to the global protocol help. Returned by
