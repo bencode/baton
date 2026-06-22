@@ -76,8 +76,11 @@ type WorkerGroupProps = {
 const WorkerGroup = ({ worker, sessions, projectId, activeId, open, close }: WorkerGroupProps) => {
   const api = useApi()
   const [expanded, setExpanded] = useState(false)
-  const alive = worker.alive
-  const dim = !alive
+  // "online" = this worker's own command stream is open (connected) — the real
+  // "can take commands / run sessions" signal. A heartbeat (alive) can belong to
+  // a same-machine sibling, so it isn't proof THIS worker is reachable.
+  const online = worker.connected
+  const dim = !online
   // Create nameless → server assigns `session-<id>`, the worker auto-titles it
   // after the first turn. Open it straight away (no prompt).
   const createSession = () => {
@@ -94,14 +97,14 @@ const WorkerGroup = ({ worker, sessions, projectId, activeId, open, close }: Wor
       <div
         className={`flex items-center gap-2 px-1 text-xs ${dim ? 'text-gray-400' : 'text-gray-700'}`}
       >
-        <PresenceDot online={alive} />
+        <PresenceDot online={online} />
         {/* W-N: the global worker handle (same convention as R-N / T-N codes). */}
         <span className="shrink-0 font-mono text-gray-400">W-{worker.id}</span>
         <span className="font-semibold tracking-wide">{worker.name}</span>
         {worker.hostname !== worker.name && (
           <span className="font-mono text-[10px] text-gray-400">{worker.hostname}</span>
         )}
-        {alive && (
+        {online && (
           <button
             type="button"
             onClick={createSession}
