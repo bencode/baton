@@ -53,6 +53,7 @@ const fakeApi = () =>
     tasks: { listByRequirement: vi.fn(async () => tasks) },
     sessions: { listByProject: vi.fn(async () => []) },
     workers: { listByProject: vi.fn(async () => []) },
+    channels: { listByWorkspace: vi.fn(async () => []) },
   }) as unknown as Api
 
 test('LeftPanel renders the requirement tree (deps + ready) and opens a task on click', async () => {
@@ -97,6 +98,7 @@ test('rail session row: trash → inline confirm → removes session and closes 
     tasks: { listByRequirement: vi.fn(async () => []) },
     sessions: { listByProject: vi.fn(async () => [session]), remove },
     workers: { listByProject: vi.fn(async () => [worker]) },
+    channels: { listByWorkspace: vi.fn(async () => []) },
   } as unknown as Api
   render(
     <ApiContext.Provider value={api}>
