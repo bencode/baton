@@ -1,7 +1,9 @@
 import type { Attachment, ChannelMember } from '@baton/shared'
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { type KeyboardEvent, useRef, useState } from 'react'
 import { AttachmentStrip } from '../../../components/attachments/attachment-strip'
-import { extractImageFiles, renamePasted } from '../../../utils/attachment'
+import { useAutosize } from '../../../hooks/use-autosize'
+import { useDropZone } from '../../../hooks/use-drop-zone'
+import { extractImageFiles, insertLabelToken, renamePasted } from '../../../utils/attachment'
 import { useMentions } from './use-mentions'
 
 // Recipients = @mentions that match an online member (deduped); empty = broadcast.
@@ -38,18 +40,10 @@ export const Composer = ({
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [dragging, setDragging] = useState(false)
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mentions = useMentions(text, setText, ref, members, me)
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure height on each text change (used indirectly via scrollHeight)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
-  }, [text])
+  useAutosize(ref, text, 160)
 
   // Upload all picked/dropped/pasted files at once; keep the successes, surface a
   // count of any failures. Pasted images have no name → give them a stable one.
@@ -70,19 +64,9 @@ export const Composer = ({
     }
   }
 
-  // Insert a {label} reference token at the caret so the user can cite a pending
-  // attachment in their text.
-  const insertLabel = (label: string) => {
-    const el = ref.current
-    const caret = el?.selectionStart ?? text.length
-    const token = `{${label}} `
-    setText(text.slice(0, caret) + token + text.slice(caret))
-    requestAnimationFrame(() => {
-      const pos = caret + token.length
-      el?.focus()
-      el?.setSelectionRange(pos, pos)
-    })
-  }
+  const { dragging, dropProps } = useDropZone(files => void addFiles(files))
+
+  const insertLabel = (label: string) => insertLabelToken(ref.current, text, setText, label)
 
   const submit = () => {
     const body = text.trim()
@@ -105,18 +89,8 @@ export const Composer = ({
   return (
     <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-2">
       <div className="mx-auto max-w-3xl">
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: the input card is the drop zone */}
         <div
-          onDragOver={e => {
-            e.preventDefault()
-            setDragging(true)
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={e => {
-            e.preventDefault()
-            setDragging(false)
-            void addFiles(Array.from(e.dataTransfer.files))
-          }}
+          {...dropProps}
           className={`rounded-xl border px-3 pt-2 pb-1.5 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-300'}`}
         >
           {attachments.length > 0 && (
