@@ -1,5 +1,6 @@
 import type { SessionEvent, SessionEventType } from '@baton/shared'
 import { primeLogin } from './client/auth.ts'
+import { type LoopsClient, loopsClient } from './client/loops.ts'
 import { type ProjectClient, projectClient } from './client/projects.ts'
 import { request, setAuthHeaders } from './client/request.ts'
 import { type RequirementClient, requirementClient } from './client/requirements.ts'
@@ -11,6 +12,7 @@ import { type WorkspaceClient, workspaceClient } from './client/workspaces.ts'
 
 // Re-export per-resource input / output types so the rest of the cli
 // (commands, tests) can keep importing from '../client.ts'.
+export type { LoopCreateInput, LoopUpdateInput } from './client/loops.ts'
 export type { ProjectInput } from './client/projects.ts'
 export type { RequirementInput } from './client/requirements.ts'
 export type { SessionCreateInput } from './client/sessions.ts'
@@ -29,6 +31,7 @@ export type ApiClient = {
   requirements: RequirementClient
   tasks: TaskClient
   sessions: SessionsClient
+  loops: LoopsClient
   workers: WorkersClient
 }
 
@@ -64,6 +67,7 @@ const clientFromBase = (baseUrl: string): ApiClient => ({
   requirements: requirementClient(baseUrl),
   tasks: taskClient(baseUrl),
   sessions: sessionsClient(baseUrl),
+  loops: loopsClient(baseUrl),
   workers: workersClient(baseUrl),
 })
 

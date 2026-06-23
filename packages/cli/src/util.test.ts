@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { resolveAuth, splitCsv } from './util.ts'
+import { parseDuration, resolveAuth, splitCsv } from './util.ts'
 
 describe('splitCsv', () => {
   test('parses / trims / drops empties; undefined when absent', () => {
@@ -24,5 +24,20 @@ describe('resolveAuth', () => {
     assert.equal(resolveAuth({ BATON_USER: 'u', BATON_PASS: 'p' }, 'file'), 'cookie')
     assert.deepEqual(resolveAuth({}, 'file'), { bearer: 'file' })
     assert.equal(resolveAuth({}, undefined), undefined)
+  })
+})
+
+describe('parseDuration', () => {
+  test('unit suffixes and bare seconds', () => {
+    assert.equal(parseDuration('90s'), 90)
+    assert.equal(parseDuration('30m'), 1800)
+    assert.equal(parseDuration('2h'), 7200)
+    assert.equal(parseDuration('1d'), 86_400)
+    assert.equal(parseDuration('120'), 120) // bare number = seconds
+  })
+  test('throws on garbage', () => {
+    assert.throws(() => parseDuration('abc'))
+    assert.throws(() => parseDuration('5x'))
+    assert.throws(() => parseDuration(''))
   })
 })

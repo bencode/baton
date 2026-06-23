@@ -84,3 +84,13 @@ export const splitCsv = (s?: string): string[] | undefined =>
         .map(x => x.trim())
         .filter(Boolean)
     : undefined
+
+// Parse a loop interval into seconds: "90s" / "30m" / "2h" / "1d", or a bare
+// number (= seconds). Throws on anything else so a typo fails loudly.
+export const parseDuration = (s: string): number => {
+  const m = s.trim().match(/^(\d+)\s*([smhd]?)$/)
+  if (!m) throw new Error(`bad interval "${s}" — use e.g. 90s, 30m, 2h, 1d`)
+  const n = Number(m[1])
+  const mult = m[2] === 'd' ? 86400 : m[2] === 'h' ? 3600 : m[2] === 'm' ? 60 : 1
+  return n * mult
+}
