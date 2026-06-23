@@ -1,5 +1,6 @@
 import type { Id } from '@baton/shared'
 import type { Hono } from 'hono'
+import { nextRunAfter } from '../loop-scheduler.ts'
 import { loadScopedSession } from '../middleware/domain-scope.ts'
 import type { ProjectBus } from '../project-bus.ts'
 import type { LoopPatch, Store } from '../store/types.ts'
@@ -8,6 +9,21 @@ import { type AppEnv, intParam } from '../views.ts'
 // The scheduler ticks at ~30s, so a sub-30s interval can't actually fire faster;
 // floor at 30s to keep loops meaningful (and off the "every second" footgun).
 const MIN_INTERVAL_SEC = 30
+// Ceiling well clear of Date-ms overflow (nextRunAt = now + intervalSec*1000 must
+// stay a valid Date); 90 days is generous for any recurring wake-up.
+const MAX_INTERVAL_SEC = 90 * 86_400
+
+// Validate a raw interval — required on create, optional on patch. Floors to whole
+// seconds; rejects non-numbers, sub-floor, and absurd values that would overflow
+// the next-run timestamp. Returns the clean value or a client-facing error string.
+const checkInterval = (v: unknown): { value: number } | { error: string } => {
+  if (typeof v !== 'number' || !Number.isFinite(v))
+    return { error: `intervalSec must be a number ≥ ${MIN_INTERVAL_SEC}` }
+  const n = Math.floor(v)
+  if (n < MIN_INTERVAL_SEC) return { error: `intervalSec must be a number ≥ ${MIN_INTERVAL_SEC}` }
+  if (n > MAX_INTERVAL_SEC) return { error: `intervalSec must be ≤ ${MAX_INTERVAL_SEC} (90d)` }
+  return { value: n }
+}
 
 const cleanName = (v: unknown): string | undefined =>
   typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined
@@ -29,19 +45,17 @@ export const registerLoopRoutes = (app: Hono<AppEnv>, store: Store, projects: Pr
       enabled?: unknown
     }
     const message = typeof body.message === 'string' ? body.message.trim() : ''
-    const intervalSec =
-      typeof body.intervalSec === 'number' ? Math.floor(body.intervalSec) : Number.NaN
     if (message.length === 0) return c.json({ error: 'message required' }, 400)
-    if (!Number.isFinite(intervalSec) || intervalSec < MIN_INTERVAL_SEC)
-      return c.json({ error: `intervalSec must be a number ≥ ${MIN_INTERVAL_SEC}` }, 400)
+    const iv = checkInterval(body.intervalSec)
+    if ('error' in iv) return c.json({ error: iv.error }, 400)
     const loop = await store.loops.create({
       sessionId,
       name: cleanName(body.name),
       message,
-      intervalSec,
+      intervalSec: iv.value,
       enabled: typeof body.enabled === 'boolean' ? body.enabled : true,
       // First beat is one interval out — creating a loop never fires immediately.
-      nextRunAt: Date.now() + intervalSec * 1000,
+      nextRunAt: nextRunAfter(Date.now(), iv.value),
     })
     bump(session.projectId)
     return c.json(loop, 201)
@@ -86,17 +100,16 @@ export const registerLoopRoutes = (app: Hono<AppEnv>, store: Store, projects: Pr
     // so a stale past nextRunAt can't make it fire the instant it's turned back on.
     let reanchor = false
     if (typeof body.intervalSec === 'number') {
-      const iv = Math.floor(body.intervalSec)
-      if (!Number.isFinite(iv) || iv < MIN_INTERVAL_SEC)
-        return c.json({ error: `intervalSec must be a number ≥ ${MIN_INTERVAL_SEC}` }, 400)
-      patch.intervalSec = iv
+      const iv = checkInterval(body.intervalSec)
+      if ('error' in iv) return c.json({ error: iv.error }, 400)
+      patch.intervalSec = iv.value
       reanchor = true
     }
     if (typeof body.enabled === 'boolean') {
       patch.enabled = body.enabled
       if (body.enabled) reanchor = true
     }
-    if (reanchor) patch.nextRunAt = Date.now() + (patch.intervalSec ?? loop.intervalSec) * 1000
+    if (reanchor) patch.nextRunAt = nextRunAfter(Date.now(), patch.intervalSec ?? loop.intervalSec)
     const updated = await store.loops.update(id, patch)
     bump(session.projectId)
     return c.json(updated)
