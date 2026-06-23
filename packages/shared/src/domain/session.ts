@@ -60,6 +60,9 @@ export type SessionView = Session & {
   attached: boolean
   busy: boolean
   worker: Worker
+  // Count of enabled loops on this session — drives the rail "heartbeat" badge
+  // and the header loops count without fetching the full list.
+  activeLoops: number
 }
 
 // A session is born with a placeholder name (`session-<id>`); auto-title renames

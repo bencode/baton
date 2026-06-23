@@ -54,8 +54,11 @@ export const registerProjectRoutes = (
     const denied = await assertProjectAccess(c, store, id)
     if (denied) return denied
     const list = await store.sessions.listByProject(id)
+    const loopCounts = await store.loops.activeCountsBySessions(list.map(s => s.id))
     const merged = await Promise.all(
-      list.map(s => sessionWithView(s, store, runtime, busyTracker, commands)),
+      list.map(s =>
+        sessionWithView(s, store, runtime, busyTracker, commands, loopCounts.get(s.id) ?? 0),
+      ),
     )
     return c.json(merged)
   })

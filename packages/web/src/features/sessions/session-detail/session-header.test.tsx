@@ -27,6 +27,8 @@ const renderHeader = (s: Session) =>
     <SessionHeader
       session={s}
       active={false}
+      projectId={1}
+      activeLoops={0}
       onStop={vi.fn()}
       onResume={vi.fn()}
       onRename={vi.fn()}

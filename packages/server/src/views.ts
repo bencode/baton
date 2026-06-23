@@ -25,6 +25,9 @@ export const sessionWithView = async (
   runtime: SessionRuntime,
   busyTracker: BusyTracker,
   commands: CommandBus,
+  // Enabled-loop count for this session (caller-supplied so the list path can
+  // batch one query for all sessions instead of an N+1). Defaults to 0.
+  activeLoops = 0,
 ): Promise<SessionView> => {
   const worker = await store.workers.get(session.workerId)
   // connected = the worker's command stream is open (commands.has) — can take
@@ -38,6 +41,7 @@ export const sessionWithView = async (
     connected: worker ? commands.has(worker.id) : false,
     attached,
     busy: attached && busyTracker.read(session.id),
+    activeLoops,
   }
 }
 

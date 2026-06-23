@@ -1,7 +1,8 @@
-import type { Session } from '@baton/shared'
+import type { Id, Session } from '@baton/shared'
 import { useState } from 'react'
 import { standaloneSessionPath } from '../../../app/route'
 import { copyText } from '../../../utils/clipboard'
+import { LoopsPanel } from '../../loops/loops-panel'
 
 // SessionHeader — one-line identity strip, gritty enough that the rest of the
 // surface stays a quiet reading area. Diagnostic info (cwd, full agent UUID)
@@ -12,6 +13,8 @@ import { copyText } from '../../../utils/clipboard'
 type HeaderProps = {
   session: Session
   active: boolean
+  projectId: Id
+  activeLoops: number
   onStop: () => void
   onResume: () => void
   onRename: (name: string) => void
@@ -111,8 +114,17 @@ const ShareButton = ({ shareToken }: { shareToken: string }) => {
   )
 }
 
-export const SessionHeader = ({ session, active, onStop, onResume, onRename }: HeaderProps) => {
+export const SessionHeader = ({
+  session,
+  active,
+  projectId,
+  activeLoops,
+  onStop,
+  onResume,
+  onRename,
+}: HeaderProps) => {
   const [open, setOpen] = useState(false)
+  const [loopsOpen, setLoopsOpen] = useState(false)
   return (
     <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-3 sm:px-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -161,6 +173,19 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
         {session.shareToken && <ShareButton shareToken={session.shareToken} />}
         <button
           type="button"
+          onClick={() => setLoopsOpen(o => !o)}
+          aria-label="loops"
+          aria-pressed={loopsOpen}
+          className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors sm:py-1 ${
+            loopsOpen
+              ? 'border-blue-400 bg-blue-50 text-blue-700'
+              : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700'
+          }`}
+        >
+          {activeLoops > 0 ? `loops·${activeLoops}` : 'loops'}
+        </button>
+        <button
+          type="button"
           onClick={() => setOpen(o => !o)}
           className="text-xs text-gray-400 transition-colors hover:text-gray-700"
           aria-label={open ? 'hide details' : 'show details'}
@@ -168,6 +193,7 @@ export const SessionHeader = ({ session, active, onStop, onResume, onRename }: H
           {open ? '▾' : 'ⓘ'}
         </button>
       </div>
+      {loopsOpen && <LoopsPanel sessionId={session.id} projectId={projectId} />}
       {open && (
         <div className="mt-2 flex flex-col gap-0.5 font-mono text-xs text-gray-500">
           <span>cwd: {session.worktreePath ?? '(pending materialize)'}</span>

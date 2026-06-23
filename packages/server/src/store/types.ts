@@ -234,6 +234,9 @@ export type Store = {
     due(now: number): Promise<Loop[]>
     update(id: Id, patch: LoopPatch): Promise<Loop>
     delete(id: Id): Promise<void>
+    // Enabled-loop counts for a batch of sessions (one query), keyed by sessionId;
+    // absent ids = 0. Drives SessionView.activeLoops without an N+1.
+    activeCountsBySessions(sessionIds: Id[]): Promise<Map<Id, number>>
   }
   workers: {
     // Idempotent register following the rule 1 / 2a / 2b / 2c algorithm.
