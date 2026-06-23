@@ -1,9 +1,9 @@
 import type { SessionView, WorkerView } from '@baton/shared'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import type { Api } from '../../api'
-import { ApiContext } from '../../app/api-context'
-import { WorkersPanel } from './workers-panel'
+import type { Api } from '../../../api'
+import { ApiContext } from '../../../app/api-context'
+import { WorkersPanel } from '../workers-panel'
 
 afterEach(cleanup)
 
