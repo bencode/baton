@@ -12,7 +12,7 @@ export const nextRunAfter = (now: number, intervalSec: number): number => now + 
 // advances to now + interval so missed beats don't pile up. Returns the number of
 // loops processed (for logging/tests).
 export const runDueLoops = async (deps: LoopSchedulerDeps, now: number): Promise<number> => {
-  const { store } = deps
+  const { store, projects } = deps
   const due = await store.loops.due(now)
   for (const loop of due) {
     const session = await store.sessions.get(loop.sessionId)
@@ -25,6 +25,10 @@ export const runDueLoops = async (deps: LoopSchedulerDeps, now: number): Promise
       lastStatus: sent.delivered ? 'ok' : 'skipped_offline',
       nextRunAt: nextRunAfter(now, loop.intervalSec),
     })
+    // The beat changed the loop's lastRunAt/lastStatus/nextRunAt — signal the
+    // project stream so an open loops panel refreshes its row (the CRUD routes
+    // bump on edits; this covers the scheduler's own writes).
+    projects.publish(session.projectId, { resource: 'loops' })
   }
   return due.length
 }

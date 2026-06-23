@@ -32,6 +32,7 @@ const makeDeps = (opts: { connected: boolean }) => {
   const updates: { id: number; patch: LoopPatch }[] = []
   const appended: SessionEvent[] = []
   const started: WorkerCommand[] = []
+  const published: { projectId: number; signal: unknown }[] = []
   const store = {
     loops: {
       due: async () => [loop],
@@ -60,9 +61,11 @@ const makeDeps = (opts: { connected: boolean }) => {
     commands,
     runtime,
     bus: { publish: () => {} } as unknown as EventBus,
-    projects: { publish: () => {} } as unknown as ProjectBus,
+    projects: {
+      publish: (projectId: number, signal: unknown) => published.push({ projectId, signal }),
+    } as unknown as ProjectBus,
   }
-  return { deps, updates, appended, started }
+  return { deps, updates, appended, started, published }
 }
 
 test('nextRunAfter advances one full interval from now', () => {
@@ -80,10 +83,13 @@ test('a due loop with a connected worker delivers, wakes it, advances with ok', 
 })
 
 test('a due loop with an offline worker is skipped — nothing persisted, schedule still advances', async () => {
-  const { deps, updates, appended, started } = makeDeps({ connected: false })
+  const { deps, updates, appended, started, published } = makeDeps({ connected: false })
   await runDueLoops(deps, 1000)
   assert.equal(appended.length, 0) // offline → not persisted (not queued)
   assert.equal(started.length, 0)
   assert.equal(updates[0]?.patch.lastStatus, 'skipped_offline')
   assert.equal(updates[0]?.patch.nextRunAt, 61_000)
+  // The beat still signals the project stream so an open loops panel refreshes
+  // its row (deliverMessage published nothing on the offline path).
+  assert.deepEqual(published, [{ projectId: 3, signal: { resource: 'loops' } }])
 })
