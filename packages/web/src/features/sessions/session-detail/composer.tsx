@@ -1,11 +1,12 @@
 import type { Attachment } from '@baton/shared'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { AttachmentStrip } from '../../../components/attachments/attachment-strip'
-import { extractImageFiles } from '../../../utils/attachment'
+import { useAutosize } from '../../../hooks/use-autosize'
+import { useDropZone } from '../../../hooks/use-drop-zone'
+import { extractImageFiles, insertLabelToken } from '../../../utils/attachment'
 import { CommandMenu } from './command-menu'
 import type { SlashCommand } from './commands'
 import { PaperclipIcon, SendIcon, Spinner } from './icons'
-import { useAutosize } from './use-autosize'
 import { useSlashCommands } from './use-slash-commands'
 
 // Session-wide status chips above the textarea (plan mode, model override):
@@ -89,39 +90,17 @@ export const Composer = ({
 }: ComposerProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const [dragging, setDragging] = useState(false)
+  const { dragging, dropProps } = useDropZone(onAddFiles)
   const slash = useSlashCommands(draft, setDraft, onCommand, onTogglePlanMode)
   useAutosize(textareaRef, draft)
   const busy = sending || uploading
   const canSend = active && !busy && (draft.trim().length > 0 || attachments.length > 0)
-  // Insert a {label} reference token at the caret so the user can cite a pending
-  // attachment in their text.
-  const insertLabel = (label: string) => {
-    const token = `{${label}} `
-    const el = textareaRef.current
-    const start = el?.selectionStart ?? draft.length
-    const end = el?.selectionEnd ?? draft.length
-    setDraft(draft.slice(0, start) + token + draft.slice(end))
-    requestAnimationFrame(() => {
-      const pos = start + token.length
-      el?.focus()
-      el?.setSelectionRange(pos, pos)
-    })
-  }
+  const insertLabel = (label: string) =>
+    insertLabelToken(textareaRef.current, draft, setDraft, label)
   return (
     <div className="shrink-0 border-t border-gray-200 bg-white px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3 sm:pt-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone is the whole card */}
       <div
-        onDragOver={e => {
-          e.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={e => {
-          e.preventDefault()
-          setDragging(false)
-          onAddFiles(Array.from(e.dataTransfer.files))
-        }}
+        {...dropProps}
         className={`mx-auto min-w-0 max-w-5xl rounded-xl border px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'} ${active ? 'bg-white' : 'bg-gray-50'}`}
       >
         {planMode && (
