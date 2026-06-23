@@ -157,6 +157,8 @@ export type Api = {
   workers: {
     listByProject(projectId: Id): Promise<WorkerView[]>
     get(id: Id): Promise<WorkerView>
+    // Delete a worker (cascades to its sessions + their events).
+    remove(id: Id): Promise<void>
   }
   admin: {
     // Fleet-wide snapshot for the ops board (/ops). 403 for non-admins.
@@ -284,6 +286,7 @@ export const createApi = (base: string = API_BASE): Api => {
     workers: {
       listByProject: projectId => request(u(`/projects/${projectId}/workers`), { method: 'GET' }),
       get: id => request(u(`/workers/${id}`), { method: 'GET' }),
+      remove: id => request(u(`/workers/${id}`), { method: 'DELETE' }),
     },
     admin: {
       overview: () => request(u('/admin/overview'), { method: 'GET' }),
