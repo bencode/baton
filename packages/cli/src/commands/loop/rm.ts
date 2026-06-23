@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty'
+import { removed } from '../../output.ts'
 import { clientFor, common } from '../../util.ts'
 
 export const loopRmCommand = defineCommand({
@@ -11,6 +12,6 @@ export const loopRmCommand = defineCommand({
     const c = clientFor(args)
     const id = Number(args.loop)
     await c.loops.remove(id)
-    console.log(`deleted loop ${id}`)
+    console.log(removed('loop', id, Boolean(args.json)))
   },
 })

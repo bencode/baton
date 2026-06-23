@@ -38,8 +38,18 @@ export const startLoopScheduler = (
   deps: LoopSchedulerDeps,
   tickMs: number = TICK_MS,
 ): { stop: () => void } => {
+  // Skip a beat while the previous pass is still draining — a backlog can make one
+  // pass outlast the tick, and overlapping passes would re-read the same due loops
+  // (nextRunAt not yet advanced) and double-fire them.
+  let running = false
   const t = setInterval(() => {
-    void runDueLoops(deps, Date.now()).catch(err => console.error('[loop-scheduler] threw', err))
+    if (running) return
+    running = true
+    void runDueLoops(deps, Date.now())
+      .catch(err => console.error('[loop-scheduler] threw', err))
+      .finally(() => {
+        running = false
+      })
   }, tickMs)
   if (typeof t.unref === 'function') t.unref()
   return { stop: () => clearInterval(t) }
