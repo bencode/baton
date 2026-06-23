@@ -4,6 +4,8 @@ import type {
   Channel,
   ChannelMessage,
   Id,
+  Loop,
+  LoopStatus,
   MemberKind,
   Project,
   Requirement,
@@ -22,6 +24,7 @@ import type {
 import type {
   Channel as DbChannel,
   ChannelMessage as DbChannelMessage,
+  Loop as DbLoop,
   Project as DbProject,
   Requirement as DbRequirement,
   Session as DbSession,
@@ -144,6 +147,20 @@ export const toChannelMessage = (r: DbChannelMessage): ChannelMessage => ({
   to: r.to ? parseJson<string[]>(r.to) : undefined,
   attachments: r.attachments ? parseJson<Attachment[]>(r.attachments) : undefined,
   ts: r.createdAt.getTime(),
+})
+
+export const toLoop = (r: DbLoop): Loop => ({
+  id: r.id,
+  sessionId: r.sessionId,
+  name: r.name ?? undefined,
+  message: r.message,
+  intervalSec: r.intervalSec,
+  enabled: r.enabled,
+  nextRunAt: r.nextRunAt.getTime(),
+  lastRunAt: r.lastRunAt?.getTime() ?? undefined,
+  lastStatus: (r.lastStatus as LoopStatus | null) ?? undefined,
+  createdAt: r.createdAt.getTime(),
+  updatedAt: r.updatedAt.getTime(),
 })
 
 export const toWorker = (r: DbWorker): Worker => ({

@@ -191,6 +191,7 @@ model Session {
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)
   events  SessionEvent[]
+  loops   Loop[]
 
   @@unique([agentKind, agentSessionId])
   @@index([projectId])
@@ -241,6 +242,31 @@ model SessionEvent {
 
   @@unique([sessionId, sequence])
   @@index([sessionId])
+}
+
+// A Loop is a recurring scheduled wake-up for a Session: every `intervalSec`
+// seconds the server sends `message` to the session via the normal send path
+// (auto-resume spins the worker up). Recurring only; `enabled` pauses it without
+// deleting. Best-effort: if the worker is offline at fire time the beat is
+// skipped (lastStatus='skipped_offline'), not queued — nextRunAt advances from
+// now so missed beats don't pile up. Cascades away with its Session.
+model Loop {
+  id          Int       @id @default(autoincrement())
+  sessionId   Int
+  name        String? // optional human label for the rail/config list
+  message     String // sent verbatim to the session each beat
+  intervalSec Int // beat period in seconds (UI enters minutes/hours/days)
+  enabled     Boolean   @default(true)
+  nextRunAt   DateTime // next scheduled fire; created as now + intervalSec
+  lastRunAt   DateTime? // last actual fire (null until first beat)
+  lastStatus  String? /// 'ok' | 'skipped_offline'
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([enabled, nextRunAt])
 }
 
 // An N-party live chat room — the multi-agent evolution of the 2-party relay
