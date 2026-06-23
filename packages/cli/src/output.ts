@@ -1,4 +1,5 @@
 import type {
+  Loop,
   Project,
   Requirement,
   SessionView,
@@ -23,6 +24,20 @@ export const fmtSession = (s: SessionView): string =>
 export const fmtWorker = (w: WorkerView): string => {
   const offline = w.connected === false ? '  [offline]' : ''
   return `W-${w.id}  ${w.name}  ${w.hostname}${offline}`
+}
+
+// Seconds → the largest whole unit (1d / 2h / 30m / 90s) for compact display.
+export const fmtInterval = (sec: number): string => {
+  if (sec % 86400 === 0) return `${sec / 86400}d`
+  if (sec % 3600 === 0) return `${sec / 3600}h`
+  if (sec % 60 === 0) return `${sec / 60}m`
+  return `${sec}s`
+}
+
+export const fmtLoop = (l: Loop): string => {
+  const label = l.name ? `${l.name}  ` : ''
+  const last = l.lastStatus ? `  last:${l.lastStatus}` : ''
+  return `${l.id}  [${l.enabled ? 'on' : 'off'}]  ${label}every ${fmtInterval(l.intervalSec)}${last}  "${l.message}"`
 }
 
 export const renderOne = <T>(item: T, fmt: (x: T) => string, json: boolean): string =>
