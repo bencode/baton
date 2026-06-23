@@ -5,6 +5,8 @@ import type {
   ChannelMessage,
   Code,
   Id,
+  Loop,
+  LoopStatus,
   MemberKind,
   Project,
   Requirement,
@@ -95,6 +97,27 @@ export type SessionMaterialize = {
   agentSessionId: string
   worktreePath: string
 }
+
+// Loop = a recurring scheduled wake-up on a Session. nextRunAt is epoch-ms (the
+// route computes now + intervalSec at create). The scheduler patches lastRunAt /
+// lastStatus / nextRunAt after each beat.
+export type LoopCreate = {
+  sessionId: Id
+  name?: string
+  message: string
+  intervalSec: number
+  enabled?: boolean
+  nextRunAt: number
+}
+export type LoopPatch = Partial<{
+  name: string | null
+  message: string
+  intervalSec: number
+  enabled: boolean
+  nextRunAt: number
+  lastRunAt: number
+  lastStatus: LoopStatus | null
+}>
 
 // Worker register — idempotent by (projectId, machineId) first, then
 // (projectId, name). See app.ts for the full priority algorithm. apiToken is
@@ -201,6 +224,16 @@ export type Store = {
       sessionId: Id,
       opts: { before?: number; limit: number },
     ): Promise<SessionEvent[]>
+  }
+  // Recurring scheduled wake-ups on a Session. `due` is the scheduler's worklist
+  // (enabled loops whose nextRunAt has passed); update advances the schedule.
+  loops: {
+    create(input: LoopCreate): Promise<Loop>
+    get(id: Id): Promise<Loop | null>
+    listBySession(sessionId: Id): Promise<Loop[]>
+    due(now: number): Promise<Loop[]>
+    update(id: Id, patch: LoopPatch): Promise<Loop>
+    delete(id: Id): Promise<void>
   }
   workers: {
     // Idempotent register following the rule 1 / 2a / 2b / 2c algorithm.

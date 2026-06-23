@@ -5,7 +5,7 @@ import { createPubSub, type PubSub } from './pubsub.ts'
 // itself; the web client refetches the matching query. One channel per open
 // project (GET /projects/:id/stream). Generalises to tasks with no new
 // mechanism — just publish { resource: 'tasks' } where tasks mutate.
-export type ProjectSignal = { resource: 'sessions' | 'workers' | 'tasks' }
+export type ProjectSignal = { resource: 'sessions' | 'workers' | 'tasks' | 'loops' }
 export type ProjectBus = PubSub<ProjectSignal>
 
 export const createProjectBus = (): ProjectBus => createPubSub<ProjectSignal>('project-bus')

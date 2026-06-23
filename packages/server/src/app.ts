@@ -11,6 +11,7 @@ import { createRelayBus, type RelayBus } from './relay-bus.ts'
 import { registerAdminRoutes } from './routes/admin.ts'
 import { registerAuthRoutes } from './routes/auth.ts'
 import { registerChannelRoutes } from './routes/channels.ts'
+import { registerLoopRoutes } from './routes/loops.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
 import { registerRelayRoutes } from './routes/relay.ts'
 import { registerRequirementRoutes } from './routes/requirements.ts'
@@ -66,5 +67,6 @@ export const createApp = (
   registerAdminRoutes(app, store, runtime, busyTracker, commands)
   registerSessionRoutes(app, store, bus, runtime, busyTracker, attachments, commands, projects)
   registerSessionAttachmentRoutes(app, store, attachments)
+  registerLoopRoutes(app, store, projects)
   return app
 }
