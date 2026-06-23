@@ -3,7 +3,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { Api } from '../api'
 import { ApiContext } from './api-context'
-import { HealthBadge, Shell } from './app'
+import { Shell } from './app'
+import { HealthBadge } from './shell/health-badge'
 
 afterEach(cleanup)
 
