@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { type ActivityGroup, groupSummary, type NodeTone, nodeTone } from './group-items'
-import { ThinkingBlock } from './render-item'
+import { ThinkingBlock } from './render-item/thinking-block'
 import { Caret, ToolBlock } from './tool-block'
 
 // Timeline node per step: amber = side-effectful tool, gray = read-only,
