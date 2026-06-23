@@ -178,6 +178,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
       <SessionHeader
         session={session}
         active={session.attached}
+        projectId={session.projectId}
+        activeLoops={session.activeLoops}
         onStop={stop}
         onResume={resume}
         onRename={rename}

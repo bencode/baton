@@ -49,4 +49,14 @@ export const prismaLoops = (prisma: PrismaClient): Store['loops'] => ({
   delete: async id => {
     await prisma.loop.delete({ where: { id } })
   },
+  // One groupBy over the given sessions → enabled-loop count each (absent = 0).
+  activeCountsBySessions: async sessionIds => {
+    if (sessionIds.length === 0) return new Map()
+    const rows = await prisma.loop.groupBy({
+      by: ['sessionId'],
+      where: { sessionId: { in: sessionIds }, enabled: true },
+      _count: { _all: true },
+    })
+    return new Map(rows.map(r => [r.sessionId, r._count._all]))
+  },
 })

@@ -30,6 +30,16 @@ export const SessionRow = ({ session, path, active, dim, open, onDelete }: Sessi
       >
         <SessionDot session={session} />
         <span className="truncate">{session.name}</span>
+        {session.activeLoops > 0 && (
+          <span
+            role="img"
+            aria-label={`${session.activeLoops} active loop(s)`}
+            title={`${session.activeLoops} active loop(s)`}
+            className="shrink-0 text-[10px] text-blue-400"
+          >
+            ⟳
+          </span>
+        )}
         <span className="ml-auto shrink-0 pr-1 text-[10px] text-gray-400 tabular-nums">
           {relativeTime(session.lastActiveAt)}
         </span>

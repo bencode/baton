@@ -73,4 +73,35 @@ describe('server HTTP — loops', () => {
     await ctx.store.sessions.destroy(session.id)
     assert.deepEqual(await ctx.store.loops.listBySession(session.id), [])
   })
+
+  test('intervalSec above the 90d ceiling is rejected', async () => {
+    const app = createApp(ctx.store)
+    const { session } = await seedSession(app)
+    const tooBig = 91 * 86_400
+    assert.equal(
+      (await postJson(app, `/sessions/${session.id}/loops`, { message: 'x', intervalSec: tooBig }))
+        .status,
+      400,
+    )
+  })
+
+  test('activeCounts counts only enabled loops; SessionView.activeLoops surfaces it', async () => {
+    const app = createApp(ctx.store)
+    const { session, projectId } = await seedSession(app)
+    await postJson(app, `/sessions/${session.id}/loops`, { message: 'on', intervalSec: 60 })
+    await postJson(app, `/sessions/${session.id}/loops`, {
+      message: 'off',
+      intervalSec: 60,
+      enabled: false,
+    })
+
+    const counts = await ctx.store.loops.activeCountsBySessions([session.id])
+    assert.equal(counts.get(session.id), 1) // disabled one not counted
+
+    const list = (await (await app.request(`/projects/${projectId}/sessions`)).json()) as {
+      id: number
+      activeLoops: number
+    }[]
+    assert.equal(list.find(s => s.id === session.id)?.activeLoops, 1)
+  })
 })

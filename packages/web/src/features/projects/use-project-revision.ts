@@ -2,7 +2,7 @@ import type { Id } from '@baton/shared'
 import { useEffect, useState } from 'react'
 import { subscribeProject } from './project-stream'
 
-type Resource = 'sessions' | 'workers' | 'tasks'
+type Resource = 'sessions' | 'workers' | 'tasks' | 'loops'
 
 // A revision counter that increments whenever the given project resource
 // changes (pushed via the project stream). Use it as a refetch dependency:

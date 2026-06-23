@@ -26,8 +26,10 @@ export type SessionRouteDeps = {
 // wiring. The inferred return type keeps the ownedByWorker union honest.
 export const createSessionCtx = (deps: SessionRouteDeps) => {
   const { store, commands, runtime, busyTracker, projects } = deps
-  const toView = (s: Parameters<typeof sessionWithView>[0]) =>
-    sessionWithView(s, store, runtime, busyTracker, commands)
+  const toView = async (s: Parameters<typeof sessionWithView>[0]) => {
+    const counts = await store.loops.activeCountsBySessions([s.id])
+    return sessionWithView(s, store, runtime, busyTracker, commands, counts.get(s.id) ?? 0)
+  }
   // Tell project subscribers the session list changed so they refetch it.
   const bump = (projectId: Id) => projects.publish(projectId, { resource: 'sessions' })
   // Load a session, 404 if missing, 403 if the bearer worker doesn't own it.

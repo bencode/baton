@@ -5,7 +5,7 @@ import { API_BASE } from '../../api'
 // which resource changed and we refetch that query. Lives as a module singleton
 // rather than a context provider so any hook can subscribe regardless of where
 // it sits in the tree (the tab-title sync and the rail both need it).
-type Resource = 'sessions' | 'workers' | 'tasks'
+type Resource = 'sessions' | 'workers' | 'tasks' | 'loops'
 type Listener = (resource: Resource) => void
 type Channel = { es: EventSource; listeners: Set<Listener>; refs: number }
 

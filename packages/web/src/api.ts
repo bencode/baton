@@ -4,6 +4,7 @@ import type {
   Channel,
   Code,
   Id,
+  Loop,
   Project,
   Requirement,
   RequirementStatus,
@@ -56,6 +57,18 @@ export type TaskInput = {
   title: string
   body?: string
   dependsOn?: Id[]
+}
+export type LoopInput = {
+  name?: string
+  message: string
+  intervalSec: number
+  enabled?: boolean
+}
+export type LoopPatch = {
+  name?: string | null
+  message?: string
+  intervalSec?: number
+  enabled?: boolean
 }
 
 // Transcript window query: `limit` = most recent n (open), `+ before` pages older,
@@ -153,6 +166,13 @@ export type Api = {
     // (`limit` = most recent n) and pages older with `before`; `since` (events
     // at/after a sequence) is the reconnect-gap backfill. See EventQuery.
     listEvents(id: Id, query?: EventQuery): Promise<SessionEvent[]>
+  }
+  // Recurring scheduled wake-ups bound to a session (see @baton/shared Loop).
+  loops: {
+    listBySession(sessionId: Id): Promise<Loop[]>
+    create(sessionId: Id, input: LoopInput): Promise<Loop>
+    update(id: Id, patch: LoopPatch): Promise<Loop>
+    remove(id: Id): Promise<void>
   }
   workers: {
     listByProject(projectId: Id): Promise<WorkerView[]>
@@ -281,6 +301,15 @@ export const createApi = (base: string = API_BASE): Api => {
           if (query?.[k] !== undefined) qs.set(k, String(query[k]))
         const suffix = qs.toString()
         return request(u(`/sessions/${id}/events${suffix ? `?${suffix}` : ''}`), { method: 'GET' })
+      },
+    },
+    loops: {
+      listBySession: sessionId => request(u(`/sessions/${sessionId}/loops`), { method: 'GET' }),
+      create: (sessionId, input) =>
+        request(u(`/sessions/${sessionId}/loops`), { method: 'POST', body: input }),
+      update: (id, patch) => request(u(`/loops/${id}`), { method: 'PATCH', body: patch }),
+      remove: async id => {
+        await request(u(`/loops/${id}`), { method: 'DELETE' })
       },
     },
     workers: {

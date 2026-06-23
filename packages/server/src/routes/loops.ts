@@ -32,7 +32,12 @@ const cleanName = (v: unknown): string | undefined =>
 // scoped through it (loadScopedSession enforces workspace access). Mutations bump
 // the project stream with { resource: 'loops' } so open clients refetch.
 export const registerLoopRoutes = (app: Hono<AppEnv>, store: Store, projects: ProjectBus): void => {
-  const bump = (projectId: Id) => projects.publish(projectId, { resource: 'loops' })
+  // Refetch the loop list (panel) AND the session views (rail/header carry the
+  // enabled-loop count in SessionView.activeLoops).
+  const bump = (projectId: Id) => {
+    projects.publish(projectId, { resource: 'loops' })
+    projects.publish(projectId, { resource: 'sessions' })
+  }
 
   app.post('/sessions/:id/loops', async c => {
     const sessionId = intParam(c.req.param('id'))
