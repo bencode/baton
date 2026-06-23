@@ -4,11 +4,25 @@ import {
   startedMessageIds,
   unstartedUserMessages,
 } from '@baton/shared'
+import type { RateLimitInfo, TurnEndSummary } from './event-payload'
+import {
+  formatToolResult,
+  headerModel,
+  isRecord,
+  messageContent,
+  parseRateLimit,
+  parseResult,
+  str,
+  systemActionNotice,
+} from './event-payload'
 
 // Re-exported from the shared turn-liveness predicate so existing web callers
 // (and this feature's tests) keep their import path. The session indicator now
 // trusts the server's `busy` instead, but the predicate stays available here.
 export { isAgentWorking } from '@baton/shared'
+// The turn-capsule summary types live with their parsers; re-export so existing
+// callers keep importing them from event-render.
+export type { RateLimitInfo, TurnEndSummary }
 
 // Pure reducer turning session events (sequence-ordered, each carrying a stable
 // server `id`) into a list of RenderItems UI can dispatch over. Tries to read
@@ -51,58 +65,6 @@ export type RenderItem =
   | { kind: 'thinking'; text: string; key: string }
   | { kind: 'system-notice'; text: string; key: string }
   | { kind: 'raw'; payload: unknown; key: string }
-
-export type TurnEndSummary = {
-  subtype?: string
-  numTurns?: number
-  totalCostUsd?: number
-  durationMs?: number
-}
-
-export type RateLimitInfo = {
-  rateLimitType?: string
-  status?: string
-  resetsAt?: number
-}
-
-// --- loose type guards -------------------------------------------------------
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v)
-
-const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
-
-type ContentBlock = Record<string, unknown> & { type?: string }
-
-const asContentArray = (v: unknown): ContentBlock[] => {
-  if (!Array.isArray(v)) return []
-  return v.filter((b): b is ContentBlock => isRecord(b))
-}
-
-const messageContent = (payload: Record<string, unknown>): ContentBlock[] => {
-  const msg = payload.message
-  if (!isRecord(msg)) return []
-  return asContentArray(msg.content)
-}
-
-// Best-effort stringify of tool_result content (which can be a string or an
-// array of content blocks). Keeps it short and readable.
-const formatToolResult = (raw: unknown): { text: string; isError: boolean } => {
-  if (!isRecord(raw)) return { text: '', isError: false }
-  const isError = raw.is_error === true
-  const c = raw.content
-  if (typeof c === 'string') return { text: c, isError }
-  if (Array.isArray(c)) {
-    const text = c
-      .map(b => {
-        if (isRecord(b) && typeof b.text === 'string') return b.text
-        return JSON.stringify(b)
-      })
-      .join('\n')
-    return { text, isError }
-  }
-  return { text: JSON.stringify(c ?? ''), isError }
-}
 
 // --- queued (pending) messages ----------------------------------------------
 
@@ -202,29 +164,14 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       continue
     }
     if (e.type === 'system') {
-      // /clear and /abort mark control actions — centered notices, not raw.
-      const action = isRecord(e.payload) ? e.payload.action : undefined
-      if (action === 'context_cleared') {
-        items.push({ kind: 'system-notice', text: 'context cleared — fresh conversation', key })
-      } else if (action === 'interrupt') {
-        items.push({ kind: 'system-notice', text: 'interrupted', key })
-      } else if (action === 'plan_mode') {
-        const on = isRecord(e.payload) && e.payload.planMode === true
-        items.push({
-          kind: 'system-notice',
-          text: on ? 'entered plan mode' : 'exited plan mode',
-          key,
-        })
-      } else if (action === 'model') {
-        const m = isRecord(e.payload) ? str(e.payload.model) : undefined
-        items.push({
-          kind: 'system-notice',
-          text: m ? `model → ${m}` : 'model reset to default',
-          key,
-        })
-      } else {
-        items.push({ kind: 'raw', payload: e.payload, key })
-      }
+      // /clear, /abort, /plan, /model surface as centered control notices; any
+      // other system payload falls through to a raw dump.
+      const notice = systemActionNotice(e.payload)
+      items.push(
+        notice
+          ? { kind: 'system-notice', text: notice, key }
+          : { kind: 'raw', payload: e.payload, key },
+      )
       continue
     }
     // e.type === 'sdk_event' below
@@ -239,9 +186,7 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       systemEmitted = true
       items.push({
         kind: 'system-header',
-        model:
-          str(p.model) ??
-          str((isRecord(p.model_info) && (p.model_info as Record<string, unknown>).id) as unknown),
+        model: headerModel(p),
         sessionId: str(p.session_id),
         key,
       })
@@ -311,23 +256,13 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
     }
 
     if (t === 'result') {
-      pendingResult = {
-        subtype: str(p.subtype),
-        numTurns: typeof p.num_turns === 'number' ? p.num_turns : undefined,
-        totalCostUsd: typeof p.total_cost_usd === 'number' ? p.total_cost_usd : undefined,
-        durationMs: typeof p.duration_ms === 'number' ? p.duration_ms : undefined,
-      }
+      pendingResult = parseResult(p)
       continue
     }
 
     if (t === 'rate_limit_event') {
       // Captured and folded into the next turn capsule, not rendered standalone.
-      const info = isRecord(p.rate_limit_info) ? p.rate_limit_info : null
-      pendingRateLimit = {
-        rateLimitType: info ? str(info.rateLimitType) : undefined,
-        status: info ? str(info.status) : undefined,
-        resetsAt: info && typeof info.resetsAt === 'number' ? info.resetsAt : undefined,
-      }
+      pendingRateLimit = parseRateLimit(p)
       continue
     }
 
