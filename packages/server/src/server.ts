@@ -3,8 +3,11 @@ import { createApp } from './app.ts'
 import { createBusy } from './busy.ts'
 import { startBusySweep } from './busy-sweep.ts'
 import { createChannelPresence, startPresencePrune } from './channel-presence.ts'
+import { createCommandBus } from './command-bus.ts'
 import { createEventBus } from './event-bus.ts'
+import { startLoopScheduler } from './loop-scheduler.ts'
 import { createProjectBus } from './project-bus.ts'
+import { createSessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
 
 export type Server = { port: number; stop: () => Promise<void> }
@@ -22,13 +25,18 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     const bus = createEventBus()
     const busy = createBusy()
     const projects = createProjectBus()
+    // Hoisted (like bus/busy/projects) so the Loop scheduler shares the exact
+    // runtime + command bus the app mutates — else it'd check an empty second
+    // tracker and never see a connected worker.
+    const runtime = createSessionRuntime()
+    const commands = createCommandBus()
     const app = createApp(
       opts.store,
       bus,
-      undefined,
+      runtime,
       busy,
       undefined,
-      undefined,
+      commands,
       projects,
       undefined,
       undefined,
@@ -37,6 +45,13 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     // Close turns whose worker went silent past the TTL (the "stuck thinking"
     // safety net), started + stopped with the server lifecycle like the prune.
     const busySweep = startBusySweep({ store: opts.store, bus, projects, busy })
+    // Recurring scheduled wake-ups (Loop): every tick, send due loops' messages
+    // through the same path an interactive send takes. BATON_LOOP_TICK_MS overrides
+    // the 30s default (tests). Unref'd; stopped with the lifecycle.
+    const loopScheduler = startLoopScheduler(
+      { store: opts.store, bus, commands, runtime, projects },
+      Number(process.env.BATON_LOOP_TICK_MS) || undefined,
+    )
     const httpServer = serve({ fetch: app.fetch, port: opts.port }, info => {
       resolve({
         port: info.port,
@@ -46,6 +61,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
           }).then(() => {
             presencePrune.stop()
             busySweep.stop()
+            loopScheduler.stop()
             return opts.store.close()
           }),
       })
