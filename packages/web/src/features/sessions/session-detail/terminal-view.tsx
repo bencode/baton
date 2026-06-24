@@ -18,24 +18,40 @@ export const TerminalView = ({ sessionId }: { sessionId: Id }) => {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(host)
-    fit.fit()
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const ws = new WebSocket(`${proto}://${location.host}/api/sessions/${sessionId}/terminal/ws`)
-    const send = (msg: object) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
+    // Fit xterm to the container and push the new size to the pty so claude redraws
+    // at full width/height. The initial fit MUST run after the flex layout settles
+    // (a bare fit() at mount measures a 0-size box — that's the "switch tabs to fix"
+    // bug), so we drive it from rAF / ws-open / ResizeObserver / a short backstop.
+    const doFit = () => {
+      try {
+        fit.fit()
+      } catch {
+        // renderer not ready yet — a later trigger re-fits
+      }
+      if (ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ t: 'r', c: term.cols, r: term.rows }))
     }
-    const pushResize = () => {
-      fit.fit()
-      send({ t: 'r', c: term.cols, r: term.rows }) // claude redraws on resize → fills a fresh viewer
-    }
-    ws.onopen = () => pushResize()
+    ws.onopen = () => doFit()
     ws.onmessage = e => term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data))
-    const onData = term.onData(d => send({ t: 'i', d }))
-    const ro = new ResizeObserver(() => pushResize())
+    const onData = term.onData(d => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'i', d }))
+    })
+    // ONE-TIME initial fits (not per-resize): the container can measure wrong at
+    // mount (tab/flex layout not settled) and the ResizeObserver only fires on a
+    // *change* — so a wrong-but-stable initial size would stick until a manual tab
+    // switch. rAF catches the post-layout frame; the 500ms backstop catches a slow
+    // layout / claude's TUI starting. Ongoing resizes are handled by the RO alone.
+    const raf = requestAnimationFrame(doFit)
+    const backstop = window.setTimeout(doFit, 500)
+    const ro = new ResizeObserver(() => doFit())
     ro.observe(host)
 
     return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(backstop)
       onData.dispose()
       ro.disconnect()
       ws.close()
