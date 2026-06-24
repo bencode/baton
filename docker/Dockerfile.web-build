@@ -14,7 +14,12 @@ COPY packages/cli/package.json packages/cli/
 COPY packages/web/package.json packages/web/
 COPY packages/dingtalk/package.json packages/dingtalk/
 
-RUN pnpm install --filter @baton/web... --frozen-lockfile
+# --ignore-scripts: the frozen-lockfile install resolves the whole workspace, so it
+# would otherwise try to build @baton/cli's native node-pty (which has no node-26
+# prebuild and no build toolchain in this slim image). The SPA build needs no install
+# scripts — esbuild ships its binary as a platform optional-dep. Same flag the backend
+# image uses for the same reason.
+RUN pnpm install --filter @baton/web... --frozen-lockfile --ignore-scripts
 
 COPY packages/shared/ packages/shared/
 COPY packages/web/ packages/web/
