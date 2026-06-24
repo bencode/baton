@@ -15,7 +15,7 @@ type HeaderProps = {
   active: boolean
   projectId: Id
   activeLoops: number
-  terminalUrl: string | null
+  terminalOpen: boolean
   onStop: () => void
   onResume: () => void
   onOpenTerminal: () => void
@@ -122,7 +122,7 @@ export const SessionHeader = ({
   active,
   projectId,
   activeLoops,
-  terminalUrl,
+  terminalOpen,
   onStop,
   onResume,
   onOpenTerminal,
@@ -168,7 +168,7 @@ export const SessionHeader = ({
         )}
         {/* Hidden while a terminal is open: the terminal owns the session, so the
             server rejects a headless resume anyway (close it first). */}
-        {!active && !terminalUrl && (
+        {!active && !terminalOpen && (
           <button
             type="button"
             onClick={onResume}
@@ -180,7 +180,7 @@ export const SessionHeader = ({
         {/* Interactive terminal — a hands-on alternative to the headless resume.
             Open only while idle (an active headless child would fight it over the
             session); once open it stays as a "close" toggle regardless. */}
-        {terminalUrl ? (
+        {terminalOpen ? (
           <button
             type="button"
             onClick={onCloseTerminal}

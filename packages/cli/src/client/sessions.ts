@@ -33,12 +33,10 @@ export type SessionsClient = {
   setName(id: Id, name: string, workerToken: string): Promise<Session>
   resume(id: Id): Promise<SessionView>
   stop(id: Id): Promise<SessionView>
-  // Open / close the interactive ttyd terminal for a session (UI/CLI). open 409s
-  // if the session is active; the spawned URL arrives async on SessionView.
+  // Open / close the interactive terminal for a session (UI/CLI). open 409s if the
+  // session is active; terminalOpen flips true once the worker's pty WS bridges.
   openTerminal(id: Id): Promise<SessionView>
   closeTerminal(id: Id): Promise<SessionView>
-  // Worker reports the spawned ttyd URL (or null on teardown) — worker-bearer.
-  reportTerminalUrl(id: Id, url: string | null, workerToken: string): Promise<Session>
   // Reset the claude conversation (fresh agentSessionId) but keep the session +
   // worktree; the running child is restarted to pick up the new context.
   clear(id: Id): Promise<SessionView>
@@ -89,12 +87,6 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
       request(u(`/sessions/${id}/terminal`), { method: 'POST', body: { action: 'open' } }),
     closeTerminal: id =>
       request(u(`/sessions/${id}/terminal`), { method: 'POST', body: { action: 'close' } }),
-    reportTerminalUrl: (id, url, workerToken) =>
-      request(u(`/sessions/${id}/terminal-url`), {
-        method: 'POST',
-        body: { url },
-        headers: { authorization: `Bearer ${workerToken}` },
-      }),
     clear: id => request(u(`/sessions/${id}/clear`), { method: 'POST' }),
     abort: id => request(u(`/sessions/${id}/abort`), { method: 'POST' }),
     rename: (id, name) => request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),

@@ -10,6 +10,7 @@ import { ConnectionBanner } from './session-detail/connection-banner'
 import { EventStream } from './session-detail/event-stream'
 import { QueuedMessages } from './session-detail/queued-messages'
 import { SessionHeader } from './session-detail/session-header'
+import { TerminalView } from './session-detail/terminal-view'
 import { useTranscriptScroll } from './session-detail/use-transcript-scroll'
 import { WorkingIndicator } from './session-detail/working-indicator'
 import { useSessionStream } from './use-session-stream'
@@ -186,7 +187,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         active={session.attached}
         projectId={session.projectId}
         activeLoops={session.activeLoops}
-        terminalUrl={session.terminalUrl}
+        terminalOpen={session.terminalOpen}
         onStop={stop}
         onResume={resume}
         onOpenTerminal={openTerminal}
@@ -194,65 +195,51 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         onRename={rename}
       />
       <ConnectionBanner streamStatus={status} connected={session.connected} />
-      {session.terminalUrl && (
-        <div className="flex shrink-0 flex-col border-b border-gray-200" style={{ height: 420 }}>
-          <div className="flex items-center justify-between bg-gray-50 px-3 py-1.5 text-xs text-gray-500">
-            <span>interactive terminal — claude --resume</span>
-            <button
-              type="button"
-              onClick={closeTerminal}
-              className="rounded px-1.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700"
-            >
-              close ✕
-            </button>
-          </div>
-          {/* sandbox: ttyd needs scripts + same-origin (its websocket) to run xterm;
-              withholding the other tokens keeps the embedded shell from navigating
-              the top frame, opening popups, etc. */}
-          <iframe
-            src={session.terminalUrl}
-            title="terminal"
-            sandbox="allow-scripts allow-same-origin"
-            className="min-h-0 w-full flex-1 border-0"
+      {/* A terminal IS the interaction surface — it fills the body; the relay
+          transcript + composer (which the server rejects while a terminal is open)
+          are hidden. Close via the header's "close terminal". */}
+      {session.terminalOpen ? (
+        <TerminalView sessionId={session.id} />
+      ) : (
+        <>
+          <EventStream
+            items={items}
+            scrollRef={scrollRef}
+            working={working}
+            onScroll={onScroll}
+            pinned={pinned}
+            onJumpToBottom={jumpToBottom}
+            hasOlder={hasOlder}
+            loadingOlder={loadingOlder}
+            onLoadOlder={onLoadOlder}
           />
-        </div>
+          {working && <WorkingIndicator onAbort={abort} />}
+          <QueuedMessages queued={queued} />
+          {showHelp && (
+            <div className="shrink-0 bg-white px-3">
+              <CommandHelp onClose={() => setShowHelp(false)} />
+            </div>
+          )}
+          <Composer
+            draft={draft}
+            setDraft={setDraft}
+            attachments={attachments}
+            onAddFiles={files => void addFiles(files)}
+            onRemoveAttachment={removeAttachment}
+            uploading={uploading}
+            uploadError={uploadError}
+            sending={sending}
+            active={session.attached}
+            sendError={sendError}
+            onSend={() => void send()}
+            onCommand={runCommand}
+            planMode={session.planMode}
+            onTogglePlanMode={togglePlanMode}
+            model={session.model}
+            onResetModel={() => setModel(null)}
+          />
+        </>
       )}
-      <EventStream
-        items={items}
-        scrollRef={scrollRef}
-        working={working}
-        onScroll={onScroll}
-        pinned={pinned}
-        onJumpToBottom={jumpToBottom}
-        hasOlder={hasOlder}
-        loadingOlder={loadingOlder}
-        onLoadOlder={onLoadOlder}
-      />
-      {working && <WorkingIndicator onAbort={abort} />}
-      <QueuedMessages queued={queued} />
-      {showHelp && (
-        <div className="shrink-0 bg-white px-3">
-          <CommandHelp onClose={() => setShowHelp(false)} />
-        </div>
-      )}
-      <Composer
-        draft={draft}
-        setDraft={setDraft}
-        attachments={attachments}
-        onAddFiles={files => void addFiles(files)}
-        onRemoveAttachment={removeAttachment}
-        uploading={uploading}
-        uploadError={uploadError}
-        sending={sending}
-        active={session.attached}
-        sendError={sendError}
-        onSend={() => void send()}
-        onCommand={runCommand}
-        planMode={session.planMode}
-        onTogglePlanMode={togglePlanMode}
-        model={session.model}
-        onResetModel={() => setModel(null)}
-      />
     </div>
   )
 }

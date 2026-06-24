@@ -34,7 +34,6 @@ export const runWorkerDaemon = async (
     closeTerminal: id => terminals.close(id),
   })
   const terminals = createTerminalManager({
-    client,
     cfg,
     log,
     hasChild: id => supervisor.has(id),

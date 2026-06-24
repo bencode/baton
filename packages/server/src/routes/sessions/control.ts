@@ -6,8 +6,18 @@ import type { RegisterSessionGroup } from './helpers.ts'
 // Runtime control + per-session settings: child up/down status, context clear,
 // plan-mode and model toggles, interrupt, and the auto-title trigger.
 export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
-  const { store, bus, runtime, busyTracker, commands, terminal, auth, toView, bump, ownedByWorker } =
-    ctx
+  const {
+    store,
+    bus,
+    runtime,
+    busyTracker,
+    commands,
+    terminal,
+    auth,
+    toView,
+    bump,
+    ownedByWorker,
+  } = ctx
 
   // Worker reports its child up (true, on spawn) / down (false, on exit). This is
   // the source of `attached` — instant, no heartbeat window.
@@ -33,7 +43,7 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
     if (s instanceof Response) return s
     // An open terminal is mid-conversation on this agentSessionId; regenerating it
     // here would orphan the live claude. Make the user close the terminal first.
-    if (terminal.get(s.id))
+    if (terminal.isOpen(s.id))
       return c.json({ error: 'terminal open — close it before clearing' }, 409)
     let view = s
     if (s.agentSessionId && s.worktreePath) {
@@ -130,21 +140,21 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
     return c.json(await toView(s))
   })
 
-  // Open / close an interactive terminal (ttyd serving `claude --resume`) for a
-  // hands-on, human-in-the-loop turn alongside the headless relay (UI/CLI, no
-  // auth in v0). Only an idle session can open one: an active session would have
-  // the headless child fighting the terminal over the same agentSessionId/JSONL
-  // (the worker also guards onStart). The spawned URL comes back async via the
-  // worker's POST /sessions/:id/terminal-url, surfaced on SessionView.terminalUrl.
+  // Open / close an interactive terminal for a hands-on, human-in-the-loop turn
+  // alongside the headless relay (UI/CLI, no auth in v0). open tells the worker to
+  // spawn `claude --resume` in a pty + dial back its terminal WS — the terminal
+  // becomes `terminalOpen` once that WS attaches (the bridge), surfaced over the
+  // 'sessions' project signal; the browser then connects its xterm WS. Only an idle
+  // session can open one (an active headless child would fight the pty over the
+  // same agentSessionId/JSONL — the worker also guards onStart). close drives the
+  // server to drop the worker's WS, which tears down the pty.
   app.post('/sessions/:id/terminal', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
     const body = (await c.req.json().catch(() => ({}))) as { action?: 'open' | 'close' }
     if (body.action === 'close') {
-      commands.publish(s.workerId, { cmd: 'session.terminal', sessionId: s.id, action: 'close' })
-      // No optimistic clear: the worker's null report is authoritative (and a gone
-      // worker is already cleared by forgetWorker). Clearing here would collapse the
-      // UI while an undelivered close leaves the ttyd shell orphaned + reachable.
+      terminal.closeWorker(s.id) // drop the worker pty WS → worker kills the pty
+      bump(s.projectId)
       return c.json(await toView(s))
     }
     if (runtime.isActive(s.id))
@@ -161,25 +171,5 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
       worktreePath: s.worktreePath,
     })
     return c.json(await toView(s))
-  })
-
-  // Worker reports the spawned ttyd URL (non-empty) or its teardown (null). The
-  // authoritative source for terminal.set/clear. Drops a `system` breadcrumb so
-  // the transcript marks the human-takeover window — the interactive turns
-  // themselves bypass baton's event log (claude writes only its own JSONL), so
-  // this boundary is what explains the gap.
-  app.post('/sessions/:id/terminal-url', auth, async c => {
-    const owned = await ownedByWorker(c)
-    if ('error' in owned) return owned.error
-    const body = (await c.req.json().catch(() => ({}))) as { url?: string | null }
-    const url = typeof body.url === 'string' && body.url.trim() ? body.url.trim() : null
-    if (url) terminal.set(owned.id, owned.session.workerId, url)
-    else terminal.clear(owned.id)
-    const ev = await store.sessions.appendEvent(owned.id, 'system', {
-      action: url ? 'terminal_open' : 'terminal_close',
-    })
-    bus.publish(owned.id, ev)
-    bump(owned.session.projectId)
-    return c.json(await toView(owned.session))
   })
 }

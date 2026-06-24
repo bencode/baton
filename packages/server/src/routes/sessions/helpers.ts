@@ -8,7 +8,7 @@ import { workerBearerAuth } from '../../middleware/auth.ts'
 import type { ProjectBus } from '../../project-bus.ts'
 import type { SessionRuntime } from '../../session-runtime.ts'
 import type { Store } from '../../store/types.ts'
-import type { TerminalRuntime } from '../../terminal-runtime.ts'
+import type { TerminalBridge } from '../../terminal-bridge.ts'
 import { type AppEnv, intParam, sessionWithView } from '../../views.ts'
 
 // The injected singletons every session route group shares.
@@ -20,7 +20,7 @@ export type SessionRouteDeps = {
   attachments: AttachmentStore
   commands: CommandBus
   projects: ProjectBus
-  terminal: TerminalRuntime
+  terminal: TerminalBridge
 }
 
 // Deps + the few helpers derived from them, built once and threaded into each
@@ -30,7 +30,15 @@ export const createSessionCtx = (deps: SessionRouteDeps) => {
   const { store, commands, runtime, busyTracker, projects, terminal } = deps
   const toView = async (s: Parameters<typeof sessionWithView>[0]) => {
     const counts = await store.loops.activeCountsBySessions([s.id])
-    return sessionWithView(s, store, runtime, busyTracker, commands, terminal, counts.get(s.id) ?? 0)
+    return sessionWithView(
+      s,
+      store,
+      runtime,
+      busyTracker,
+      commands,
+      terminal,
+      counts.get(s.id) ?? 0,
+    )
   }
   // Tell project subscribers the session list changed so they refetch it.
   const bump = (projectId: Id) => projects.publish(projectId, { resource: 'sessions' })

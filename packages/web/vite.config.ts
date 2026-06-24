@@ -10,7 +10,10 @@ export default defineConfig({
   server: {
     port: 5280,
     proxy: {
-      '/api': { target: BACKEND, changeOrigin: true, rewrite: p => p.replace(/^\/api/, '') },
+      // ws:true so the terminal-bridge WebSocket upgrade (/api/sessions/:id/terminal/ws)
+      // proxies through to the backend in dev — same as it rides caddy's reverse_proxy
+      // in prod.
+      '/api': { target: BACKEND, changeOrigin: true, ws: true, rewrite: p => p.replace(/^\/api/, '') },
     },
   },
   test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'] },

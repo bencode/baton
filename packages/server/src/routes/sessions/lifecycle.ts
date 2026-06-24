@@ -96,7 +96,7 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
     if (s instanceof Response) return s
     // A terminal owns the session interactively — the worker would skip the
     // headless start anyway; reject up front so the UI/CLI says why.
-    if (terminal.get(s.id))
+    if (terminal.isOpen(s.id))
       return c.json({ error: 'terminal open — close it to resume the headless session' }, 409)
     commands.publish(s.workerId, { cmd: 'session.start', sessionId: s.id, name: s.name })
     return c.json(await toView(s))
