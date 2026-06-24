@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react'
 // WebSocket to the server bridge (/api/sessions/:id/terminal/ws), which relays to
 // the worker's pty. Output = raw pty bytes (xterm.write); input + resize go up as
 // framed JSON ({t:'i',d} / {t:'r',c,r}). No direct worker connection — works for
-// remote workers behind NAT, over https. Reconnect-safe (no ttyd --once).
+// remote workers behind NAT, over https. Reconnect-safe (a re-mount reconnects).
 export const TerminalView = ({ sessionId }: { sessionId: Id }) => {
   const hostRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -35,7 +35,11 @@ export const TerminalView = ({ sessionId }: { sessionId: Id }) => {
         ws.send(JSON.stringify({ t: 'r', c: term.cols, r: term.rows }))
     }
     ws.onopen = () => doFit()
-    ws.onmessage = e => term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data))
+    // The bridge relays pty output as text frames (server coerces to UTF-8), so
+    // e.data is always a string; ignore anything else rather than mis-decoding it.
+    ws.onmessage = e => {
+      if (typeof e.data === 'string') term.write(e.data)
+    }
     const onData = term.onData(d => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'i', d }))
     })

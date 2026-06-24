@@ -80,9 +80,9 @@ export const registerWorkerRoutes = (
     projects.publish(worker.projectId, { resource: 'workers' })
     return streamBus(c, push => commands.subscribe(worker.id, push), {
       onClose: () => {
-        // Daemon offline: its sessions flip inactive (forgetWorker), their ttyd
-        // terminals died with it (forgetWorker), and its presence drops — refetch
-        // both.
+        // Daemon offline: its sessions flip inactive (forgetWorker), its interactive
+        // terminals died with it (terminal.forgetWorker), and its presence drops —
+        // refetch both.
         runtime.forgetWorker(worker.id)
         terminal.forgetWorker(worker.id)
         projects.publish(worker.projectId, { resource: 'workers' })

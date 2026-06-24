@@ -14,8 +14,9 @@ export type SessionsApi = {
   // Lifecycle control: resume (re-spawn the child) / stop (kill it, keep the row).
   resume(id: Id): Promise<SessionView>
   stop(id: Id): Promise<SessionView>
-  // Open / close the interactive ttyd terminal (idle sessions only; open 409s if
-  // active). The spawned URL arrives async on SessionView.terminalUrl.
+  // Open / close the interactive terminal (idle sessions only; open 409s if
+  // active). SessionView.terminalOpen flips true once the worker's pty WS bridges;
+  // the detail view then connects its xterm over /sessions/:id/terminal/ws.
   openTerminal(id: Id): Promise<SessionView>
   closeTerminal(id: Id): Promise<SessionView>
   // Reset the conversation context (fresh agentSessionId) — keeps session/worktree/url.

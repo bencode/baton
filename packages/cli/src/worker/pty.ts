@@ -7,7 +7,7 @@ import { join } from 'node:path'
 export const MAX_TERMINALS = 10
 
 // Resume the session's own JSONL if claude has written one, else start a fresh
-// conversation at that id (same rule the old ttyd bash wrapper used).
+// conversation at that id.
 export const ptyArgs = (agentSessionId: string, hasJsonl: boolean): string[] =>
   hasJsonl ? ['--resume', agentSessionId] : ['--session-id', agentSessionId]
 
@@ -25,3 +25,8 @@ export const hasSessionJsonl = (agentSessionId: string): boolean => {
 // pty WS rides the same host the worker already talks to (no inbound port).
 export const serverTerminalWsUrl = (server: string, sessionId: number): string =>
   `${server.replace(/^http/, 'ws')}/workers/me/terminal/ws?sessionId=${sessionId}`
+
+// A valid terminal dimension: a finite positive number. node-pty's resize throws
+// on 0/negative/NaN/Infinity, so a resize frame must be vetted before it's applied.
+export const isPositiveDim = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isFinite(v) && v > 0
