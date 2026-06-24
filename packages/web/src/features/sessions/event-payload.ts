@@ -71,6 +71,10 @@ export const systemActionNotice = (payload: unknown): string | null => {
     const m = str(payload.model)
     return m ? `model → ${m}` : 'model reset to default'
   }
+  // Interactive-terminal boundaries — mark the human-takeover window (those turns
+  // bypass baton's event log, so this is what explains the transcript gap).
+  if (action === 'terminal_open') return 'interactive terminal opened'
+  if (action === 'terminal_close') return 'interactive terminal closed'
   return null
 }
 

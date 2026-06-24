@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { createConnection } from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { query } from '@anthropic-ai/claude-agent-sdk'
@@ -50,6 +51,11 @@ export const runWorkerDaemon = async (
   // Track the worktree path alongside the child so we can git-remove it on
   // delete — by then the server row is gone, so we can't re-fetch it.
   const children = new Map<Id, { child: ChildProcess; worktreePath: string }>()
+  // Live interactive ttyd terminals (one per session, separate from `children`).
+  // Long-lived (unlike the per-turn headless child), so capped by a small port
+  // pool — that cap is the backpressure against runaway terminals.
+  const terminals = new Map<Id, { proc: ChildProcess; port: number }>()
+  const TTYD_PORTS = Array.from({ length: 10 }, (_, i) => 8901 + i)
   const log = (m: string): void => console.log(`[worker #${cfg.workerId} ${cfg.name}] ${m}`)
 
   // The worker has TWO independent liveness signals, each its own self-watchdog:
@@ -133,10 +139,134 @@ export const runWorkerDaemon = async (
     })
   }
 
+  // Poll a TCP port until it accepts (ttyd is listening) or we give up. ttyd
+  // cold-start (libwebsockets init) is ~sub-second on modern hardware.
+  const waitForPort = (port: number, timeoutMs = 3000): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeoutMs
+      const attempt = (): void => {
+        const sock = createConnection({ port, host: '127.0.0.1' })
+        sock.once('connect', () => {
+          sock.destroy()
+          resolve()
+        })
+        sock.once('error', () => {
+          sock.destroy()
+          if (Date.now() > deadline) reject(new Error(`port ${port} did not open`))
+          else setTimeout(attempt, 100)
+        })
+      }
+      attempt()
+    })
+
+  // First port in the pool not already held by a live terminal; null = pool full.
+  const freePort = (): number | null => {
+    const used = new Set([...terminals.values()].map(t => t.port))
+    return TTYD_PORTS.find(p => !used.has(p)) ?? null
+  }
+
+  // SAFE DEFAULT: ttyd binds loopback only (http://127.0.0.1) — same-machine dev.
+  // ttyd serves an UNAUTHENTICATED interactive claude shell, so we never expose it
+  // on the network by default. Setting BATON_TERMINAL_BASE both advertises that
+  // host AND opts ttyd into binding all interfaces — only do that behind a trusted
+  // network (LAN / tailscale) or the v2 reverse proxy.
+  const exposeNetwork = Boolean(process.env.BATON_TERMINAL_BASE)
+  const terminalBase = (): string => process.env.BATON_TERMINAL_BASE ?? 'http://127.0.0.1'
+  const reportNull = (sessionId: Id): void => {
+    void client.sessions
+      .reportTerminalUrl(sessionId, null, cfg.apiToken)
+      .catch(err => log(`terminal #${sessionId} report-null failed: ${String(err)}`))
+  }
+
+  // Open an interactive ttyd terminal serving `claude --resume <agentSessionId>`
+  // in the session's worktree — the same conversation the headless relay drives,
+  // now hands-on. `--once` makes ttyd accept a single client and exit when it
+  // disconnects (the iframe closing / navigating away auto-tears it down and frees
+  // the port; no explicit close needed). The spawned URL is reported back so the
+  // web can show the iframe. agentSessionId/worktreePath come from the command, so
+  // there's NO await before we reserve the slot — a concurrent session.start can't
+  // sneak the headless child in (the children.has guard is the backstop).
+  const onTerminalOpen = (sessionId: Id, agentSessionId: string, worktreePath: string): void => {
+    if (terminals.has(sessionId)) {
+      log(`terminal #${sessionId} already open`)
+      return
+    }
+    if (children.has(sessionId)) {
+      log(`terminal #${sessionId}: headless child running — refusing`)
+      return
+    }
+    if (!existsSync(worktreePath)) {
+      log(`terminal #${sessionId}: worktree missing (${worktreePath}) — refusing`)
+      reportNull(sessionId)
+      return
+    }
+    const port = freePort()
+    if (port === null) {
+      log(`terminal #${sessionId}: port pool full (${TTYD_PORTS.length}) — refusing`)
+      reportNull(sessionId)
+      return
+    }
+    const claudeBin = process.env.BATON_CLAUDE_BIN ?? 'claude'
+    // bash -c SCRIPT arg0 arg1… → $0=baton $1=worktree $2=agentSessionId $3=claudeBin.
+    const script =
+      'cd "$1" || exit 1\n' +
+      'sf=$(find "$HOME/.claude/projects" -maxdepth 2 -name "$2.jsonl" -print -quit 2>/dev/null)\n' +
+      'if [ -n "$sf" ]; then exec "$3" --resume "$2"; else exec "$3" --session-id "$2"; fi'
+    const bind = exposeNetwork ? [] : ['-i', '127.0.0.1']
+    const proc = spawn(
+      'ttyd',
+      // biome-ignore format: keep the ttyd argv compact and readable
+      ['-p', String(port), ...bind, '-W', '--once', '-t', 'fontSize=14', '--', 'bash', '-c', script,
+        'baton', worktreePath, agentSessionId, claudeBin],
+      { detached: true, stdio: 'inherit', env: process.env },
+    )
+    terminals.set(sessionId, { proc, port }) // reserve synchronously — no await gap
+    // Either exit (--once after the browser left, explicit close, crash) or a
+    // spawn error (ttyd not installed) drops the entry and clears the URL so the
+    // UI collapses the iframe.
+    const teardown = (why: string): void => {
+      if (terminals.get(sessionId)?.proc !== proc) return
+      terminals.delete(sessionId)
+      log(`terminal #${sessionId} gone (${why})`)
+      reportNull(sessionId)
+    }
+    proc.on('exit', code => teardown(`ttyd exit ${code ?? -1}`))
+    proc.on('error', err => teardown(`ttyd spawn error: ${String(err)} — is ttyd installed?`))
+    // Wait for ttyd to listen, then report the URL. The slot is already reserved
+    // above, so this async tail can't race a concurrent start/open.
+    void waitForPort(port)
+      .then(() => {
+        const url = `${terminalBase()}:${port}`
+        log(`terminal #${sessionId} → ${url}`)
+        return client.sessions.reportTerminalUrl(sessionId, url, cfg.apiToken)
+      })
+      .catch(e => {
+        log(`terminal #${sessionId} failed to start: ${String(e)}`)
+        killChild(proc) // exit handler clears the entry + reports null
+      })
+  }
+
+  // Explicit teardown (close command / session stop / delete). killChild fires
+  // proc.on('exit') → the teardown above removes the entry and reports null.
+  const onTerminalClose = (sessionId: Id): void => {
+    const t = terminals.get(sessionId)
+    if (!t) return
+    log(`closing terminal #${sessionId}`)
+    killChild(t.proc)
+  }
+
   // Materialize on first sight (mint agentSessionId + git worktree, PATCH them
   // back), then spawn. Idempotent: a session that's already materialized (worker
   // restart) reuses the existing worktree and just respawns.
   const onStart = async (sessionId: Id, name: string): Promise<void> => {
+    // An open interactive terminal owns this session's agentSessionId — never let
+    // the headless child run alongside it (two claudes, one JSONL → corruption).
+    // Defensive backstop: the server already rejects relay messages / resume while
+    // a terminal is open, so we mostly won't get here; a start already in flight is
+    // dropped. A message queued before the terminal opened drains when the session
+    // next starts (the spawned child reconciles its own queue).
+    if (terminals.has(sessionId))
+      return log(`session #${sessionId} has an open terminal — skipping headless start`)
     if (children.has(sessionId)) return log(`session #${sessionId} already running`)
     const session = await client.sessions.get(sessionId)
     let worktreePath = session.worktreePath
@@ -171,6 +301,7 @@ export const runWorkerDaemon = async (
   // Stop: kill the child but keep the worktree (session goes inactive, can be
   // resumed). The child's exit handler reports active=false.
   const onStop = (sessionId: Id): void => {
+    onTerminalClose(sessionId) // tear down an open terminal too, if any
     const entry = children.get(sessionId)
     if (!entry) return
     killChild(entry.child)
@@ -182,6 +313,7 @@ export const runWorkerDaemon = async (
   // from our tracked entry, or from the command itself when we aren't tracking a
   // child for it (e.g. delete after a worker restart).
   const onDelete = (sessionId: Id, worktreePath: string | null): void => {
+    onTerminalClose(sessionId) // kill an open terminal before removing the worktree
     const entry = children.get(sessionId)
     if (entry) {
       killChild(entry.child)
@@ -261,6 +393,11 @@ export const runWorkerDaemon = async (
         void onTitle(cmd.sessionId, cmd.agentSessionId, cmd.worktreePath).catch(err =>
           log(`title failed: ${String(err)}`),
         )
+      else if (cmd.cmd === 'session.terminal') {
+        if (cmd.action === 'open')
+          onTerminalOpen(cmd.sessionId, cmd.agentSessionId, cmd.worktreePath)
+        else onTerminalClose(cmd.sessionId)
+      }
     } catch {
       // skip malformed commands
     }
@@ -291,6 +428,7 @@ export const runWorkerDaemon = async (
   es.close()
   clearInterval(hb)
   for (const { child } of children.values()) killChild(child)
+  for (const { proc } of terminals.values()) killChild(proc)
   // Watchdog exit: cleanup ran above, now hand a non-zero code to the supervisor.
   if (fatal) process.exit(1)
 }

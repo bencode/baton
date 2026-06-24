@@ -10,6 +10,7 @@ import { sessionRmCommand } from './session/rm.ts'
 import { sessionRunCommand } from './session/run.ts'
 import { sessionSendCommand } from './session/send.ts'
 import { sessionStopCommand } from './session/stop.ts'
+import { sessionTerminalCommand } from './session/terminal.ts'
 
 export const session = defineCommand({
   meta: { name: 'session', description: 'create / resume / stop / send to agent sessions' },
@@ -25,5 +26,6 @@ export const session = defineCommand({
     ls: sessionLsCommand,
     get: sessionGetCommand,
     run: sessionRunCommand,
+    terminal: sessionTerminalCommand,
   },
 })

@@ -15,8 +15,11 @@ type HeaderProps = {
   active: boolean
   projectId: Id
   activeLoops: number
+  terminalUrl: string | null
   onStop: () => void
   onResume: () => void
+  onOpenTerminal: () => void
+  onCloseTerminal: () => void
   onRename: (name: string) => void
 }
 
@@ -119,8 +122,11 @@ export const SessionHeader = ({
   active,
   projectId,
   activeLoops,
+  terminalUrl,
   onStop,
   onResume,
+  onOpenTerminal,
+  onCloseTerminal,
   onRename,
 }: HeaderProps) => {
   const [open, setOpen] = useState(false)
@@ -160,7 +166,9 @@ export const SessionHeader = ({
             stop
           </button>
         )}
-        {!active && (
+        {/* Hidden while a terminal is open: the terminal owns the session, so the
+            server rejects a headless resume anyway (close it first). */}
+        {!active && !terminalUrl && (
           <button
             type="button"
             onClick={onResume}
@@ -168,6 +176,28 @@ export const SessionHeader = ({
           >
             resume
           </button>
+        )}
+        {/* Interactive terminal — a hands-on alternative to the headless resume.
+            Open only while idle (an active headless child would fight it over the
+            session); once open it stays as a "close" toggle regardless. */}
+        {terminalUrl ? (
+          <button
+            type="button"
+            onClick={onCloseTerminal}
+            className="rounded-md border border-blue-400 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 sm:py-1"
+          >
+            close terminal
+          </button>
+        ) : (
+          !active && (
+            <button
+              type="button"
+              onClick={onOpenTerminal}
+              className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 sm:py-1"
+            >
+              terminal
+            </button>
+          )
         )}
         {session.shareToken && <ShareButton shareToken={session.shareToken} />}
         {/* Divider sets loops (recurring automation) apart from the lifecycle /

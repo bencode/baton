@@ -22,6 +22,7 @@ import { registerWorkerRoutes } from './routes/workers.ts'
 import { registerWorkspaceRoutes } from './routes/workspaces.ts'
 import { createSessionRuntime, type SessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
+import { createTerminalRuntime, type TerminalRuntime } from './terminal-runtime.ts'
 import type { AppEnv } from './views.ts'
 
 export type { AppEnv } from './views.ts'
@@ -47,6 +48,9 @@ export const createApp = (
   relay: RelayBus = createRelayBus(),
   channelBus: ChannelBus = createChannelBus(),
   presence: ChannelPresence = createChannelPresence(),
+  // Per-session live ttyd URL (runtime-only, like `runtime`); set by the worker
+  // after spawning the interactive terminal, cleared on close / worker drop.
+  terminal: TerminalRuntime = createTerminalRuntime(),
 ): Hono<AppEnv> => {
   const app = new Hono<AppEnv>()
   app.get('/health', c => c.json({ ok: true }))
@@ -60,12 +64,12 @@ export const createApp = (
   registerChannelRoutes(app, store, channelBus, presence, attachments)
   app.use('*', cookieAuth(store))
   registerWorkspaceRoutes(app, store)
-  registerProjectRoutes(app, store, runtime, busyTracker, projects, commands)
+  registerProjectRoutes(app, store, runtime, busyTracker, projects, commands, terminal)
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store, projects)
-  registerWorkerRoutes(app, store, commands, runtime, projects)
+  registerWorkerRoutes(app, store, commands, runtime, projects, terminal)
   registerAdminRoutes(app, store, runtime, busyTracker, commands)
-  registerSessionRoutes(app, store, bus, runtime, busyTracker, attachments, commands, projects)
+  registerSessionRoutes(app, store, bus, runtime, busyTracker, attachments, commands, projects, terminal)
   registerSessionAttachmentRoutes(app, store, attachments)
   registerLoopRoutes(app, store, projects)
   return app

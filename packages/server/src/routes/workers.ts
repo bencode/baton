@@ -7,6 +7,7 @@ import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
+import type { TerminalRuntime } from '../terminal-runtime.ts'
 import { type AppEnv, intParam, workerWithView } from '../views.ts'
 
 export const registerWorkerRoutes = (
@@ -15,6 +16,7 @@ export const registerWorkerRoutes = (
   commands: CommandBus,
   runtime: SessionRuntime,
   projects: ProjectBus,
+  terminal: TerminalRuntime,
 ): void => {
   const auth = workerBearerAuth(store)
   // Idempotent register (machineId-anchored). See store.workers.register
@@ -78,9 +80,11 @@ export const registerWorkerRoutes = (
     projects.publish(worker.projectId, { resource: 'workers' })
     return streamBus(c, push => commands.subscribe(worker.id, push), {
       onClose: () => {
-        // Daemon offline: its sessions flip inactive (forgetWorker) and its
-        // presence drops — refetch both.
+        // Daemon offline: its sessions flip inactive (forgetWorker), their ttyd
+        // terminals died with it (forgetWorker), and its presence drops — refetch
+        // both.
         runtime.forgetWorker(worker.id)
+        terminal.forgetWorker(worker.id)
         projects.publish(worker.projectId, { resource: 'workers' })
         projects.publish(worker.projectId, { resource: 'sessions' })
       },
