@@ -1,5 +1,6 @@
 import type { SessionView } from '@baton/shared'
 import { useState } from 'react'
+import { ClockIcon } from '../../../components/icons'
 import { relativeTime } from '../../sessions/relative-time'
 import { TrashIcon } from './icons'
 
@@ -35,9 +36,9 @@ export const SessionRow = ({ session, path, active, dim, open, onDelete }: Sessi
             role="img"
             aria-label={`${session.activeLoops} active loop(s)`}
             title={`${session.activeLoops} active loop(s)`}
-            className="shrink-0 text-[10px] text-blue-400"
+            className="inline-flex shrink-0 text-blue-400"
           >
-            ⟳
+            <ClockIcon />
           </span>
         )}
         <span className="ml-auto shrink-0 pr-1 text-[10px] text-gray-400 tabular-nums">

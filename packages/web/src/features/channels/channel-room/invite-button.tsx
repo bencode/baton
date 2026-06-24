@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { useDismiss } from '../../../hooks/use-dismiss'
 import { copyText } from '../../../utils/clipboard'
 
 // A copy row with ✓ feedback (mirrors session-header's copy buttons).
@@ -30,20 +31,7 @@ const CopyRow = ({ label, text }: { label: string; text: string }) => {
 export const InviteButton = ({ invite, webLink }: { invite: string; webLink: string }) => {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+  useDismiss(ref, open, () => setOpen(false))
 
   return (
     <div ref={ref} className="relative shrink-0">

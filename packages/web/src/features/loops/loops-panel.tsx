@@ -41,9 +41,10 @@ const LoopRow = ({
   </div>
 )
 
-// Session-scoped loops manager: list (toggle / delete) + inline create. Sits in a
-// collapsible panel under the session header. Refetch rides the project stream
-// ('loops' signal, bumped server-side), so mutations need no manual refresh.
+// Session-scoped loops manager: list (toggle / delete) + inline create. Rendered
+// inside the header's LoopsControl (desktop popover / phone Modal). Refetch rides
+// the project stream ('loops' signal, bumped server-side), so mutations need no
+// manual refresh.
 export const LoopsPanel = ({ sessionId, projectId }: { sessionId: Id; projectId: Id }) => {
   const api = useApi()
   const { data: loops, loading } = useLoops(sessionId, projectId)
@@ -79,7 +80,7 @@ export const LoopsPanel = ({ sessionId, projectId }: { sessionId: Id; projectId:
     void api.loops.remove(id).catch(err => console.error('remove loop', err))
 
   return (
-    <div className="mt-2 flex flex-col gap-1 text-xs">
+    <div className="flex flex-col gap-1 text-xs">
       {loading && <p className="text-gray-400">loading…</p>}
       {!loading && loops?.length === 0 && <p className="text-gray-400">No loops yet.</p>}
       {loops?.map(loop => (
