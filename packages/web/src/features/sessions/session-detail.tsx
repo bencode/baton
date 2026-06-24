@@ -137,8 +137,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     void api.sessions.resume(sessionId).catch(() => {})
   }
   const stop = () => void api.sessions.stop(sessionId).catch(() => {})
-  // Open / close the interactive ttyd terminal. The spawned URL arrives async on
-  // session.terminalUrl (project stream + 2s poll), which renders the iframe below.
+  // Open / close the interactive terminal. session.terminalOpen flips true (via the
+  // project stream) once the worker's pty WS bridges, which renders <TerminalView>.
   const openTerminal = () =>
     void api.sessions.openTerminal(sessionId).catch(err => console.error('open terminal', err))
   const closeTerminal = () =>

@@ -40,11 +40,11 @@ export type WorkerCommand =
   // session's own transcript for context and generates a short name. Carries the
   // ids it needs to locate the transcript + run the throwaway claude call.
   | { cmd: 'session.title'; sessionId: Id; agentSessionId: string; worktreePath: string }
-  // Interactive terminal: open spawns a ttyd serving `claude --resume` in the
-  // session's worktree (human-in-the-loop, alongside the headless relay); close
-  // kills it. open carries the ids the worker needs to spawn so it doesn't have to
-  // re-fetch (no await before reserving its slot — closes a spawn race). The
-  // spawned URL is reported back via POST /sessions/:id/terminal-url.
+  // Interactive terminal: open spawns `claude --resume` in a node-pty in the
+  // session's worktree and dials an outbound WS back to the server (human-in-the-
+  // loop, alongside the headless relay); close drops that WS, which kills the pty.
+  // open carries the ids the worker needs to spawn so it doesn't have to re-fetch
+  // (no await before reserving its slot — closes a spawn race).
   | {
       cmd: 'session.terminal'
       sessionId: Id

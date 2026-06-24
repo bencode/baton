@@ -3,7 +3,13 @@ import type { Id } from '@baton/shared'
 import { type IPty, spawn } from 'node-pty'
 import { WebSocket } from 'ws'
 import type { WorkerConfig } from '../project-config.ts'
-import { hasSessionJsonl, MAX_TERMINALS, ptyArgs, serverTerminalWsUrl } from './pty.ts'
+import {
+  hasSessionJsonl,
+  isPositiveDim,
+  MAX_TERMINALS,
+  ptyArgs,
+  serverTerminalWsUrl,
+} from './pty.ts'
 
 export type TerminalManager = {
   open(sessionId: Id, agentSessionId: string, worktreePath: string): void
@@ -82,7 +88,9 @@ export const createTerminalManager = (deps: {
       try {
         const m = JSON.parse(raw.toString()) as { t?: string; d?: string; c?: number; r?: number }
         if (m.t === 'i' && typeof m.d === 'string') term.write(m.d)
-        else if (m.t === 'r' && m.c && m.r) term.resize(m.c, m.r)
+        // node-pty throws on non-positive dims — require finite positives, not just
+        // falsy (a hostile frame could send {c:-1} or {c:Infinity}, both truthy).
+        else if (m.t === 'r' && isPositiveDim(m.c) && isPositiveDim(m.r)) term.resize(m.c, m.r)
       } catch (e) {
         log(`terminal #${sessionId}: bad control frame: ${String(e)}`)
       }

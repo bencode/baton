@@ -11,7 +11,7 @@ const ES_OPEN = 1 // WHATWG EventSource.readyState: 0 CONNECTING, 1 OPEN, 2 CLOS
 // The persistent, lightweight worker process. It owns no Claude state itself — it
 // listens on the server→worker command stream and dispatches each command to one
 // of two managers: the session supervisor (a disposable headless child per session)
-// and the terminal manager (interactive ttyd terminals). A self-watchdog (liveness)
+// and the terminal manager (interactive node-pty terminals). A self-watchdog (liveness)
 // exits non-zero if the heartbeat or the stream wedges, so the OS supervisor
 // (docker restart / launchd KeepAlive) respawns a clean worker that re-subscribes.
 export const runWorkerDaemon = async (

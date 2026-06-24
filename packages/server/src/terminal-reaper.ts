@@ -20,8 +20,9 @@ export const startTerminalReaper = (deps: {
   const { bridge, store, projects } = deps
   const idleMs = deps.idleMs ?? IDLE_MS
   const reap = async (): Promise<void> => {
-    for (const sessionId of bridge.idleSessions(idleMs)) {
-      bridge.closeWorker(sessionId)
+    // reapIdle closes the idle terminals atomically and returns their ids; we just
+    // signal the project streams so the rail/detail flip terminalOpen → false.
+    for (const sessionId of bridge.reapIdle(idleMs)) {
       const s = await store.sessions.get(sessionId)
       if (s) projects.publish(s.projectId, { resource: 'sessions' })
     }

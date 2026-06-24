@@ -42,6 +42,6 @@ export const sessionTerminalCommand = defineCommand({
     if (args.json) console.log(renderOne(view, fmtSession, true))
     else if (view.terminalOpen)
       console.log(`terminal open — view session #${handle.id} in the web UI`)
-    else console.log('terminal did not start (worker offline, or ttyd/pty unavailable)')
+    else console.log('terminal did not start (worker offline, or pty unavailable)')
   },
 })

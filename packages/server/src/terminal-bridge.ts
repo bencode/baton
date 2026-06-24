@@ -17,9 +17,21 @@ export type TerminalBridge = {
   toWorker(sessionId: Id, data: string): void
   toViewers(sessionId: Id, data: string): void
   isOpen(sessionId: Id): boolean
-  closeWorker(sessionId: Id): void // server-initiated close (close button / reaper)
-  idleSessions(idleMs: number): Id[] // open + 0 viewers + last viewer left > idleMs ago
+  closeWorker(sessionId: Id): void // server-initiated close (close button)
+  reapIdle(idleMs: number): Id[] // atomically close + return terminals with no viewer this long
   forgetWorker(workerId: Id): Id[] // worker stream dropped → tear down its terminals
+}
+
+// Send on a socket that may have left OPEN (closing) before its onClose fired —
+// node-ws's send has no readyState guard and throws "WebSocket is not open". A
+// throw must not abort a fan-out loop (one dead viewer would starve the rest);
+// the socket's onClose will reap it on the next tick.
+const safeSend = (ws: WSContext | undefined, data: string): void => {
+  try {
+    ws?.send(data)
+  } catch {
+    // socket closing/closed — its onClose will detach it
+  }
 }
 
 export const createTerminalBridge = (): TerminalBridge => {
@@ -63,11 +75,11 @@ export const createTerminalBridge = (): TerminalBridge => {
       }
     },
     toWorker(sessionId, data) {
-      open.get(sessionId)?.worker.send(data)
+      safeSend(open.get(sessionId)?.worker, data)
     },
     toViewers(sessionId, data) {
       const e = open.get(sessionId)
-      if (e) for (const v of e.viewers) v.send(data)
+      if (e) for (const v of e.viewers) safeSend(v, data)
     },
     isOpen(sessionId) {
       return open.has(sessionId)
@@ -75,11 +87,14 @@ export const createTerminalBridge = (): TerminalBridge => {
     closeWorker(sessionId) {
       teardown(sessionId)
     },
-    idleSessions(idleMs) {
+    reapIdle(idleMs) {
+      // Find AND close in one synchronous pass: a separate find-then-close would
+      // let a viewer attach in between and get torn down mid-connect.
       const cutoff = Date.now() - idleMs
       const ids: Id[] = []
       for (const [sid, e] of open)
         if (e.viewers.size === 0 && e.lastViewerAt < cutoff) ids.push(sid)
+      for (const sid of ids) teardown(sid)
       return ids
     },
     forgetWorker(workerId) {
