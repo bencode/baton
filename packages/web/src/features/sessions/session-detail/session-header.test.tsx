@@ -29,8 +29,11 @@ const renderHeader = (s: Session) =>
       active={false}
       projectId={1}
       activeLoops={0}
+      terminalUrl={null}
       onStop={vi.fn()}
       onResume={vi.fn()}
+      onOpenTerminal={vi.fn()}
+      onCloseTerminal={vi.fn()}
       onRename={vi.fn()}
     />,
   )

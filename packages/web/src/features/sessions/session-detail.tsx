@@ -136,6 +136,12 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     void api.sessions.resume(sessionId).catch(() => {})
   }
   const stop = () => void api.sessions.stop(sessionId).catch(() => {})
+  // Open / close the interactive ttyd terminal. The spawned URL arrives async on
+  // session.terminalUrl (project stream + 2s poll), which renders the iframe below.
+  const openTerminal = () =>
+    void api.sessions.openTerminal(sessionId).catch(err => console.error('open terminal', err))
+  const closeTerminal = () =>
+    void api.sessions.closeTerminal(sessionId).catch(err => console.error('close terminal', err))
   // Interrupt the in-flight turn (the 停止 button + /abort); session stays alive.
   const abort = () => void api.sessions.abort(sessionId).catch(() => {})
   // Rename propagates back via the project stream (rail/tab/header all refetch).
@@ -180,11 +186,37 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         active={session.attached}
         projectId={session.projectId}
         activeLoops={session.activeLoops}
+        terminalUrl={session.terminalUrl}
         onStop={stop}
         onResume={resume}
+        onOpenTerminal={openTerminal}
+        onCloseTerminal={closeTerminal}
         onRename={rename}
       />
       <ConnectionBanner streamStatus={status} connected={session.connected} />
+      {session.terminalUrl && (
+        <div className="flex shrink-0 flex-col border-b border-gray-200" style={{ height: 420 }}>
+          <div className="flex items-center justify-between bg-gray-50 px-3 py-1.5 text-xs text-gray-500">
+            <span>interactive terminal — claude --resume</span>
+            <button
+              type="button"
+              onClick={closeTerminal}
+              className="rounded px-1.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700"
+            >
+              close ✕
+            </button>
+          </div>
+          {/* sandbox: ttyd needs scripts + same-origin (its websocket) to run xterm;
+              withholding the other tokens keeps the embedded shell from navigating
+              the top frame, opening popups, etc. */}
+          <iframe
+            src={session.terminalUrl}
+            title="terminal"
+            sandbox="allow-scripts allow-same-origin"
+            className="min-h-0 w-full flex-1 border-0"
+          />
+        </div>
+      )}
       <EventStream
         items={items}
         scrollRef={scrollRef}

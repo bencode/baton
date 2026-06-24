@@ -20,7 +20,8 @@ const numQuery = (v: string | undefined): number | undefined => {
 // Transcript I/O: the worker-bearer event ingress (which drives busy liveness),
 // chat-message ingress, the bounded history read, and the live SSE stream.
 export const registerSessionIo: RegisterSessionGroup = (app, ctx) => {
-  const { store, bus, runtime, busyTracker, auth, bump, ownedByWorker, commands, projects } = ctx
+  const { store, bus, runtime, busyTracker, terminal, auth, bump, ownedByWorker, commands, projects } =
+    ctx
 
   // Session child emits events (worker-bearer, must own session). Persisted to
   // the transcript then published to the bus so subscribed browsers / CLIs
@@ -58,6 +59,11 @@ export const registerSessionIo: RegisterSessionGroup = (app, ctx) => {
     const sessionId = intParam(c.req.param('id'))
     const session = await loadScopedSession(c, store, sessionId)
     if (session instanceof Response) return session
+    // A terminal owns the session interactively — relay input would queue against
+    // a headless start the worker skips (stranded). Reject so the user uses the
+    // terminal (or closes it first).
+    if (terminal.get(sessionId))
+      return c.json({ error: 'terminal open — type in the terminal, or close it first' }, 409)
     const body = (await c.req.json()) as {
       text?: string
       images?: unknown

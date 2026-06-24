@@ -7,8 +7,18 @@ import type { RegisterSessionGroup } from './helpers.ts'
 // worker-bearer materialize / auto-title PATCH, resume / stop control, human
 // rename, and DELETE (tear down child + worktree, then drop the row).
 export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
-  const { store, commands, attachments, runtime, busyTracker, auth, toView, bump, ownedByWorker } =
-    ctx
+  const {
+    store,
+    commands,
+    attachments,
+    runtime,
+    busyTracker,
+    terminal,
+    auth,
+    toView,
+    bump,
+    ownedByWorker,
+  } = ctx
 
   // Create a session row (collaboration metadata only) and push a session.start
   // command to the owning worker, which materializes (worktree + agentSessionId)
@@ -84,6 +94,10 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
   app.post('/sessions/:id/resume', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
+    // A terminal owns the session interactively — the worker would skip the
+    // headless start anyway; reject up front so the UI/CLI says why.
+    if (terminal.get(s.id))
+      return c.json({ error: 'terminal open — close it to resume the headless session' }, 409)
     commands.publish(s.workerId, { cmd: 'session.start', sessionId: s.id, name: s.name })
     return c.json(await toView(s))
   })

@@ -6,6 +6,7 @@ import type { EventBus } from '../event-bus.ts'
 import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import type { Store } from '../store/types.ts'
+import type { TerminalRuntime } from '../terminal-runtime.ts'
 import type { AppEnv } from '../views.ts'
 import { registerSessionControl } from './sessions/control.ts'
 import { createSessionCtx } from './sessions/helpers.ts'
@@ -27,6 +28,7 @@ export const registerSessionRoutes = (
   attachments: AttachmentStore,
   commands: CommandBus,
   projects: ProjectBus,
+  terminal: TerminalRuntime,
 ): void => {
   const ctx = createSessionCtx({
     store,
@@ -36,6 +38,7 @@ export const registerSessionRoutes = (
     attachments,
     commands,
     projects,
+    terminal,
   })
   registerSessionLifecycle(app, ctx)
   registerSessionControl(app, ctx)

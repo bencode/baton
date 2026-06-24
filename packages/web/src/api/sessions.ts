@@ -14,6 +14,10 @@ export type SessionsApi = {
   // Lifecycle control: resume (re-spawn the child) / stop (kill it, keep the row).
   resume(id: Id): Promise<SessionView>
   stop(id: Id): Promise<SessionView>
+  // Open / close the interactive ttyd terminal (idle sessions only; open 409s if
+  // active). The spawned URL arrives async on SessionView.terminalUrl.
+  openTerminal(id: Id): Promise<SessionView>
+  closeTerminal(id: Id): Promise<SessionView>
   // Reset the conversation context (fresh agentSessionId) — keeps session/worktree/url.
   clear(id: Id): Promise<SessionView>
   // Interrupt the in-flight turn (like Esc) — keeps the session + conversation.
@@ -40,6 +44,10 @@ export const sessionsApi = (u: Url): SessionsApi => ({
   create: input => request(u('/sessions'), { method: 'POST', body: input }),
   resume: id => request(u(`/sessions/${id}/resume`), { method: 'POST' }),
   stop: id => request(u(`/sessions/${id}/stop`), { method: 'POST' }),
+  openTerminal: id =>
+    request(u(`/sessions/${id}/terminal`), { method: 'POST', body: { action: 'open' } }),
+  closeTerminal: id =>
+    request(u(`/sessions/${id}/terminal`), { method: 'POST', body: { action: 'close' } }),
   clear: id => request(u(`/sessions/${id}/clear`), { method: 'POST' }),
   abort: id => request(u(`/sessions/${id}/abort`), { method: 'POST' }),
   rename: (id, name) => request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
