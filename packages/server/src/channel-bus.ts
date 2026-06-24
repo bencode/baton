@@ -7,4 +7,5 @@ import { createPubSub, type PubSub } from './pubsub.ts'
 // mid-write still catches up via the ?since= DB replay in streamBus.
 export type ChannelBus = PubSub<ChannelMessage, string>
 
-export const createChannelBus = (): ChannelBus => createPubSub<ChannelMessage, string>('channel-bus')
+export const createChannelBus = (): ChannelBus =>
+  createPubSub<ChannelMessage, string>('channel-bus')

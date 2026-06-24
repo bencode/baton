@@ -9,6 +9,8 @@ import { startLoopScheduler } from './loop-scheduler.ts'
 import { createProjectBus } from './project-bus.ts'
 import { createSessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
+import { createTerminalBridge } from './terminal-bridge.ts'
+import { startTerminalReaper } from './terminal-reaper.ts'
 
 export type Server = { port: number; stop: () => Promise<void> }
 
@@ -30,6 +32,11 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     // tracker and never see a connected worker.
     const runtime = createSessionRuntime()
     const commands = createCommandBus()
+    // Hoisted so the idle-reaper shares the exact terminal bridge the WS routes
+    // mutate. `injectWs` is captured during createApp (@hono/node-ws needs the http
+    // server, only known after serve) and called post-serve.
+    const terminal = createTerminalBridge()
+    let injectWs: ((server: ReturnType<typeof serve>) => void) | undefined
     const app = createApp(
       opts.store,
       bus,
@@ -41,6 +48,10 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
       undefined,
       undefined,
       presence,
+      terminal,
+      inject => {
+        injectWs = inject
+      },
     )
     // Close turns whose worker went silent past the TTL (the "stuck thinking"
     // safety net), started + stopped with the server lifecycle like the prune.
@@ -52,6 +63,8 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
       { store: opts.store, bus, commands, runtime, projects },
       Number(process.env.BATON_LOOP_TICK_MS) || undefined,
     )
+    // Recycle interactive terminals nobody is viewing (frees pty slots).
+    const terminalReaper = startTerminalReaper({ bridge: terminal, store: opts.store, projects })
     const httpServer = serve({ fetch: app.fetch, port: opts.port }, info => {
       resolve({
         port: info.port,
@@ -62,8 +75,11 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
             presencePrune.stop()
             busySweep.stop()
             loopScheduler.stop()
+            terminalReaper.stop()
             return opts.store.close()
           }),
       })
     })
+    // Wire the WS upgrade handler onto the http server (the terminal bridge).
+    injectWs?.(httpServer)
   })

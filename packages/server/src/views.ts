@@ -4,7 +4,7 @@ import type { CommandBus } from './command-bus.ts'
 import type { AuthVars } from './middleware/auth.ts'
 import type { SessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
-import type { TerminalRuntime } from './terminal-runtime.ts'
+import type { TerminalBridge } from './terminal-bridge.ts'
 
 // Parse an `:id` URL param to int; NaN is fine — downstream finds return null → 404.
 export const intParam = (s: string): Id => Number(s)
@@ -26,7 +26,7 @@ export const sessionWithView = async (
   runtime: SessionRuntime,
   busyTracker: BusyTracker,
   commands: CommandBus,
-  terminal: TerminalRuntime,
+  terminal: TerminalBridge,
   // Enabled-loop count for this session (caller-supplied so the list path can
   // batch one query for all sessions instead of an N+1). Defaults to 0.
   activeLoops = 0,
@@ -44,7 +44,7 @@ export const sessionWithView = async (
     attached,
     busy: attached && busyTracker.read(session.id),
     activeLoops,
-    terminalUrl: terminal.get(session.id),
+    terminalOpen: terminal.isOpen(session.id),
   }
 }
 

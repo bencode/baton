@@ -63,10 +63,11 @@ export type SessionView = Session & {
   // Count of enabled loops on this session — drives the rail "heartbeat" badge
   // and the header loops count without fetching the full list.
   activeLoops: number
-  // URL of the live interactive terminal (ttyd) for this session, or null when
-  // none is open. Pure runtime signal (like attached/busy) — the worker reports
-  // it after spawning ttyd; cleared on close / worker disconnect.
-  terminalUrl: string | null
+  // Whether a live interactive terminal is open for this session. Pure runtime
+  // signal (like attached/busy): true once the worker's pty WS is bridged on the
+  // server; cleared on close / worker disconnect / idle-reap. The web connects its
+  // xterm to /api/sessions/:id/terminal/ws (same-origin) when this is true.
+  terminalOpen: boolean
 }
 
 // A session is born with a placeholder name (`session-<id>`); auto-title renames

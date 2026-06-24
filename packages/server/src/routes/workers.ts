@@ -7,7 +7,7 @@ import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
-import type { TerminalRuntime } from '../terminal-runtime.ts'
+import type { TerminalBridge } from '../terminal-bridge.ts'
 import { type AppEnv, intParam, workerWithView } from '../views.ts'
 
 export const registerWorkerRoutes = (
@@ -16,7 +16,7 @@ export const registerWorkerRoutes = (
   commands: CommandBus,
   runtime: SessionRuntime,
   projects: ProjectBus,
-  terminal: TerminalRuntime,
+  terminal: TerminalBridge,
 ): void => {
   const auth = workerBearerAuth(store)
   // Idempotent register (machineId-anchored). See store.workers.register

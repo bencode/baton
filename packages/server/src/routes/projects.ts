@@ -7,7 +7,7 @@ import type { ProjectBus } from '../project-bus.ts'
 import type { SessionRuntime } from '../session-runtime.ts'
 import { streamBus } from '../sse.ts'
 import type { ProjectPatch, Store } from '../store/types.ts'
-import type { TerminalRuntime } from '../terminal-runtime.ts'
+import type { TerminalBridge } from '../terminal-bridge.ts'
 import {
   type AppEnv,
   intParam,
@@ -23,7 +23,7 @@ export const registerProjectRoutes = (
   busyTracker: BusyTracker,
   projects: ProjectBus,
   commands: CommandBus,
-  terminal: TerminalRuntime,
+  terminal: TerminalBridge,
 ): void => {
   app.post('/projects', async c => {
     const body = (await c.req.json()) as {
@@ -59,7 +59,15 @@ export const registerProjectRoutes = (
     const loopCounts = await store.loops.activeCountsBySessions(list.map(s => s.id))
     const merged = await Promise.all(
       list.map(s =>
-        sessionWithView(s, store, runtime, busyTracker, commands, terminal, loopCounts.get(s.id) ?? 0),
+        sessionWithView(
+          s,
+          store,
+          runtime,
+          busyTracker,
+          commands,
+          terminal,
+          loopCounts.get(s.id) ?? 0,
+        ),
       ),
     )
     return c.json(merged)
