@@ -69,6 +69,27 @@ export const MoreIcon = () => (
   </svg>
 )
 
+// Clock face — the loops affordance (recurring, interval-scheduled wake-ups).
+// Reads clearer than a generic cycle arrow; shared by the header control and the
+// rail's per-session indicator so both surfaces speak the same loops language.
+export const ClockIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="13"
+    height="13"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <circle cx="8" cy="8" r="5.8" />
+    <path d="M8 4.6V8h2.6" />
+  </svg>
+)
+
 export const LogoutIcon = () => (
   <svg
     viewBox="0 0 16 16"

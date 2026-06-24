@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
 import { ChevronDownIcon, LogoutIcon } from '../../components/icons'
 import { useAsync } from '../../hooks/use-async'
+import { useDismiss } from '../../hooks/use-dismiss'
 import { AccountSettings } from './account-settings'
 
 // Header user menu: the signed-in username with a dropdown to log out. Fetches
@@ -17,23 +18,7 @@ export const UserMenu = () => {
   const [open, setOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
-
-  // Close on outside click / Escape while open.
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+  useDismiss(ref, open, () => setOpen(false))
 
   if (!user) return null
 

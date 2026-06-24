@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { MoreIcon } from '../../components/icons'
+import { useDismiss } from '../../hooks/use-dismiss'
 
 // The project switcher's "⋯" actions menu: rename + delete grouped so the row
 // stays uncluttered (the ＋ new-project button stays separate). Mirrors the header
@@ -22,23 +23,7 @@ export const ProjectMenu = ({ onRename, onDelete }: ProjectMenuProps) => {
     setOpen(false)
     setConfirming(false)
   }, [])
-
-  // Close on outside click / Escape while open (same as the header user-menu).
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close()
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open, close])
+  useDismiss(ref, open, close)
 
   return (
     <div ref={ref} className="relative shrink-0">
