@@ -3,9 +3,11 @@
 # baton.fmap.dev → this container's published ${CADDY_HOST_PORT}.
 :80 {
 	# Compress the API JSON (multi-MB session transcripts) and the SPA bundle —
-	# EXCEPT SSE streams (paths ending in /stream): `encode` buffers, which would
-	# break the real-time flush that `flush_interval -1` exists to preserve.
-	@compressible not path */stream
+	# EXCEPT the streaming endpoints: SSE (paths ending in /stream) and the terminal
+	# WebSocket (ending in /ws). `encode` buffers, which would break the real-time
+	# flush `flush_interval -1` preserves; and it has no business wrapping a hijacked
+	# WS upgrade. reverse_proxy itself forwards the WS upgrade automatically.
+	@compressible not path */stream */ws
 	encode @compressible zstd gzip
 
 	# /api/* → backend. `handle_path` STRIPS the /api prefix (baton routes are flat,
