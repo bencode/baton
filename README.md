@@ -23,6 +23,10 @@ metaphor: work handed from node to node.
   status + link; bodies and discussion stay on GitHub.
 - **Share links** — every session has an unguessable `/s/:token` page; anyone
   with the link can read and write into the conversation.
+- **Interactive terminal** — open any session in a real terminal in the browser
+  (xterm.js over a server-bridged WebSocket); the worker runs the agent in a pty
+  for hands-on, human-in-the-loop control alongside the headless relay — and it
+  works for a remote worker with no inbound port, over plain https.
 - **Delegation** — a session can list workers and open a session on any other
   worker by its global `W-N` handle (see `skills/delegate`).
 
