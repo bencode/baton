@@ -1,6 +1,6 @@
 {
   "name": "@lesscap/baton-cli",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "license": "MIT",
   "type": "module",
   "description": "baton CLI — register/run a worker, manage projects/requirements/tasks/sessions",
@@ -8,11 +8,13 @@
     "baton": "dist/baton.mjs"
   },
   "files": [
-    "dist"
+    "dist",
+    "scripts"
   ],
   "scripts": {
     "baton": "tsx src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --packages=bundle --external:@anthropic-ai/claude-agent-sdk --external:node-pty --banner:js=\"#!/usr/bin/env node\" --outfile=dist/baton.mjs && chmod +x dist/baton.mjs",
+    "build": "node build.mjs && chmod +x dist/baton.mjs",
+    "postinstall": "node scripts/postinstall.mjs",
     "prepublishOnly": "pnpm build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test 'src/**/*.test.ts'"
