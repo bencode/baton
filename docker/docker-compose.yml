@@ -56,70 +56,9 @@ services:
       - backend
     restart: unless-stopped
 
-  # Feishu (Lark) → baton bridge. Same shape as `bridge`; routes to its own
-  # (project, worker) via `environment` (overrides .env, which the DingTalk
-  # bridge uses for its route). FEISHU_APP_ID/SECRET + BATON_TOKEN live in .env.
-  feishu:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.feishu
-    env_file: .env
-    environment:
-      - BATON_PROJECT_ID=3
-      - BATON_WORKER_ID=4
-      - BATON_FEISHU_BINDINGS=/data/feishu-bindings.json
-    volumes:
-      - feishu_data:/data
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  # Second Feishu bridge — the personal/general account → the rooma worker.
-  # Same image as `feishu`; its own app creds (FEISHU2_* in .env) and its own
-  # bindings volume so the two apps never share user→session state.
-  feishu2:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.feishu
-    env_file: .env
-    environment:
-      - FEISHU_APP_ID=${FEISHU2_APP_ID}
-      - FEISHU_APP_SECRET=${FEISHU2_APP_SECRET}
-      - BATON_PROJECT_ID=4
-      - BATON_WORKER_ID=3
-      - BATON_FEISHU_BINDINGS=/data/feishu-bindings.json
-    volumes:
-      - feishu2_data:/data
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  # Third Feishu bridge — the Goat project (考研复习) → its macmini worker.
-  # Same image as `feishu`; its own app creds (FEISHU3_* in .env) and its own
-  # bindings volume so it never shares user→session state with the others.
-  feishu3:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.feishu
-    env_file: .env
-    environment:
-      - FEISHU_APP_ID=${FEISHU3_APP_ID}
-      - FEISHU_APP_SECRET=${FEISHU3_APP_SECRET}
-      - BATON_PROJECT_ID=11
-      - BATON_WORKER_ID=14
-      - BATON_FEISHU_BINDINGS=/data/feishu-bindings.json
-    volumes:
-      - feishu3_data:/data
-    depends_on:
-      - backend
-    restart: unless-stopped
-
 volumes:
   web-dist:
   caddy_data:
   caddy_config:
   baton_data:
   bridge_data:
-  feishu_data:
-  feishu2_data:
-  feishu3_data:
