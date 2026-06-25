@@ -54,16 +54,19 @@ importers:
 
   packages/dingtalk:
     dependencies:
-      '@baton/shared':
-        specifier: workspace:*
-        version: link:../shared
       dingtalk-stream:
         specifier: 2.1.6-beta.1
         version: 2.1.6-beta.1
     devDependencies:
+      '@baton/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.0
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -73,16 +76,19 @@ importers:
 
   packages/feishu:
     dependencies:
-      '@baton/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@larksuiteoapi/node-sdk':
         specifier: ^1.66.1
         version: 1.66.1
     devDependencies:
+      '@baton/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.0
       tsx:
         specifier: ^4.22.4
         version: 4.22.4

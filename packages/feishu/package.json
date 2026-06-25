@@ -1,19 +1,29 @@
 {
-  "name": "@baton/feishu",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@lesscap/baton-feishu",
+  "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
+  "description": "baton Feishu (Lark) bridge — relay Feishu messages into baton sessions on your own worker",
+  "bin": {
+    "baton-feishu": "dist/index.mjs"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "start": "tsx src/index.ts",
+    "build": "node build.mjs && chmod +x dist/index.mjs",
+    "prepublishOnly": "pnpm build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "@baton/shared": "workspace:*",
     "@larksuiteoapi/node-sdk": "^1.66.1"
   },
   "devDependencies": {
+    "@baton/shared": "workspace:*",
     "@types/node": "^25.9.1",
+    "esbuild": "^0.28.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }

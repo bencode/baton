@@ -1,9 +1,12 @@
 import type { Id } from '@baton/shared'
+import { readBatonConfig } from './baton-config.ts'
 import type { BatonCreds } from './client.ts'
 
-// All config comes from the environment — the bridge owns its own settings and
-// never reads baton's project config. v0 is a single fixed route: every Feishu
-// message goes to one (project, worker).
+// Config: bot creds + prompt come from the operator's env (their own app, never
+// shared with baton); the baton server URL + (project, worker) route + auth token
+// are reused from the worker's `.baton.json` when present (run the bridge next to
+// `baton worker run`), and any of those can be overridden by env. A single fixed
+// route: every Feishu message goes to one (project, worker).
 export type FeishuConfig = {
   server: string
   webBase: string
@@ -32,12 +35,17 @@ const required = (name: string): string => {
   return v
 }
 
-const requiredInt = (name: string): number => {
-  const v = required(name)
-  const n = Number(v)
-  if (!Number.isInteger(n) || n <= 0)
-    throw new Error(`env ${name} must be a positive integer (got ${v})`)
-  return n
+// A positive-int route field: env wins, else the worker's .baton.json, else throw.
+const resolveInt = (name: string, fallback?: number): number => {
+  const raw = process.env[name]
+  if (raw !== undefined) {
+    const n = Number(raw)
+    if (!Number.isInteger(n) || n <= 0)
+      throw new Error(`env ${name} must be a positive integer (got ${raw})`)
+    return n
+  }
+  if (fallback !== undefined && Number.isInteger(fallback) && fallback > 0) return fallback
+  throw new Error(`missing ${name} — set the env, or run from a worker dir with a .baton.json`)
 }
 
 const optionalCreds = (): BatonCreds | undefined => {
@@ -46,13 +54,19 @@ const optionalCreds = (): BatonCreds | undefined => {
   return username && password ? { username, password } : undefined
 }
 
-export const loadConfig = (): FeishuConfig => ({
-  server: process.env.BATON_SERVER ?? 'http://localhost:3280',
-  webBase: process.env.BATON_WEB_BASE ?? 'http://localhost:5280',
-  promptTemplate: process.env.FEISHU_PROMPT_TEMPLATE ?? DEFAULT_PROMPT,
-  route: { projectId: requiredInt('BATON_PROJECT_ID'), workerId: requiredInt('BATON_WORKER_ID') },
-  appId: required('FEISHU_APP_ID'),
-  appSecret: required('FEISHU_APP_SECRET'),
-  token: process.env.BATON_TOKEN,
-  creds: optionalCreds(),
-})
+export const loadConfig = (): FeishuConfig => {
+  const base = readBatonConfig()
+  return {
+    server: process.env.BATON_SERVER ?? base.server ?? 'http://localhost:3280',
+    webBase: process.env.BATON_WEB_BASE ?? 'http://localhost:5280',
+    promptTemplate: process.env.FEISHU_PROMPT_TEMPLATE ?? DEFAULT_PROMPT,
+    route: {
+      projectId: resolveInt('BATON_PROJECT_ID', base.projectId),
+      workerId: resolveInt('BATON_WORKER_ID', base.workerId),
+    },
+    appId: required('FEISHU_APP_ID'),
+    appSecret: required('FEISHU_APP_SECRET'),
+    token: process.env.BATON_TOKEN ?? base.token,
+    creds: optionalCreds(),
+  }
+}

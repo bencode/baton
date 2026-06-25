@@ -1,19 +1,29 @@
 {
-  "name": "@baton/dingtalk",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@lesscap/baton-dingtalk",
+  "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
+  "description": "baton DingTalk bridge — relay DingTalk messages into baton sessions on your own worker",
+  "bin": {
+    "baton-dingtalk": "dist/index.mjs"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "start": "tsx src/index.ts",
+    "build": "node build.mjs && chmod +x dist/index.mjs",
+    "prepublishOnly": "pnpm build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "@baton/shared": "workspace:*",
     "dingtalk-stream": "2.1.6-beta.1"
   },
   "devDependencies": {
+    "@baton/shared": "workspace:*",
     "@types/node": "^25.9.1",
+    "esbuild": "^0.28.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }
