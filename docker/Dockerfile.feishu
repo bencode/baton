@@ -14,7 +14,7 @@ COPY packages/dingtalk/package.json packages/dingtalk/
 COPY packages/feishu/package.json packages/feishu/
 
 # Bridge + its workspace dep (shared) + @larksuiteoapi/node-sdk. --prod=false keeps tsx.
-RUN pnpm install --filter @baton/feishu... --frozen-lockfile --prod=false --ignore-scripts
+RUN pnpm install --filter @lesscap/baton-feishu... --frozen-lockfile --prod=false --ignore-scripts
 
 COPY packages/shared/ packages/shared/
 COPY packages/feishu/ packages/feishu/

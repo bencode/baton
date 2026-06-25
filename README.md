@@ -29,6 +29,10 @@ metaphor: work handed from node to node.
   works for a remote worker with no inbound port, over plain https.
 - **Delegation** — a session can list workers and open a session on any other
   worker by its global `W-N` handle (see `skills/delegate`).
+- **Self-serve channels** — anyone running a worker can wire their own
+  DingTalk/Feishu bot to it: install the bridge next to the worker, bring your own
+  app key/secret, no central setup. The bridge is a pure API client that reuses
+  the worker's `.baton.json` for the server URL, route, and auth token.
 
 ## Packages
 
@@ -38,7 +42,7 @@ metaphor: work handed from node to node.
 | `packages/web` | SPA (React, Vite, Tailwind) |
 | `packages/cli` | [`@lesscap/baton-cli`](https://www.npmjs.com/package/@lesscap/baton-cli) — worker daemon + management commands |
 | `packages/shared` | domain types shared by all of the above |
-| `packages/dingtalk` / `packages/feishu` | chat bridges (long-connection bots) |
+| `packages/dingtalk` / `packages/feishu` | `@lesscap/baton-dingtalk` / `@lesscap/baton-feishu` — chat bridges you run on your own worker |
 | `skills/` | agent skills (baton workflow, GitHub sync, delegation) |
 | `docker/` | compose stack for the server + bridges, and a containerized worker |
 
@@ -55,6 +59,11 @@ pnpm --filter @baton/web dev           # SPA on :5280, proxies /api
 npm i -g @lesscap/baton-cli
 baton worker register --url <server-url> --project <id> --name <name>
 baton worker run
+
+# (optional) wire your own DingTalk/Feishu bot to this worker — run it alongside
+# `baton worker run`, from the worker's dir so it reuses .baton.json for auth+route
+npm i -g @lesscap/baton-feishu
+FEISHU_APP_ID=<your-app-id> FEISHU_APP_SECRET=<your-secret> baton-feishu
 ```
 
 ## Development

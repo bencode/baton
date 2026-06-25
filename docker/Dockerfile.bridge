@@ -12,7 +12,7 @@ COPY packages/web/package.json packages/web/
 COPY packages/dingtalk/package.json packages/dingtalk/
 
 # Bridge + its workspace dep (shared) + dingtalk-stream. --prod=false keeps tsx.
-RUN pnpm install --filter @baton/dingtalk... --frozen-lockfile --prod=false --ignore-scripts
+RUN pnpm install --filter @lesscap/baton-dingtalk... --frozen-lockfile --prod=false --ignore-scripts
 
 COPY packages/shared/ packages/shared/
 COPY packages/dingtalk/ packages/dingtalk/
