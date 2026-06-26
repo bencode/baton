@@ -2,6 +2,9 @@
   "name": "@lesscap/baton-dingtalk",
   "version": "0.1.0",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "description": "baton DingTalk bridge — relay DingTalk messages into baton sessions on your own worker",
   "bin": {

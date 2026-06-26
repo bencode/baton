@@ -10,14 +10,18 @@
 FROM node:26-bookworm-slim
 
 ARG CLAUDE_CODE_VERSION=2.1.159
-ARG BATON_CLI_VERSION=0.3.3
+ARG BATON_CLI_VERSION=0.4.2
 # Set to a non-empty value to bake in the reclaude CLI (a claude wrapper that
 # routes through the reclaude.ai gateway). Point BATON_CLAUDE_BIN at it in .env
 # to drive claude through reclaude instead of an Anthropic-compatible endpoint.
 ARG INSTALL_RECLAUDE=
 
+# build-essential (+ python3) lets node-pty rebuild from source: Node 26 ships a
+# broken prebuilt (pty.node loads but spawn-helper fails), so @baton/cli's
+# postinstall falls back to `npm rebuild node-pty --build-from-source` — which
+# needs a C++ toolchain. Without it, interactive terminals are silently disabled.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git ca-certificates curl ripgrep jq less python3 procps \
+      git ca-certificates curl ripgrep jq less python3 build-essential procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root agent user (reuse uid 1000; the slim image's `node` user holds it).
