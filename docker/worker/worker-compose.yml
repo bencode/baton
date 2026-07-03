@@ -14,7 +14,7 @@ services:
       dockerfile: Dockerfile.worker
     restart: unless-stopped
     working_dir: /repo
-    # All runtime config (baton wiring + claude auth) comes from .env.
+    # All runtime config (baton wiring + agent auth) comes from .env.
     env_file: .env
     volumes:
       # The repo the agent works in. cwd=/repo; worktrees branch off /repo/.git.
@@ -23,6 +23,8 @@ services:
       - baton_state:/home/baton/.local/share/baton
       # claude session state / settings (resume needs this to persist).
       - claude_home:/home/baton/.claude
+      # codex auth/session state (ChatGPT login + ~/.codex/sessions).
+      - codex_home:/home/baton/.codex
       # Host-managed skills, surfaced inside as user-level skills (install/edit
       # outside → live inside, no rebuild, every session). Read-only so the
       # agent can't alter them. ./skills is relative to this compose file.
@@ -51,3 +53,4 @@ services:
 volumes:
   baton_state:
   claude_home:
+  codex_home:

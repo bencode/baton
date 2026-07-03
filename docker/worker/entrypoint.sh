@@ -1,7 +1,7 @@
 #!/bin/sh
 # Register this machine as a baton worker (idempotent — keyed by the machineId
 # persisted on the baton_state volume), then run the worker daemon. The daemon
-# spawns `claude` per turn in a git worktree off /repo (cwd).
+# spawns the configured agent per turn in a git worktree off /repo (cwd).
 set -e
 
 : "${BATON_URL:?set BATON_URL in .env}"
@@ -12,11 +12,15 @@ set -e
 # so the two daemons own distinct identity files instead of fighting over
 # ./.baton.json. The baton CLI itself does not read this env, only the flag.
 cfg="${BATON_WORKER_CONFIG:-.baton.json}"
-if [ ! -f "$cfg" ]; then
-  name="${WORKER_NAME:-$(hostname)}"
-  echo "[baton] registering worker (project ${BATON_PROJECT_ID}, name ${name}) against ${BATON_URL}..."
-  baton worker register --config "$cfg" --url "$BATON_URL" --project "$BATON_PROJECT_ID" --name "$name"
-fi
+name="${WORKER_NAME:-$(hostname)}"
+agent_kind="${BATON_AGENT_KIND:-claude-code}"
+echo "[baton] registering worker (project ${BATON_PROJECT_ID}, name ${name}, agent ${agent_kind}) against ${BATON_URL}..."
+baton worker register \
+  --config "$cfg" \
+  --url "$BATON_URL" \
+  --project "$BATON_PROJECT_ID" \
+  --name "$name" \
+  --agentKind "$agent_kind"
 
 echo "[baton] worker run..."
 exec baton worker run --config "$cfg"

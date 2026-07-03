@@ -10,7 +10,7 @@
 FROM node:26-bookworm-slim
 
 ARG CLAUDE_CODE_VERSION=2.1.159
-ARG BATON_CLI_VERSION=0.4.2
+ARG BATON_CLI_VERSION=0.4.3
 # Set to a non-empty value to bake in the reclaude CLI (a claude wrapper that
 # routes through the reclaude.ai gateway). Point BATON_CLAUDE_BIN at it in .env
 # to drive claude through reclaude instead of an Anthropic-compatible endpoint.
