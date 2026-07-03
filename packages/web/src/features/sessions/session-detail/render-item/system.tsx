@@ -11,7 +11,7 @@ export const SystemNotice = ({ text }: { text: string }) => (
 export const SystemHeader = ({ model, sessionId }: { model?: string; sessionId?: string }) => (
   <div className="flex items-center gap-2 font-mono text-[11px] text-gray-400">
     <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5">
-      {model ?? 'claude'}
+      {model ?? 'agent'}
     </span>
     {sessionId && <span>session {sessionId.slice(0, 8)}</span>}
   </div>

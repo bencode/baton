@@ -1,6 +1,7 @@
 import {
   type AgentEvent,
   type AgentItem,
+  type AgentKind,
   type Attachment,
   type SessionEvent,
   startedMessageIds,
@@ -68,6 +69,13 @@ export type RenderItem =
   | { kind: 'system-notice'; text: string; key: string }
   | { kind: 'raw'; payload: unknown; key: string }
 
+export type ReduceEventsOptions = {
+  agentKind?: AgentKind
+}
+
+const defaultHeaderModel = (agentKind?: AgentKind): string =>
+  agentKind === 'codex' ? 'codex' : agentKind === 'claude-code' ? 'claude' : 'agent'
+
 // --- queued (pending) messages ----------------------------------------------
 
 // A user message sent while a turn is running sits in the worker's queue until
@@ -104,7 +112,10 @@ export const pendingMessages = (events: SessionEvent[]): QueuedMessage[] =>
 
 // --- reducer -----------------------------------------------------------------
 
-export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
+export const reduceEvents = (
+  events: SessionEvent[],
+  options: ReduceEventsOptions = {},
+): RenderItem[] => {
   const items: RenderItem[] = []
   // Queued messages render in their own zone (see pendingMessages); keep them
   // out of the transcript until their turn_start lands.
@@ -247,7 +258,7 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       systemEmitted = true
       items.push({
         kind: 'system-header',
-        model: event.model,
+        model: event.model ?? defaultHeaderModel(options.agentKind),
         sessionId: event.sessionId,
         key,
       })
@@ -355,7 +366,7 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       systemEmitted = true
       items.push({
         kind: 'system-header',
-        model: headerModel(p),
+        model: headerModel(p) ?? defaultHeaderModel(options.agentKind),
         sessionId: str(p.session_id),
         key,
       })

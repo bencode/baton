@@ -36,7 +36,10 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const { events, status, hasOlder, loadingOlder, loadOlder } = useSessionStream(
     session?.id ?? null,
   )
-  const items = useMemo(() => reduceEvents(events), [events])
+  const items = useMemo(
+    () => reduceEvents(events, { agentKind: session?.agentKind }),
+    [events, session?.agentKind],
+  )
   const queued = useMemo(() => pendingMessages(events), [events])
   const [draft, setDraft] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])

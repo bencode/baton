@@ -122,6 +122,17 @@ describe('reduceEvents', () => {
     })
   })
 
+  test('codex thread without model falls back to codex, not claude', () => {
+    seq = 0
+    const out = reduceEvents(
+      [ev('agent_event', { type: 'thread.started', sessionId: 'codex-thread' })],
+      { agentKind: 'codex' },
+    )
+    expect(out).toMatchObject([
+      { kind: 'system-header', model: 'codex', sessionId: 'codex-thread' },
+    ])
+  })
+
   test('malformed agent_event falls back to raw instead of throwing', () => {
     seq = 0
     const out = reduceEvents([
