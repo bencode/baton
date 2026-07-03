@@ -12,7 +12,7 @@ await build({
   platform: 'node',
   format: 'esm',
   packages: 'bundle',
-  external: ['@anthropic-ai/claude-agent-sdk', 'node-pty'],
+  external: ['@anthropic-ai/claude-agent-sdk', '@openai/codex-sdk', 'node-pty'],
   banner: {
     js: "#!/usr/bin/env node\nimport { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);",
   },
