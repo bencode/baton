@@ -9,6 +9,7 @@ const cfg: SessionConfig = {
   server: 's',
   sessionId: 1,
   name: 'x',
+  agentKind: 'claude-code',
   agentSessionId: 'uuid',
   worktreePath: '/tmp/wt',
 }
@@ -54,14 +55,14 @@ afterEach(() => {
 })
 
 describe('runTurn', () => {
-  // A successful turn forwards the result as an sdk_event and finalizes with a
+  // A successful turn forwards the result as an agent_event and finalizes with a
   // single turn_complete — no turn_error.
   test('success result completes cleanly', async () => {
     const { calls, worker } = collector()
     const qf = fakeQuery([{ type: 'result', subtype: 'success', is_error: false, result: 'ok' }])
     const code = await runTurn(cfg, worker, userMsg(), false, qf, () => {})
     assert.equal(code, 0)
-    assert.deepEqual(calls, ['turn_start', 'sdk_event', 'turn_complete'])
+    assert.deepEqual(calls, ['turn_start', 'agent_event', 'turn_complete'])
   })
 
   // An error result (non-success subtype / is_error) emits turn_error then
@@ -110,7 +111,7 @@ describe('runTurn', () => {
     assert.ok(calls.includes('turn_complete'))
   })
 
-  // A long single tool call streams no sdk_events, so the turn pings the server
+  // A long single tool call streams no agent_events, so the turn pings the server
   // with turn_heartbeat to stay above the liveness TTL. Here a wedged query runs
   // until the watchdog aborts it; the heartbeat must have fired meanwhile.
   test('emits turn_heartbeat while a turn runs', async () => {

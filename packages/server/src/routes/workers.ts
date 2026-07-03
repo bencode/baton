@@ -1,4 +1,4 @@
-import type { Id } from '@baton/shared'
+import type { AgentKind, Id } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { CommandBus } from '../command-bus.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
@@ -9,6 +9,13 @@ import { streamBus } from '../sse.ts'
 import type { Store } from '../store/types.ts'
 import type { TerminalBridge } from '../terminal-bridge.ts'
 import { type AppEnv, intParam, workerWithView } from '../views.ts'
+
+const parseAgentKind = (value: unknown): AgentKind | null =>
+  value === undefined || value === null || value === ''
+    ? 'claude-code'
+    : value === 'claude-code' || value === 'codex'
+      ? value
+      : null
 
 export const registerWorkerRoutes = (
   app: Hono<AppEnv>,
@@ -24,6 +31,7 @@ export const registerWorkerRoutes = (
   app.post('/workers', async c => {
     const body = (await c.req.json()) as {
       projectId?: Id
+      agentKind?: string
       machineId?: string
       name?: string
       hostname?: string
@@ -35,8 +43,11 @@ export const registerWorkerRoutes = (
     // token re-registering is allowed (domain-scope exempts workers); dev (no users) open.
     const denied = await assertProjectAccess(c, store, body.projectId)
     if (denied) return denied
+    const agentKind = parseAgentKind(body.agentKind)
+    if (!agentKind) return c.json({ error: 'agentKind must be claude-code or codex' }, 400)
     const out = await store.workers.register({
       projectId: body.projectId,
+      agentKind,
       machineId: body.machineId,
       name: body.name,
       hostname: body.hostname,

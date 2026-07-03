@@ -39,12 +39,14 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
     const worker = await store.workers.get(body.workerId)
     if (!worker || worker.projectId !== body.projectId)
       return c.json({ error: 'worker not found in project' }, 404)
+    if (body.agentKind && body.agentKind !== worker.agentKind)
+      return c.json({ error: 'session agentKind must match worker agentKind' }, 400)
     const created = await store.sessions.create({
       projectId: body.projectId,
       workerId: body.workerId,
       mode: body.mode ?? 'worker',
       name: body.name ?? '',
-      agentKind: body.agentKind ?? 'claude-code',
+      agentKind: worker.agentKind,
     })
     // No name given → a stable placeholder (`session-<id>`); the worker auto-titles
     // it after the first turn. The id is only known post-insert.

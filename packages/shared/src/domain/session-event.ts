@@ -1,5 +1,104 @@
 import type { Id } from './ids.ts'
 
+export type ItemStatus = 'in_progress' | 'completed' | 'failed'
+
+type BaseAgentItem = {
+  id: string
+  status: ItemStatus
+}
+
+export type AgentMessageItem = BaseAgentItem & {
+  type: 'agent_message'
+  text: string
+}
+
+export type ReasoningItem = BaseAgentItem & {
+  type: 'reasoning'
+  text: string
+}
+
+export type ToolCallItem = BaseAgentItem & {
+  type: 'tool_call'
+  name: string
+  input: unknown
+  output?: unknown
+  isError?: boolean
+}
+
+export type CommandExecutionItem = BaseAgentItem & {
+  type: 'command_execution'
+  command: string
+  output: string
+  exitCode?: number
+}
+
+export type FileChangeItem = BaseAgentItem & {
+  type: 'file_change'
+  changes: Array<{ path: string; kind: 'add' | 'update' | 'delete' }>
+}
+
+export type McpToolCallItem = BaseAgentItem & {
+  type: 'mcp_tool_call'
+  server: string
+  tool: string
+  arguments: unknown
+  output?: unknown
+  isError?: boolean
+}
+
+export type WebSearchItem = BaseAgentItem & {
+  type: 'web_search'
+  query: string
+}
+
+export type TodoListItem = BaseAgentItem & {
+  type: 'todo_list'
+  items: Array<{ text: string; completed: boolean }>
+}
+
+export type ErrorItem = BaseAgentItem & {
+  type: 'error'
+  message: string
+}
+
+export type AgentItem =
+  | AgentMessageItem
+  | ReasoningItem
+  | ToolCallItem
+  | CommandExecutionItem
+  | FileChangeItem
+  | McpToolCallItem
+  | WebSearchItem
+  | TodoListItem
+  | ErrorItem
+
+export type AgentUsage = {
+  inputTokens?: number
+  cachedInputTokens?: number
+  outputTokens?: number
+  reasoningOutputTokens?: number
+  totalCostUsd?: number
+  durationMs?: number
+  numTurns?: number
+}
+
+type WithRaw = { raw?: unknown }
+
+export type AgentEvent =
+  | (WithRaw & { type: 'thread.started'; sessionId: string; model?: string })
+  | (WithRaw & { type: 'turn.started' })
+  | (WithRaw & { type: 'item.started'; item: AgentItem })
+  | (WithRaw & { type: 'item.updated'; item: AgentItem })
+  | (WithRaw & { type: 'item.completed'; item: AgentItem })
+  | (WithRaw & { type: 'turn.completed'; usage?: AgentUsage; subtype?: string })
+  | (WithRaw & {
+      type: 'turn.failed'
+      error: { message: string; subtype?: string }
+      usage?: AgentUsage
+    })
+  | (WithRaw & { type: 'error'; message: string })
+  | { type: 'raw'; raw: unknown }
+
 // A chat / SDK transcript event. Persisted server-side (SessionEvent table,
 // per-session monotonic `sequence`); the web loads history from the server and
 // tails new events live over SSE. A user_message with no matching turn_start is
@@ -11,7 +110,8 @@ import type { Id } from './ids.ts'
 //                    (images is legacy base64; attachments is the canonical path;
 //                    planMode=true → worker runs this turn read-only, SDK permissionMode:'plan')
 //   - turn_start:    payload = { messageId?: number }
-//   - sdk_event:     payload = a parsed line from `claude --output-format stream-json`
+//   - agent_event:   payload = provider-neutral AgentEvent (new canonical stream)
+//   - sdk_event:     legacy payload = a parsed line from `claude --output-format stream-json`
 //   - turn_heartbeat: payload = {} — periodic liveness ping while a turn runs, so
 //                    the server can tell a live-but-quiet turn (long single tool
 //                    call, no sdk_event) from an abandoned one. Non-rendering,
@@ -22,6 +122,7 @@ import type { Id } from './ids.ts'
 export type SessionEventType =
   | 'user_message'
   | 'turn_start'
+  | 'agent_event'
   | 'sdk_event'
   | 'turn_heartbeat'
   | 'turn_complete'

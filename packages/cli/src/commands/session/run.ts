@@ -65,6 +65,7 @@ export const sessionRunCommand = defineCommand({
       server,
       sessionId,
       name: s.name,
+      agentKind: s.agentKind,
       agentSessionId: s.agentSessionId,
       worktreePath: s.worktreePath,
     }

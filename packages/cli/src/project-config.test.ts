@@ -54,6 +54,7 @@ describe('project-config', () => {
       server: 'http://x',
       projectId: 1,
       workerId: 9,
+      agentKind: 'codex',
       name: 'w',
       machineId: 'mid',
       apiToken: 'wtok',
@@ -73,6 +74,7 @@ describe('project-config', () => {
       assert.equal(w.apiToken, 'wtok')
       assert.equal(w.server, 'http://x')
       assert.equal(w.projectId, 1)
+      assert.equal(w.agentKind, 'claude-code')
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

@@ -97,12 +97,13 @@ export const createSessionSupervisor = (deps: {
     const session = await client.sessions.get(sessionId)
     let worktreePath = session.worktreePath
     if (!session.agentSessionId || !worktreePath) {
-      const agentSessionId = randomUUID()
-      worktreePath = join(worktreeDir, slug(`${name}-${agentSessionId.slice(0, 8)}`))
+      const sessionCode = randomUUID()
+      const agentSessionId = session.agentKind === 'codex' ? `pending:${sessionCode}` : sessionCode
+      worktreePath = join(worktreeDir, slug(`${name}-${sessionCode.slice(0, 8)}`))
       createWorktree({
         repo,
         worktreePath,
-        sessionCode: agentSessionId.slice(0, 8),
+        sessionCode: sessionCode.slice(0, 8),
         base: repoHeadBranch(repo),
       })
       await client.sessions.materialize(sessionId, { agentSessionId, worktreePath }, cfg.apiToken)
@@ -158,6 +159,8 @@ export const createSessionSupervisor = (deps: {
     agentSessionId: string,
     worktreePath: string,
   ): Promise<void> => {
+    const session = await client.sessions.get(sessionId)
+    if (session.agentKind !== 'claude-code') return log(`title #${sessionId}: unsupported agent`)
     const exchange = readFirstExchange(agentSessionId)
     if (!exchange) return log(`title #${sessionId}: no transcript yet, skipping`)
     const outcome = await generateTitle({

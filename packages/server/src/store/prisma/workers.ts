@@ -12,15 +12,20 @@ export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
   // 'created' / 'reattached-machine' / 'claimed-legacy' / 'name-collision'
   register: async input =>
     prisma.$transaction(async tx => {
+      const agentKind = input.agentKind ?? 'claude-code'
       const byMachine = await tx.worker.findFirst({
         where: { projectId: input.projectId, machineId: input.machineId },
       })
       if (byMachine) {
+        const currentAgentKind =
+          (byMachine as typeof byMachine & { agentKind?: string }).agentKind ?? 'claude-code'
         const updated =
-          byMachine.name !== input.name || byMachine.hostname !== input.hostname
+          byMachine.name !== input.name ||
+          byMachine.hostname !== input.hostname ||
+          currentAgentKind !== agentKind
             ? await tx.worker.update({
                 where: { id: byMachine.id },
-                data: { name: input.name, hostname: input.hostname },
+                data: { name: input.name, hostname: input.hostname, agentKind },
               })
             : byMachine
         return { kind: 'reattached-machine', worker: toWorker(updated), apiToken: updated.apiToken }
@@ -32,6 +37,7 @@ export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
         const created = await tx.worker.create({
           data: {
             projectId: input.projectId,
+            agentKind,
             machineId: input.machineId,
             name: input.name,
             hostname: input.hostname,
@@ -43,7 +49,11 @@ export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
       if (byName.machineId === '') {
         const claimed = await tx.worker.update({
           where: { id: byName.id },
-          data: { machineId: input.machineId, hostname: input.hostname },
+          data: {
+            machineId: input.machineId,
+            hostname: input.hostname,
+            agentKind,
+          },
         })
         return { kind: 'claimed-legacy', worker: toWorker(claimed), apiToken: claimed.apiToken }
       }

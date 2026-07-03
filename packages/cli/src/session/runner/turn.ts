@@ -2,8 +2,9 @@ import { type Attachment, labelAttachments, type SessionEvent } from '@baton/sha
 import type { WorkerClient } from '../../client.ts'
 import type { SessionConfig } from '../../project-config.ts'
 import { augmentPrompt, type FetchImpl, materializeAttachments } from './attachments.ts'
+import { type CodexInput, startCodexEvents } from './codex.ts'
 import { type QueryFn, startQuery } from './query.ts'
-import { streamSdkEvents, type TurnResult } from './stream.ts'
+import { streamAgentEvents, streamClaudeSdkEvents, type TurnResult } from './stream.ts'
 
 // Hard ceiling on a single turn. A wedged claude must never hold the session
 // forever (busy stays true → the session is never idle-reaped and every queued
@@ -31,14 +32,14 @@ const finalizeTurn = async (
 ): Promise<number> => {
   if (!result) {
     log('[exit] stream ended with no result')
-    await worker.emitEvent('turn_error', { message: 'claude produced no result' })
+    await worker.emitEvent('turn_error', { message: 'agent produced no result' })
     await worker.emitEvent('turn_complete', {})
     return -1
   }
   log(`[exit] subtype=${result.subtype} isError=${result.isError}`)
   if (result.isError) {
     await worker.emitEvent('turn_error', {
-      message: result.resultText || `claude result: ${result.subtype}`,
+      message: result.resultText || `agent result: ${result.subtype}`,
       subtype: result.subtype,
     })
   }
@@ -55,8 +56,8 @@ const buildPrompt = async (
   attachments: Attachment[],
   log: (m: string) => void,
   fetchImpl?: FetchImpl,
-): Promise<string> => {
-  if (attachments.length === 0) return rawText
+): Promise<{ text: string; input: CodexInput }> => {
+  if (attachments.length === 0) return { text: rawText, input: rawText }
   const relPaths = await materializeAttachments({
     worktreePath: config.worktreePath,
     serverBase: config.server,
@@ -64,11 +65,21 @@ const buildPrompt = async (
     fetchImpl,
   })
   log(`[attach] downloaded ${relPaths.length} file(s) → ${config.worktreePath}/attachments`)
-  return augmentPrompt(rawText, relPaths, labelAttachments(attachments))
+  const labels = labelAttachments(attachments)
+  const text = augmentPrompt(rawText, relPaths, labels)
+  const images = relPaths.flatMap((relPath, i) => {
+    const att = attachments[i]
+    return att?.contentType.startsWith('image/')
+      ? [{ type: 'local_image' as const, path: `${config.worktreePath}/${relPath}` }]
+      : []
+  })
+  return images.length > 0
+    ? { text, input: [{ type: 'text', text }, ...images] }
+    : { text, input: text }
 }
 
-// Run exactly one turn end-to-end. POSTs turn_start, drives claude through the
-// SDK, forwards each message as sdk_event, finishes with turn_complete (plus a
+// Run exactly one turn end-to-end. POSTs turn_start, drives the selected agent
+// through its SDK, forwards canonical events, finishes with turn_complete (plus a
 // turn_error on failure). A watchdog aborts a turn that outlives the ceiling so
 // it can never wedge the session. Returns 0 on success, -1/1 otherwise.
 export const runTurn = async (
@@ -98,9 +109,9 @@ export const runTurn = async (
     return -1
   }
 
-  let text: string
+  let built: { text: string; input: CodexInput }
   try {
-    text = await buildPrompt(config, rawText, attachments, log, fetchImpl)
+    built = await buildPrompt(config, rawText, attachments, log, fetchImpl)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     await worker.emitEvent('turn_error', { message: `attachment download failed: ${message}` })
@@ -130,12 +141,26 @@ export const runTurn = async (
     heartbeat = setInterval(() => {
       void worker.emitEvent('turn_heartbeat', {}).catch(e => log(`[heartbeat] ${String(e)}`))
     }, heartbeatMs())
-    const messages = startQuery(config, text, resuming, queryFn, abort, log, {
-      envOverlay,
-      planMode,
-      model,
-    })
-    const consume = streamSdkEvents(messages, worker)
+    const consume =
+      config.agentKind === 'codex'
+        ? streamAgentEvents(
+            startCodexEvents(config, built.input, worker, {
+              envOverlay,
+              planMode,
+              model,
+              signal: abort.signal,
+              log,
+            }),
+            worker,
+          )
+        : streamClaudeSdkEvents(
+            startQuery(config, built.text, resuming, queryFn, abort, log, {
+              envOverlay,
+              planMode,
+              model,
+            }),
+            worker,
+          )
     void consume.catch(() => {}) // abort below may make it reject; handled via race
     const outcome = await Promise.race([consume, timeout, interrupted])
     if (outcome === ABORTED) {
@@ -146,10 +171,10 @@ export const runTurn = async (
       return -1
     }
     if (outcome === TIMEOUT) {
-      log(`[watchdog] turn exceeded ${ceiling}ms — aborting claude`)
+      log(`[watchdog] turn exceeded ${ceiling}ms — aborting agent`)
       abort.abort()
       await worker.emitEvent('turn_error', {
-        message: `turn exceeded ${ceiling}ms — claude aborted`,
+        message: `turn exceeded ${ceiling}ms — agent aborted`,
       })
       await worker.emitEvent('turn_complete', {})
       return -1

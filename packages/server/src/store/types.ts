@@ -124,6 +124,7 @@ export type LoopPatch = Partial<{
 // issued at creation and returned on every successful (re)register.
 export type WorkerRegister = {
   projectId: Id
+  agentKind?: AgentKind
   machineId: string
   name: string
   hostname: string

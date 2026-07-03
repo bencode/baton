@@ -35,6 +35,7 @@ describe('worker helpers', () => {
               worker: {
                 id: 42,
                 projectId: 1,
+                agentKind: (input as { agentKind: 'claude-code' | 'codex' }).agentKind,
                 machineId: (input as { machineId: string }).machineId,
                 name: (input as { name: string }).name,
                 hostname: (input as { hostname: string }).hostname,
@@ -56,6 +57,7 @@ describe('worker helpers', () => {
           server: 'http://localhost:3280',
           hostname: 'bens-air.local',
           machineId: 'mid-abc',
+          agentKind: 'codex',
         },
         cfgPath,
       )
@@ -64,6 +66,7 @@ describe('worker helpers', () => {
       assert.equal(configPath, cfgPath)
       assert.deepEqual(registeredWith, {
         projectId: 1,
+        agentKind: 'codex',
         machineId: 'mid-abc',
         name: 'ben-laptop',
         hostname: 'bens-air.local',
@@ -74,6 +77,7 @@ describe('worker helpers', () => {
       assert.equal(saved.worker.id, 42)
       assert.equal(saved.worker.machineId, 'mid-abc')
       assert.equal(saved.worker.name, 'ben-laptop')
+      assert.equal(saved.worker.agentKind, 'codex')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

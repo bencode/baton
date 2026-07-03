@@ -67,6 +67,8 @@ describe('turn liveness predicates', () => {
     assert.equal(closesTurn(ev(5, 'sdk_event', {})), false)
     assert.equal(opensTurn(ev(6, 'turn_heartbeat', {})), false)
     assert.equal(closesTurn(ev(6, 'turn_heartbeat', {})), false)
+    assert.equal(opensTurn(ev(7, 'agent_event', { type: 'turn.started' })), false)
+    assert.equal(closesTurn(ev(7, 'agent_event', { type: 'turn.started' })), false)
   })
 
   test('isAgentWorking: a dangling turn_start is open; a trailing close is not', () => {

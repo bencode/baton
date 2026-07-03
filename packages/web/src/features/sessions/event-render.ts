@@ -1,4 +1,6 @@
 import {
+  type AgentEvent,
+  type AgentItem,
   type Attachment,
   type SessionEvent,
   startedMessageIds,
@@ -108,6 +110,7 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
   // out of the transcript until their turn_start lands.
   const started = startedMessageIds(events)
   const pendingTools = new Map<string, Extract<RenderItem, { kind: 'tool-block' }>>()
+  const pendingAgentItems = new Map<string, RenderItem>()
   // Fold a tool_result block back into its tool-block (by tool_use_id). Used in
   // both the assistant branch (server-tool results) and user branch (client).
   const applyToolResult = (b: Record<string, unknown>): void => {
@@ -121,6 +124,157 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
   let pendingRateLimit: RateLimitInfo | undefined
   let turnIndex = 0
   let systemEmitted = false
+
+  const toolLikeFromAgentItem = (
+    item: Exclude<AgentItem, { type: 'agent_message' | 'reasoning' | 'error' }>,
+    key: string,
+  ): Extract<RenderItem, { kind: 'tool-block' }> => {
+    if (item.type === 'command_execution') {
+      return {
+        kind: 'tool-block',
+        name: 'Bash',
+        input: { command: item.command },
+        toolUseId: item.id,
+        resultText: item.output || undefined,
+        isError: item.status === 'failed',
+        key,
+      }
+    }
+    if (item.type === 'mcp_tool_call') {
+      return {
+        kind: 'tool-block',
+        name: `mcp__${item.server}__${item.tool}`,
+        input: item.arguments,
+        toolUseId: item.id,
+        resultText: item.output === undefined ? undefined : JSON.stringify(item.output),
+        isError: item.isError ?? item.status === 'failed',
+        key,
+      }
+    }
+    if (item.type === 'web_search') {
+      return {
+        kind: 'tool-block',
+        name: 'WebSearch',
+        input: { query: item.query },
+        toolUseId: item.id,
+        isError: item.status === 'failed',
+        key,
+      }
+    }
+    if (item.type === 'file_change') {
+      return {
+        kind: 'tool-block',
+        name: 'file_change',
+        input: item.changes,
+        toolUseId: item.id,
+        isError: item.status === 'failed',
+        key,
+      }
+    }
+    if (item.type === 'todo_list') {
+      return {
+        kind: 'tool-block',
+        name: 'TodoWrite',
+        input: item.items,
+        toolUseId: item.id,
+        isError: item.status === 'failed',
+        key,
+      }
+    }
+    return {
+      kind: 'tool-block',
+      name: item.name,
+      input: item.input,
+      toolUseId: item.id,
+      resultText: item.output === undefined ? undefined : JSON.stringify(item.output),
+      isError: item.isError ?? item.status === 'failed',
+      key,
+    }
+  }
+
+  const upsertAgentItem = (item: AgentItem, key: string): void => {
+    const existing = pendingAgentItems.get(item.id)
+    if (item.type === 'agent_message') {
+      if (existing?.kind === 'assistant-text') existing.text = item.text
+      else {
+        const next: RenderItem = { kind: 'assistant-text', text: item.text, key }
+        pendingAgentItems.set(item.id, next)
+        items.push(next)
+      }
+      return
+    }
+    if (item.type === 'reasoning') {
+      if (existing?.kind === 'thinking') existing.text = item.text
+      else if (item.text.trim()) {
+        const next: RenderItem = { kind: 'thinking', text: item.text, key }
+        pendingAgentItems.set(item.id, next)
+        items.push(next)
+      }
+      return
+    }
+    if (item.type === 'error') {
+      const next: RenderItem = {
+        kind: 'turn-error',
+        turnIndex: turnIndex + 1,
+        message: item.message,
+        key,
+      }
+      pendingAgentItems.set(item.id, next)
+      items.push(next)
+      return
+    }
+    const next = toolLikeFromAgentItem(item, key)
+    if (existing?.kind === 'tool-block') {
+      existing.name = next.name
+      existing.input = next.input
+      existing.resultText = next.resultText
+      existing.isError = next.isError
+    } else {
+      pendingAgentItems.set(item.id, next)
+      items.push(next)
+    }
+  }
+
+  const applyAgentEvent = (event: AgentEvent, key: string): void => {
+    if (event.type === 'thread.started') {
+      if (systemEmitted) return
+      systemEmitted = true
+      items.push({
+        kind: 'system-header',
+        model: event.model,
+        sessionId: event.sessionId,
+        key,
+      })
+      return
+    }
+    if (event.type === 'turn.started') return
+    if (
+      event.type === 'item.started' ||
+      event.type === 'item.updated' ||
+      event.type === 'item.completed'
+    ) {
+      upsertAgentItem(event.item, `${key}-${event.item.id}`)
+      return
+    }
+    if (event.type === 'turn.completed') {
+      pendingResult = {
+        subtype: event.subtype,
+        numTurns: event.usage?.numTurns,
+        totalCostUsd: event.usage?.totalCostUsd,
+        durationMs: event.usage?.durationMs,
+      }
+      return
+    }
+    if (event.type === 'turn.failed') {
+      pendingResult = { subtype: event.error.subtype ?? 'error' }
+      return
+    }
+    if (event.type === 'error') {
+      items.push({ kind: 'turn-error', turnIndex: turnIndex + 1, message: event.message, key })
+      return
+    }
+    items.push({ kind: 'raw', payload: event.raw, key })
+  }
 
   for (const e of events) {
     // Server `id` is a stable unique identity (events are persisted) — safe as
@@ -172,6 +326,12 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
           ? { kind: 'system-notice', text: notice, key }
           : { kind: 'raw', payload: e.payload, key },
       )
+      continue
+    }
+    if (e.type === 'agent_event') {
+      if (isRecord(e.payload) && typeof e.payload.type === 'string')
+        applyAgentEvent(e.payload as AgentEvent, key)
+      else items.push({ kind: 'raw', payload: e.payload, key })
       continue
     }
     // e.type === 'sdk_event' below

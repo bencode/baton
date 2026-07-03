@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Id } from '@baton/shared'
+import type { AgentKind, Id } from '@baton/shared'
 
 // Single local-state file per checkout: `.baton.json` at the repo root.
 // Gitignored — holds this machine's worker identity (id + machineId + apiToken).
@@ -19,6 +19,7 @@ export const PROJECT_CONFIG_NAME = '.baton.json'
 export type WorkerEntry = {
   id: Id
   name: string
+  agentKind?: AgentKind
   machineId: string
   apiToken: string
 }
@@ -36,6 +37,7 @@ export type WorkerConfig = {
   server: string
   projectId: Id
   workerId: Id
+  agentKind: AgentKind
   name: string
   machineId: string
   apiToken: string
@@ -49,6 +51,7 @@ export type SessionConfig = {
   server: string
   sessionId: Id
   name: string
+  agentKind: AgentKind
   agentSessionId: string
   worktreePath: string
 }
@@ -106,6 +109,7 @@ export const viewWorker = (cfg: ProjectConfig): WorkerConfig => {
     server,
     projectId: project,
     workerId: worker.id,
+    agentKind: worker.agentKind ?? 'claude-code',
     name: worker.name,
     machineId: worker.machineId,
     apiToken: worker.apiToken,
@@ -118,5 +122,11 @@ export const viewWorker = (cfg: ProjectConfig): WorkerConfig => {
 export const worktreeConfig = (cfg: WorkerConfig): ProjectConfig => ({
   server: cfg.server,
   project: cfg.projectId,
-  worker: { id: cfg.workerId, name: cfg.name, machineId: cfg.machineId, apiToken: cfg.apiToken },
+  worker: {
+    id: cfg.workerId,
+    name: cfg.name,
+    agentKind: cfg.agentKind,
+    machineId: cfg.machineId,
+    apiToken: cfg.apiToken,
+  },
 })

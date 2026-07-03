@@ -47,8 +47,9 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
       return c.json({ error: 'terminal open — close it before clearing' }, 409)
     let view = s
     if (s.agentSessionId && s.worktreePath) {
+      const nextId = randomUUID()
       view = await store.sessions.materialize(s.id, {
-        agentSessionId: randomUUID(),
+        agentSessionId: s.agentKind === 'codex' ? `pending:${nextId}` : nextId,
         worktreePath: s.worktreePath,
       })
       // Restart the running child so it picks up the new id — but only if it's
@@ -130,7 +131,12 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
   app.post('/sessions/:id/autotitle', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
-    if (/^session-\d+$/.test(s.name) && s.agentSessionId && s.worktreePath)
+    if (
+      s.agentKind === 'claude-code' &&
+      /^session-\d+$/.test(s.name) &&
+      s.agentSessionId &&
+      s.worktreePath
+    )
       commands.publish(s.workerId, {
         cmd: 'session.title',
         sessionId: s.id,
@@ -157,6 +163,8 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
       bump(s.projectId)
       return c.json(await toView(s))
     }
+    if (s.agentKind !== 'claude-code')
+      return c.json({ error: 'terminal is only supported for claude-code sessions' }, 409)
     if (runtime.isActive(s.id))
       return c.json({ error: 'session active — stop it to open a terminal' }, 409)
     if (!commands.has(s.workerId))

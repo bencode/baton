@@ -14,7 +14,7 @@ import type { Worker } from './worker.ts'
 // soft-delete / closedAt. Daemon attach state (`attached`) and turn activity
 // (`busy`) are runtime signals on SessionView, not session state.
 export type SessionMode = 'worker' | 'skill'
-export type AgentKind = 'claude-code'
+export type AgentKind = 'claude-code' | 'codex'
 
 // `agentSessionId` and `worktreePath` are null between creation and
 // materialization: a session row is created remotely (just project/worker/name),

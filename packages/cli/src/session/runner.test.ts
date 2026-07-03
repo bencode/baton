@@ -26,11 +26,12 @@ const recordingQuery = (
 }
 
 describe('runTurn', () => {
-  test('posts turn_start + N sdk_event + turn_complete; presets sessionId vs resume', async () => {
+  test('posts turn_start + N agent_event + turn_complete; presets sessionId vs resume', async () => {
     const cfg: SessionConfig = {
       server: 'http://localhost:3280',
       sessionId: 1,
       name: 'dogfood',
+      agentKind: 'claude-code',
       agentSessionId: '00000000-0000-0000-0000-000000000001',
       worktreePath: '/tmp/wt',
     }
@@ -69,10 +70,10 @@ describe('runTurn', () => {
     assert.equal(seen.options?.cwd, cfg.worktreePath)
     assert.deepEqual(
       calls.map(c => c.type),
-      ['turn_start', 'sdk_event', 'sdk_event', 'sdk_event', 'turn_complete'],
+      ['turn_start', 'agent_event', 'agent_event', 'turn_complete'],
     )
     assert.deepEqual(calls[0]?.payload, { messageId: 99 })
-    assert.deepEqual(calls[4]?.payload, { subtype: 'success' })
+    assert.deepEqual(calls[3]?.payload, { subtype: 'success' })
     assert.equal(code1, 0)
 
     // second turn → resume (= CLI --resume)
@@ -100,6 +101,7 @@ describe('runTurn', () => {
       server: 's',
       sessionId: 1,
       name: 'x',
+      agentKind: 'claude-code',
       agentSessionId: 'uuid',
       worktreePath: '/tmp/wt',
     }
@@ -136,6 +138,7 @@ describe('runTurn', () => {
       server: 'http://srv',
       sessionId: 1,
       name: 'x',
+      agentKind: 'claude-code',
       agentSessionId: 'uuid',
       worktreePath: wt,
     }
@@ -245,6 +248,7 @@ describe('runDaemon reconcile-on-connect', () => {
     server: 'http://srv',
     sessionId: 1,
     name: 'x',
+    agentKind: 'claude-code',
     agentSessionId: 'uuid-without-transcript',
     worktreePath: '/tmp/wt',
   }
@@ -282,7 +286,7 @@ describe('runDaemon reconcile-on-connect', () => {
 
     assert.deepEqual(
       calls.map(c => c.type),
-      ['turn_start', 'sdk_event', 'turn_complete'],
+      ['turn_start', 'agent_event', 'turn_complete'],
     )
     assert.deepEqual(calls[0]?.payload, { messageId: 7 })
   })

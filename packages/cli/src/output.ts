@@ -23,7 +23,7 @@ export const fmtSession = (s: SessionView): string =>
 // these are NOT per-project: W-7 means the same worker from anywhere.
 export const fmtWorker = (w: WorkerView): string => {
   const offline = w.connected === false ? '  [offline]' : ''
-  return `W-${w.id}  ${w.name}  ${w.hostname}${offline}`
+  return `W-${w.id}  ${w.name}  ${w.hostname}  ${w.agentKind}${offline}`
 }
 
 // Seconds → the largest whole unit (1d / 2h / 30m / 90s) for compact display.

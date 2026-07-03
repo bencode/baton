@@ -166,6 +166,7 @@ export const toLoop = (r: DbLoop): Loop => ({
 export const toWorker = (r: DbWorker): Worker => ({
   id: r.id,
   projectId: r.projectId,
+  agentKind: (r as DbWorker & { agentKind?: AgentKind }).agentKind ?? 'claude-code',
   machineId: r.machineId,
   name: r.name,
   hostname: r.hostname,

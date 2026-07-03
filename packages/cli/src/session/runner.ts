@@ -128,7 +128,10 @@ export const runDaemon = async (
   log(`runtime env keys: ${maskedEnvKeys(deps.env)}`)
 
   const state: DaemonState = {
-    firstSpawnDone: findTranscriptPath(config.agentSessionId) !== null,
+    firstSpawnDone:
+      config.agentKind === 'codex'
+        ? !config.agentSessionId.startsWith('pending:')
+        : findTranscriptPath(config.agentSessionId) !== null,
     seen: new Set(),
   }
   const pendingQueue: SessionEvent[] = []

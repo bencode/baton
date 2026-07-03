@@ -208,6 +208,7 @@ model Session {
 model Worker {
   id        Int      @id @default(autoincrement())
   projectId Int
+  agentKind String   @default("claude-code")
   machineId String
   name      String
   hostname  String

@@ -49,6 +49,9 @@ export type WorkerClient = {
   // authoritative pending queue (user_messages with no turn_start yet), so a
   // missed live SSE delivery can't strand a message.
   listEvents(): Promise<SessionEvent[]>
+  // Update the provider conversation id after a driver that mints it lazily
+  // (Codex thread.started) reports the real handle.
+  materialize(input: { agentSessionId: string; worktreePath: string }): Promise<unknown>
 }
 
 // `bearer` → the worker daemon / session child: authenticate every request with
@@ -106,5 +109,11 @@ export const createWorkerClient = (
         headers: auth,
       }),
     listEvents: () => request(u(`/sessions/${sessionId}/events`), { method: 'GET', headers: auth }),
+    materialize: input =>
+      request(u(`/sessions/${sessionId}`), {
+        method: 'PATCH',
+        body: input,
+        headers: auth,
+      }),
   }
 }

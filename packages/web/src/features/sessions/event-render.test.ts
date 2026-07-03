@@ -73,6 +73,55 @@ describe('reduceEvents', () => {
     })
   })
 
+  test('agent_event canonical stream renders system, assistant, tool, and result', () => {
+    seq = 0
+    const out = reduceEvents([
+      ev('agent_event', { type: 'thread.started', sessionId: 'codex-thread', model: 'gpt-5' }),
+      ev('agent_event', {
+        type: 'item.completed',
+        item: { type: 'agent_message', id: 'm1', status: 'completed', text: 'hi there' },
+      }),
+      ev('agent_event', {
+        type: 'item.started',
+        item: {
+          type: 'command_execution',
+          id: 'cmd1',
+          status: 'in_progress',
+          command: 'ls',
+          output: '',
+        },
+      }),
+      ev('agent_event', {
+        type: 'item.completed',
+        item: {
+          type: 'command_execution',
+          id: 'cmd1',
+          status: 'completed',
+          command: 'ls',
+          output: 'README.md',
+        },
+      }),
+      ev('agent_event', {
+        type: 'turn.completed',
+        subtype: 'success',
+        usage: { totalCostUsd: 0.01 },
+      }),
+      ev('turn_complete', {}),
+    ])
+    expect(out).toHaveLength(4)
+    expect(out[0]).toMatchObject({ kind: 'system-header', sessionId: 'codex-thread' })
+    expect(out[1]).toMatchObject({ kind: 'assistant-text', text: 'hi there' })
+    expect(out[2]).toMatchObject({
+      kind: 'tool-block',
+      name: 'Bash',
+      resultText: 'README.md',
+    })
+    expect(out[3]).toMatchObject({
+      kind: 'turn-end',
+      result: { subtype: 'success', totalCostUsd: 0.01 },
+    })
+  })
+
   test('assistant text → assistant-text bubble', () => {
     seq = 0
     const out = reduceEvents([

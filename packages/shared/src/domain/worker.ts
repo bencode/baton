@@ -1,4 +1,5 @@
 import type { Id } from './ids.ts'
+import type { AgentKind } from './session.ts'
 
 // A Worker is a registered (project × machine) presence. Identified by
 // `machineId` (UUID baton lazily writes to ~/.local/share/baton/machine-id)
@@ -10,6 +11,7 @@ import type { Id } from './ids.ts'
 export type Worker = {
   id: Id
   projectId: Id
+  agentKind: AgentKind
   machineId: string
   name: string
   hostname: string
