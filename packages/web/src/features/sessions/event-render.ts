@@ -125,6 +125,12 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
   let turnIndex = 0
   let systemEmitted = false
 
+  const isAgentItem = (value: unknown): value is AgentItem =>
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.type === 'string' &&
+    typeof value.status === 'string'
+
   const toolLikeFromAgentItem = (
     item: Exclude<AgentItem, { type: 'agent_message' | 'reasoning' | 'error' }>,
     key: string,
@@ -253,7 +259,8 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       event.type === 'item.updated' ||
       event.type === 'item.completed'
     ) {
-      upsertAgentItem(event.item, `${key}-${event.item.id}`)
+      if (isAgentItem(event.item)) upsertAgentItem(event.item, `${key}-${event.item.id}`)
+      else items.push({ kind: 'raw', payload: event.raw ?? event, key })
       return
     }
     if (event.type === 'turn.completed') {
@@ -266,7 +273,9 @@ export const reduceEvents = (events: SessionEvent[]): RenderItem[] => {
       return
     }
     if (event.type === 'turn.failed') {
-      pendingResult = { subtype: event.error.subtype ?? 'error' }
+      pendingResult = {
+        subtype: isRecord(event.error) ? (str(event.error.subtype) ?? 'error') : 'error',
+      }
       return
     }
     if (event.type === 'error') {

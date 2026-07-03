@@ -122,6 +122,16 @@ describe('reduceEvents', () => {
     })
   })
 
+  test('malformed agent_event falls back to raw instead of throwing', () => {
+    seq = 0
+    const out = reduceEvents([
+      ev('agent_event', { type: 'item.completed', item: { type: 'agent_message' } }),
+      ev('agent_event', { type: 'turn.failed' }),
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ kind: 'raw' })
+  })
+
   test('assistant text → assistant-text bubble', () => {
     seq = 0
     const out = reduceEvents([
