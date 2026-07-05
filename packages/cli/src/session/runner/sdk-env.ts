@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
+import type { ApprovalMode, SandboxMode } from '@openai/codex-sdk'
 
 // Environment for the SDK's claude subprocess. When the SDK `env` option is
 // omitted the subprocess inherits `process.env` wholesale (carrying whatever
@@ -31,4 +32,29 @@ export const additionalDirs = (): string[] | undefined => {
     .map(s => s.trim())
     .filter(s => s !== '' && isAbsolute(s) && existsSync(s))
   return dirs.length > 0 ? dirs : undefined
+}
+
+const truthy = (value: string | undefined): boolean | undefined => {
+  if (value === undefined) return undefined
+  const normalized = value.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  return undefined
+}
+
+export const codexNetworkAccess = (): boolean | undefined =>
+  truthy(process.env.BATON_CODEX_NETWORK_ACCESS)
+
+export const codexSandboxMode = (planMode: boolean): SandboxMode => {
+  if (planMode) return 'read-only'
+  const raw = process.env.BATON_CODEX_SANDBOX_MODE
+  if (raw === 'read-only' || raw === 'workspace-write' || raw === 'danger-full-access') return raw
+  return 'workspace-write'
+}
+
+export const codexApprovalPolicy = (): ApprovalMode => {
+  const raw = process.env.BATON_CODEX_APPROVAL_POLICY
+  if (raw === 'never' || raw === 'on-request' || raw === 'on-failure' || raw === 'untrusted')
+    return raw
+  return 'never'
 }

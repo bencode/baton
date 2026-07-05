@@ -2,7 +2,13 @@ import type { AgentEvent, AgentItem, AgentUsage } from '@baton/shared'
 import { Codex, type Input, type ThreadOptions } from '@openai/codex-sdk'
 import type { WorkerClient } from '../../client.ts'
 import type { SessionConfig } from '../../project-config.ts'
-import { additionalDirs, buildSdkEnv } from './sdk-env.ts'
+import {
+  additionalDirs,
+  buildSdkEnv,
+  codexApprovalPolicy,
+  codexNetworkAccess,
+  codexSandboxMode,
+} from './sdk-env.ts'
 
 export type CodexInput = Input
 
@@ -173,13 +179,22 @@ export async function* startCodexEvents(
   const codex = new Codex(env ? { env } : undefined)
   const resuming = !config.agentSessionId.startsWith('pending:')
   const addDirs = additionalDirs()
+  const sandboxMode = codexSandboxMode(opts.planMode ?? false)
+  const approvalPolicy = codexApprovalPolicy()
+  const networkAccessEnabled = codexNetworkAccess()
+  opts.log(
+    `[codex] sandbox=${sandboxMode} approval=${approvalPolicy}${
+      networkAccessEnabled === undefined ? '' : ` network=${networkAccessEnabled}`
+    }`,
+  )
   const threadOptions: ThreadOptions = {
     workingDirectory: config.worktreePath,
     skipGitRepoCheck: true,
-    sandboxMode: opts.planMode ? 'read-only' : 'workspace-write',
-    approvalPolicy: 'never',
+    sandboxMode,
+    approvalPolicy,
     ...(opts.model ? { model: opts.model } : {}),
     ...(addDirs ? { additionalDirectories: addDirs } : {}),
+    ...(networkAccessEnabled === undefined ? {} : { networkAccessEnabled }),
   }
   const thread = resuming
     ? codex.resumeThread(config.agentSessionId, threadOptions)
