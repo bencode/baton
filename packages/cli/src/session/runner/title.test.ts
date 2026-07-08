@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
+import { writeFile } from 'node:fs/promises'
 import { describe, test } from 'node:test'
 import type { QueryFn } from './query.ts'
-import { generateTitle, sanitizeTitle } from './title.ts'
+import { generateTitle, generateTitleWithCodex, sanitizeTitle } from './title.ts'
 
 // Fake claude that returns `out` as its result message.
 const fakeQuery =
@@ -97,5 +98,34 @@ describe('generateTitle', () => {
     const t = await generateTitle({ ...base, queryFn: silent })
     assert.equal(t.kind, 'error')
     assert.match((t as { reason: string }).reason, /without a result/)
+  })
+})
+
+describe('generateTitleWithCodex', () => {
+  test('uses codex output-last-message and sanitizes it', async () => {
+    const t = await generateTitleWithCodex({
+      worktreePath: '/tmp',
+      userText: 'fix session auto titles',
+      assistantText: 'I will inspect the title flow.',
+      execFileFn: async (_file, args) => {
+        const outPath = String(args[args.indexOf('--output-last-message') + 1])
+        await writeFile(outPath, 'Title: "Session Auto Titles"\n')
+        return { stdout: '', stderr: '' } as never
+      },
+    })
+    assert.deepEqual(t, { kind: 'titled', title: 'Session Auto Titles' })
+  })
+
+  test('reports codex exec failures', async () => {
+    const t = await generateTitleWithCodex({
+      worktreePath: '/tmp',
+      userText: 'fix session auto titles',
+      assistantText: '',
+      execFileFn: async () => {
+        throw Object.assign(new Error('spawn codex ENOENT'), { stderr: 'missing' })
+      },
+    })
+    assert.equal(t.kind, 'error')
+    assert.match((t as { reason: string }).reason, /spawn codex ENOENT/)
   })
 })

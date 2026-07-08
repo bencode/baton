@@ -35,6 +35,7 @@ describe('worker helpers', () => {
               worker: {
                 id: 42,
                 projectId: 1,
+                agentKind: (input as { agentKind: 'codex' }).agentKind,
                 machineId: (input as { machineId: string }).machineId,
                 name: (input as { name: string }).name,
                 hostname: (input as { hostname: string }).hostname,
@@ -53,6 +54,7 @@ describe('worker helpers', () => {
         c,
         {
           projectId: 1,
+          agentKind: 'codex',
           name: 'ben-laptop',
           server: 'http://localhost:3280',
           hostname: 'bens-air.local',
@@ -65,6 +67,7 @@ describe('worker helpers', () => {
       assert.equal(configPath, cfgPath)
       assert.deepEqual(registeredWith, {
         projectId: 1,
+        agentKind: 'codex',
         machineId: 'mid-abc',
         name: 'ben-laptop',
         hostname: 'bens-air.local',
@@ -73,6 +76,7 @@ describe('worker helpers', () => {
       assert.equal(saved.server, 'http://localhost:3280')
       assert.equal(saved.project, 1)
       assert.equal(saved.worker.id, 42)
+      assert.equal(saved.worker.agentKind, 'codex')
       assert.equal(saved.worker.machineId, 'mid-abc')
       assert.equal(saved.worker.name, 'ben-laptop')
     } finally {

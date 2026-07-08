@@ -1,3 +1,4 @@
+import { isAgentKind } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { fmtSession, renderOne } from '../../output.ts'
 import { loadProjectConfigOrNull, projectConfigPath } from '../../project-config.ts'
@@ -22,6 +23,10 @@ export const sessionCreateCommand = defineCommand({
       type: 'string',
       description: "project id (default: the worker's own project, else .baton.json)",
     },
+    agentKind: {
+      type: 'string',
+      description: 'override agent runtime for this session (claude-code|codex)',
+    },
     ...common,
   },
   run: async ({ args }) => {
@@ -41,7 +46,15 @@ export const sessionCreateCommand = defineCommand({
         : args.worker
           ? (await c.workers.get(workerId)).projectId
           : resolveProjectId(args)
-    const s = await c.sessions.create({ projectId, workerId, name: args.name })
+    const agentKind = args.agentKind
+    if (agentKind !== undefined && !isAgentKind(agentKind))
+      throw new Error(`invalid agent kind "${agentKind}" (expected claude-code or codex)`)
+    const s = await c.sessions.create({
+      projectId,
+      workerId,
+      name: args.name,
+      ...(agentKind ? { agentKind } : {}),
+    })
     console.log(renderOne(s, fmtSession, Boolean(args.json)))
   },
 })

@@ -17,10 +17,12 @@ export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
       })
       if (byMachine) {
         const updated =
-          byMachine.name !== input.name || byMachine.hostname !== input.hostname
+          byMachine.name !== input.name ||
+          byMachine.hostname !== input.hostname ||
+          byMachine.agentKind !== input.agentKind
             ? await tx.worker.update({
                 where: { id: byMachine.id },
-                data: { name: input.name, hostname: input.hostname },
+                data: { name: input.name, hostname: input.hostname, agentKind: input.agentKind },
               })
             : byMachine
         return { kind: 'reattached-machine', worker: toWorker(updated), apiToken: updated.apiToken }
@@ -32,6 +34,7 @@ export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
         const created = await tx.worker.create({
           data: {
             projectId: input.projectId,
+            agentKind: input.agentKind,
             machineId: input.machineId,
             name: input.name,
             hostname: input.hostname,
@@ -43,7 +46,11 @@ export const prismaWorkers = (prisma: PrismaClient): Store['workers'] => ({
       if (byName.machineId === '') {
         const claimed = await tx.worker.update({
           where: { id: byName.id },
-          data: { machineId: input.machineId, hostname: input.hostname },
+          data: {
+            machineId: input.machineId,
+            hostname: input.hostname,
+            agentKind: input.agentKind,
+          },
         })
         return { kind: 'claimed-legacy', worker: toWorker(claimed), apiToken: claimed.apiToken }
       }

@@ -1,3 +1,4 @@
+import type { AgentKind } from '@baton/shared'
 import type { createApp } from '../app.ts'
 
 // HTTP test helpers shared by app/*.test.ts files. Not a test file itself.
@@ -20,6 +21,7 @@ export const postJson = (
 // the worker apiToken so tests can act as the worker (create/materialize/events).
 export const seedWorker = async (
   app: ReturnType<typeof createApp>,
+  agentKind: AgentKind = 'claude-code',
 ): Promise<{ projectId: number; workerId: number; workerToken: string }> => {
   const w = (await (await postJson(app, '/workspaces', { name: 'w' })).json()) as WithId
   const p = (await (
@@ -28,6 +30,7 @@ export const seedWorker = async (
   const reg = (await (
     await postJson(app, '/workers', {
       projectId: p.id,
+      agentKind,
       machineId: 'mid-test',
       name: 'test-worker',
       hostname: 'h-test',

@@ -1,5 +1,5 @@
 import { hostname as osHostname } from 'node:os'
-import type { Id } from '@baton/shared'
+import { type AgentKind, type Id, isAgentKind } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { type ApiClient, createClient, type WorkerRegisterOutput } from '../client.ts'
 import { resolveBaseUrlOrNull } from '../config.ts'
@@ -37,8 +37,15 @@ export type WorkerRegisterRunInput = {
   projectId: Id
   name: string
   server: string
+  agentKind: AgentKind
   hostname: string
   machineId: string
+}
+
+const resolveAgentKind = (value: unknown): AgentKind => {
+  const raw = value ?? process.env.BATON_AGENT_KIND ?? 'claude-code'
+  if (isAgentKind(raw)) return raw
+  throw new Error(`invalid agent kind "${String(raw)}" (expected claude-code or codex)`)
 }
 
 // Pure handler: idempotent register + persist worker section into .baton.json.
@@ -51,6 +58,7 @@ export const registerWorker = async (
 ): Promise<{ out: WorkerRegisterOutput; configPath: string }> => {
   const out = await client.workers.register({
     projectId: input.projectId,
+    agentKind: input.agentKind,
     machineId: input.machineId,
     name: input.name,
     hostname: input.hostname,
@@ -64,6 +72,7 @@ export const registerWorker = async (
   }
   setWorker(cfgPath, {
     id: out.worker.id,
+    agentKind: out.worker.agentKind,
     name: out.worker.name,
     machineId: out.worker.machineId,
     apiToken: out.apiToken,
@@ -82,6 +91,10 @@ export const worker = defineCommand({
       args: {
         project: { type: 'string', description: 'project id (overrides .baton.json)' },
         name: { type: 'string', description: 'worker display name (default: hostname)' },
+        agentKind: {
+          type: 'string',
+          description: 'agent runtime for sessions created on this worker (claude-code|codex)',
+        },
         config: {
           type: 'string',
           description: 'path to the worker config file (default: ./.baton.json)',
@@ -100,10 +113,12 @@ export const worker = defineCommand({
         const hostname = osHostname()
         const machineId = readOrCreateMachineId()
         const name = args.name ?? hostname
+        const agentKind = resolveAgentKind(args.agentKind)
         const { out, configPath } = await registerWorker(
           c,
           {
             projectId: resolveProjectId(args),
+            agentKind,
             name,
             server,
             hostname,
@@ -116,6 +131,7 @@ export const worker = defineCommand({
           return
         }
         console.log(`worker #${out.worker.id} (${out.worker.name}) — ${out.outcome}`)
+        console.log(`  agentKind:      ${out.worker.agentKind}`)
         console.log(`  hostname:       ${out.worker.hostname}`)
         console.log(`  machineId:      ${out.worker.machineId}`)
         console.log(`  machineId file: ${machineIdPath()}`)

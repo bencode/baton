@@ -1,4 +1,5 @@
 import type { Id } from './ids.ts'
+import type { AgentKind } from './session.ts'
 
 // A Worker is a registered (project × machine) presence. Identified by
 // `machineId` (UUID baton lazily writes to ~/.local/share/baton/machine-id)
@@ -10,6 +11,7 @@ import type { Id } from './ids.ts'
 export type Worker = {
   id: Id
   projectId: Id
+  agentKind: AgentKind
   machineId: string
   name: string
   hostname: string
@@ -36,7 +38,12 @@ export type WorkerCommand =
   // worktreePath carried so the worker can remove it even if it isn't currently
   // tracking a child for this session (e.g. delete after a worker restart).
   | { cmd: 'session.delete'; sessionId: Id; worktreePath: string | null }
-  // Auto-title (frontend-triggered after the first turn): the worker reads the
-  // session's own transcript for context and generates a short name. Carries the
-  // ids it needs to locate the transcript + run the throwaway claude call.
-  | { cmd: 'session.title'; sessionId: Id; agentSessionId: string; worktreePath: string }
+  // Auto-title: the worker reads the session's own events/transcript for context
+  // and generates a short name with the matching agent backend.
+  | {
+      cmd: 'session.title'
+      sessionId: Id
+      agentKind: 'claude-code' | 'codex'
+      agentSessionId: string
+      worktreePath: string
+    }

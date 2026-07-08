@@ -15,6 +15,7 @@ describe('Store contract — workers', () => {
     const { project } = await seedReq(ctx)
     const out = await ctx.store.workers.register({
       projectId: project,
+      agentKind: 'claude-code',
       machineId: 'mid-1',
       name: 'ben-laptop',
       hostname: 'bens-air.local',
@@ -29,12 +30,14 @@ describe('Store contract — workers', () => {
     const { project } = await seedReq(ctx)
     await ctx.store.workers.register({
       projectId: project,
+      agentKind: 'claude-code',
       machineId: 'mid-1',
       name: 'ben-laptop',
       hostname: 'bens-air.local',
     })
     const again = await ctx.store.workers.register({
       projectId: project,
+      agentKind: 'codex',
       machineId: 'mid-1',
       name: 'ben-laptop-renamed',
       hostname: 'bens-air.local',
@@ -42,6 +45,7 @@ describe('Store contract — workers', () => {
     assert.equal(again.kind, 'reattached-machine')
     if (again.kind !== 'reattached-machine') throw new Error('unreachable')
     assert.equal(again.worker.name, 'ben-laptop-renamed')
+    assert.equal(again.worker.agentKind, 'codex')
     // Only one worker row exists in this project (no soft delete anymore)
     const list = await ctx.store.workers.listByProject(project)
     assert.equal(list.length, 1)
@@ -51,12 +55,14 @@ describe('Store contract — workers', () => {
     const { project } = await seedReq(ctx)
     await ctx.store.workers.register({
       projectId: project,
+      agentKind: 'claude-code',
       machineId: 'mid-1',
       name: 'shared-name',
       hostname: 'host-a',
     })
     const collide = await ctx.store.workers.register({
       projectId: project,
+      agentKind: 'claude-code',
       machineId: 'mid-2',
       name: 'shared-name',
       hostname: 'host-b',
@@ -68,6 +74,7 @@ describe('Store contract — workers', () => {
     const { project } = await seedReq(ctx)
     const a = await ctx.store.workers.register({
       projectId: project,
+      agentKind: 'claude-code',
       machineId: 'mid-1',
       name: 'ben',
       hostname: 'h',
@@ -76,6 +83,7 @@ describe('Store contract — workers', () => {
     await ctx.store.workers.destroy(a.worker.id)
     const b = await ctx.store.workers.register({
       projectId: project,
+      agentKind: 'claude-code',
       machineId: 'mid-1',
       name: 'ben',
       hostname: 'h',

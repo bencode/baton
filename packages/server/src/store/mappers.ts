@@ -118,6 +118,7 @@ export const toUserRecord = (r: DbUser): UserRecord => ({
 export const toWorker = (r: DbWorker): Worker => ({
   id: r.id,
   projectId: r.projectId,
+  agentKind: r.agentKind as AgentKind,
   machineId: r.machineId,
   name: r.name,
   hostname: r.hostname,

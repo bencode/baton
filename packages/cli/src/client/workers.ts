@@ -1,8 +1,9 @@
-import type { Id, WorkerView } from '@baton/shared'
+import type { AgentKind, Id, WorkerView } from '@baton/shared'
 import { request } from './request.ts'
 
 export type WorkerRegisterInput = {
   projectId: Id
+  agentKind: AgentKind
   machineId: string
   name: string
   hostname: string
