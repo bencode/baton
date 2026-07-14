@@ -20,6 +20,7 @@ export const seedReq = async (ctx: ContractCtx): Promise<{ req: number; project:
 export const seedWorker = async (ctx: ContractCtx, projectId: number): Promise<number> => {
   const out = await ctx.store.workers.register({
     projectId,
+    agentKind: 'claude-code',
     machineId: `mid-test-${projectId}`,
     name: 'test-worker',
     hostname: 'h-test',

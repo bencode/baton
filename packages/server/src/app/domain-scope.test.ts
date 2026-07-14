@@ -33,6 +33,7 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     const project = await ctx.store.projects.create({ workspaceId: ws.id, name: `${name}-p` })
     const reg = await ctx.store.workers.register({
       projectId: project.id,
+      agentKind: 'claude-code',
       machineId: `mid-${name}`,
       name: `w-${name}`,
       hostname: `h-${name}`,

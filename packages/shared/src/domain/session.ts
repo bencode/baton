@@ -4,17 +4,20 @@ import type { Worker } from './worker.ts'
 // A Session is one agent conversation pinned to a specific Worker (= machine)
 // and to that machine's agent session file. The pinning is non-movable:
 // resuming requires the agent's local state file (claude-code:
-// `~/.claude/projects/<agentSessionId>.jsonl`; codex: TBD).
+// `~/.claude/projects/<agentSessionId>.jsonl`; codex: Codex's local session
+// store).
 //
 // `mode` is the collaboration dimension ('worker' | 'skill') and is orthogonal
-// to `agentKind` (the agent flavour: 'claude-code' v0; 'codex' later).
+// to `agentKind` (the agent flavour: 'claude-code' or 'codex').
 //
 // Lifecycle is intentionally minimal — the row exists or doesn't. Destroyed
 // sessions are physically DELETEd (cascade to SessionEvent); there's no
 // soft-delete / closedAt. Daemon attach state (`attached`) and turn activity
 // (`busy`) are runtime signals on SessionView, not session state.
 export type SessionMode = 'worker' | 'skill'
-export type AgentKind = 'claude-code'
+export type AgentKind = 'claude-code' | 'codex'
+
+export const isAgentKind = (v: unknown): v is AgentKind => v === 'claude-code' || v === 'codex'
 
 // `agentSessionId` and `worktreePath` are null between creation and
 // materialization: a session row is created remotely (just project/worker/name),

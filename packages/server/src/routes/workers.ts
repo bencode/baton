@@ -1,4 +1,4 @@
-import type { Id } from '@baton/shared'
+import { type Id, isAgentKind } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { CommandBus } from '../command-bus.ts'
 import type { LivenessTracker } from '../liveness.ts'
@@ -24,14 +24,18 @@ export const registerWorkerRoutes = (
   app.post('/workers', async c => {
     const body = (await c.req.json()) as {
       projectId?: Id
+      agentKind?: unknown
       machineId?: string
       name?: string
       hostname?: string
     }
     if (!body.projectId || !body.machineId || !body.name || !body.hostname)
       return c.json({ error: 'projectId, machineId, name, hostname required' }, 400)
+    const agentKind = body.agentKind ?? 'claude-code'
+    if (!isAgentKind(agentKind)) return c.json({ error: 'invalid agentKind' }, 400)
     const out = await store.workers.register({
       projectId: body.projectId,
+      agentKind,
       machineId: body.machineId,
       name: body.name,
       hostname: body.hostname,

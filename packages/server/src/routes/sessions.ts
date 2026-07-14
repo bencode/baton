@@ -7,6 +7,7 @@ import type {
   SessionEventType,
   SessionMode,
 } from '@baton/shared'
+import { isAgentKind, isPlaceholderSessionName } from '@baton/shared'
 import type { Context, Hono } from 'hono'
 import type { AttachmentStore } from '../attachments.ts'
 import type { BusyTracker } from '../busy.ts'
@@ -49,6 +50,23 @@ export const registerSessionRoutes = (
     sessionWithView(s, store, workerLiveness, runtime, busyTracker)
   // Tell project subscribers the session list changed so they refetch it.
   const bump = (projectId: Id) => projects.publish(projectId, { resource: 'sessions' })
+  const publishTitle = (s: {
+    id: Id
+    workerId: Id
+    name: string
+    agentKind: AgentKind
+    agentSessionId: string | null
+    worktreePath: string | null
+  }) => {
+    if (!isPlaceholderSessionName(s.name) || !s.agentSessionId || !s.worktreePath) return
+    commands.publish(s.workerId, {
+      cmd: 'session.title',
+      sessionId: s.id,
+      agentKind: s.agentKind,
+      agentSessionId: s.agentSessionId,
+      worktreePath: s.worktreePath,
+    })
+  }
 
   // Helper: load a session, 404 if missing, 403 if the bearer worker doesn't own
   // it. Used by every worker-authed session route.
@@ -70,7 +88,7 @@ export const registerSessionRoutes = (
       workerId?: Id
       mode?: SessionMode
       name?: string
-      agentKind?: AgentKind
+      agentKind?: unknown
     }
     if (!body.projectId || !body.workerId)
       return c.json({ error: 'projectId, workerId required' }, 400)
@@ -79,12 +97,14 @@ export const registerSessionRoutes = (
     const worker = await store.workers.get(body.workerId)
     if (!worker || worker.projectId !== body.projectId)
       return c.json({ error: 'worker not found in project' }, 404)
+    const agentKind = body.agentKind ?? worker.agentKind
+    if (!isAgentKind(agentKind)) return c.json({ error: 'invalid agentKind' }, 400)
     const created = await store.sessions.create({
       projectId: body.projectId,
       workerId: body.workerId,
       mode: body.mode ?? 'worker',
       name: body.name ?? '',
-      agentKind: body.agentKind ?? 'claude-code',
+      agentKind,
     })
     // No name given → a stable placeholder (`session-<id>`); the worker auto-titles
     // it after the first turn. The id is only known post-insert.
@@ -242,13 +262,7 @@ export const registerSessionRoutes = (
   app.post('/sessions/:id/autotitle', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
-    if (/^session-\d+$/.test(s.name) && s.agentSessionId && s.worktreePath)
-      commands.publish(s.workerId, {
-        cmd: 'session.title',
-        sessionId: s.id,
-        agentSessionId: s.agentSessionId,
-        worktreePath: s.worktreePath,
-      })
+    publishTitle(s)
     return c.json(await toView(s))
   })
 
@@ -302,6 +316,7 @@ export const registerSessionRoutes = (
     } else if (body.type === 'turn_complete' || body.type === 'turn_error') {
       busyTracker.set(owned.id, false)
       bump(owned.session.projectId)
+      if (body.type === 'turn_complete') publishTitle(owned.session)
     }
     const ev = await store.sessions.appendEvent(owned.id, body.type, body.payload ?? null)
     bus.publish(owned.id, ev)

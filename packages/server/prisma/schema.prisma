@@ -150,8 +150,8 @@ model TaskComment {
 // is non-movable: `claude --resume <agentSessionId>` only works on the worker
 // where the agent session file was first created (~/.claude/projects/...).
 //
-// agentKind is the agent flavour (currently 'claude-code'; 'codex' etc. later);
-// agentSessionId is the agent's own session reference (a UUID for claude-code).
+// agentKind is the agent flavour ('claude-code' | 'codex'); agentSessionId is
+// the agent's own session reference.
 //
 // `state` (idle/busy/closed) and `heartbeatAt` from M2.5 are gone — busy is
 // derived from SessionEvent log, alive from worker liveness. `code` (S-N) is
@@ -169,7 +169,7 @@ model Session {
   mode           String /// 'worker' | 'skill' (collaboration dimension; orthogonal to agent kind)
   name           String
   nameLocked     Boolean   @default(false) // true once a human names it; suppresses auto-title. Server-internal (not in SessionView).
-  agentKind      String /// 'claude-code' (v0). Future: 'codex' | …
+  agentKind      String /// 'claude-code' | 'codex'
   agentSessionId String? // claude-code: UUID; null until the Worker materializes.
   worktreePath   String? // local cwd on the worker; null until the Worker materializes.
   shareToken     String? // unguessable key for the standalone /s/:token page; null on legacy rows (32-byte random ⇒ effectively unique)
@@ -206,6 +206,7 @@ model Session {
 model Worker {
   id        Int      @id @default(autoincrement())
   projectId Int
+  agentKind String   @default("claude-code") /// 'claude-code' | 'codex'
   machineId String
   name      String
   hostname  String

@@ -21,18 +21,20 @@ describe('server HTTP — workers', () => {
     ).json()) as WithId
     const res = await postJson(app, '/workers', {
       projectId: p.id,
+      agentKind: 'codex',
       machineId: 'mid-1',
       name: 'ben-laptop',
       hostname: 'bens-air.local',
     })
     assert.equal(res.status, 201)
     const body = (await res.json()) as {
-      worker: { id: number; alive: boolean; machineId: string }
+      worker: { id: number; alive: boolean; machineId: string; agentKind: string }
       outcome: string
     }
     assert.equal(body.outcome, 'created')
     assert.equal(body.worker.alive, true)
     assert.equal(body.worker.machineId, 'mid-1')
+    assert.equal(body.worker.agentKind, 'codex')
 
     // Listed under the project
     const list = (await (await app.request(`/projects/${p.id}/workers`)).json()) as Array<{

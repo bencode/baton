@@ -1,3 +1,8 @@
+import { execFile as execFileCb } from 'node:child_process'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
 import type { QueryFn } from './query.ts'
 import { claudeExecutable } from './sdk-env.ts'
 
@@ -46,6 +51,7 @@ export const sanitizeTitle = (raw: string): string =>
 // is worthless if it costs a minute, but a too-tight timeout silently kills
 // every attempt — 90s errs on the side of getting one.
 const TITLE_TIMEOUT_MS = 90_000
+const execFile = promisify(execFileCb)
 
 const buildPrompt = (userText: string, assistantText: string): string => {
   const exchange = [
@@ -72,6 +78,14 @@ const buildPrompt = (userText: string, assistantText: string): string => {
     exchange,
   ].join('\n')
 }
+
+type ExecFileFn = (
+  file: string,
+  args: readonly string[],
+  options: { timeout: number; maxBuffer: number },
+) => Promise<{ stdout: string | Buffer; stderr: string | Buffer }>
+
+const codexExecutable = (): string => process.env.BATON_CODEX_EXECUTABLE ?? 'codex'
 
 // Run a throwaway SDK query in the worktree (no session id — this isn't part
 // of the conversation). Never throws; failures come back as `error` outcomes
@@ -138,4 +152,50 @@ export const generateTitle = async (input: {
   }
   const title = sanitizeTitle(out)
   return !title || isDeclined(title) ? { kind: 'declined' } : { kind: 'titled', title }
+}
+
+export const generateTitleWithCodex = async (input: {
+  worktreePath: string
+  userText: string
+  assistantText: string
+  execFileFn?: ExecFileFn
+}): Promise<TitleOutcome> => {
+  const { worktreePath, userText, assistantText, execFileFn = execFile as ExecFileFn } = input
+  if (`${userText}${assistantText}`.trim().length < 4) return { kind: 'declined' }
+  const dir = await mkdtemp(join(tmpdir(), 'baton-title-'))
+  const outPath = join(dir, 'title.txt')
+  try {
+    await execFileFn(
+      codexExecutable(),
+      [
+        'exec',
+        '--cd',
+        worktreePath,
+        '--sandbox',
+        'read-only',
+        '--ask-for-approval',
+        'never',
+        '--ephemeral',
+        '--ignore-rules',
+        '--color',
+        'never',
+        '--output-last-message',
+        outPath,
+        buildPrompt(userText, assistantText),
+      ],
+      {
+        timeout: TITLE_TIMEOUT_MS,
+        maxBuffer: 1024 * 1024,
+      },
+    )
+    const title = sanitizeTitle(await readFile(outPath, 'utf8'))
+    return !title || isDeclined(title) ? { kind: 'declined' } : { kind: 'titled', title }
+  } catch (e) {
+    const err = e as { message?: string; stderr?: string | Buffer }
+    const stderr = err.stderr ? String(err.stderr).trim().slice(0, 300) : ''
+    const reason = [err.message ?? String(e), stderr].filter(Boolean).join(' | stderr: ')
+    return { kind: 'error', reason }
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
 }

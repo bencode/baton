@@ -46,6 +46,7 @@ export const sessionWithView = async (
 const unknownWorker = (workerId: Id, projectId: Id): Worker => ({
   id: workerId,
   projectId,
+  agentKind: 'claude-code',
   machineId: '',
   name: '(missing)',
   hostname: '',

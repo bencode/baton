@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { SessionEvent } from '@baton/shared'
 
 // claude writes a session file on first `--session-id` invocation, at
 // `~/.claude/projects/<flattened-cwd>/<agentSessionId>.jsonl`. We don't
@@ -69,6 +70,22 @@ export const parseFirstExchange = (content: string): FirstExchange | null => {
     if (!text) continue
     if (role === 'user' && !userText) userText = text
     else if (role === 'assistant' && !assistantText) assistantText = text
+    if (userText && assistantText) break
+  }
+  return userText || assistantText ? { userText, assistantText } : null
+}
+
+export const parseFirstExchangeFromEvents = (events: SessionEvent[]): FirstExchange | null => {
+  let userText = ''
+  let assistantText = ''
+  for (const ev of events) {
+    if (ev.type === 'user_message' && !userText) {
+      const payload = isRecord(ev.payload) ? ev.payload : null
+      if (typeof payload?.text === 'string') userText = payload.text.trim()
+    } else if (ev.type === 'sdk_event' && !assistantText) {
+      const payload = isRecord(ev.payload) ? ev.payload : null
+      if (payload?.type === 'assistant') assistantText = textOf(payload)
+    }
     if (userText && assistantText) break
   }
   return userText || assistantText ? { userText, assistantText } : null

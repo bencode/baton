@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, test } from 'node:test'
+import type { WorkerCommand } from '@baton/shared'
 import { createApp } from '../app.ts'
+import { createCommandBus } from '../command-bus.ts'
 import { freshStore, type TestStore } from '../store/test-db.ts'
 import { postJson, seedSession, seedWorker } from './test-helpers.ts'
 
@@ -369,6 +371,54 @@ describe('server HTTP — sessions + chat protocol', () => {
     // Missing session → 404.
     await app.request(`/sessions/${s.id}`, { method: 'DELETE' })
     assert.equal((await postJson(app, `/sessions/${s.id}/rename`, { name: 'x' })).status, 404)
+  })
+
+  test('session create inherits worker agentKind', async () => {
+    const app = createApp(ctx.store)
+    const { projectId, workerId } = await seedWorker(app, 'codex')
+    const s = (await (await postJson(app, '/sessions', { projectId, workerId })).json()) as {
+      agentKind: string
+    }
+    assert.equal(s.agentKind, 'codex')
+  })
+
+  test('turn_complete triggers worker auto-title command with agentKind', async () => {
+    const commands = createCommandBus()
+    const app = createApp(
+      ctx.store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      commands,
+    )
+    const { projectId, workerId, workerToken } = await seedWorker(app, 'codex')
+    const s = (await (await postJson(app, '/sessions', { projectId, workerId })).json()) as {
+      id: number
+    }
+    const auth = { authorization: `Bearer ${workerToken}` }
+    await app.request(`/sessions/${s.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ agentSessionId: 'uuid-1', worktreePath: '/tmp/wt' }),
+      headers: { 'content-type': 'application/json', ...auth },
+    })
+    const seen: WorkerCommand[] = []
+    const unsub = commands.subscribe(workerId, cmd => seen.push(cmd))
+    try {
+      await postJson(app, `/sessions/${s.id}/events`, { type: 'turn_complete', payload: {} }, auth)
+    } finally {
+      unsub()
+    }
+    assert.deepEqual(seen, [
+      {
+        cmd: 'session.title',
+        sessionId: s.id,
+        agentKind: 'codex',
+        agentSessionId: 'uuid-1',
+        worktreePath: '/tmp/wt',
+      },
+    ])
   })
 
   test('busy=false when daemon never heartbeated (orphan turn_start, sticky-yellow fix)', async () => {

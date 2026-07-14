@@ -14,8 +14,8 @@ import {
   type WorkerConfig,
   worktreeConfig,
 } from '../project-config.ts'
-import { generateTitle } from '../session/runner/title.ts'
-import { readFirstExchange } from '../session/runner/transcript.ts'
+import { generateTitle, generateTitleWithCodex } from '../session/runner/title.ts'
+import { parseFirstExchangeFromEvents, readFirstExchange } from '../session/runner/transcript.ts'
 import {
   createWorktree,
   ensureExcluded,
@@ -189,18 +189,29 @@ export const runWorkerDaemon = async (
   // and PATCH it back. The server drops it if the user has locked the name.
   const onTitle = async (
     sessionId: Id,
+    agentKind: 'claude-code' | 'codex',
     agentSessionId: string,
     worktreePath: string,
   ): Promise<void> => {
-    const exchange = readFirstExchange(agentSessionId)
+    const events = await client.sessions.listEvents(sessionId).catch(() => [])
+    const exchange =
+      parseFirstExchangeFromEvents(events) ??
+      (agentKind === 'claude-code' ? readFirstExchange(agentSessionId) : null)
     if (!exchange) return log(`title #${sessionId}: no transcript yet, skipping`)
-    const outcome = await generateTitle({
-      worktreePath,
-      userText: exchange.userText,
-      assistantText: exchange.assistantText,
-      queryFn: query,
-    })
-    // The claude call itself failed — surface why instead of folding it into
+    const outcome =
+      agentKind === 'codex'
+        ? await generateTitleWithCodex({
+            worktreePath,
+            userText: exchange.userText,
+            assistantText: exchange.assistantText,
+          })
+        : await generateTitle({
+            worktreePath,
+            userText: exchange.userText,
+            assistantText: exchange.assistantText,
+            queryFn: query,
+          })
+    // The title call itself failed — surface why instead of folding it into
     // the decline message (that masking is how titles silently died once).
     if (outcome.kind === 'error') return log(`title #${sessionId} failed: ${outcome.reason}`)
     // Declined: not enough to title yet — leave the placeholder, retry later.
@@ -250,8 +261,8 @@ export const runWorkerDaemon = async (
       else if (cmd.cmd === 'session.stop') onStop(cmd.sessionId)
       else if (cmd.cmd === 'session.delete') onDelete(cmd.sessionId, cmd.worktreePath)
       else if (cmd.cmd === 'session.title')
-        void onTitle(cmd.sessionId, cmd.agentSessionId, cmd.worktreePath).catch(err =>
-          log(`title failed: ${String(err)}`),
+        void onTitle(cmd.sessionId, cmd.agentKind, cmd.agentSessionId, cmd.worktreePath).catch(
+          err => log(`title failed: ${String(err)}`),
         )
     } catch {
       // skip malformed commands
