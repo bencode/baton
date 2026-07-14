@@ -69,7 +69,9 @@ export const systemActionNotice = (payload: unknown): string | null => {
     return payload.planMode === true ? 'entered plan mode' : 'exited plan mode'
   if (action === 'model') {
     const m = str(payload.model)
-    return m ? `model → ${m}` : 'model reset to default'
+    const e = str(payload.effort)
+    if (!m) return 'model reset to default'
+    return e ? `model → ${m} (${e})` : `model → ${m}`
   }
   // Interactive-terminal boundaries — mark the human-takeover window (those turns
   // bypass baton's event log, so this is what explains the transcript gap).

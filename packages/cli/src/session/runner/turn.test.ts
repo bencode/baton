@@ -157,4 +157,32 @@ describe('runTurn', () => {
     await runTurn(cfg, collector().worker, userMsg(), false, capture, () => {})
     assert.deepEqual(seen.disallowed, ['AskUserQuestion'])
   })
+
+  // The web /model command stamps payload.model + payload.effort → both must reach
+  // the SDK options, with effort narrowed to this SDK's enum.
+  test('model + effort from the message payload reach the SDK options', async () => {
+    const seen: { model?: unknown; effort?: unknown } = {}
+    const capture: QueryFn = params => {
+      const o = params.options as { model?: unknown; effort?: unknown } | undefined
+      seen.model = o?.model
+      seen.effort = o?.effort
+      return (async function* () {
+        yield { type: 'result', subtype: 'success', is_error: false, result: 'ok' } as never
+      })()
+    }
+    const msg = { ...userMsg(), payload: { text: 'hi', model: 'opus', effort: 'max' } }
+    await runTurn(cfg, collector().worker, msg, false, capture, () => {})
+    assert.equal(seen.model, 'opus')
+    assert.equal(seen.effort, 'max')
+
+    // 'minimal' is codex-only — the claude path clamps it rather than passing junk.
+    const min = { ...userMsg(), payload: { text: 'hi', model: 'opus', effort: 'minimal' } }
+    await runTurn(cfg, collector().worker, min, false, capture, () => {})
+    assert.equal(seen.effort, 'low')
+
+    // No override → the SDK's own default (key absent, not undefined-ish junk).
+    await runTurn(cfg, collector().worker, userMsg(), false, capture, () => {})
+    assert.equal(seen.model, undefined)
+    assert.equal(seen.effort, undefined)
+  })
 })

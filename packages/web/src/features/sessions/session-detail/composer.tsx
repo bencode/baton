@@ -1,4 +1,4 @@
-import type { Attachment } from '@baton/shared'
+import type { AgentEffort, AgentKind, Attachment } from '@baton/shared'
 import { useRef } from 'react'
 import { AttachmentStrip } from '../../../components/attachments/attachment-strip'
 import { useAutosize } from '../../../hooks/use-autosize'
@@ -58,10 +58,13 @@ type ComposerProps = {
   // Session-wide read-only plan mode + its toggle (/plan command, Shift+Tab).
   planMode: boolean
   onTogglePlanMode: () => void
-  // Session-wide model override (/model <name>); null = default. Clicking the
-  // chip resets, same as a bare /model.
+  // Session-wide model + effort override (/model <name> [effort]); null = default.
+  // Clicking the chip resets both, same as a bare /model.
   model: string | null
+  effort: AgentEffort | null
   onResetModel: () => void
+  // Which agent this session runs — picks the /model preset list.
+  agentKind: AgentKind
 }
 
 // One rounded input card: pending attachments + textarea stacked over a bottom
@@ -86,12 +89,14 @@ export const Composer = ({
   planMode,
   onTogglePlanMode,
   model,
+  effort,
   onResetModel,
+  agentKind,
 }: ComposerProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const { dragging, dropProps } = useDropZone(onAddFiles)
-  const slash = useSlashCommands(draft, setDraft, onCommand, onTogglePlanMode)
+  const slash = useSlashCommands(draft, setDraft, onCommand, onTogglePlanMode, agentKind)
   useAutosize(textareaRef, draft)
   const busy = sending || uploading
   const canSend = active && !busy && (draft.trim().length > 0 || attachments.length > 0)
@@ -114,7 +119,7 @@ export const Composer = ({
         {model && (
           <StatusChip
             tone="indigo"
-            label={`🧠 MODEL · ${model}`}
+            label={`🧠 MODEL · ${model}${effort ? ` · ${effort}` : ''}`}
             hint="点击重置为默认"
             onClick={onResetModel}
           />

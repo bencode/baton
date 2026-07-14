@@ -6,6 +6,7 @@ import {
   additionalDirs,
   buildSdkEnv,
   codexApprovalPolicy,
+  codexEffort,
   codexNetworkAccess,
   codexSandboxMode,
 } from './sdk-env.ts'
@@ -16,6 +17,7 @@ export type CodexRunOptions = {
   envOverlay?: Record<string, string>
   planMode?: boolean
   model?: string
+  effort?: string
   signal?: AbortSignal
   log: (m: string) => void
 }
@@ -182,17 +184,21 @@ export async function* startCodexEvents(
   const sandboxMode = codexSandboxMode(opts.planMode ?? false)
   const approvalPolicy = codexApprovalPolicy()
   const networkAccessEnabled = codexNetworkAccess()
+  const reasoningEffort = codexEffort(opts.effort)
   opts.log(
     `[codex] sandbox=${sandboxMode} approval=${approvalPolicy}${
       networkAccessEnabled === undefined ? '' : ` network=${networkAccessEnabled}`
     }`,
   )
+  if (opts.model) opts.log(`[model] ${opts.model}`)
+  if (reasoningEffort) opts.log(`[effort] ${reasoningEffort}`)
   const threadOptions: ThreadOptions = {
     workingDirectory: config.worktreePath,
     skipGitRepoCheck: true,
     sandboxMode,
     approvalPolicy,
     ...(opts.model ? { model: opts.model } : {}),
+    ...(reasoningEffort ? { modelReasoningEffort: reasoningEffort } : {}),
     ...(addDirs ? { additionalDirectories: addDirs } : {}),
     ...(networkAccessEnabled === undefined ? {} : { networkAccessEnabled }),
   }

@@ -25,6 +25,7 @@ const session = {
   name: 's',
   planMode: false,
   model: null,
+  effort: null,
 } as Session
 
 // Minimal fakes covering exactly what runDueLoops + deliverMessage touch.

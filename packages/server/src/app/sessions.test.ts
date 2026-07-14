@@ -183,20 +183,50 @@ describe('server HTTP — sessions + chat protocol', () => {
     await postJson(app, `/sessions/${session.id}/status`, { active: true }, auth)
 
     // Set an override → view reflects it, and the next message is stamped.
-    const on = await postJson(app, `/sessions/${session.id}/model`, { model: ' opus ' })
-    assert.equal(((await on.json()) as { model: string | null }).model, 'opus') // trimmed
+    const on = await postJson(app, `/sessions/${session.id}/model`, {
+      model: ' opus ',
+      effort: 'max',
+    })
+    const view = (await on.json()) as { model: string | null; effort: string | null }
+    assert.equal(view.model, 'opus') // trimmed
+    assert.equal(view.effort, 'max')
     const m1 = (await (
       await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
-    ).json()) as { payload: { model?: string } }
+    ).json()) as { payload: { model?: string; effort?: string } }
     assert.equal(m1.payload.model, 'opus')
+    assert.equal(m1.payload.effort, 'max')
 
-    // Bare /model (empty body) resets → messages stop carrying it.
+    // Bare /model (empty body) resets both → messages stop carrying either.
     const off = await postJson(app, `/sessions/${session.id}/model`, {})
-    assert.equal(((await off.json()) as { model: string | null }).model, null)
+    const reset = (await off.json()) as { model: string | null; effort: string | null }
+    assert.equal(reset.model, null)
+    assert.equal(reset.effort, null)
     const m2 = (await (
       await postJson(app, `/sessions/${session.id}/messages`, { text: 'go' })
-    ).json()) as { payload: { model?: string } }
+    ).json()) as { payload: { model?: string; effort?: string } }
     assert.equal(m2.payload.model, undefined)
+    assert.equal(m2.payload.effort, undefined)
+  })
+
+  test('model: an unknown effort is rejected outright, leaving the override untouched', async () => {
+    const app = createApp(ctx.store)
+    const { session, workerToken } = await seedSession(app)
+    const auth = { authorization: `Bearer ${workerToken}` }
+    await postJson(app, `/sessions/${session.id}/status`, { active: true }, auth)
+    await postJson(app, `/sessions/${session.id}/model`, { model: 'opus', effort: 'high' })
+
+    // Effort is a closed enum — a typo must 400 rather than half-apply the model.
+    const bad = await postJson(app, `/sessions/${session.id}/model`, {
+      model: 'sonnet',
+      effort: 'higgh',
+    })
+    assert.equal(bad.status, 400)
+    const still = (await (await app.request(`/sessions/${session.id}`)).json()) as {
+      model: string | null
+      effort: string | null
+    }
+    assert.equal(still.model, 'opus')
+    assert.equal(still.effort, 'high')
   })
 
   test('messages are persisted + replayable via GET history (store-backed)', async () => {

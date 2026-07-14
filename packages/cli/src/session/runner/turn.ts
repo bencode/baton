@@ -99,11 +99,13 @@ export const runTurn = async (
     attachments?: Attachment[]
     planMode?: unknown
     model?: unknown
+    effort?: unknown
   }
   const rawText = typeof payload?.text === 'string' ? payload.text : ''
   const attachments = Array.isArray(payload?.attachments) ? payload.attachments : []
   const planMode = payload?.planMode === true
   const model = typeof payload?.model === 'string' ? payload.model : undefined
+  const effort = typeof payload?.effort === 'string' ? payload.effort : undefined
   if (rawText.length === 0 && attachments.length === 0) {
     await worker.emitEvent('turn_error', { message: 'user_message missing text and attachments' })
     return -1
@@ -148,6 +150,7 @@ export const runTurn = async (
               envOverlay,
               planMode,
               model,
+              effort,
               signal: abort.signal,
               log,
             }),
@@ -158,6 +161,7 @@ export const runTurn = async (
               envOverlay,
               planMode,
               model,
+              effort,
             }),
             worker,
           )

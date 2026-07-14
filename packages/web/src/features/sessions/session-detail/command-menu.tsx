@@ -1,4 +1,5 @@
-import { SLASH_COMMANDS, type SlashCommand } from './commands'
+import type { AgentKind } from '@baton/shared'
+import { type SlashCommand, slashCommands } from './commands'
 
 type CommandMenuProps = {
   commands: SlashCommand[]
@@ -29,8 +30,14 @@ export const CommandMenu = ({ commands, activeIndex, onPick }: CommandMenuProps)
 )
 
 // /help panel — the full command list with a dismiss button. Shown above the
-// composer.
-export const CommandHelp = ({ onClose }: { onClose: () => void }) => (
+// composer. agentKind picks which agent's /model presets the list describes.
+export const CommandHelp = ({
+  agentKind,
+  onClose,
+}: {
+  agentKind: AgentKind
+  onClose: () => void
+}) => (
   <div className="mx-auto mb-2 max-w-5xl rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
     <div className="mb-1.5 flex items-center justify-between">
       <span className="text-sm font-medium text-gray-700">commands</span>
@@ -44,7 +51,7 @@ export const CommandHelp = ({ onClose }: { onClose: () => void }) => (
       </button>
     </div>
     <ul className="flex flex-col gap-1">
-      {SLASH_COMMANDS.map(cmd => (
+      {slashCommands(agentKind).map(cmd => (
         <li key={cmd.name} className="flex items-baseline gap-2">
           <span className="font-mono text-sm text-blue-700">/{cmd.name}</span>
           <span className="text-xs text-gray-500">{cmd.desc}</span>

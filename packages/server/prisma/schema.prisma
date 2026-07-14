@@ -187,6 +187,9 @@ model Session {
   // Model override for this session's turns (web /model). Passed verbatim to
   // the SDK's options.model; null = the CLI default model.
   model          String?
+  // Reasoning effort for this session's turns (web /model <name> <effort>).
+  // AgentEffort; each runner narrows it to its own SDK's enum. null = SDK default.
+  effort         String?
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)

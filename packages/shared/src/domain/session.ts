@@ -16,6 +16,27 @@ import type { Worker } from './worker.ts'
 export type SessionMode = 'worker' | 'skill'
 export type AgentKind = 'claude-code' | 'codex'
 
+// Reasoning effort for a turn — the union of what the two SDKs accept, since a
+// session's model is free-form and the two enums only partly overlap:
+//   claude-agent-sdk  Options.effort              low | medium | high | xhigh | max
+//   codex-sdk         ThreadOptions.modelReasoningEffort
+//                                        minimal | low | medium | high | xhigh
+// Each runner narrows this to its own SDK's enum (clamping the odd one out), so
+// an effort the target SDK can't express is degraded, never fatal.
+export type AgentEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+const EFFORTS: AgentEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+
+export const isAgentEffort = (v: unknown): v is AgentEffort =>
+  typeof v === 'string' && (EFFORTS as string[]).includes(v)
+
+// Effort is a closed enum (unlike model, whose ids vary by gateway), so a typo
+// is knowable — callers reject it rather than silently dropping it.
+export const parseEffort = (raw: string): AgentEffort | null => {
+  const v = raw.trim().toLowerCase()
+  return isAgentEffort(v) ? v : null
+}
+
 // `agentSessionId` and `worktreePath` are null between creation and
 // materialization: a session row is created remotely (just project/worker/name),
 // then the owning Worker mints the agent session id + git worktree and fills
@@ -45,6 +66,9 @@ export type Session = {
   // resets). Passed through verbatim to the SDK's options.model — no server-side
   // validation (gateway model ids vary). null = the CLI default model.
   model: string | null
+  // Reasoning effort for this session's turns (web /model <name> <effort>; bare
+  // /model resets it along with the model). null = the SDK's default effort.
+  effort: AgentEffort | null
 }
 
 // Server read endpoints return record + runtime view. The worker object is

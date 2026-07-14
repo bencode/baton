@@ -16,7 +16,12 @@ describe('systemActionNotice', () => {
     expect(systemActionNotice({ action: 'plan_mode', planMode: true })).toBe('entered plan mode')
     expect(systemActionNotice({ action: 'plan_mode' })).toBe('exited plan mode')
     expect(systemActionNotice({ action: 'model', model: 'opus' })).toBe('model → opus')
+    expect(systemActionNotice({ action: 'model', model: 'opus', effort: 'max' })).toBe(
+      'model → opus (max)',
+    )
     expect(systemActionNotice({ action: 'model' })).toBe('model reset to default')
+    // A reset clears both, so effort alone can't linger in the notice.
+    expect(systemActionNotice({ action: 'model', effort: 'high' })).toBe('model reset to default')
   })
   test('unknown action / non-record → null (caller falls back to raw)', () => {
     expect(systemActionNotice({ action: 'something_else' })).toBeNull()

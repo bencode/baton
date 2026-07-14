@@ -1,4 +1,4 @@
-import type { Attachment, Id, SessionEvent, SessionView } from '@baton/shared'
+import type { AgentEffort, Attachment, Id, SessionEvent, SessionView } from '@baton/shared'
 import { request, type Url } from './request'
 
 // Transcript window query: `limit` = most recent n (open), `before` pages older,
@@ -27,8 +27,9 @@ export type SessionsApi = {
   rename(id: Id, name: string): Promise<SessionView>
   // Toggle the session-wide read-only plan mode (/plan or Shift+Tab).
   setMode(id: Id, planMode: boolean): Promise<SessionView>
-  // Set the session's model override (/model <name>; null resets to default).
-  setModel(id: Id, model: string | null): Promise<SessionView>
+  // Set the session's model + effort override (/model <name> [effort]; both null
+  // resets to the SDK default).
+  setModel(id: Id, model: string | null, effort: AgentEffort | null): Promise<SessionView>
   // Ask the worker to auto-title this session (no-op unless still unnamed).
   autotitle(id: Id): Promise<SessionView>
   // Delete the session (worker tears down its child + worktree; row dropped).
@@ -54,7 +55,8 @@ export const sessionsApi = (u: Url): SessionsApi => ({
   rename: (id, name) => request(u(`/sessions/${id}/rename`), { method: 'POST', body: { name } }),
   setMode: (id, planMode) =>
     request(u(`/sessions/${id}/mode`), { method: 'POST', body: { planMode } }),
-  setModel: (id, model) => request(u(`/sessions/${id}/model`), { method: 'POST', body: { model } }),
+  setModel: (id, model, effort) =>
+    request(u(`/sessions/${id}/model`), { method: 'POST', body: { model, effort } }),
   autotitle: id => request(u(`/sessions/${id}/autotitle`), { method: 'POST' }),
   remove: id => request(u(`/sessions/${id}`), { method: 'DELETE' }),
   sendMessage: (id, text, attachments) =>

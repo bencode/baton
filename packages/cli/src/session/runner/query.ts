@@ -1,6 +1,6 @@
 import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { SessionConfig } from '../../project-config.ts'
-import { additionalDirs, buildSdkEnv, claudeExecutable } from './sdk-env.ts'
+import { additionalDirs, buildSdkEnv, claudeEffort, claudeExecutable } from './sdk-env.ts'
 
 // Injection seam for tests: the real `query` returns a Query (an
 // AsyncGenerator<SDKMessage>); a fake just needs to be an async-iterable of
@@ -17,11 +17,14 @@ export type QueryFn = (params: { prompt: string; options?: Options }) => AsyncIt
 //     then sends a normal message to execute. The SDK enforces read-only.
 //   - model: the web /model command — per-session model override, passed
 //     verbatim to the SDK; unset = the CLI default model.
+//   - effort: the web /model <name> <effort> command — reasoning effort, narrowed
+//     to the SDK's EffortLevel; unset = the SDK default.
 //   - abortController: the watchdog aborts it to kill an overrunning turn
 export type TurnOverrides = {
   envOverlay?: Record<string, string>
   planMode?: boolean
   model?: string
+  effort?: string
 }
 
 export const startQuery = (
@@ -31,14 +34,16 @@ export const startQuery = (
   queryFn: QueryFn,
   abortController: AbortController,
   log: (m: string) => void,
-  { envOverlay, planMode = false, model }: TurnOverrides = {},
+  { envOverlay, planMode = false, model, effort }: TurnOverrides = {},
 ): AsyncIterable<SDKMessage> => {
   const env = buildSdkEnv(envOverlay)
   const exe = claudeExecutable()
   const addDirs = additionalDirs()
+  const level = claudeEffort(effort)
   if (addDirs) log(`[add-dir] ${addDirs.join(', ')}`)
   if (planMode) log('[plan] read-only planning turn')
   if (model) log(`[model] ${model}`)
+  if (level) log(`[effort] ${level}`)
   const options: Options = {
     cwd: config.worktreePath,
     permissionMode: planMode ? 'plan' : 'bypassPermissions',
@@ -54,6 +59,7 @@ export const startQuery = (
     ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),
     ...(addDirs ? { additionalDirectories: addDirs } : {}),
     ...(model ? { model } : {}),
+    ...(level ? { effort: level } : {}),
   }
   return queryFn({ prompt: text, options })
 }
