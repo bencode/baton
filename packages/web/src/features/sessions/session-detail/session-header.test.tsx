@@ -20,6 +20,7 @@ const session = (shareToken: string | null): Session => ({
   lastActiveAt: 0,
   planMode: false,
   model: null,
+  effort: null,
 })
 
 const renderHeader = (s: Session) =>

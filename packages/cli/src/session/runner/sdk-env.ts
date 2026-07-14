@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import type { ApprovalMode, SandboxMode } from '@openai/codex-sdk'
+import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
+import type { ApprovalMode, ModelReasoningEffort, SandboxMode } from '@openai/codex-sdk'
 
 // Environment for the SDK's claude subprocess. When the SDK `env` option is
 // omitted the subprocess inherits `process.env` wholesale (carrying whatever
@@ -57,4 +58,28 @@ export const codexApprovalPolicy = (): ApprovalMode => {
   if (raw === 'never' || raw === 'on-request' || raw === 'on-failure' || raw === 'untrusted')
     return raw
   return 'never'
+}
+
+// A session's effort (shared AgentEffort) is the union of what the two SDKs take;
+// each SDK gets it narrowed to its own enum. Where a level has no counterpart we
+// clamp to the nearest one the target supports rather than drop it — asking for
+// more thinking and getting the most available beats silently getting the default.
+// Anything unrecognized → undefined (the SDK's own default).
+
+// claude-agent-sdk EffortLevel: low | medium | high | xhigh | max (no 'minimal').
+export const claudeEffort = (raw: string | undefined): EffortLevel | undefined => {
+  if (raw === 'minimal') return 'low'
+  if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh' || raw === 'max')
+    return raw
+  return undefined
+}
+
+// codex-sdk ModelReasoningEffort: minimal | low | medium | high | xhigh (no 'max').
+// The codex binary itself already knows 'ultra' above 'xhigh', but the SDK's
+// typedef stops at 'xhigh' — until it catches up, 'max' clamps down to 'xhigh'.
+export const codexEffort = (raw: string | undefined): ModelReasoningEffort | undefined => {
+  if (raw === 'max') return 'xhigh'
+  if (raw === 'minimal' || raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh')
+    return raw
+  return undefined
 }

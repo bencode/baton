@@ -1,10 +1,10 @@
-import { type Attachment, type Id, isPlaceholderSessionName } from '@baton/shared'
+import { type AgentEffort, type Attachment, type Id, isPlaceholderSessionName } from '@baton/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { renamePasted } from '../../utils/attachment'
 import { pendingMessages, reduceEvents } from './event-render'
 import { CommandHelp } from './session-detail/command-menu'
-import type { SlashCommand } from './session-detail/commands'
+import { parseModelArgs, type SlashCommand } from './session-detail/commands'
 import { Composer } from './session-detail/composer'
 import { ConnectionBanner } from './session-detail/connection-banner'
 import { EventStream } from './session-detail/event-stream'
@@ -157,23 +157,32 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const togglePlanMode = () =>
     void api.sessions.setMode(sessionId, !session.planMode).catch(() => {})
 
-  // Set/reset the session's model override. Persisted server-side like planMode;
-  // rides back over the project stream (session.model), and the server stamps it
-  // onto each user_message → the runner passes it to the SDK's options.model.
-  const setModel = (model: string | null) =>
-    void api.sessions.setModel(sessionId, model).catch(err => console.error('set model', err))
+  // Set/reset the session's model + effort override. Persisted server-side like
+  // planMode; rides back over the project stream (session.model/effort), and the
+  // server stamps both onto each user_message → the runner hands them to the SDK.
+  const setModel = (model: string | null, effort: AgentEffort | null) =>
+    void api.sessions
+      .setModel(sessionId, model, effort)
+      .catch(err => setSendError(err instanceof Error ? err.message : String(err)))
 
   // Slash command from the composer. /clear resets context (the server appends a
   // notice the transcript renders); /help opens the command list; /plan toggles
   // read-only plan mode (server persists it → worker runs each turn in the SDK's
-  // permissionMode:'plan' until toggled back); /model <name> overrides the model
-  // (bare /model resets to the default).
+  // permissionMode:'plan' until toggled back); /model <name> [effort] overrides
+  // the model and reasoning effort (bare /model resets both).
   const runCommand = (command: SlashCommand, args: string) => {
     if (command.kind === 'clear') void api.sessions.clear(sessionId).catch(() => {})
     else if (command.kind === 'abort') abort()
     else if (command.kind === 'help') setShowHelp(true)
     else if (command.kind === 'plan') togglePlanMode()
-    else if (command.kind === 'model') setModel(args || null)
+    else if (command.kind === 'model') {
+      const { model, effort, error } = parseModelArgs(args)
+      if (error) setSendError(error)
+      else {
+        setSendError(null)
+        setModel(model, effort)
+      }
+    }
   }
 
   // Show the breathing indicator while a turn is open. Trust the server's `busy`
@@ -220,7 +229,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
           <QueuedMessages queued={queued} />
           {showHelp && (
             <div className="shrink-0 bg-white px-3">
-              <CommandHelp onClose={() => setShowHelp(false)} />
+              <CommandHelp agentKind={session.agentKind} onClose={() => setShowHelp(false)} />
             </div>
           )}
           <Composer
@@ -239,7 +248,9 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
             planMode={session.planMode}
             onTogglePlanMode={togglePlanMode}
             model={session.model}
-            onResetModel={() => setModel(null)}
+            effort={session.effort}
+            onResetModel={() => setModel(null, null)}
+            agentKind={session.agentKind}
           />
         </>
       )}

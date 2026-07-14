@@ -1,3 +1,4 @@
+import type { AgentKind } from '@baton/shared'
 import { type KeyboardEvent, useState } from 'react'
 import { matchCommands, resolveCommand, type SlashCommand } from './commands'
 
@@ -11,10 +12,11 @@ export const useSlashCommands = (
   setDraft: (v: string) => void,
   onCommand: (command: SlashCommand, args: string) => void,
   onTogglePlanMode: () => void,
+  agentKind: AgentKind,
 ) => {
   const [index, setIndex] = useState(0)
   const [dismissed, setDismissed] = useState(false)
-  const menu = matchCommands(draft)
+  const menu = matchCommands(draft, agentKind)
   const open = menu.length > 0 && !dismissed
   const activeIndex = Math.min(index, menu.length - 1)
 
@@ -76,7 +78,7 @@ export const useSlashCommands = (
     // no-arg toggle now resolves); an unknown slash line falls through to send as
     // plain text. Shift+Enter is always a newline, never a command.
     if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
-      const resolved = resolveCommand(draft)
+      const resolved = resolveCommand(draft, agentKind)
       if (resolved) {
         e.preventDefault()
         onCommand(resolved.command, resolved.args)

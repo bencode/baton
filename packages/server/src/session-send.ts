@@ -36,10 +36,11 @@ export const deliverMessage = async (
     text: input.text,
     ...(images.length > 0 ? { images } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
-    // Stamp the turn with the session's plan mode + model override so a resumed
-    // (or scheduled) turn honours the same settings an interactive one would.
+    // Stamp the turn with the session's plan mode + model/effort override so a
+    // resumed (or scheduled) turn honours the same settings an interactive one would.
     ...(session.planMode ? { planMode: true } : {}),
     ...(session.model ? { model: session.model } : {}),
+    ...(session.effort ? { effort: session.effort } : {}),
   }
   const ev = await store.sessions.appendEvent(session.id, 'user_message', payload)
   await store.sessions.touch(session.id).catch(() => {})

@@ -1,15 +1,17 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, test, vi } from 'vitest'
-import { SLASH_COMMANDS } from './commands'
+import { slashCommands } from './commands'
 import { useSlashCommands } from './use-slash-commands'
 
-const modelCmd = SLASH_COMMANDS.find(c => c.name === 'model')
+const modelCmd = slashCommands('claude-code').find(c => c.name === 'model')
 if (!modelCmd) throw new Error('model command missing from registry')
 
 const mount = (draft: string) => {
   const onCommand = vi.fn()
   const setDraft = vi.fn()
-  const hook = renderHook(() => useSlashCommands(draft, setDraft, onCommand, vi.fn()))
+  const hook = renderHook(() =>
+    useSlashCommands(draft, setDraft, onCommand, vi.fn(), 'claude-code'),
+  )
   return { hook, onCommand, setDraft }
 }
 

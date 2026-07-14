@@ -106,9 +106,11 @@ export type AgentEvent =
 //
 // type discriminator (kept loose; payload shape is owned by the producer):
 //   - user_message:  payload = { text: string; attachments?: Attachment[]; images?: string[];
-//                    planMode?: boolean }
+//                    planMode?: boolean; model?: string; effort?: AgentEffort }
 //                    (images is legacy base64; attachments is the canonical path;
-//                    planMode=true → worker runs this turn read-only, SDK permissionMode:'plan')
+//                    planMode=true → worker runs this turn read-only, SDK permissionMode:'plan';
+//                    model/effort → the session's overrides, stamped per turn so a
+//                    resumed turn honours what an interactive one would)
 //   - turn_start:    payload = { messageId?: number }
 //   - agent_event:   payload = provider-neutral AgentEvent (new canonical stream)
 //   - sdk_event:     legacy payload = a parsed line from `claude --output-format stream-json`

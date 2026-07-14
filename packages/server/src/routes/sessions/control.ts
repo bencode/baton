@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { parseEffort } from '@baton/shared'
 import { loadScopedSession } from '../../middleware/domain-scope.ts'
 import { intParam } from '../../views.ts'
 import type { RegisterSessionGroup } from './helpers.ts'
@@ -86,18 +87,26 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
     return c.json(await toView(updated))
   })
 
-  // Set the session's model override (web /model <name>; bare /model resets).
-  // Same shape as /mode: persisted on the session, stamped onto each
-  // user_message (below), and the runner passes it to the SDK's options.model.
-  // The name is passed through verbatim — no whitelist (gateway model ids
-  // vary); a bad name surfaces as a turn_error in the transcript.
+  // Set the session's model + effort override (web /model <name> [effort]; bare
+  // /model resets both). Same shape as /mode: persisted on the session, stamped
+  // onto each user_message (below), and the runner hands them to the SDK.
+  //
+  // The two args are validated asymmetrically, on purpose. The model name passes
+  // through verbatim — no whitelist (gateway model ids vary); a bad name surfaces
+  // as a turn_error in the transcript. Effort is a closed enum, so a typo IS
+  // knowable here: reject it rather than let it be silently dropped downstream.
   app.post('/sessions/:id/model', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
-    const body = (await c.req.json().catch(() => ({}))) as { model?: unknown }
+    const body = (await c.req.json().catch(() => ({}))) as { model?: unknown; effort?: unknown }
     const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : null
-    const updated = await store.sessions.setModel(s.id, model)
-    const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'model', model })
+    const rawEffort =
+      typeof body.effort === 'string' && body.effort.trim() ? body.effort.trim() : null
+    const effort = rawEffort === null ? null : parseEffort(rawEffort)
+    if (rawEffort !== null && effort === null)
+      return c.json({ error: `unknown effort: ${rawEffort}` }, 400)
+    const updated = await store.sessions.setModel(s.id, model, effort)
+    const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'model', model, effort })
     bus.publish(s.id, ev)
     bump(s.projectId)
     return c.json(await toView(updated))

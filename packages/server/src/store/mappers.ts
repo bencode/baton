@@ -21,6 +21,7 @@ import type {
   Worker,
   Workspace,
 } from '@baton/shared'
+import { isAgentEffort } from '@baton/shared'
 import type {
   Channel as DbChannel,
   ChannelMessage as DbChannelMessage,
@@ -104,6 +105,9 @@ export const toSession = (r: DbSession): Session => ({
   lastActiveAt: r.lastActiveAt.getTime(),
   planMode: r.planMode,
   model: r.model,
+  // Column is TEXT; anything not in the enum (hand-edited row, rolled-back
+  // client) reads back as "no override" rather than a bogus effort.
+  effort: isAgentEffort(r.effort) ? r.effort : null,
 })
 
 export const toSessionEvent = (r: DbSessionEvent): SessionEvent => ({
