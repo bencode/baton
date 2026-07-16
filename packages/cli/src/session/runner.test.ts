@@ -7,7 +7,13 @@ import type { SessionEvent } from '@baton/shared'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
 import type { QueryFn } from './runner/query.ts'
-import { type EventSourceLike, runDaemon, runTurn, shouldReap } from './runner.ts'
+import {
+  type EventSourceLike,
+  isAgentConversationResumable,
+  runDaemon,
+  runTurn,
+  shouldReap,
+} from './runner.ts'
 
 // Build a fake query that records the params it was called with and yields the
 // given SDK messages. `seen` lets a test inspect prompt + options afterwards.
@@ -191,6 +197,51 @@ describe('runTurn', () => {
   })
 })
 
+describe('isAgentConversationResumable', () => {
+  const claude: SessionConfig = {
+    server: 'http://srv',
+    sessionId: 1,
+    name: 'claude',
+    agentKind: 'claude-code',
+    agentSessionId: '00000000-0000-4000-8000-000000000001',
+    worktreePath: '/tmp/wt',
+  }
+
+  test('claude resumes only after its transcript exists', () => {
+    assert.equal(
+      isAgentConversationResumable(claude, () => null),
+      false,
+    )
+    assert.equal(
+      isAgentConversationResumable(claude, () => '/tmp/session.jsonl'),
+      true,
+    )
+  })
+
+  test('codex resumes only after its pending id becomes a real thread id', () => {
+    let transcriptLookupCalled = false
+    const lookup = (): string | null => {
+      transcriptLookupCalled = true
+      return '/unused'
+    }
+    assert.equal(
+      isAgentConversationResumable(
+        { ...claude, agentKind: 'codex', agentSessionId: 'pending:fresh' },
+        lookup,
+      ),
+      false,
+    )
+    assert.equal(
+      isAgentConversationResumable(
+        { ...claude, agentKind: 'codex', agentSessionId: 'real-codex-thread' },
+        lookup,
+      ),
+      true,
+    )
+    assert.equal(transcriptLookupCalled, false)
+  })
+})
+
 // EventSource stub that fires onopen on the next tick (after runDaemon assigns
 // the handler), driving the reconcile-on-connect path without a real stream.
 const openOnConnect = (): (new (u: string) => EventSourceLike) => {
@@ -289,6 +340,81 @@ describe('runDaemon reconcile-on-connect', () => {
       ['turn_start', 'agent_event', 'turn_complete'],
     )
     assert.deepEqual(calls[0]?.payload, { messageId: 7 })
+  })
+
+  test('a failed first turn stays fresh so a valid model can recover on the next message', async () => {
+    const controller = new AbortController()
+    const freshConfig: SessionConfig = {
+      ...cfg,
+      agentSessionId: '00000000-0000-4000-8000-000000000045',
+    }
+    const calls: Array<{ type: string; payload: unknown }> = []
+    const options: Array<Record<string, unknown>> = []
+    let attempts = 0
+    let completions = 0
+    let firstTurnDone = (): void => {}
+    const firstCompleted = new Promise<void>(resolve => {
+      firstTurnDone = resolve
+    })
+    const worker = {
+      setActive: async () => ({}),
+      listEvents: async () => [],
+      emitEvent: async (type: string, payload: unknown) => {
+        calls.push({ type, payload })
+        if (type === 'turn_complete') {
+          completions++
+          if (completions === 1) firstTurnDone()
+          else controller.abort()
+        }
+        return {} as never
+      },
+    } as unknown as WorkerClient
+    const queryFn: QueryFn = params => {
+      attempts++
+      options.push(params.options as Record<string, unknown>)
+      const attempt = attempts
+      return (async function* () {
+        if (attempt === 1) throw new Error('model unavailable')
+        yield { type: 'result', subtype: 'success', is_error: false, result: 'recovered' } as never
+      })()
+    }
+    const es = controllableES()
+    const run = runDaemon(
+      freshConfig,
+      { worker, queryFn, eventSourceImpl: es.ctor, log: () => {} },
+      controller.signal,
+    )
+    await es.opened
+    es.emit({
+      id: 7,
+      sessionId: 1,
+      sequence: 1,
+      type: 'user_message',
+      payload: { text: 'first', model: 'unavailable-model' },
+      createdAt: 0,
+    })
+    await firstCompleted
+    es.emit({
+      id: 8,
+      sessionId: 1,
+      sequence: 2,
+      type: 'user_message',
+      payload: { text: 'retry', model: 'sonnet' },
+      createdAt: 0,
+    })
+    await run
+
+    assert.equal(attempts, 2)
+    assert.equal(options[0]?.sessionId, freshConfig.agentSessionId)
+    assert.equal(options[0]?.resume, undefined)
+    assert.equal(options[0]?.model, 'unavailable-model')
+    assert.equal(options[1]?.sessionId, freshConfig.agentSessionId)
+    assert.equal(options[1]?.resume, undefined)
+    assert.equal(options[1]?.model, 'sonnet')
+    assert.deepEqual(
+      calls.map(call => call.type),
+      ['turn_start', 'turn_error', 'turn_complete', 'turn_start', 'agent_event', 'turn_complete'],
+    )
   })
 
   test('does not re-run a user_message that already has a turn_start', async () => {

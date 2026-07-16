@@ -34,9 +34,25 @@ export type RunnerDeps = {
 }
 
 type DaemonState = {
-  firstSpawnDone: boolean
   seen: Set<number>
 }
+
+// Decide whether the next turn can resume from durable provider state. Claude
+// session ids are assigned before the first turn, so the id alone is not proof
+// that its transcript exists. Codex starts with a pending sentinel and replaces
+// it with the real thread id only after `thread.started`.
+//
+// Re-evaluate this before every queued message: a first turn can fail before the
+// provider creates any state (for example, an unavailable model). In that case
+// the next message must try the same fresh session id again instead of getting
+// stuck resuming a conversation that does not exist.
+export const isAgentConversationResumable = (
+  config: SessionConfig,
+  transcriptPath: (agentSessionId: string) => string | null = findTranscriptPath,
+): boolean =>
+  config.agentKind === 'codex'
+    ? !config.agentSessionId.startsWith('pending:')
+    : transcriptPath(config.agentSessionId) !== null
 
 // Build the SSE subscription wrapper. We connect live-only (?live=1, no replay),
 // so each `user_message` is forwarded to `onUserMessage`; the per-connection
@@ -113,7 +129,7 @@ const restoreTty = (): void => {
 // the authoritative queue — on every (re)connect we reconcile against it
 // (reconcile() below) and drain any user_message with no turn_start yet, so a
 // message sent while this daemon was offline / reconnecting isn't stranded.
-// `firstSpawnDone` reads the filesystem (claude's own session file).
+// Resume state is derived from the provider's durable state before each turn.
 export const runDaemon = async (
   config: SessionConfig,
   deps: RunnerDeps,
@@ -127,13 +143,7 @@ export const runDaemon = async (
   log(`bin: ${claudeExecutable() ?? '(sdk bundled)'}  cwd: ${config.worktreePath}`)
   log(`runtime env keys: ${maskedEnvKeys(deps.env)}`)
 
-  const state: DaemonState = {
-    firstSpawnDone:
-      config.agentKind === 'codex'
-        ? !config.agentSessionId.startsWith('pending:')
-        : findTranscriptPath(config.agentSessionId) !== null,
-    seen: new Set(),
-  }
+  const state: DaemonState = { seen: new Set() }
   const pendingQueue: SessionEvent[] = []
   let busy = false
   // True while reconcile() is awaiting the transcript — blocks the idle reaper
@@ -153,7 +163,7 @@ export const runDaemon = async (
       while (pendingQueue.length > 0 && !signal.aborted) {
         const msg = pendingQueue.shift()
         if (!msg) break
-        const resuming = state.firstSpawnDone
+        const resuming = isAgentConversationResumable(config)
         log(`▶ msg #${msg.sequence} (${resuming ? 'resume' : 'first'})`)
         const turnAbort = new AbortController()
         currentTurn = turnAbort
@@ -169,9 +179,6 @@ export const runDaemon = async (
           turnAbort.signal,
         )
         currentTurn = undefined
-        // Claude's session file exists after the first --session-id invocation
-        // even on non-zero exit — future turns must --resume.
-        state.firstSpawnDone = true
         lastActivity = Date.now()
         log(`✔ msg #${msg.sequence}${code === 0 ? '' : ` (exit ${code})`}`)
       }
