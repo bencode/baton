@@ -9,6 +9,8 @@ export type ChannelsApi = {
     workspaceId: Id,
     input?: { title?: string; description?: string },
   ): Promise<{ channelId: string; help: string }>
+  // Delete a room (cascades to its messages + attachments, drops the roster).
+  remove(channelId: string): Promise<void>
 }
 
 export const channelsApi = (u: Url): ChannelsApi => ({
@@ -16,4 +18,5 @@ export const channelsApi = (u: Url): ChannelsApi => ({
     request(u(`/workspaces/${workspaceId}/channels`), { method: 'GET' }),
   create: (workspaceId, input) =>
     request(u(`/workspaces/${workspaceId}/channels`), { method: 'POST', body: input ?? {} }),
+  remove: channelId => request(u(`/channels/${channelId}`), { method: 'DELETE' }),
 })

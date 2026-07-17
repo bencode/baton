@@ -2,8 +2,8 @@ import type { Id, SessionView, WorkerView } from '@baton/shared'
 import { useState } from 'react'
 import { useApi } from '../../../app/api-context'
 import { sessionPath } from '../../../app/route'
+import { TrashIcon } from '../../../components/icons'
 import { orderSessions, VISIBLE_BUDGET } from './grouping'
-import { TrashIcon } from './icons'
 import { SessionRow } from './session-row'
 
 // Display principle:

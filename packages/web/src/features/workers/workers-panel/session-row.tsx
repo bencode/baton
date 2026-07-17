@@ -1,8 +1,7 @@
 import type { SessionView } from '@baton/shared'
 import { useState } from 'react'
-import { ClockIcon } from '../../../components/icons'
+import { ClockIcon, TrashIcon } from '../../../components/icons'
 import { relativeTime } from '../../sessions/relative-time'
-import { TrashIcon } from './icons'
 
 type SessionRowProps = {
   session: SessionView
