@@ -20,14 +20,6 @@ export const LeftPanel = ({ workspaceId, projectId, activeId, open, close }: Lef
   return (
     <div className="flex h-full flex-col gap-5 overflow-auto bg-gray-50/60 p-3">
       <ProjectSwitcher workspaceId={workspaceId} activeProjectId={projectId} />
-      {workspaceId !== null && (
-        <section className="flex flex-col gap-1">
-          <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-            Channels
-          </h2>
-          <ChannelsPanel workspaceId={workspaceId} />
-        </section>
-      )}
       {projectId === null ? (
         <p className="px-2 text-sm text-gray-400">Select a project.</p>
       ) : (
@@ -60,6 +52,7 @@ export const LeftPanel = ({ workspaceId, projectId, activeId, open, close }: Lef
           <WorkersPanel projectId={projectId} activeId={activeId} open={open} close={close} />
         </section>
       )}
+      {workspaceId !== null && <ChannelsPanel workspaceId={workspaceId} />}
     </div>
   )
 }
