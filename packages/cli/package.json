@@ -1,6 +1,6 @@
 {
   "name": "@lesscap/baton-cli",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "license": "MIT",
   "publishConfig": {
     "access": "public"
