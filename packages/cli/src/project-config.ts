@@ -29,6 +29,7 @@ export type ProjectConfig = {
   workspace?: Id
   project?: Id
   name?: string
+  baseBranch?: string
   worker?: WorkerEntry
 }
 
@@ -36,6 +37,7 @@ export type ProjectConfig = {
 export type WorkerConfig = {
   server: string
   projectId: Id
+  baseBranch?: string
   workerId: Id
   agentKind: AgentKind
   name: string
@@ -108,6 +110,7 @@ export const viewWorker = (cfg: ProjectConfig): WorkerConfig => {
   return {
     server,
     projectId: project,
+    baseBranch: cfg.baseBranch,
     workerId: worker.id,
     agentKind: worker.agentKind ?? 'claude-code',
     name: worker.name,
@@ -122,6 +125,7 @@ export const viewWorker = (cfg: ProjectConfig): WorkerConfig => {
 export const worktreeConfig = (cfg: WorkerConfig): ProjectConfig => ({
   server: cfg.server,
   project: cfg.projectId,
+  baseBranch: cfg.baseBranch,
   worker: {
     id: cfg.workerId,
     name: cfg.name,

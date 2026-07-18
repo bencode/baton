@@ -36,6 +36,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/provision-worker.sh" \
   ( --project <id> | --new-project <name> --workspace <id> ) \
   [--claude-bin /Users/<you>/.local/bin/reclaude] \
   [--dir ~/work/<name>] \
+  [--base-branch <branch>] \
   [--server https://baton.fmap.dev/api]
 ```
 
@@ -47,7 +48,9 @@ What it does (idempotent; refuses if the plist already exists):
 3. Clones the repo to `--dir` (or reuses an existing checkout / local path).
 4. Registers the worker with its **own `XDG_DATA_HOME`**
    (`~/.local/share/baton-workers/<name>`) → a distinct machineId + worktrees,
-   so it's independent even if it shares a project.
+   so it's independent even if it shares a project. `--base-branch` is persisted
+   in the generated `.baton.json`; without it the repo's current branch is used,
+   falling back to `main`.
 5. Writes `~/Library/LaunchAgents/dev.fmap.baton-worker-<name>.plist` (templated
    from the canonical `baton` worker plist) and `launchctl bootstrap`s it.
 6. Polls until the new worker shows `alive: true`, then prints its **W-N** handle.

@@ -21,6 +21,7 @@ import {
   removeWorktree,
   repoHeadBranch,
   restoreWorktree,
+  syncBaseBranch,
 } from '../session/worktree.ts'
 import { killProcessGroup } from './proc.ts'
 
@@ -43,6 +44,8 @@ export type SessionSupervisor = {
   killAll(): void
 }
 
+export type BaseBranchSync = (repo: string, branch: string) => Promise<string>
+
 // Supervises one disposable headless child per session (`baton session run <id>`):
 // materialize on first sight, (re)spawn, stop, delete, auto-title, and reconcile
 // orphans on (re)connect. `hasTerminal`/`closeTerminal` are injected so the child
@@ -54,12 +57,32 @@ export const createSessionSupervisor = (deps: {
   log: (m: string) => void
   hasTerminal: (sessionId: Id) => boolean
   closeTerminal: (sessionId: Id) => void
+  syncBase?: BaseBranchSync
 }): SessionSupervisor => {
   const { client, cfg, repo, log, hasTerminal, closeTerminal } = deps
   const worktreeDir = defaultWorktreeDir()
+  const baseBranch = cfg.baseBranch ?? repoHeadBranch(repo)
+  const syncBase = deps.syncBase ?? syncBaseBranch
+  let syncInFlight: Promise<string> | null = null
+  const syncedBase = (): Promise<string> => {
+    if (syncInFlight) return syncInFlight
+    const pending = syncBase(repo, baseBranch)
+    syncInFlight = pending
+    const clear = (): void => {
+      if (syncInFlight === pending) syncInFlight = null
+    }
+    void pending.then(clear, clear)
+    return pending
+  }
   // Track the worktree path alongside the child so we can git-remove it on delete —
   // by then the server row is gone, so we can't re-fetch it.
   const children = new Map<Id, { child: ChildProcess; worktreePath: string }>()
+  const starts = new Map<Id, { epoch: number; promise: Promise<void> }>()
+  const startEpochs = new Map<Id, number>()
+  const currentStartEpoch = (sessionId: Id): number => startEpochs.get(sessionId) ?? 0
+  const cancelStart = (sessionId: Id): void => {
+    startEpochs.set(sessionId, currentStartEpoch(sessionId) + 1)
+  }
 
   // Spawn the session child, handing it the worker credentials via env so it can
   // authenticate session writes with the worker token.
@@ -85,7 +108,9 @@ export const createSessionSupervisor = (deps: {
   // Materialize on first sight (mint agentSessionId + git worktree, PATCH back),
   // then spawn. Idempotent: an already-materialized session (worker restart) reuses
   // the worktree and just respawns.
-  const start = async (sessionId: Id, name: string): Promise<void> => {
+  const startOne = async (sessionId: Id, name: string, epoch: number): Promise<void> => {
+    const wasCanceled = (): boolean => currentStartEpoch(sessionId) !== epoch
+    if (wasCanceled()) return
     // An open interactive terminal owns this session's agentSessionId — never let
     // the headless child run alongside it (two claudes, one JSONL → corruption).
     // Defensive backstop: the server already rejects relay messages / resume while
@@ -95,23 +120,28 @@ export const createSessionSupervisor = (deps: {
       return log(`session #${sessionId} has an open terminal — skipping headless start`)
     if (children.has(sessionId)) return log(`session #${sessionId} already running`)
     const session = await client.sessions.get(sessionId)
+    if (wasCanceled()) return log(`session #${sessionId} start canceled before materializing`)
     let worktreePath = session.worktreePath
     if (!session.agentSessionId || !worktreePath) {
       const sessionCode = randomUUID()
       const agentSessionId = session.agentKind === 'codex' ? `pending:${sessionCode}` : sessionCode
       worktreePath = join(worktreeDir, slug(`${name}-${sessionCode.slice(0, 8)}`))
+      const base = await syncedBase()
+      if (wasCanceled()) return log(`session #${sessionId} start canceled during git sync`)
       createWorktree({
         repo,
         worktreePath,
         sessionCode: sessionCode.slice(0, 8),
-        base: repoHeadBranch(repo),
+        base,
       })
       await client.sessions.materialize(sessionId, { agentSessionId, worktreePath }, cfg.apiToken)
+      if (wasCanceled()) return log(`session #${sessionId} start canceled after materializing`)
       log(`materialized session #${sessionId} → ${worktreePath}`)
     } else if (!existsSync(worktreePath)) {
       // Materialized, but the worktree dir is gone (container rebuild / cleanup) —
       // recreate at the same path, keeping the agentSessionId so it still resumes.
-      restoreWorktree(repo, worktreePath, session.agentSessionId.slice(0, 8))
+      await restoreWorktree(repo, worktreePath, session.agentSessionId.slice(0, 8), baseBranch)
+      if (wasCanceled()) return log(`session #${sessionId} start canceled during worktree restore`)
       log(`recreated session #${sessionId} worktree (was missing) → ${worktreePath}`)
     }
     // Drop the worker's baton context into the worktree so the agent's bare `baton`
@@ -127,8 +157,27 @@ export const createSessionSupervisor = (deps: {
     spawnChild(sessionId, worktreePath)
   }
 
+  const start = (sessionId: Id, name: string): Promise<void> => {
+    const epoch = currentStartEpoch(sessionId)
+    const existing = starts.get(sessionId)
+    if (existing?.epoch === epoch) return existing.promise
+    const pending = existing
+      ? existing.promise.then(
+          () => startOne(sessionId, name, epoch),
+          () => startOne(sessionId, name, epoch),
+        )
+      : startOne(sessionId, name, epoch)
+    starts.set(sessionId, { epoch, promise: pending })
+    const clear = (): void => {
+      if (starts.get(sessionId)?.promise === pending) starts.delete(sessionId)
+    }
+    void pending.then(clear, clear)
+    return pending
+  }
+
   // Stop: kill the child but keep the worktree (session goes inactive, resumable).
   const stop = (sessionId: Id): void => {
+    cancelStart(sessionId)
     closeTerminal(sessionId) // tear down an open terminal too, if any
     const entry = children.get(sessionId)
     if (!entry) return
@@ -140,6 +189,7 @@ export const createSessionSupervisor = (deps: {
   // Delete: kill the child (if tracked) AND remove the worktree. The path comes
   // from our tracked entry, or the command itself when we aren't tracking a child.
   const remove = (sessionId: Id, worktreePath: string | null): void => {
+    cancelStart(sessionId)
     closeTerminal(sessionId) // kill an open terminal before removing the worktree
     const entry = children.get(sessionId)
     if (entry) {
