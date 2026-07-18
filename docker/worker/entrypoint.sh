@@ -14,13 +14,18 @@ set -e
 cfg="${BATON_WORKER_CONFIG:-.baton.json}"
 name="${WORKER_NAME:-$(hostname)}"
 agent_kind="${BATON_AGENT_KIND:-claude-code}"
-echo "[baton] registering worker (project ${BATON_PROJECT_ID}, name ${name}, agent ${agent_kind}) against ${BATON_URL}..."
+base_branch="${BATON_BASE_BRANCH:-current branch}"
+echo "[baton] registering worker (project ${BATON_PROJECT_ID}, name ${name}, agent ${agent_kind}, base ${base_branch}) against ${BATON_URL}..."
 baton worker register \
   --config "$cfg" \
   --url "$BATON_URL" \
   --project "$BATON_PROJECT_ID" \
   --name "$name" \
   --agentKind "$agent_kind"
+
+# Registration may use site-level credentials, but the daemon and its session
+# children need only the worker token persisted in the config file.
+unset BATON_TOKEN BATON_USER BATON_PASS
 
 echo "[baton] worker run..."
 exec baton worker run --config "$cfg"

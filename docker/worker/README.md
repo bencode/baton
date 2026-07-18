@@ -20,7 +20,7 @@ colima start --cpu 4 --memory 8 --mount-type virtiofs --mount-writable
 ```sh
 # Put these files somewhere on the host, e.g. ~/trantor-daily/.worker/
 cp .env.example .env
-# Edit .env: BATON_REPO_DIR + ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN (your proxy)
+# Edit .env: BATON_REPO_DIR + optional BATON_BASE_BRANCH + agent authentication
 ```
 
 ## Smoke-test claude auth first
@@ -51,6 +51,9 @@ project's workers on https://baton.fmap.dev .
   container and drop the `ANTHROPIC_*` env — a future variant.
 - **git push**: uncomment the `.gitcfg` mount in `worker-compose.yml` and drop a
   `credentials` file there (`https://USER:TOKEN@host`).
+- **base branch freshness**: set `BATON_BASE_BRANCH` when the worker should not
+  follow the repo's checked-out branch. Registration persists it, and every new
+  session fetches the matching remote branch before its worktree is created.
 - **skills**: drop Claude Code skills into `./skills/` (mounted to
   `~/.claude/skills`, read-only). They become user-level skills, available in
   every session — install/edit on the host, no rebuild. Skills that shell out to

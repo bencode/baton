@@ -1,6 +1,47 @@
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFile, execFileSync, type SpawnSyncReturns, spawnSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, resolve } from 'node:path'
+import { promisify } from 'node:util'
+
+const git = (repo: string, args: string[]): SpawnSyncReturns<string> =>
+  spawnSync('git', ['-C', repo, ...args], {
+    stdio: 'pipe',
+    encoding: 'utf8',
+  })
+
+const commandError = (result: SpawnSyncReturns<string>): string => {
+  const raw = result.stderr || result.stdout || result.error?.message || `exit ${result.status}`
+  // Do not accidentally copy an embedded HTTPS credential into worker logs.
+  return raw.trim().replace(/(https?:\/\/)[^/@\s]+@/g, '$1***@')
+}
+
+const execFileAsync = promisify(execFile)
+const DEFAULT_SYNC_TIMEOUT_MS = 60_000
+
+type CommandFailure = Error & {
+  code?: string | number
+  killed?: boolean
+  stderr?: string
+  stdout?: string
+}
+
+const asyncCommandError = (error: unknown, timeoutMs: number): string => {
+  const failure = error as CommandFailure
+  if (failure.killed || failure.code === 'ETIMEDOUT') return `timed out after ${timeoutMs}ms`
+  const raw = failure.stderr || failure.stdout || failure.message || String(error)
+  return raw.trim().replace(/(https?:\/\/)[^/@\s]+@/g, '$1***@')
+}
+
+export const validateBaseBranch = (branch: string): string => {
+  const normalized = branch.trim()
+  const valid = spawnSync('git', ['check-ref-format', '--branch', normalized], {
+    stdio: 'pipe',
+    encoding: 'utf8',
+  })
+  if (valid.status !== 0)
+    throw new Error(`invalid base branch "${normalized}": ${commandError(valid)}`)
+  return normalized
+}
 
 // Provision a git worktree for a session. Creates a branch named
 // `baton/<sessionCode>` checked out at `base` in the target path. The repo
@@ -38,12 +79,71 @@ export const createWorktree = (input: {
 // The repo's currently checked-out branch — the base a new worktree forks from.
 // Falls back to 'main' on detached HEAD / non-git / any failure.
 export const repoHeadBranch = (repo: string): string => {
-  const r = spawnSync('git', ['-C', repo, 'symbolic-ref', '--short', 'HEAD'], {
-    stdio: 'pipe',
-    encoding: 'utf8',
-  })
+  const r = git(repo, ['symbolic-ref', '--short', 'HEAD'])
   const branch = r.status === 0 ? r.stdout.trim() : ''
   return branch || 'main'
+}
+
+// Refresh the configured branch without moving the source checkout. New worktrees
+// fork from the updated remote-tracking ref, so a long-lived worker cannot silently
+// create sessions from a stale local branch. A trusted helper can perform the fetch
+// out-of-process (for example through a credential-holding broker); it receives
+// exactly two arguments: <repo> <branch>.
+export const syncBaseBranch = async (
+  repo: string,
+  branch: string,
+  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {},
+): Promise<string> => {
+  const checkedBranch = validateBaseBranch(branch)
+  const env = options.env ?? process.env
+  const timeoutMs = options.timeoutMs ?? DEFAULT_SYNC_TIMEOUT_MS
+
+  const origin = git(repo, ['remote', 'get-url', 'origin'])
+  if (origin.status !== 0) {
+    const localRef = `refs/heads/${checkedBranch}`
+    const verified = git(repo, ['rev-parse', '--verify', '-q', localRef])
+    if (verified.status !== 0) throw new Error(`local base branch does not exist: ${checkedBranch}`)
+    return localRef
+  }
+
+  const helper = env.BATON_GIT_SYNC_BIN?.trim()
+  const command = helper ?? 'git'
+  const args = helper
+    ? [repo, checkedBranch]
+    : [
+        '-C',
+        repo,
+        'fetch',
+        '--no-tags',
+        'origin',
+        `+refs/heads/${checkedBranch}:refs/remotes/origin/${checkedBranch}`,
+      ]
+  let synced: { stdout: string; stderr: string }
+  try {
+    synced = await execFileAsync(command, args, {
+      encoding: 'utf8',
+      env: { ...env, GIT_TERMINAL_PROMPT: '0' },
+      timeout: timeoutMs,
+    })
+  } catch (error) {
+    const via = helper ? ` via ${helper}` : ''
+    throw new Error(
+      `git sync failed for origin/${checkedBranch}${via}: ${asyncCommandError(error, timeoutMs)}`,
+    )
+  }
+
+  const remoteRef = `refs/remotes/origin/${checkedBranch}`
+  const verified = git(repo, ['rev-parse', '--verify', '-q', remoteRef])
+  if (verified.status !== 0) throw new Error(`git sync succeeded but ${remoteRef} does not exist`)
+  if (helper) {
+    const reportedCommit = synced.stdout.trim()
+    const actualCommit = verified.stdout.trim()
+    if (!/^[0-9a-f]{40,64}$/i.test(reportedCommit))
+      throw new Error('git sync helper did not report the synced commit on stdout')
+    if (reportedCommit !== actualCommit)
+      throw new Error(`git sync helper reported a commit that does not match ${remoteRef}`)
+  }
+  return remoteRef
 }
 
 // Append a pattern to the repo's `.git/info/exclude` unless already present.
@@ -88,7 +188,12 @@ export const removeWorktree = (repo: string, worktreePath: string): void => {
 // If the branch is gone too, fall back to a brand-new worktree from HEAD. The
 // claude transcript lives in ~/.claude/projects (separate from the worktree), so
 // the conversation resumes either way.
-export const restoreWorktree = (repo: string, worktreePath: string, sessionCode: string): void => {
+export const restoreWorktree = async (
+  repo: string,
+  worktreePath: string,
+  sessionCode: string,
+  baseBranch: string = repoHeadBranch(repo),
+): Promise<void> => {
   spawnSync('git', ['-C', repo, 'worktree', 'prune'], { stdio: 'pipe' })
   mkdirSync(dirname(worktreePath), { recursive: true })
   const branch = `baton/${sessionCode}`
@@ -98,5 +203,10 @@ export const restoreWorktree = (repo: string, worktreePath: string, sessionCode:
   })
   if (reuse.status === 0) return
   // Branch gone (or unattachable) → fresh worktree from the repo's head branch.
-  createWorktree({ repo, worktreePath, sessionCode, base: repoHeadBranch(repo) })
+  createWorktree({
+    repo,
+    worktreePath,
+    sessionCode,
+    base: await syncBaseBranch(repo, baseBranch),
+  })
 }

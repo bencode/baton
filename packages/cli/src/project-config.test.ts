@@ -53,6 +53,7 @@ describe('project-config', () => {
     const w: WorkerConfig = {
       server: 'http://x',
       projectId: 1,
+      baseBranch: 'develop',
       workerId: 9,
       agentKind: 'codex',
       name: 'w',
@@ -74,6 +75,7 @@ describe('project-config', () => {
       assert.equal(w.apiToken, 'wtok')
       assert.equal(w.server, 'http://x')
       assert.equal(w.projectId, 1)
+      assert.equal(w.baseBranch, undefined)
       assert.equal(w.agentKind, 'claude-code')
     } finally {
       rmSync(root, { recursive: true, force: true })

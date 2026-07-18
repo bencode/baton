@@ -10,7 +10,7 @@
 # plist + `baton worker destroy <W-N> --confirm`.
 set -euo pipefail
 
-NAME="" REPO="" PROJECT="" NEW_PROJECT="" WORKSPACE="" DIR=""
+NAME="" REPO="" PROJECT="" NEW_PROJECT="" WORKSPACE="" DIR="" BASE_BRANCH=""
 CLAUDE_BIN="/Users/$(id -un)/.local/bin/reclaude"
 SERVER="https://baton.fmap.dev/api"
 
@@ -28,6 +28,7 @@ while [ $# -gt 0 ]; do
     --claude-bin) CLAUDE_BIN="$2"; shift 2;;
     --dir) DIR="$2"; shift 2;;
     --server) SERVER="$2"; shift 2;;
+    --base-branch) BASE_BRANCH="$2"; shift 2;;
     *) die "unknown arg: $1 (see SKILL.md)";;
   esac
 done
@@ -92,8 +93,12 @@ fi
 # 4) register with an isolated identity (own machineId + worktrees)
 mkdir -p "$STATE/baton"
 info "registering worker '$NAME' on project $PROJECT (state: $STATE)"
+REGISTER_ARGS=(worker register --project "$PROJECT" --url "$SERVER" --name "$NAME" --json)
+if [ -n "$BASE_BRANCH" ]; then
+  REGISTER_ARGS+=(--baseBranch "$BASE_BRANCH")
+fi
 REG=$(cd "$DIR" && XDG_DATA_HOME="$STATE" BATON_TOKEN="$TOKEN" \
-  baton worker register --project "$PROJECT" --url "$SERVER" --name "$NAME" --json) \
+  baton "${REGISTER_ARGS[@]}") \
   || die "register failed (name already in use in this project? pick another --name)"
 WID=$(printf '%s' "$REG" | jq -r '.worker.id')
 ok "registered worker W-$WID ($NAME)"

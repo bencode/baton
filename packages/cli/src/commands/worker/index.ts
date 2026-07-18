@@ -10,9 +10,9 @@ import {
   loadProjectConfigOrNull,
   projectConfigPath,
   saveProjectConfig,
-  setWorker,
   viewWorker,
 } from '../../project-config.ts'
+import { repoHeadBranch, validateBaseBranch } from '../../session/worktree.ts'
 import { clientFor, common, parseWorkerHandle, resolveAuth, resolveProjectId } from '../../util.ts'
 import { runWorkerDaemon } from '../../worker/daemon.ts'
 import { machineIdPath, readOrCreateMachineId } from '../../worker/machine-id.ts'
@@ -41,12 +41,33 @@ export type WorkerRegisterRunInput = {
   hostname: string
   machineId: string
   agentKind: AgentKind
+  baseBranch: string
 }
 
 const parseAgentKind = (value: unknown): AgentKind => {
   const raw = typeof value === 'string' && value.trim() ? value.trim() : 'claude-code'
   if (raw === 'claude-code' || raw === 'codex') return raw
   throw new Error(`invalid agent kind "${raw}" (expected claude-code or codex)`)
+}
+
+const nonEmptyString = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value.trim() : null
+
+// Registration is the single configuration entrypoint for a worker's base branch.
+// Existing configs keep their explicit choice; legacy configs adopt the repo's
+// currently checked-out branch (and repoHeadBranch itself falls back to main).
+export const resolveBaseBranch = (input: {
+  flag?: unknown
+  env?: unknown
+  saved?: unknown
+  repo?: string
+}): string => {
+  const branch =
+    nonEmptyString(input.flag) ??
+    nonEmptyString(input.env) ??
+    nonEmptyString(input.saved) ??
+    repoHeadBranch(input.repo ?? process.cwd())
+  return validateBaseBranch(branch)
 }
 
 // Pure handler: idempotent register + persist worker section into .baton.json.
@@ -64,19 +85,21 @@ export const registerWorker = async (
     name: input.name,
     hostname: input.hostname,
   })
-  // Tolerate a missing .baton.json: seed it. (Init would normally have done
-  // this, but the worker section is the only thing we strictly need.)
-  try {
-    loadProjectConfig(cfgPath)
-  } catch {
-    saveProjectConfig(cfgPath, { server: input.server, project: input.projectId })
-  }
-  setWorker(cfgPath, {
-    id: out.worker.id,
-    name: out.worker.name,
-    agentKind: out.worker.agentKind,
-    machineId: out.worker.machineId,
-    apiToken: out.apiToken,
+  // Tolerate a missing .baton.json: seed it. Preserve init's workspace/name
+  // metadata when present, while making register authoritative for worker wiring.
+  const existing = loadProjectConfigOrNull(cfgPath) ?? {}
+  saveProjectConfig(cfgPath, {
+    ...existing,
+    server: input.server,
+    project: input.projectId,
+    baseBranch: input.baseBranch,
+    worker: {
+      id: out.worker.id,
+      name: out.worker.name,
+      agentKind: out.worker.agentKind,
+      machineId: out.worker.machineId,
+      apiToken: out.apiToken,
+    },
   })
   return { out, configPath: cfgPath }
 }
@@ -100,6 +123,11 @@ export const worker = defineCommand({
           type: 'string',
           description: 'agent engine for new sessions: claude-code or codex',
         },
+        baseBranch: {
+          type: 'string',
+          description:
+            'branch new session worktrees start from (default: current branch, then main)',
+        },
         ...common,
       },
       run: async ({ args }) => {
@@ -115,9 +143,15 @@ export const worker = defineCommand({
         // re-register from .baton.json). Mirrors clientFor, but reuses the already-
         // validated `server` + the --config location. No token → 401 from the gate.
         const cfgPath = configPathFromArgs(args)
-        const fileToken = loadProjectConfigOrNull(cfgPath)?.worker?.apiToken
+        const savedConfig = loadProjectConfigOrNull(cfgPath)
+        const fileToken = savedConfig?.worker?.apiToken
         const auth = resolveAuth(process.env, fileToken)
         const c = createClient(server, auth && auth !== 'cookie' ? auth : undefined)
+        const baseBranch = resolveBaseBranch({
+          flag: args.baseBranch,
+          env: process.env.BATON_BASE_BRANCH,
+          saved: savedConfig?.baseBranch,
+        })
         const hostname = osHostname()
         const machineId = readOrCreateMachineId()
         const name = args.name ?? hostname
@@ -131,15 +165,17 @@ export const worker = defineCommand({
             hostname,
             machineId,
             agentKind,
+            baseBranch,
           },
           cfgPath,
         )
         if (args.json) {
-          console.log(toJson({ ...out, configPath, machineIdPath: machineIdPath() }))
+          console.log(toJson({ ...out, baseBranch, configPath, machineIdPath: machineIdPath() }))
           return
         }
         console.log(`worker #${out.worker.id} (${out.worker.name}) — ${out.outcome}`)
         console.log(`  agentKind:      ${out.worker.agentKind}`)
+        console.log(`  baseBranch:     ${baseBranch}`)
         console.log(`  hostname:       ${out.worker.hostname}`)
         console.log(`  machineId:      ${out.worker.machineId}`)
         console.log(`  machineId file: ${machineIdPath()}`)
@@ -249,13 +285,22 @@ export const worker = defineCommand({
           console.log('(no worker registered for this project — run `baton worker register`)')
           return
         }
+        const baseBranch = resolveBaseBranch({ saved: cfg.baseBranch })
         if (args.json) {
-          console.log(toJson({ ...worker, server: cfg?.server, projectId: cfg?.project }))
+          console.log(
+            toJson({
+              ...worker,
+              server: cfg.server,
+              projectId: cfg.project,
+              baseBranch,
+            }),
+          )
           return
         }
         console.log(`worker #${worker.id} (${worker.name})`)
         console.log(`  machineId: ${worker.machineId}`)
         console.log(`  agentKind: ${worker.agentKind ?? 'claude-code'}`)
+        console.log(`  baseBranch: ${baseBranch}`)
         console.log(`  server:    ${cfg?.server}`)
       },
     }),
