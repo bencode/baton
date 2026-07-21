@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { SessionEvent } from '@baton/shared'
+import { agentMessageText, type SessionEvent } from '@baton/shared'
 
 // claude writes a session file on first `--session-id` invocation, at
 // `~/.claude/projects/<flattened-cwd>/<agentSessionId>.jsonl`. We don't
@@ -76,18 +76,6 @@ export const parseFirstExchange = (content: string): FirstExchange | null => {
   return userText || assistantText ? { userText, assistantText } : null
 }
 
-const canonicalAgentMessage = (payload: unknown): { id: string; text: string } | null => {
-  if (
-    !isRecord(payload) ||
-    !['item.started', 'item.updated', 'item.completed'].includes(String(payload.type))
-  )
-    return null
-  const item = payload.item
-  if (!isRecord(item) || item.type !== 'agent_message' || typeof item.id !== 'string') return null
-  const text = textOf(item)
-  return text ? { id: item.id, text } : null
-}
-
 // The server event log is the provider-neutral title source. Keep the latest
 // text for each canonical item (updated/completed replace partial frames) and
 // stop at the first turn boundary so later turns cannot change the topic seed.
@@ -103,7 +91,7 @@ export const parseFirstExchangeFromEvents = (events: SessionEvent[]): FirstExcha
     }
     if (!userText) continue
     if (event.type === 'turn_complete' || event.type === 'turn_error') break
-    const agent = event.type === 'agent_event' ? canonicalAgentMessage(event.payload) : null
+    const agent = event.type === 'agent_event' ? agentMessageText(event.payload) : null
     if (agent) {
       if (!agentText.has(agent.id)) itemOrder.push(agent.id)
       agentText.set(agent.id, agent.text)

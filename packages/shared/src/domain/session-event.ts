@@ -99,6 +99,24 @@ export type AgentEvent =
   | (WithRaw & { type: 'error'; message: string })
   | { type: 'raw'; raw: unknown }
 
+// The agent's prose out of an `agent_event` payload, or null for anything else
+// (reasoning, tool calls, turn boundaries). Every consumer that wants "what did
+// the agent say" reads item.* frames: item.updated/completed replace earlier
+// frames of the same item, hence the id — keyed replacement, not concatenation.
+// Shared because three consumers read it: the Feishu and DingTalk bridges (the
+// text they relay back into the chat) and the CLI's auto-title seed.
+export const agentMessageText = (payload: unknown): { id: string; text: string } | null => {
+  if (typeof payload !== 'object' || payload === null) return null
+  const event = payload as Record<string, unknown>
+  if (!['item.started', 'item.updated', 'item.completed'].includes(String(event.type))) return null
+  const item = event.item
+  if (typeof item !== 'object' || item === null) return null
+  const { type, id, text } = item as Record<string, unknown>
+  if (type !== 'agent_message' || typeof id !== 'string' || typeof text !== 'string') return null
+  const trimmed = text.trim()
+  return trimmed ? { id, text: trimmed } : null
+}
+
 // A chat / SDK transcript event. Persisted server-side (SessionEvent table,
 // per-session monotonic `sequence`); the web loads history from the server and
 // tails new events live over SSE. A user_message with no matching turn_start is

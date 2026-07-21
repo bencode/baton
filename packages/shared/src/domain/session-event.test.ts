@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {
+  agentMessageText,
   closesTurn,
   isAgentWorking,
   opensTurn,
@@ -53,6 +54,31 @@ describe('unstartedUserMessages', () => {
       ev(4, 'turn_start', null),
     ])
     assert.deepEqual([...ids], [1])
+  })
+})
+
+describe('agentMessageText', () => {
+  const item = (type: string, extra: Record<string, unknown> = {}) => ({
+    type: 'item.completed',
+    item: { type, id: 'i1', status: 'completed', text: '答案', ...extra },
+  })
+
+  test('extracts agent_message text from every item frame', () => {
+    for (const frame of ['item.started', 'item.updated', 'item.completed']) {
+      assert.deepEqual(agentMessageText({ ...item('agent_message'), type: frame }), {
+        id: 'i1',
+        text: '答案',
+      })
+    }
+  })
+
+  test('ignores non-agent items, non-item events, and empty text', () => {
+    assert.equal(agentMessageText(item('reasoning')), null)
+    assert.equal(agentMessageText(item('command_execution')), null)
+    assert.equal(agentMessageText({ type: 'turn.completed', subtype: 'success' }), null)
+    assert.equal(agentMessageText(item('agent_message', { text: '  ' })), null)
+    assert.equal(agentMessageText(item('agent_message', { id: 7 })), null)
+    assert.equal(agentMessageText(null), null)
   })
 })
 

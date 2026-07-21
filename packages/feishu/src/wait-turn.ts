@@ -1,4 +1,4 @@
-import type { SessionEvent } from '@baton/shared'
+import { agentMessageText, type SessionEvent } from '@baton/shared'
 
 export type TurnOutcome = 'complete' | 'error' | 'timeout'
 // outcome + the agent's answer text (so the Feishu reply can show it inline).
@@ -24,9 +24,10 @@ const assistantText = (payload: Record<string, unknown>): string => {
 // turn isn't missed) and correlate by messageId: turn_start carries
 // { messageId } = our user_message's id, and the next turn_complete /
 // turn_error after it is ours (ignoring other turns in a reused session). While
-// in our turn we keep the latest `result` event's text (the canonical final
-// answer), falling back to the last assistant message's text. Resolves 'timeout'
-// (empty text) on the deadline or a closed stream; always aborts on resolve.
+// in our turn we keep the last agent message's text — the final answer, since
+// later messages supersede earlier ones. Legacy `sdk_event` workers (pre-codex
+// adapter) still get their `result` text preferred. Resolves 'timeout' (empty
+// text) on the deadline or a closed stream; always aborts on resolve.
 export const waitForTurn = async (
   streamUrl: string,
   messageId: number,
@@ -74,7 +75,10 @@ export const waitForTurn = async (
             isRecord(ev.payload) && typeof ev.payload.message === 'string' ? ev.payload.message : ''
           return { outcome: 'error', text: msg || resultText || lastAssistant }
         }
-        if (ev.type === 'sdk_event' && isRecord(ev.payload)) {
+        if (ev.type === 'agent_event') {
+          const agent = agentMessageText(ev.payload)
+          if (agent) lastAssistant = agent.text
+        } else if (ev.type === 'sdk_event' && isRecord(ev.payload)) {
           const p = ev.payload
           if (p.type === 'result' && typeof p.result === 'string') resultText = p.result
           else if (p.type === 'assistant') {

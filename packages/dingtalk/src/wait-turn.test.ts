@@ -83,4 +83,28 @@ describe('waitForTurn', () => {
     ])
     assert.equal((await waitForTurn('url', 5, 1000, f)).text, '回答')
   })
+
+  // The canonical stream since the codex adapter: no `result` event at all, the
+  // answer only ever arrives as agent_message items. A bridge that misses these
+  // replies with a bare link (the 0-chars regression).
+  test('captures the last agent_message of an agent_event stream', async () => {
+    const item = (id: string, text: string) => ({
+      type: 'item.completed',
+      item: { type: 'agent_message', id, status: 'completed', text },
+    })
+    const f = fetchOf([
+      ev(6, 'turn_start', { messageId: 5 }),
+      ev(7, 'agent_event', {
+        type: 'item.completed',
+        item: { type: 'reasoning', id: 'r1', status: 'completed', text: '先想想' },
+      }),
+      ev(8, 'agent_event', item('a1', '中间说明')),
+      ev(9, 'agent_event', item('a2', '最终答案')),
+      ev(10, 'agent_event', { type: 'turn.completed', subtype: 'success' }),
+      ev(11, 'turn_complete', {}),
+    ])
+    const r = await waitForTurn('url', 5, 1000, f)
+    assert.equal(r.outcome, 'complete')
+    assert.equal(r.text, '最终答案')
+  })
 })
