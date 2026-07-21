@@ -46,6 +46,7 @@ export type SessionsClient = {
   listByProject(projectId: Id): Promise<SessionView[]>
   get(id: Id): Promise<SessionView>
   findByName(projectId: Id, name: string): Promise<Session | null>
+  listEvents(id: Id): Promise<SessionEvent[]>
   sendMessage(
     id: Id,
     text: string,
@@ -98,6 +99,7 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
       const matches = all.filter(s => s.name === name)
       return matches.length === 0 ? null : (matches[matches.length - 1] ?? null)
     },
+    listEvents: id => request(u(`/sessions/${id}/events`), { method: 'GET' }),
     sendMessage: (id, text, attachments, planMode) =>
       request(u(`/sessions/${id}/messages`), {
         method: 'POST',

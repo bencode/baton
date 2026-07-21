@@ -31,6 +31,7 @@ export const registerSessionIo: RegisterSessionGroup = (app, ctx) => {
     ownedByWorker,
     commands,
     projects,
+    publishTitle,
   } = ctx
 
   // Session child emits events (worker-bearer, must own session). Persisted to
@@ -57,6 +58,9 @@ export const registerSessionIo: RegisterSessionGroup = (app, ctx) => {
     }
     const ev = await store.sessions.appendEvent(owned.id, body.type, body.payload ?? null)
     bus.publish(owned.id, ev)
+    // Drive auto-title from the durable turn boundary, not from an open browser.
+    // A concurrent human rename still wins through the store's nameLocked guard.
+    if (body.type === 'turn_complete') publishTitle(owned.session)
     return c.json(ev, 201)
   })
 

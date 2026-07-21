@@ -122,6 +122,44 @@ describe('reduceEvents', () => {
     })
   })
 
+  test('agent item ids are scoped to a turn, so repeated ids keep chronological order', () => {
+    seq = 0
+    const first = ev('user_message', { text: 'user one' })
+    const events = [
+      first,
+      ev('turn_start', { messageId: first.id }),
+      ev('agent_event', {
+        type: 'item.completed',
+        item: { type: 'agent_message', id: 'assistant-1', status: 'completed', text: 'reply one' },
+      }),
+      ev('turn_complete', {}),
+    ]
+    const second = ev('user_message', { text: 'user two' })
+    events.push(
+      second,
+      ev('turn_start', { messageId: second.id }),
+      ev('agent_event', {
+        type: 'item.started',
+        item: { type: 'agent_message', id: 'assistant-1', status: 'in_progress', text: 'reply' },
+      }),
+      ev('agent_event', {
+        type: 'item.completed',
+        item: { type: 'agent_message', id: 'assistant-1', status: 'completed', text: 'reply two' },
+      }),
+      ev('turn_complete', {}),
+    )
+    const out = reduceEvents(events)
+
+    expect(out.map(item => ('text' in item ? [item.kind, item.text] : [item.kind]))).toEqual([
+      ['user-bubble', 'user one'],
+      ['assistant-text', 'reply one'],
+      ['turn-end'],
+      ['user-bubble', 'user two'],
+      ['assistant-text', 'reply two'],
+      ['turn-end'],
+    ])
+  })
+
   test('codex thread without model falls back to codex, not claude', () => {
     seq = 0
     const out = reduceEvents(

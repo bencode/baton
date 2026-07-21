@@ -30,7 +30,7 @@ export type SessionsApi = {
   // Set the session's model + effort override (/model <name> [effort]; both null
   // resets to the SDK default).
   setModel(id: Id, model: string | null, effort: AgentEffort | null): Promise<SessionView>
-  // Ask the worker to auto-title this session (no-op unless still unnamed).
+  // Explicit auto-title retry; completed turns normally trigger this server-side.
   autotitle(id: Id): Promise<SessionView>
   // Delete the session (worker tears down its child + worktree; row dropped).
   remove(id: Id): Promise<void>
