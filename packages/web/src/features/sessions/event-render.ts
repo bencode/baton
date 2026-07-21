@@ -307,8 +307,17 @@ export const reduceEvents = (
       items.push({ kind: 'user-bubble', text, images, attachments, key })
       continue
     }
-    // turn_start opens a turn; turn_heartbeat is a liveness ping — neither renders.
-    if (e.type === 'turn_start' || e.type === 'turn_heartbeat') continue
+    // Provider item ids only need to be stable within a turn. Claude's canonical
+    // adapter restarts its local counters for every turn, and Codex may also reuse
+    // ids, so carrying these maps across a turn boundary would update an earlier
+    // reply in place instead of appending the new one at the current position.
+    if (e.type === 'turn_start') {
+      pendingAgentItems.clear()
+      pendingTools.clear()
+      continue
+    }
+    // turn_heartbeat is a liveness ping — it does not render.
+    if (e.type === 'turn_heartbeat') continue
     if (e.type === 'turn_error') {
       const msg =
         isRecord(e.payload) && typeof e.payload.message === 'string' ? e.payload.message : 'error'
