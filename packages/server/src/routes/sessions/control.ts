@@ -17,6 +17,7 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
     auth,
     toView,
     bump,
+    publishTitle,
     ownedByWorker,
   } = ctx
 
@@ -132,26 +133,12 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
     return c.json(await toView(s))
   })
 
-  // Auto-title trigger (UI, no auth in v0). Fired by the browser after the first
-  // turn completes. We only forward a title command for a still-placeholder name
-  // (cheap guard — the worker's PATCH is also guarded by nameLocked) and only
-  // once the session is materialized (the worker needs the transcript). The
-  // worker reads its own transcript for context and PATCHes a name back.
+  // Explicit auto-title retry for older clients/manual callers. Normal turns now
+  // trigger this from event ingress, so naming no longer depends on an open tab.
   app.post('/sessions/:id/autotitle', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
-    if (
-      s.agentKind === 'claude-code' &&
-      /^session-\d+$/.test(s.name) &&
-      s.agentSessionId &&
-      s.worktreePath
-    )
-      commands.publish(s.workerId, {
-        cmd: 'session.title',
-        sessionId: s.id,
-        agentSessionId: s.agentSessionId,
-        worktreePath: s.worktreePath,
-      })
+    publishTitle(s)
     return c.json(await toView(s))
   })
 

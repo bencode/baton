@@ -1,4 +1,4 @@
-import type { Id } from '@baton/shared'
+import { type Id, type Session, isPlaceholderSessionName } from '@baton/shared'
 import type { Context, Hono } from 'hono'
 import type { AttachmentStore } from '../../attachments.ts'
 import type { BusyTracker } from '../../busy.ts'
@@ -42,6 +42,19 @@ export const createSessionCtx = (deps: SessionRouteDeps) => {
   }
   // Tell project subscribers the session list changed so they refetch it.
   const bump = (projectId: Id) => projects.publish(projectId, { resource: 'sessions' })
+  // The worker owns provider-specific title generation. The server only decides
+  // whether this materialized session still needs one; the guarded PATCH keeps a
+  // late result from replacing a human-locked name.
+  const publishTitle = (session: Session): void => {
+    if (!isPlaceholderSessionName(session.name) || !session.agentSessionId || !session.worktreePath)
+      return
+    commands.publish(session.workerId, {
+      cmd: 'session.title',
+      sessionId: session.id,
+      agentSessionId: session.agentSessionId,
+      worktreePath: session.worktreePath,
+    })
+  }
   // Load a session, 404 if missing, 403 if the bearer worker doesn't own it.
   // Used by every worker-authed session route.
   const ownedByWorker = async (c: Context<AppEnv>) => {
@@ -51,7 +64,7 @@ export const createSessionCtx = (deps: SessionRouteDeps) => {
     if (s.workerId !== c.get('worker').id) return { error: c.json({ error: 'forbidden' }, 403) }
     return { id, session: s }
   }
-  return { ...deps, auth: workerBearerAuth(store), toView, bump, ownedByWorker }
+  return { ...deps, auth: workerBearerAuth(store), toView, bump, publishTitle, ownedByWorker }
 }
 
 export type SessionRouteCtx = ReturnType<typeof createSessionCtx>

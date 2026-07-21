@@ -42,12 +42,17 @@ export const sanitizeTitle = (raw: string): string =>
     .replace(/[\s。．，,、；;：:!！?？.]+$/, '') // trailing punctuation
     .trim()
 
+export const titleOutcome = (raw: string): TitleOutcome => {
+  const title = sanitizeTitle(raw)
+  return !title || isDeclined(title) ? { kind: 'declined' } : { kind: 'titled', title }
+}
+
 // reclaude/proxy cold spawns routinely take >30s (config sync + TLS); a title
 // is worthless if it costs a minute, but a too-tight timeout silently kills
 // every attempt — 90s errs on the side of getting one.
-const TITLE_TIMEOUT_MS = 90_000
+export const TITLE_TIMEOUT_MS = 90_000
 
-const buildPrompt = (userText: string, assistantText: string): string => {
+export const buildTitlePrompt = (userText: string, assistantText: string): string => {
   const exchange = [
     `User: ${clip(userText, 800)}`,
     assistantText ? `Assistant: ${clip(assistantText, 800)}` : '',
@@ -94,7 +99,7 @@ export const generateTitle = async (input: {
   let failure = ''
   try {
     const messages = queryFn({
-      prompt: buildPrompt(userText, assistantText),
+      prompt: buildTitlePrompt(userText, assistantText),
       options: {
         cwd: worktreePath,
         // A one-shot summarizer, not an agent: replace the ~18k-token Claude
@@ -136,6 +141,5 @@ export const generateTitle = async (input: {
     const tail = stderrTail.length > 0 ? ` | stderr: ${stderrTail.join(' / ')}` : ''
     return { kind: 'error', reason: `${failure}${tail}` }
   }
-  const title = sanitizeTitle(out)
-  return !title || isDeclined(title) ? { kind: 'declined' } : { kind: 'titled', title }
+  return titleOutcome(out)
 }

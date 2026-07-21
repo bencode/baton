@@ -13,8 +13,9 @@ import {
   type WorkerConfig,
   worktreeConfig,
 } from '../project-config.ts'
+import { generateTitleWithCodex } from '../session/runner/title-codex.ts'
 import { generateTitle } from '../session/runner/title.ts'
-import { readFirstExchange } from '../session/runner/transcript.ts'
+import { parseFirstExchangeFromEvents, readFirstExchange } from '../session/runner/transcript.ts'
 import {
   createWorktree,
   ensureExcluded,
@@ -201,24 +202,31 @@ export const createSessionSupervisor = (deps: {
     log(`deleted session #${sessionId} (removed worktree)`)
   }
 
-  // Auto-title (frontend-triggered after the first turn): read the session's own
-  // transcript for context, generate a short name via a throwaway claude call, and
-  // PATCH it back. The server drops it if the user has locked the name.
+  // Read the provider-neutral event log first so both agents share the same title
+  // context. Claude's local transcript remains a fallback for legacy sessions.
   const title = async (
     sessionId: Id,
     agentSessionId: string,
     worktreePath: string,
   ): Promise<void> => {
     const session = await client.sessions.get(sessionId)
-    if (session.agentKind !== 'claude-code') return log(`title #${sessionId}: unsupported agent`)
-    const exchange = readFirstExchange(agentSessionId)
+    const events = await client.sessions.listEvents(sessionId).catch(() => [])
+    const exchange =
+      parseFirstExchangeFromEvents(events) ??
+      (session.agentKind === 'claude-code' ? readFirstExchange(agentSessionId) : null)
     if (!exchange) return log(`title #${sessionId}: no transcript yet, skipping`)
-    const outcome = await generateTitle({
-      worktreePath,
-      userText: exchange.userText,
-      assistantText: exchange.assistantText,
-      queryFn: query,
-    })
+    const outcome =
+      session.agentKind === 'codex'
+        ? await generateTitleWithCodex({
+            userText: exchange.userText,
+            assistantText: exchange.assistantText,
+          })
+        : await generateTitle({
+            worktreePath,
+            userText: exchange.userText,
+            assistantText: exchange.assistantText,
+            queryFn: query,
+          })
     if (outcome.kind === 'error') return log(`title #${sessionId} failed: ${outcome.reason}`)
     if (outcome.kind === 'declined')
       return log(`title #${sessionId}: not enough to title yet, skipping`)

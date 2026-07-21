@@ -38,9 +38,8 @@ export type WorkerCommand =
   // worktreePath carried so the worker can remove it even if it isn't currently
   // tracking a child for this session (e.g. delete after a worker restart).
   | { cmd: 'session.delete'; sessionId: Id; worktreePath: string | null }
-  // Auto-title (frontend-triggered after the first turn): the worker reads the
-  // session's own transcript for context and generates a short name. Carries the
-  // ids it needs to locate the transcript + run the throwaway claude call.
+  // Auto-title after a completed turn: the worker reads the durable event log
+  // and generates a short name with the session's matching agent backend.
   | { cmd: 'session.title'; sessionId: Id; agentSessionId: string; worktreePath: string }
   // Interactive terminal: open spawns `claude --resume` in a node-pty in the
   // session's worktree and dials an outbound WS back to the server (human-in-the-

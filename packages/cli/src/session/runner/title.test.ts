@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import type { QueryFn } from './query.ts'
+import { generateTitleWithCodex } from './title-codex.ts'
 import { generateTitle, sanitizeTitle } from './title.ts'
 
 // Fake claude that returns `out` as its result message.
@@ -97,5 +98,55 @@ describe('generateTitle', () => {
     const t = await generateTitle({ ...base, queryFn: silent })
     assert.equal(t.kind, 'error')
     assert.match((t as { reason: string }).reason, /without a result/)
+  })
+})
+
+describe('generateTitleWithCodex', () => {
+  const base = {
+    userText: 'fix session auto titles',
+    assistantText: 'I will inspect the title flow.',
+  }
+
+  test('runs read-only without repository context and sanitizes the response', async () => {
+    let options: Record<string, unknown> = {}
+    const outcome = await generateTitleWithCodex({
+      ...base,
+      client: {
+        startThread: input => {
+          options = input
+          return { run: async () => ({ finalResponse: 'Title: "Session Auto Titles"' }) }
+        },
+      },
+    })
+    assert.deepEqual(outcome, { kind: 'titled', title: 'Session Auto Titles' })
+    assert.deepEqual(
+      {
+        sandboxMode: options.sandboxMode,
+        approvalPolicy: options.approvalPolicy,
+        networkAccessEnabled: options.networkAccessEnabled,
+        webSearchMode: options.webSearchMode,
+      },
+      {
+        sandboxMode: 'read-only',
+        approvalPolicy: 'never',
+        networkAccessEnabled: false,
+        webSearchMode: 'disabled',
+      },
+    )
+  })
+
+  test('reports Codex SDK failures', async () => {
+    const outcome = await generateTitleWithCodex({
+      ...base,
+      client: {
+        startThread: () => ({
+          run: async () => {
+            throw new Error('codex unavailable')
+          },
+        }),
+      },
+    })
+    assert.equal(outcome.kind, 'error')
+    assert.match((outcome as { reason: string }).reason, /codex unavailable/)
   })
 })

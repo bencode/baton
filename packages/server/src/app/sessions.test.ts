@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import type { WorkerCommand } from '@baton/shared'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import { createApp } from '../app.ts'
+import { createCommandBus } from '../command-bus.ts'
 import { freshStore, type TestStore } from '../store/test-db.ts'
 import { postJson, seedSession, seedWorker } from './test-helpers.ts'
 
@@ -402,6 +404,57 @@ describe('server HTTP — sessions + chat protocol', () => {
     // Missing session → 404.
     await app.request(`/sessions/${s.id}`, { method: 'DELETE' })
     assert.equal((await postJson(app, `/sessions/${s.id}/rename`, { name: 'x' })).status, 404)
+  })
+
+  test('completed Codex turn triggers auto-title without a browser', async () => {
+    const commands = createCommandBus()
+    const app = createApp(ctx.store, undefined, undefined, undefined, undefined, commands)
+    const { projectId, workerId, workerToken } = await seedWorker(app, 'codex')
+    const auth = { authorization: `Bearer ${workerToken}` }
+    const session = (await (await postJson(app, '/sessions', { projectId, workerId })).json()) as {
+      id: number
+    }
+    await app.request(`/sessions/${session.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ agentSessionId: 'codex-thread', worktreePath: '/tmp/wt' }),
+      headers: { 'content-type': 'application/json', ...auth },
+    })
+
+    const seen: WorkerCommand[] = []
+    const unsubscribe = commands.subscribe(workerId, command => seen.push(command))
+    try {
+      await postJson(
+        app,
+        `/sessions/${session.id}/events`,
+        { type: 'turn_error', payload: { message: 'failed' } },
+        auth,
+      )
+      assert.deepEqual(seen, [])
+      await postJson(
+        app,
+        `/sessions/${session.id}/events`,
+        { type: 'turn_complete', payload: {} },
+        auth,
+      )
+      await postJson(app, `/sessions/${session.id}/rename`, { name: 'Human Name' })
+      await postJson(
+        app,
+        `/sessions/${session.id}/events`,
+        { type: 'turn_complete', payload: {} },
+        auth,
+      )
+    } finally {
+      unsubscribe()
+    }
+
+    assert.deepEqual(seen, [
+      {
+        cmd: 'session.title',
+        sessionId: session.id,
+        agentSessionId: 'codex-thread',
+        worktreePath: '/tmp/wt',
+      },
+    ])
   })
 
   test('busy=false when daemon never heartbeated (orphan turn_start, sticky-yellow fix)', async () => {
