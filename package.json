@@ -22,6 +22,11 @@
       "@prisma/engines",
       "node-pty",
       "prisma"
-    ]
+    ],
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@hono/node-ws>@hono/node-server": "2"
+      }
+    }
   }
 }
