@@ -24,7 +24,11 @@ export const LoopsControl = ({ sessionId, projectId, activeLoops }: LoopsControl
   const [open, setOpen] = useState(false)
   const isMobile = useIsMobile()
   const ref = useRef<HTMLDivElement | null>(null)
-  const close = useCallback(() => setOpen(false), [])
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const close = useCallback(() => {
+    setOpen(false)
+    triggerRef.current?.focus()
+  }, [])
   // Desktop popover dismisses on outside click / Escape; the Modal owns its own.
   useDismiss(ref, open && !isMobile, close)
 
@@ -32,12 +36,13 @@ export const LoopsControl = ({ sessionId, projectId, activeLoops }: LoopsControl
   return (
     <div ref={ref} className="relative shrink-0">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => (open ? close() : setOpen(true))}
-        aria-label={activeLoops > 0 ? `loops, ${activeLoops} active` : 'loops'}
+        aria-label={activeLoops > 0 ? `scheduled tasks, ${activeLoops} active` : 'scheduled tasks'}
         aria-expanded={open}
         aria-haspopup="dialog"
-        title="loops"
+        title="scheduled tasks"
         className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors sm:py-1 ${
           open
             ? 'border-blue-400 bg-blue-50 text-blue-700'
@@ -50,17 +55,23 @@ export const LoopsControl = ({ sessionId, projectId, activeLoops }: LoopsControl
         </span>
       </button>
       {open && isMobile && (
-        <Modal title="Loops" onClose={close}>
-          <div className="max-h-[60vh] overflow-y-auto">{panel}</div>
+        <Modal title="Scheduled tasks" onClose={close} className="max-w-lg">
+          <div className="-mx-5 -mb-5 flex max-h-[70vh] min-h-0 flex-col border-t border-gray-200">
+            {panel}
+          </div>
         </Modal>
       )}
       {open && !isMobile && (
         <div
           role="dialog"
-          aria-label="loops"
-          className="absolute right-0 z-20 mt-1.5 w-80 origin-top-right rounded-xl border border-gray-200 bg-white shadow-lg shadow-gray-900/5 transition duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
+          aria-label="scheduled tasks"
+          className="absolute right-0 z-20 mt-1.5 flex max-h-[70vh] w-[28rem] max-w-[calc(100vw-2rem)] origin-top-right flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg shadow-gray-900/5 transition duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
         >
-          <div className="max-h-[60vh] overflow-y-auto p-3">{panel}</div>
+          <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-gray-900">Scheduled tasks</h2>
+            <span className="text-xs text-gray-500 tabular-nums">{activeLoops} active</span>
+          </div>
+          {panel}
         </div>
       )}
     </div>
