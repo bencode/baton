@@ -171,9 +171,9 @@
 
   .msg { display: grid; grid-template-columns: 56px 1fr; gap: 10px; }
   .gutter { color: var(--fg-faint); font-size: 11px; text-align: right; padding-top: 2px; user-select: none; }
+  .body { min-width: 0; }
   .you .gutter { color: var(--cyan); }
   .you .body { color: var(--fg); }
-  .body { min-width: 0; }
   .body p { margin: 0 0 8px; }
   .body p:last-child { margin-bottom: 0; }
   .body code { background: #121a22; border: 1px solid var(--line); padding: 0 4px; color: #9fe5c5; border-radius: 2px; font-size: 12px; }
@@ -263,7 +263,7 @@
   }
   .resume:hover { background: rgba(63,185,80,.12); box-shadow: 0 0 0 1px rgba(63,185,80,.4); }
 
-  .hide { display: none !important; }
+  .hide { display: none; }
 
   /* page-load stagger */
   .feed > * { animation: rise .4s both; }
@@ -419,8 +419,8 @@ $ curl -s localhost:8889/health
             <span class="chip s-active">model: default</span>
             <span class="chip s-active">bypass</span>
             <span class="spacer"></span>
-            <button class="send s-active">⏎ send</button>
-            <button class="resume s-inactive hide" onclick="resumeSel()">▸ resume session</button>
+            <button type="button" class="send s-active">⏎ send</button>
+            <button type="button" class="resume s-inactive hide">▸ resume session</button>
           </div>
         </div>
       </div>
@@ -432,26 +432,33 @@ $ curl -s localhost:8889/health
 <script>
   // Select a session row → reflect its state in the header + composer.
   function sel(el, state) {
-    document.querySelectorAll('.sess').forEach(s => s.dataset.sel = '0');
+    document.querySelectorAll('.sess').forEach(s => {
+      s.dataset.sel = '0';
+    });
     el.dataset.sel = '1';
     const name = el.querySelector('.sname').textContent;
     document.getElementById('h-name').textContent = name;
-    setState(state, name);
+    setState(state);
   }
-  function setState(state, name) {
+  function setState(state) {
     const c = document.getElementById('composer');
     c.dataset.state = state;
     const active = state === 'active';
-    c.querySelectorAll('.s-active').forEach(n => n.classList.toggle('hide', !active));
-    c.querySelectorAll('.s-inactive').forEach(n => n.classList.toggle('hide', active));
+    c.querySelectorAll('.s-active').forEach(n => {
+      n.classList.toggle('hide', !active);
+    });
+    c.querySelectorAll('.s-inactive').forEach(n => {
+      n.classList.toggle('hide', active);
+    });
     document.getElementById('h-status').innerHTML = active
       ? '<span class="dot green"></span> stream live'
       : '<span class="dot amber"></span> stopped';
   }
   function resumeSel() {
     const sel = document.querySelector('.sess[data-sel="1"]');
-    if (sel) { sel.dataset.state = 'active'; setState('active', sel.querySelector('.sname').textContent); }
+    if (sel) { sel.dataset.state = 'active'; setState('active'); }
   }
+  document.querySelector('.resume')?.addEventListener('click', resumeSel);
 </script>
 </body>
 </html>
