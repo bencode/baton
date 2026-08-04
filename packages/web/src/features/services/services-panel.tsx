@@ -1,6 +1,6 @@
 import type { Id, SessionView, WorkerView } from '@baton/shared'
 import { useApi } from '../../app/api-context'
-import { sessionPath } from '../../app/route'
+import { servicePath } from '../../app/route'
 import { ServiceRow } from './service-row'
 import { useServices } from './use-services'
 
@@ -8,10 +8,17 @@ type ServicesPanelProps = {
   projectId: Id
   workers: WorkerView[] | null
   sessions: SessionView[] | null
+  activeId: string
   open: (id: string, title: string) => void
 }
 
-export const ServicesPanel = ({ projectId, workers, sessions, open }: ServicesPanelProps) => {
+export const ServicesPanel = ({
+  projectId,
+  workers,
+  sessions,
+  activeId,
+  open,
+}: ServicesPanelProps) => {
   const api = useApi()
   const { data: services, loading, error, refresh } = useServices(projectId)
   const workerNames = new Map(workers?.map(worker => [worker.id, worker.name]))
@@ -46,17 +53,15 @@ export const ServicesPanel = ({ projectId, workers, sessions, open }: ServicesPa
       )}
       {ordered.map(service => {
         const sessionName = sessionNames.get(service.sessionId)
+        const path = servicePath(projectId, service.workerId, service.name)
         return (
           <ServiceRow
             key={`${service.workerId}/${service.name}`}
             service={service}
             workerName={workerNames.get(service.workerId) ?? `W-${service.workerId}`}
             sessionName={sessionName ?? `session #${service.sessionId}`}
-            openSession={
-              sessionName
-                ? () => open(sessionPath(projectId, service.sessionId), sessionName)
-                : undefined
-            }
+            active={activeId === path}
+            open={() => open(path, `W-${service.workerId}/${service.name}`)}
             stop={async () => {
               await api.services.stop(service.workerId, service.name)
               refresh()

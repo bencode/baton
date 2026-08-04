@@ -60,5 +60,7 @@ export type WorkerCommand =
       sessionId: Id
       name: string
       argv: string[]
+      publicUrl?: string
+      note?: string
     }
   | { cmd: 'service.stop'; requestId: string; name: string }

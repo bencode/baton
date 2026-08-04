@@ -1,28 +1,23 @@
 import type { ServicePresence } from '@baton/shared'
 import { useState } from 'react'
 import { StopIcon } from '../../components/icons'
+import { formatServiceUptime } from './format'
 
 type ServiceRowProps = {
   service: ServicePresence
   workerName: string
   sessionName: string
-  openSession?: () => void
+  active: boolean
+  open: () => void
   stop: () => Promise<void>
-}
-
-const formatUptime = (startedAt: number, now = Date.now()): string => {
-  const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
-  if (seconds >= 86400) return `${Math.floor(seconds / 86400)}d`
-  if (seconds >= 3600) return `${Math.floor(seconds / 3600)}h`
-  if (seconds >= 60) return `${Math.floor(seconds / 60)}m`
-  return `${seconds}s`
 }
 
 export const ServiceRow = ({
   service,
   workerName,
   sessionName,
-  openSession,
+  active,
+  open,
   stop,
 }: ServiceRowProps) => {
   const [confirming, setConfirming] = useState(false)
@@ -38,9 +33,11 @@ export const ServiceRow = ({
       />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate font-medium text-gray-700">{service.name}</span>
+          <span className={`truncate font-medium ${active ? 'text-blue-900' : 'text-gray-700'}`}>
+            {service.name}
+          </span>
           <span className="ml-auto shrink-0 text-[10px] text-gray-500 tabular-nums">
-            {formatUptime(service.startedAt)}
+            {formatServiceUptime(service.startedAt)}
           </span>
         </span>
         <span className="block truncate text-[11px] text-gray-500">
@@ -64,19 +61,19 @@ export const ServiceRow = ({
   }
 
   return (
-    <div className="group rounded-md px-1 py-0.5 hover:bg-gray-100/70">
+    <div
+      className={`group rounded-md px-1 py-0.5 transition-colors duration-150 ${
+        active ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-100/70'
+      }`}
+    >
       <div className="flex items-center gap-1">
-        {openSession ? (
-          <button
-            type="button"
-            onClick={openSession}
-            className="flex min-w-0 flex-1 items-start gap-2 py-1 text-left"
-          >
-            {content}
-          </button>
-        ) : (
-          <div className="flex min-w-0 flex-1 items-start gap-2 py-1">{content}</div>
-        )}
+        <button
+          type="button"
+          onClick={open}
+          className="flex min-w-0 flex-1 items-start gap-2 py-1 text-left"
+        >
+          {content}
+        </button>
         {confirming ? (
           <span className="flex shrink-0 items-center gap-2 pl-1 text-[11px]">
             <span className="text-gray-500">{stopping ? 'stopping…' : 'stop?'}</span>

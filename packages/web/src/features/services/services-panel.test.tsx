@@ -31,7 +31,7 @@ const service: ServicePresence = {
   startedAt: Date.now() - 120_000,
 }
 
-test('lists a live service, opens its session, and confirms before stopping it', async () => {
+test('lists a live service, opens its detail, and confirms before stopping it', async () => {
   const stop = vi.fn(async () => undefined)
   const open = vi.fn()
   const api = {
@@ -40,12 +40,19 @@ test('lists a live service, opens its session, and confirms before stopping it',
 
   render(
     <ApiContext.Provider value={api}>
-      <ServicesPanel projectId={1} workers={[worker]} sessions={[session]} open={open} />
+      <ServicesPanel
+        projectId={1}
+        workers={[worker]}
+        sessions={[session]}
+        activeId="/proj/1/service/20/web"
+        open={open}
+      />
     </ApiContext.Provider>,
   )
 
   fireEvent.click(await screen.findByText('web'))
-  expect(open).toHaveBeenCalledWith('/proj/1/session/7', 'smoke-glm')
+  expect(open).toHaveBeenCalledWith('/proj/1/service/20/web', 'W-20/web')
+  expect(screen.getByText('web').closest('.group')?.className).toContain('bg-blue-50')
   expect(screen.getByText('glm · smoke-glm')).toBeTruthy()
   expect(screen.getByText('2m')).toBeTruthy()
 
@@ -67,7 +74,13 @@ test('keeps a service visible and reports a failed stop', async () => {
 
   render(
     <ApiContext.Provider value={api}>
-      <ServicesPanel projectId={1} workers={[worker]} sessions={[session]} open={vi.fn()} />
+      <ServicesPanel
+        projectId={1}
+        workers={[worker]}
+        sessions={[session]}
+        activeId=""
+        open={vi.fn()}
+      />
     </ApiContext.Provider>,
   )
 
@@ -76,4 +89,34 @@ test('keeps a service visible and reports a failed stop', async () => {
   fireEvent.click(screen.getByLabelText('confirm stop web'))
   expect((await screen.findByRole('alert')).textContent).toContain('Couldn’t stop web.')
   expect(screen.getByText('web')).toBeTruthy()
+})
+
+test('keeps equal service names isolated by worker', async () => {
+  const secondWorker = { ...worker, id: 21, name: 'codex' }
+  const secondSession = { ...session, id: 8, workerId: 21, name: 'smoke-codex' }
+  const api = {
+    services: {
+      listByProject: vi.fn(async () => [service, { ...service, workerId: 21, sessionId: 8 }]),
+      stop: vi.fn(async () => undefined),
+    },
+  } as unknown as Api
+  const open = vi.fn()
+
+  render(
+    <ApiContext.Provider value={api}>
+      <ServicesPanel
+        projectId={1}
+        workers={[worker, secondWorker]}
+        sessions={[session, secondSession]}
+        activeId=""
+        open={open}
+      />
+    </ApiContext.Provider>,
+  )
+
+  const rows = await screen.findAllByText('web')
+  fireEvent.click(rows[0] as HTMLElement)
+  fireEvent.click(rows[1] as HTMLElement)
+  expect(open).toHaveBeenNthCalledWith(1, '/proj/1/service/20/web', 'W-20/web')
+  expect(open).toHaveBeenNthCalledWith(2, '/proj/1/service/21/web', 'W-21/web')
 })

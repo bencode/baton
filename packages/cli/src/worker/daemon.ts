@@ -100,7 +100,7 @@ export const runWorkerDaemon = async (
         else terminals.close(cmd.sessionId)
       } else if (cmd.cmd === 'service.run')
         void services
-          .run(cmd.requestId, cmd.sessionId, cmd.name, cmd.argv)
+          .run(cmd.requestId, cmd.sessionId, cmd.name, cmd.argv, cmd.publicUrl, cmd.note)
           .catch(err => log(`service run failed: ${String(err)}`))
       else if (cmd.cmd === 'service.stop')
         void services

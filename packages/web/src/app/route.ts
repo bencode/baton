@@ -2,7 +2,7 @@
 // the project (workspace is derived from it) plus an optional open item (also the active tab).
 // Pure functions — no react-router — so they unit-test.
 
-import type { Code } from '@baton/shared'
+import { type Code, isServiceName } from '@baton/shared'
 
 // Item kinds that travel as project-scoped codes in the URL.
 // In M2.6 only R-/T- carry codes (chat-referenced resources). Session
@@ -15,6 +15,7 @@ export type Route =
   | { kind: 'project'; projectId: number }
   | { kind: 'item'; projectId: number; code: Code; itemKind: ItemKind }
   | { kind: 'session'; projectId: number; sessionId: number }
+  | { kind: 'service'; projectId: number; workerId: number; name: string }
 
 const kindFromCode = (code: string): ItemKind | null => {
   if (code.startsWith('R-')) return 'requirement'
@@ -43,6 +44,13 @@ export const parseRoute = (pathname: string): Route => {
       if (sessionId !== null) return { kind: 'session', projectId, sessionId }
       return { kind: 'project', projectId }
     }
+    if (seg[2] === 'service') {
+      const workerId = intSeg(seg[3])
+      const name = seg[4]
+      if (workerId !== null && name && isServiceName(name) && seg.length === 5)
+        return { kind: 'service', projectId, workerId, name }
+      return { kind: 'project', projectId }
+    }
     const codeSeg = seg[2]
     if (codeSeg) {
       const itemKind = kindFromCode(codeSeg)
@@ -59,6 +67,8 @@ export const projectPath = (projectId: number): string => `/proj/${projectId}`
 export const itemPath = (projectId: number, code: Code): string => `/proj/${projectId}/${enc(code)}`
 export const sessionPath = (projectId: number, sessionId: number): string =>
   `/proj/${projectId}/session/${sessionId}`
+export const servicePath = (projectId: number, workerId: number, name: string): string =>
+  `/proj/${projectId}/service/${workerId}/${enc(name)}`
 // Standalone, shell-less session page (shared deep link, e.g. from DingTalk).
 // Keyed by the session's unguessable share token, not its int id.
 export const standaloneSessionPath = (shareToken: string): string => `/s/${shareToken}`
@@ -66,7 +76,7 @@ export const standaloneSessionPath = (shareToken: string): string => `/s/${share
 // Whether a path opens a tab (item or session).
 export const isItemRoute = (pathname: string): boolean => {
   const r = parseRoute(pathname)
-  return r.kind === 'item' || r.kind === 'session'
+  return r.kind === 'item' || r.kind === 'session' || r.kind === 'service'
 }
 
 // The active project for a path (drives the left tree), if any.

@@ -8,6 +8,8 @@ export type ServicePresence = {
   sessionId: Id
   name: string
   startedAt: number
+  publicUrl?: string
+  note?: string
 }
 
 export type ServiceSnapshot = Omit<ServicePresence, 'workerId'>
@@ -16,6 +18,8 @@ export type ServiceRunInput = {
   sessionId: Id
   name: string
   argv: string[]
+  publicUrl?: string
+  note?: string
 }
 
 export type ServiceActionResult =
@@ -39,3 +43,19 @@ export type ServiceReport = {
 
 export const isServiceName = (value: string): boolean =>
   /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value)
+
+export const SERVICE_PUBLIC_URL_MAX_LENGTH = 2048
+export const SERVICE_NOTE_MAX_LENGTH = 500
+
+export const isServicePublicUrl = (value: string): boolean => {
+  if (value.length === 0 || value.length > SERVICE_PUBLIC_URL_MAX_LENGTH) return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export const isServiceNote = (value: string): boolean =>
+  value.length > 0 && value.length <= SERVICE_NOTE_MAX_LENGTH

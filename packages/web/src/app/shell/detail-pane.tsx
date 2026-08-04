@@ -1,4 +1,5 @@
 import { RequirementDetail } from '../../features/requirements/requirement-detail'
+import { ServiceDetail } from '../../features/services/service-detail'
 import { SessionDetail } from '../../features/sessions/session-detail'
 import { TaskDetail } from '../../features/tasks/task-detail'
 import { parseRoute } from '../route'
@@ -8,9 +9,18 @@ import type { Tab } from '../tabs/tabs-model'
 
 // Dispatch a tab's path to its detail view. R-/T- ride the code-based item
 // route; sessions navigate by int id under /proj/<p>/session/<sid>.
-const renderTab = (tab: Tab) => {
+const renderTab = (tab: Tab, open: (id: string, title: string) => void) => {
   const route = parseRoute(tab.id)
   if (route.kind === 'session') return <SessionDetail sessionId={route.sessionId} />
+  if (route.kind === 'service')
+    return (
+      <ServiceDetail
+        projectId={route.projectId}
+        workerId={route.workerId}
+        name={route.name}
+        open={open}
+      />
+    )
   if (route.kind !== 'item') return null
   if (route.itemKind === 'requirement')
     return <RequirementDetail projectId={route.projectId} code={route.code} />
@@ -56,6 +66,11 @@ export const DetailPane = ({
       onCloseRight={closeRight}
       onCloseAll={closeAll}
     />
-    <TabViewer tabs={tabs} activeId={activeId} renderTab={renderTab} empty={<EmptyMain />} />
+    <TabViewer
+      tabs={tabs}
+      activeId={activeId}
+      renderTab={tab => renderTab(tab, open)}
+      empty={<EmptyMain />}
+    />
   </div>
 )

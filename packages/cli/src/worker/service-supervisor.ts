@@ -18,6 +18,8 @@ type Entry = {
   sessionId: Id
   name: string
   startedAt: number
+  publicUrl?: string
+  note?: string
 }
 
 const waitForExit = (child: ChildProcess): Promise<void> =>
@@ -26,7 +28,14 @@ const waitForExit = (child: ChildProcess): Promise<void> =>
     : new Promise(resolve => child.once('exit', () => resolve()))
 
 export type ServiceSupervisor = {
-  run(requestId: string, sessionId: Id, name: string, argv: string[]): Promise<void>
+  run(
+    requestId: string,
+    sessionId: Id,
+    name: string,
+    argv: string[],
+    publicUrl?: string,
+    note?: string,
+  ): Promise<void>
   stop(requestId: string, name: string): Promise<void>
   stopSession(sessionId: Id): Promise<void>
   report(result?: ServiceActionResult): Promise<void>
@@ -46,7 +55,13 @@ export const createServiceSupervisor = (deps: {
   const snapshot = (): ServiceSnapshot[] =>
     [...entries.values()]
       .filter(entry => entry.appPid !== undefined)
-      .map(({ sessionId, name, startedAt }) => ({ sessionId, name, startedAt }))
+      .map(({ sessionId, name, startedAt, publicUrl, note }) => ({
+        sessionId,
+        name,
+        startedAt,
+        ...(publicUrl ? { publicUrl } : {}),
+        ...(note ? { note } : {}),
+      }))
 
   const report = (result?: ServiceActionResult): Promise<void> => {
     const body = { services: snapshot(), ...(result ? { result } : {}) }
@@ -74,6 +89,8 @@ export const createServiceSupervisor = (deps: {
     sessionId: Id,
     name: string,
     argv: string[],
+    publicUrl?: string,
+    note?: string,
   ): Promise<void> => {
     if (entries.has(name))
       return report({
@@ -100,6 +117,8 @@ export const createServiceSupervisor = (deps: {
       sessionId,
       name,
       startedAt: Date.now(),
+      publicUrl,
+      note,
     }
     entries.set(name, entry)
     wrapper.once('exit', code => {
@@ -118,6 +137,8 @@ export const createServiceSupervisor = (deps: {
       sessionId,
       name,
       startedAt: entry.startedAt,
+      ...(publicUrl ? { publicUrl } : {}),
+      ...(note ? { note } : {}),
     }
     log(`service ${name} started in ${session.worktreePath}`)
     await report({ requestId, ok: true, service, logPath })
@@ -128,9 +149,11 @@ export const createServiceSupervisor = (deps: {
     sessionId: Id,
     name: string,
     argv: string[],
+    publicUrl?: string,
+    note?: string,
   ): Promise<void> => {
     try {
-      await runOne(requestId, sessionId, name, argv)
+      await runOne(requestId, sessionId, name, argv, publicUrl, note)
     } catch (error) {
       await report({ requestId, ok: false, error: String(error), status: 500 })
     }

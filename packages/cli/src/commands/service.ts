@@ -1,4 +1,4 @@
-import type { Id, ServicePresence } from '@baton/shared'
+import { type Id, isServiceNote, isServicePublicUrl, type ServicePresence } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { toJson } from '../output.ts'
 import { loadProjectConfig, projectConfigPath } from '../project-config.ts'
@@ -39,21 +39,32 @@ const runCommand = defineCommand({
   meta: { name: 'run', description: 'run a service on the current worker' },
   args: {
     name: { type: 'positional', required: true, description: 'service name' },
+    'public-url': { type: 'string', description: 'public HTTP(S) URL for this service' },
+    note: { type: 'string', description: 'short note describing this service' },
     ...common,
   },
   run: async ({ args, rawArgs }) => {
     const separator = rawArgs.indexOf('--')
     const argv = separator === -1 ? [] : rawArgs.slice(separator + 1)
     if (argv.length === 0) throw new Error('command required after `--`')
+    const publicUrl = args['public-url']?.trim() || undefined
+    const note = args.note?.trim() || undefined
+    if (publicUrl && !isServicePublicUrl(publicUrl))
+      throw new Error('--public-url must be an absolute HTTP(S) URL')
+    if (note && !isServiceNote(note))
+      throw new Error('service note must be 500 characters or fewer')
     const context = currentContext()
     const result = await clientFor(args).services.run(context.workerId, {
       sessionId: context.sessionId,
       name: args.name,
       argv,
+      ...(publicUrl ? { publicUrl } : {}),
+      ...(note ? { note } : {}),
     })
     if (!result.ok) throw new Error(result.error)
     if (args.json) return console.log(toJson(result))
     console.log(`running W-${context.workerId}/${args.name}`)
+    if (publicUrl) console.log(`public: ${publicUrl}`)
     if (result.logPath) console.log(`logs: ${result.logPath}`)
   },
 })

@@ -59,20 +59,42 @@ describe('service supervisor', () => {
   }, async () => {
     const { worktree, reports, supervisor } = createHarness()
 
-    await supervisor.run('run-1', 3, 'web', serviceCommand(true))
+    await supervisor.run(
+      'run-1',
+      3,
+      'web',
+      serviceCommand(true),
+      'https://jingzhe.fmap.dev',
+      'Spec Factory preview',
+    )
     const logPath = join(worktree, '.baton-services', 'web.log')
     assert.equal(existsSync(logPath), true)
     await waitForText(logPath, /ready/)
-    assert.equal(
-      reports.some(report => report.services.some(service => service.name === 'web')),
-      true,
-    )
+    const running = reports.find(report => report.result?.requestId === 'run-1')
+    assert.deepEqual(running?.services, [
+      {
+        sessionId: 3,
+        name: 'web',
+        startedAt: running?.services[0]?.startedAt,
+        publicUrl: 'https://jingzhe.fmap.dev',
+        note: 'Spec Factory preview',
+      },
+    ])
+    assert.deepEqual(running?.result?.ok && running.result.service, {
+      workerId: cfg.workerId,
+      sessionId: 3,
+      name: 'web',
+      startedAt: running.services[0]?.startedAt,
+      publicUrl: 'https://jingzhe.fmap.dev',
+      note: 'Spec Factory preview',
+    })
 
     await supervisor.stop('stop-1', 'web')
     assert.equal(
       reports.some(report => report.result?.requestId === 'stop-1'),
       true,
     )
+    assert.deepEqual(reports.at(-1)?.services, [])
   })
 
   test('stopSession removes only services owned by that session', async () => {
