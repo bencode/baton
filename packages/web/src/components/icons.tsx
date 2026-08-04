@@ -106,6 +106,20 @@ export const TrashIcon = () => (
   </svg>
 )
 
+export const StopIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    className="h-3.5 w-3.5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.4"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <rect x="4" y="4" width="8" height="8" rx="1" />
+  </svg>
+)
+
 export const LogoutIcon = () => (
   <svg
     viewBox="0 0 16 16"

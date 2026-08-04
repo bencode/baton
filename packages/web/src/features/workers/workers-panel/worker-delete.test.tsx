@@ -34,7 +34,14 @@ const renderPanel = () => {
   } as unknown as Api
   render(
     <ApiContext.Provider value={api}>
-      <WorkersPanel projectId={1} activeId="" open={vi.fn()} close={close} />
+      <WorkersPanel
+        projectId={1}
+        workers={[worker]}
+        sessions={[session(7), session(8)]}
+        activeId=""
+        open={vi.fn()}
+        close={close}
+      />
     </ApiContext.Provider>,
   )
   return { remove, close }

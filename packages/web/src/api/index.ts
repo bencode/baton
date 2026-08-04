@@ -6,6 +6,7 @@ import { type LoopsApi, loopsApi } from './loops'
 import { type ProjectsApi, projectsApi } from './projects'
 import { API_BASE, request, type Url, urlFor } from './request'
 import { type RequirementsApi, requirementsApi } from './requirements'
+import { type ServicesApi, servicesApi } from './services'
 import { type SessionsApi, sessionsApi } from './sessions'
 import { type TasksApi, tasksApi } from './tasks'
 import { type WorkersApi, workersApi } from './workers'
@@ -32,6 +33,7 @@ export type Api = {
   channels: ChannelsApi
   requirements: RequirementsApi
   tasks: TasksApi
+  services: ServicesApi
   sessions: SessionsApi
   loops: LoopsApi
   workers: WorkersApi
@@ -52,6 +54,7 @@ export const createApi = (base: string = API_BASE): Api => {
     channels: channelsApi(u),
     requirements: requirementsApi(u),
     tasks: tasksApi(u),
+    services: servicesApi(u),
     sessions: sessionsApi(u),
     loops: loopsApi(u),
     workers: workersApi(u),

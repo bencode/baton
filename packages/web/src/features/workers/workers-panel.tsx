@@ -1,24 +1,29 @@
-import type { Id, SessionView } from '@baton/shared'
+import type { Id, SessionView, WorkerView } from '@baton/shared'
 import { useState } from 'react'
-import { useSessions } from '../sessions/use-sessions'
 import { AddWorker } from './add-worker'
-import { useWorkers } from './use-workers'
 import { groupByWorker } from './workers-panel/grouping'
 import { WorkerGroup } from './workers-panel/worker-group'
 
 type WorkersPanelProps = {
   projectId: Id
+  workers: WorkerView[] | null
+  sessions: SessionView[] | null
   activeId: string
   open: (id: string, title: string) => void
   close: (id: string) => void
 }
 
-export const WorkersPanel = ({ projectId, activeId, open, close }: WorkersPanelProps) => {
-  const { data: workers } = useWorkers(projectId)
-  const { data: sessions } = useSessions(projectId)
+export const WorkersPanel = ({
+  projectId,
+  workers,
+  sessions,
+  activeId,
+  open,
+  close,
+}: WorkersPanelProps) => {
   const [adding, setAdding] = useState(false)
   if (!workers || !sessions) return <p className="px-2 text-sm text-gray-400">loading…</p>
-  const groups = groupByWorker(workers, sessions as SessionView[])
+  const groups = groupByWorker(workers, sessions)
   return (
     <div className="flex flex-col gap-3">
       {workers.length === 0 ? (

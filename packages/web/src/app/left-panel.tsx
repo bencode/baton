@@ -2,6 +2,9 @@ import type { Id } from '@baton/shared'
 import { ChannelsPanel } from '../features/channels/channels-panel'
 import { ProjectSwitcher } from '../features/projects/project-switcher'
 import { useRequirements } from '../features/requirements/use-requirements'
+import { ServicesPanel } from '../features/services/services-panel'
+import { useSessions } from '../features/sessions/use-sessions'
+import { useWorkers } from '../features/workers/use-workers'
 import { WorkersPanel } from '../features/workers/workers-panel'
 import { usePersistedSet } from '../hooks/use-persisted-set'
 import { RequirementTree } from './requirement-tree'
@@ -16,6 +19,8 @@ type LeftPanelProps = {
 
 export const LeftPanel = ({ workspaceId, projectId, activeId, open, close }: LeftPanelProps) => {
   const { data: requirements, loading } = useRequirements(projectId)
+  const { data: workers } = useWorkers(projectId)
+  const { data: sessions } = useSessions(projectId)
   const collapsed = usePersistedSet('baton.req.collapsed')
   return (
     <div className="flex h-full flex-col gap-5 overflow-auto bg-gray-50/60 p-3">
@@ -49,8 +54,24 @@ export const LeftPanel = ({ workspaceId, projectId, activeId, open, close }: Lef
           <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
             Workers
           </h2>
-          <WorkersPanel projectId={projectId} activeId={activeId} open={open} close={close} />
+          <WorkersPanel
+            projectId={projectId}
+            workers={workers}
+            sessions={sessions}
+            activeId={activeId}
+            open={open}
+            close={close}
+          />
         </section>
+      )}
+      {projectId !== null && (
+        <ServicesPanel
+          key={projectId}
+          projectId={projectId}
+          workers={workers}
+          sessions={sessions}
+          open={open}
+        />
       )}
       {workspaceId !== null && <ChannelsPanel workspaceId={workspaceId} />}
     </div>
