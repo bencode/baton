@@ -23,6 +23,7 @@ import type {
 } from '@baton/shared'
 import { isAgentEffort } from '@baton/shared'
 import type {
+  Artifact as DbArtifact,
   Channel as DbChannel,
   ChannelMessage as DbChannelMessage,
   Loop as DbLoop,
@@ -36,7 +37,7 @@ import type {
   Worker as DbWorker,
   Workspace as DbWorkspace,
 } from '@prisma/client'
-import type { UserRecord } from './types.ts'
+import type { StoredArtifact, UserRecord } from './types.ts'
 
 const parseJson = <T>(s: string): T => JSON.parse(s) as T
 
@@ -51,6 +52,17 @@ export const toProject = (r: DbProject): Project => ({
   workspaceId: r.workspaceId,
   name: r.name,
   description: r.description ?? undefined,
+  createdAt: r.createdAt.getTime(),
+})
+
+export const toArtifact = (r: DbArtifact): StoredArtifact => ({
+  id: r.id,
+  projectId: r.projectId,
+  key: r.key,
+  storageId: r.storageId,
+  filename: r.filename,
+  contentType: r.contentType,
+  size: r.size,
   createdAt: r.createdAt.getTime(),
 })
 

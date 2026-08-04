@@ -1,4 +1,5 @@
 import type { Hono } from 'hono'
+import type { ArtifactFileStore } from '../artifacts.ts'
 import {
   accessibleWorkspaceIds,
   assertWorkspaceAccess,
@@ -8,7 +9,11 @@ import type { Store, WorkspacePatch } from '../store/types.ts'
 import { type AppEnv, intParam, isUniqueViolation } from '../views.ts'
 import { HELP_PATH } from './channels.ts'
 
-export const registerWorkspaceRoutes = (app: Hono<AppEnv>, store: Store): void => {
+export const registerWorkspaceRoutes = (
+  app: Hono<AppEnv>,
+  store: Store,
+  artifactFiles: ArtifactFileStore,
+): void => {
   // Only admins create workspaces (domain isolation: members are bound, not self-serve).
   app.post('/workspaces', async c => {
     const denied = await requireAdmin(c, store)
@@ -80,7 +85,9 @@ export const registerWorkspaceRoutes = (app: Hono<AppEnv>, store: Store): void =
     const denied = await assertWorkspaceAccess(c, store, id)
     if (denied) return denied
     if (!(await store.workspaces.get(id))) return c.json({ error: 'not found' }, 404)
+    const projects = await store.projects.listByWorkspace(id)
     await store.workspaces.delete(id)
+    await Promise.all(projects.map(project => artifactFiles.forgetProject(project.id)))
     return c.body(null, 204)
   })
 }

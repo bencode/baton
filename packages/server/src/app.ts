@@ -1,5 +1,6 @@
 import { createNodeWebSocket } from '@hono/node-ws'
 import { Hono } from 'hono'
+import { type ArtifactFileStore, createArtifactFileStore, defaultArtifactDir } from './artifacts.ts'
 import { type AttachmentStore, createAttachmentStore, defaultAttachmentDir } from './attachments.ts'
 import { type BusyTracker, createBusy } from './busy.ts'
 import { type ChannelBus, createChannelBus } from './channel-bus.ts'
@@ -10,6 +11,7 @@ import { cookieAuth } from './middleware/cookie-auth.ts'
 import { createProjectBus, type ProjectBus } from './project-bus.ts'
 import { createRelayBus, type RelayBus } from './relay-bus.ts'
 import { registerAdminRoutes } from './routes/admin.ts'
+import { registerArtifactPublicRoutes, registerArtifactRoutes } from './routes/artifacts.ts'
 import { registerAuthRoutes } from './routes/auth.ts'
 import { registerChannelRoutes } from './routes/channels.ts'
 import { registerLoopRoutes } from './routes/loops.ts'
@@ -60,6 +62,7 @@ type AppOptions = {
   // calls it post-serve. Tests omit it (they use app.fetch, no real WS upgrade).
   onInjectWs?: (inject: ReturnType<typeof createNodeWebSocket>['injectWebSocket']) => void
   services?: ServiceRuntime
+  artifactFiles?: ArtifactFileStore
 }
 
 export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> => {
@@ -76,6 +79,7 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
     terminal = createTerminalBridge(),
     onInjectWs,
     services = createServiceRuntime(),
+    artifactFiles = createArtifactFileStore(defaultArtifactDir()),
   } = options
   const app = new Hono<AppEnv>()
   const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app })
@@ -89,9 +93,20 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
   registerAuthRoutes(app, store)
   registerRelayRoutes(app, relay)
   registerChannelRoutes(app, store, channelBus, presence, attachments)
+  registerArtifactPublicRoutes(app, store, artifactFiles)
   app.use('*', cookieAuth(store))
-  registerWorkspaceRoutes(app, store)
-  registerProjectRoutes(app, store, runtime, busyTracker, projects, commands, terminal)
+  registerWorkspaceRoutes(app, store, artifactFiles)
+  registerProjectRoutes(
+    app,
+    store,
+    runtime,
+    busyTracker,
+    projects,
+    commands,
+    terminal,
+    artifactFiles,
+  )
+  registerArtifactRoutes(app, store, artifactFiles)
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store, projects)
   registerWorkerRoutes(app, store, commands, runtime, projects, terminal)

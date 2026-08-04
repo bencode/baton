@@ -13,9 +13,9 @@ const rfc5987 = (s: string): string =>
 // HTTP header values are latin1 (ByteString) — a non-ASCII filename (e.g. a
 // Chinese name) throws when set. ASCII-fold the legacy `filename=` fallback and
 // carry the real UTF-8 name in RFC 5987 `filename*`.
-const contentDisposition = (filename: string): string => {
+export const fileContentDisposition = (filename: string, inline: boolean): string => {
   const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, "'")
-  return `inline; filename="${ascii}"; filename*=UTF-8''${rfc5987(filename)}`
+  return `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${rfc5987(filename)}`
 }
 
 // Stream a stored attachment back with download headers (content-type/length +
@@ -27,6 +27,6 @@ export const sendAttachment = (
 ): Response => {
   c.header('content-type', found.meta.contentType)
   c.header('content-length', String(found.meta.size))
-  c.header('content-disposition', contentDisposition(found.meta.filename))
+  c.header('content-disposition', fileContentDisposition(found.meta.filename, true))
   return c.body(Readable.toWeb(createReadStream(found.path)) as ReadableStream<Uint8Array>)
 }

@@ -26,7 +26,8 @@
     "@prisma/adapter-libsql": "^7.9.0",
     "@prisma/client": "^7.9.0",
     "dotenv": "^17.4.2",
-    "hono": "^4.12.23"
+    "hono": "^4.12.23",
+    "nanoid": "^3.3.12"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

@@ -25,6 +25,7 @@ import {
   syncBaseBranch,
 } from '../session/worktree.ts'
 import { killProcessGroup } from './proc.ts'
+import { syncBundledArtifactSkill } from './bundled-skills.ts'
 
 // Node-runnable entry to re-exec for the session child (`baton session run`).
 // Dev: the tsx shim (bin/baton.mjs) that loads src/index.ts. Published bundle:
@@ -151,6 +152,7 @@ export const createSessionSupervisor = (deps: {
     ensureExcluded(repo, PROJECT_CONFIG_NAME)
     ensureExcluded(repo, '.baton-services/')
     saveProjectConfig(join(worktreePath, PROJECT_CONFIG_NAME), worktreeConfig(cfg, sessionId))
+    syncBundledArtifactSkill(repo, worktreePath)
     // Re-check: the top guard ran before the awaits above (get / materialize), so a
     // terminal-open could have raced in and reserved the pty during that window —
     // don't spawn a headless child over it.

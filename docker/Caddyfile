@@ -19,6 +19,12 @@
 		}
 	}
 
+	# Public Artifact capability links keep their short /a/:key path. Unlike /api,
+	# this prefix is not stripped because the backend route is also /a/:key.
+	handle /a/* {
+		reverse_proxy backend:3280
+	}
+
 	# SPA: serve built assets, fall back to index.html for client-side routes.
 	handle {
 		root * /srv/web

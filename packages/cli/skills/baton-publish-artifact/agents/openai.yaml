@@ -1,0 +1,4 @@
+interface:
+  display_name: "Publish Baton Artifact"
+  short_description: "Publish generated files as project artifact links"
+  default_prompt: "Use $baton-publish-artifact to publish the generated file and return its public link."

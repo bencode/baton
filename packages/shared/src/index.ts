@@ -1,4 +1,5 @@
 export * from './domain/admin.ts'
+export * from './domain/artifact.ts'
 export * from './domain/attachment.ts'
 export * from './domain/channel.ts'
 export * from './domain/channel-invite.ts'

@@ -1,6 +1,7 @@
 import type {
   AgentEffort,
   AgentKind,
+  Artifact,
   Attachment,
   Channel,
   ChannelMessage,
@@ -24,6 +25,16 @@ import type {
   Worker,
   Workspace,
 } from '@baton/shared'
+
+export type StoredArtifact = Omit<Artifact, 'url' | 'downloadUrl'> & { storageId: string }
+export type ArtifactCreate = {
+  projectId: Id
+  key: string
+  storageId: string
+  filename: string
+  contentType: string
+  size: number
+}
 
 // Server-internal: the public User view plus the password hash (never serialized
 // to clients). The store works in UserRecord; routes strip it down to User.
@@ -154,6 +165,13 @@ export type Store = {
     // Cross-workspace (admin overview only — callers must gate on requireAdmin).
     listAll(): Promise<Project[]>
     update(id: Id, patch: ProjectPatch): Promise<Project>
+    delete(id: Id): Promise<void>
+  }
+  artifacts: {
+    create(input: ArtifactCreate): Promise<StoredArtifact>
+    get(id: Id): Promise<StoredArtifact | null>
+    getByKey(key: string): Promise<StoredArtifact | null>
+    listByProject(projectId: Id): Promise<StoredArtifact[]>
     delete(id: Id): Promise<void>
   }
   requirements: {

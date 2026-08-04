@@ -1,5 +1,6 @@
 import type { Id } from '@baton/shared'
 import type { Hono } from 'hono'
+import type { ArtifactFileStore } from '../artifacts.ts'
 import type { BusyTracker } from '../busy.ts'
 import type { CommandBus } from '../command-bus.ts'
 import { assertProjectAccess, assertWorkspaceAccess } from '../middleware/domain-scope.ts'
@@ -24,6 +25,7 @@ export const registerProjectRoutes = (
   projects: ProjectBus,
   commands: CommandBus,
   terminal: TerminalBridge,
+  artifactFiles: ArtifactFileStore,
 ): void => {
   app.post('/projects', async c => {
     const body = (await c.req.json()) as {
@@ -124,6 +126,7 @@ export const registerProjectRoutes = (
     if (denied) return denied
     if (!(await store.projects.get(id))) return c.json({ error: 'not found' }, 404)
     await store.projects.delete(id)
+    await artifactFiles.forgetProject(id)
     return c.body(null, 204)
   })
 }

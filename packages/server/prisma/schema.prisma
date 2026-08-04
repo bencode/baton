@@ -70,9 +70,25 @@ model Project {
   sessions     Session[]
   workers      Worker[]
   counters     CodeCounter[]
+  artifacts    Artifact[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
+}
+
+model Artifact {
+  id          Int      @id @default(autoincrement())
+  projectId   Int
+  key         String   @unique
+  storageId   String   @unique
+  filename    String
+  contentType String
+  size        Int
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
 
 model CodeCounter {

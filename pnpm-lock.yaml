@@ -23,6 +23,9 @@ importers:
       '@openai/codex-sdk':
         specifier: ^0.146.0
         version: 0.146.0
+      mime:
+        specifier: ^4.1.0
+        version: 4.1.0
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
@@ -125,6 +128,9 @@ importers:
       hono:
         specifier: ^4.12.23
         version: 4.12.23
+      nanoid:
+        specifier: ^3.3.12
+        version: 3.3.12
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
@@ -2308,6 +2314,11 @@ packages:
   mime-types@3.0.2:
     resolution: {integrity: sha512-Lbgzdk0h4juoQ9fCKXW4by0UJqj+nOOrI9MJ1sSj4nI8aI2eo1qmvQEie4VD1glsS250n15LsWsYtCugiStS5A==}
     engines: {node: '>=18'}
+
+  mime@4.1.0:
+    resolution: {integrity: sha512-X5ju04+cAzsojXKes0B/S4tcYtFAJ6tTMuSPBEn9CPGlrWr8Fiw7qYeLT0XyH80HSoAoqWCaz+MWKh22P7G1cw==}
+    engines: {node: '>=16'}
+    hasBin: true
 
   mimic-response@3.1.0:
     resolution: {integrity: sha512-z0yWI+4FDrrweS8Zmt4Ej5HdJmky15+L2e6Wgn3+iK5fWzb6T3fhNFq2+MeTRb064c6Wr4N/wv0DzQTjNzHNGQ==}
@@ -5224,6 +5235,8 @@ snapshots:
   mime-types@3.0.2:
     dependencies:
       mime-db: 1.54.0
+
+  mime@4.1.0: {}
 
   mimic-response@3.1.0:
     optional: true

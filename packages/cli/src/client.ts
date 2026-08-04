@@ -1,5 +1,6 @@
 import type { SessionEvent, SessionEventType } from '@baton/shared'
 import { primeLogin } from './client/auth.ts'
+import { type ArtifactsClient, artifactsClient } from './client/artifacts.ts'
 import { type LoopsClient, loopsClient } from './client/loops.ts'
 import { type ProjectClient, projectClient } from './client/projects.ts'
 import { request, setAuthHeaders } from './client/request.ts'
@@ -27,6 +28,7 @@ export type { WorkspaceInput } from './client/workspaces.ts'
 
 // Public HTTP client (UI / CLI / observability tools).
 export type ApiClient = {
+  artifacts: ArtifactsClient
   workspaces: WorkspaceClient
   projects: ProjectClient
   requirements: RequirementClient
@@ -67,6 +69,7 @@ export const createClient = (baseUrl: string, opts?: { bearer?: string }): ApiCl
 }
 
 const clientFromBase = (baseUrl: string): ApiClient => ({
+  artifacts: artifactsClient(baseUrl),
   workspaces: workspaceClient(baseUrl),
   projects: projectClient(baseUrl),
   requirements: requirementClient(baseUrl),

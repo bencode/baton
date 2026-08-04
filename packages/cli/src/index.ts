@@ -1,4 +1,5 @@
 import { defineCommand, runMain } from 'citty'
+import { artifact } from './commands/artifact.ts'
 import { channel } from './commands/channel.ts'
 import { init } from './commands/init.ts'
 import { loop } from './commands/loop.ts'
@@ -22,6 +23,7 @@ const main = defineCommand({
     worker,
     session,
     service,
+    artifact,
     loop,
     relay,
     channel,

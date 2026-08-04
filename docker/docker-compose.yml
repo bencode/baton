@@ -32,6 +32,8 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.backend
     env_file: .env
+    environment:
+      - BATON_DATA_DIR=/data
     volumes:
       - baton_data:/data
     expose:

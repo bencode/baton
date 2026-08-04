@@ -13,7 +13,13 @@ export default defineConfig({
       // ws:true so the terminal-bridge WebSocket upgrade (/api/sessions/:id/terminal/ws)
       // proxies through to the backend in dev — same as it rides caddy's reverse_proxy
       // in prod.
-      '/api': { target: BACKEND, changeOrigin: true, ws: true, rewrite: p => p.replace(/^\/api/, '') },
+      '/api': {
+        target: BACKEND,
+        changeOrigin: true,
+        ws: true,
+        rewrite: p => p.replace(/^\/api/, ''),
+      },
+      '/a': { target: BACKEND, changeOrigin: true },
     },
   },
   test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'] },

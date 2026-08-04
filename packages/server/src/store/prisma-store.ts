@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 import { toRequirement, toTask } from './mappers.ts'
+import { prismaArtifacts } from './prisma/artifacts.ts'
 import { prismaChannels } from './prisma/channels.ts'
 import { prismaLoops } from './prisma/loops.ts'
 import { prismaProjects } from './prisma/projects.ts'
@@ -18,6 +19,7 @@ import type { Store } from './types.ts'
 export const createPrismaStore = (prisma: PrismaClient): Store => ({
   workspaces: prismaWorkspaces(prisma),
   projects: prismaProjects(prisma),
+  artifacts: prismaArtifacts(prisma),
   requirements: prismaRequirements(prisma),
   tasks: prismaTasks(prisma),
   taskComments: prismaTaskComments(prisma),
