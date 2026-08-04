@@ -13,8 +13,8 @@ import {
   type WorkerConfig,
   worktreeConfig,
 } from '../project-config.ts'
-import { generateTitleWithCodex } from '../session/runner/title-codex.ts'
 import { generateTitle } from '../session/runner/title.ts'
+import { generateTitleWithCodex } from '../session/runner/title-codex.ts'
 import { parseFirstExchangeFromEvents, readFirstExchange } from '../session/runner/transcript.ts'
 import {
   createWorktree,
@@ -149,7 +149,8 @@ export const createSessionSupervisor = (deps: {
     // calls resolve server/project/worker from cwd. Overwrite every start (refreshes
     // a rotated token; no live child yet, so no race); keep it out of agent commits.
     ensureExcluded(repo, PROJECT_CONFIG_NAME)
-    saveProjectConfig(join(worktreePath, PROJECT_CONFIG_NAME), worktreeConfig(cfg))
+    ensureExcluded(repo, '.baton-services/')
+    saveProjectConfig(join(worktreePath, PROJECT_CONFIG_NAME), worktreeConfig(cfg, sessionId))
     // Re-check: the top guard ran before the awaits above (get / materialize), so a
     // terminal-open could have raced in and reserved the pty during that window —
     // don't spawn a headless child over it.

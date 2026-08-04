@@ -5,6 +5,7 @@ import { type ProjectClient, projectClient } from './client/projects.ts'
 import { request, setAuthHeaders } from './client/request.ts'
 import { type RequirementClient, requirementClient } from './client/requirements.ts'
 import { withRetry } from './client/retry.ts'
+import { type ServicesClient, servicesClient } from './client/services.ts'
 import { type SessionsClient, sessionsClient } from './client/sessions.ts'
 import { type TaskClient, taskClient } from './client/tasks.ts'
 import { type WorkersClient, workersClient } from './client/workers.ts'
@@ -31,6 +32,7 @@ export type ApiClient = {
   requirements: RequirementClient
   tasks: TaskClient
   sessions: SessionsClient
+  services: ServicesClient
   loops: LoopsClient
   workers: WorkersClient
 }
@@ -70,6 +72,7 @@ const clientFromBase = (baseUrl: string): ApiClient => ({
   requirements: requirementClient(baseUrl),
   tasks: taskClient(baseUrl),
   sessions: sessionsClient(baseUrl),
+  services: servicesClient(baseUrl),
   loops: loopsClient(baseUrl),
   workers: workersClient(baseUrl),
 })

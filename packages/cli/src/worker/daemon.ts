@@ -3,6 +3,7 @@ import { EventSource } from 'eventsource'
 import type { ApiClient } from '../client.ts'
 import type { WorkerConfig } from '../project-config.ts'
 import { createLiveness } from './liveness.ts'
+import { createServiceSupervisor } from './service-supervisor.ts'
 import { createSessionSupervisor } from './session-supervisor.ts'
 import { createTerminalManager } from './terminal-manager.ts'
 
@@ -38,14 +39,20 @@ export const runWorkerDaemon = async (
     log,
     hasChild: id => supervisor.has(id),
   })
+  const services = createServiceSupervisor({
+    getSession: sessionId => client.sessions.get(sessionId),
+    sendReport: report => client.services.report(report),
+    cfg,
+    log,
+  })
 
   let fatal = false
   let stop: () => void = () => {}
   const liveness = createLiveness({
-    client,
-    cfg,
+    heartbeat: () => client.workers.heartbeat(cfg.machineId),
     log,
     isStreamOpen: () => es.readyState === ES_OPEN,
+    reportRuntime: () => services.report(),
     onTrip: reason => {
       if (fatal) return
       log(`${reason} — exiting so the supervisor restarts a clean worker`)
@@ -67,6 +74,7 @@ export const runWorkerDaemon = async (
   es.onopen = () => {
     liveness.markStreamOk()
     void supervisor.reconcile().catch(err => log(`reconcile failed: ${String(err)}`))
+    void services.report().catch(err => log(`service report failed: ${String(err)}`))
   }
   es.onmessage = e => {
     liveness.markStreamOk()
@@ -77,7 +85,11 @@ export const runWorkerDaemon = async (
           .start(cmd.sessionId, cmd.name)
           .catch(err => log(`start failed: ${String(err)}`))
       else if (cmd.cmd === 'session.stop') supervisor.stop(cmd.sessionId)
-      else if (cmd.cmd === 'session.delete') supervisor.remove(cmd.sessionId, cmd.worktreePath)
+      else if (cmd.cmd === 'session.delete')
+        void services
+          .stopSession(cmd.sessionId)
+          .then(() => supervisor.remove(cmd.sessionId, cmd.worktreePath))
+          .catch(err => log(`service cleanup failed: ${String(err)}`))
       else if (cmd.cmd === 'session.title')
         void supervisor
           .title(cmd.sessionId, cmd.agentSessionId, cmd.worktreePath)
@@ -86,7 +98,14 @@ export const runWorkerDaemon = async (
         if (cmd.action === 'open')
           terminals.open(cmd.sessionId, cmd.agentSessionId, cmd.worktreePath)
         else terminals.close(cmd.sessionId)
-      }
+      } else if (cmd.cmd === 'service.run')
+        void services
+          .run(cmd.requestId, cmd.sessionId, cmd.name, cmd.argv)
+          .catch(err => log(`service run failed: ${String(err)}`))
+      else if (cmd.cmd === 'service.stop')
+        void services
+          .stop(cmd.requestId, cmd.name)
+          .catch(err => log(`service stop failed: ${String(err)}`))
     } catch {
       // skip malformed commands
     }
@@ -103,6 +122,7 @@ export const runWorkerDaemon = async (
   })
   es.close()
   liveness.stop()
+  services.killAll()
   supervisor.killAll()
   terminals.killAll()
   // Watchdog exit: cleanup ran above, now hand a non-zero code to the supervisor.

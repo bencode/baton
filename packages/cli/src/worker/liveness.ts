@@ -1,5 +1,3 @@
-import type { ApiClient } from '../client.ts'
-import type { WorkerConfig } from '../project-config.ts'
 import { stale, streamWedged } from './watchdog.ts'
 
 // The worker has TWO independent liveness signals, each its own self-watchdog: the
@@ -21,28 +19,33 @@ export type Liveness = {
 }
 
 export const createLiveness = (deps: {
-  client: ApiClient
-  cfg: WorkerConfig
+  heartbeat: () => Promise<unknown>
   log: (m: string) => void
   isStreamOpen: () => boolean
+  reportRuntime?: () => Promise<void>
   onTrip: (reason: string) => void
 }): Liveness => {
-  const { client, cfg, log, isStreamOpen, onTrip } = deps
+  const { heartbeat, log, isStreamOpen, reportRuntime, onTrip } = deps
   let heartbeatOkAt = Date.now()
   let streamOkAt = Date.now()
   let timer: ReturnType<typeof setInterval> | null = null
 
   const ping = async (): Promise<void> => {
+    if (reportRuntime)
+      void reportRuntime().catch(error => log(`service report failed: ${String(error)}`))
+    let timeout: ReturnType<typeof setTimeout> | undefined
     try {
       await Promise.race([
-        client.workers.heartbeat(cfg.machineId),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('heartbeat timeout')), HEARTBEAT_TIMEOUT_MS),
-        ),
+        heartbeat(),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('heartbeat timeout')), HEARTBEAT_TIMEOUT_MS)
+        }),
       ])
       heartbeatOkAt = Date.now()
     } catch (e) {
       log(`heartbeat failed: ${String(e)}`)
+    } finally {
+      if (timeout) clearTimeout(timeout)
     }
   }
 

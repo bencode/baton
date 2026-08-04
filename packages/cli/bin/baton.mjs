@@ -11,8 +11,14 @@ const here = dirname(fileURLToPath(import.meta.url))
 const entry = join(here, '..', 'src', 'index.ts')
 const require = createRequire(import.meta.url)
 const tsxBin = require.resolve('tsx/cli')
+const stdio = process.connected ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit'
 const child = spawn(process.execPath, [tsxBin, entry, ...process.argv.slice(2)], {
-  stdio: 'inherit',
+  stdio,
   cwd: process.cwd(),
 })
+if (process.connected) {
+  process.on('message', message => child.send(message))
+  child.on('message', message => process.send?.(message))
+  process.on('disconnect', () => child.disconnect())
+}
 child.on('exit', code => process.exit(code ?? 0))

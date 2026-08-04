@@ -61,6 +61,7 @@ describe('project-config', () => {
       apiToken: 'wtok',
     }
     assert.deepEqual(viewWorker(worktreeConfig(w)), w)
+    assert.equal(worktreeConfig(w, 42).session, 42)
   })
 
   test('setWorker + viewWorker round-trip (carries apiToken)', () => {

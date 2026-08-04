@@ -54,3 +54,11 @@ export type WorkerCommand =
       worktreePath: string
     }
   | { cmd: 'session.terminal'; sessionId: Id; action: 'close' }
+  | {
+      cmd: 'service.run'
+      requestId: string
+      sessionId: Id
+      name: string
+      argv: string[]
+    }
+  | { cmd: 'service.stop'; requestId: string; name: string }

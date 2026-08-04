@@ -7,6 +7,7 @@ import { createCommandBus } from './command-bus.ts'
 import { createEventBus } from './event-bus.ts'
 import { startLoopScheduler } from './loop-scheduler.ts'
 import { createProjectBus } from './project-bus.ts'
+import { createServiceRuntime, startServicePrune } from './service-runtime.ts'
 import { createSessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
 import { createTerminalBridge } from './terminal-bridge.ts'
@@ -23,7 +24,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     const presencePrune = startPresencePrune(presence)
     // Own the session event bus, busy tracker, and project bus here so the busy
     // sweep can share the exact instances the app mutates (else it'd sweep an
-    // empty second tracker). createApp injection is positional.
+    // empty second tracker).
     const bus = createEventBus()
     const busy = createBusy()
     const projects = createProjectBus()
@@ -32,27 +33,26 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     // tracker and never see a connected worker.
     const runtime = createSessionRuntime()
     const commands = createCommandBus()
+    const services = createServiceRuntime()
+    const servicePrune = startServicePrune(services)
     // Hoisted so the idle-reaper shares the exact terminal bridge the WS routes
     // mutate. `injectWs` is captured during createApp (@hono/node-ws needs the http
     // server, only known after serve) and called post-serve.
     const terminal = createTerminalBridge()
     let injectWs: ((server: ReturnType<typeof serve>) => void) | undefined
-    const app = createApp(
-      opts.store,
+    const app = createApp(opts.store, {
       bus,
       runtime,
-      busy,
-      undefined,
+      busyTracker: busy,
       commands,
       projects,
-      undefined,
-      undefined,
       presence,
       terminal,
-      inject => {
+      onInjectWs: inject => {
         injectWs = inject
       },
-    )
+      services,
+    })
     // Close turns whose worker went silent past the TTL (the "stuck thinking"
     // safety net), started + stopped with the server lifecycle like the prune.
     const busySweep = startBusySweep({ store: opts.store, bus, projects, busy })
@@ -76,6 +76,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
             busySweep.stop()
             loopScheduler.stop()
             terminalReaper.stop()
+            servicePrune.stop()
             return opts.store.close()
           }),
       })

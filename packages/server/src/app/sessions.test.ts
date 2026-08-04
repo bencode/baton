@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import type { WorkerCommand } from '@baton/shared'
 import { afterEach, beforeEach, describe, test } from 'node:test'
+import type { WorkerCommand } from '@baton/shared'
 import { createApp } from '../app.ts'
 import { createCommandBus } from '../command-bus.ts'
 import { freshStore, type TestStore } from '../store/test-db.ts'
@@ -408,7 +408,7 @@ describe('server HTTP — sessions + chat protocol', () => {
 
   test('completed Codex turn triggers auto-title without a browser', async () => {
     const commands = createCommandBus()
-    const app = createApp(ctx.store, undefined, undefined, undefined, undefined, commands)
+    const app = createApp(ctx.store, { commands })
     const { projectId, workerId, workerToken } = await seedWorker(app, 'codex')
     const auth = { authorization: `Bearer ${workerToken}` }
     const session = (await (await postJson(app, '/sessions', { projectId, workerId })).json()) as {

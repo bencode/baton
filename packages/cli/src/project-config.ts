@@ -31,6 +31,7 @@ export type ProjectConfig = {
   name?: string
   baseBranch?: string
   worker?: WorkerEntry
+  session?: Id
 }
 
 // Flattened projection for the worker daemon — derived on demand, not persisted.
@@ -122,7 +123,7 @@ export const viewWorker = (cfg: ProjectConfig): WorkerConfig => {
 // Inverse of viewWorker: the `.baton.json` a worker drops into each session
 // worktree so the agent's bare `baton` calls resolve server/project/worker
 // from cwd (project-config lookup is strictly cwd-only — no upward walk).
-export const worktreeConfig = (cfg: WorkerConfig): ProjectConfig => ({
+export const worktreeConfig = (cfg: WorkerConfig, session?: Id): ProjectConfig => ({
   server: cfg.server,
   project: cfg.projectId,
   baseBranch: cfg.baseBranch,
@@ -133,4 +134,5 @@ export const worktreeConfig = (cfg: WorkerConfig): ProjectConfig => ({
     machineId: cfg.machineId,
     apiToken: cfg.apiToken,
   },
+  ...(session === undefined ? {} : { session }),
 })

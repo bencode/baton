@@ -5,6 +5,7 @@ import { loop } from './commands/loop.ts'
 import { project } from './commands/project.ts'
 import { relay } from './commands/relay.ts'
 import { requirement } from './commands/requirement.ts'
+import { service } from './commands/service.ts'
 import { session } from './commands/session.ts'
 import { task } from './commands/task.ts'
 import { worker } from './commands/worker.ts'
@@ -20,6 +21,7 @@ const main = defineCommand({
     init,
     worker,
     session,
+    service,
     loop,
     relay,
     channel,

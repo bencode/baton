@@ -16,12 +16,14 @@ import { registerLoopRoutes } from './routes/loops.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
 import { registerRelayRoutes } from './routes/relay.ts'
 import { registerRequirementRoutes } from './routes/requirements.ts'
+import { registerServiceRoutes } from './routes/services.ts'
 import { registerSessionAttachmentRoutes } from './routes/session-attachments.ts'
 import { registerSessionRoutes } from './routes/sessions.ts'
 import { registerTaskRoutes } from './routes/tasks.ts'
 import { registerTerminalWsRoutes } from './routes/terminal-ws.ts'
 import { registerWorkerRoutes } from './routes/workers.ts'
 import { registerWorkspaceRoutes } from './routes/workspaces.ts'
+import { createServiceRuntime, type ServiceRuntime } from './service-runtime.ts'
 import { createSessionRuntime, type SessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
 import { createTerminalBridge, type TerminalBridge } from './terminal-bridge.ts'
@@ -39,26 +41,42 @@ export type { AppEnv } from './views.ts'
 //   busyTracker    — keyed by sessionId; toggled by POST /sessions/:id/events on
 //                    turn_start (true) / turn_complete / turn_error (false).
 //   commands       — server→worker command bus (session.start/stop/delete).
-export const createApp = (
-  store: Store,
-  bus: EventBus = createEventBus(),
-  runtime: SessionRuntime = createSessionRuntime(),
-  busyTracker: BusyTracker = createBusy(),
-  attachments: AttachmentStore = createAttachmentStore(defaultAttachmentDir()),
-  commands: CommandBus = createCommandBus(),
-  projects: ProjectBus = createProjectBus(),
-  relay: RelayBus = createRelayBus(),
-  channelBus: ChannelBus = createChannelBus(),
-  presence: ChannelPresence = createChannelPresence(),
+type AppOptions = {
+  bus?: EventBus
+  runtime?: SessionRuntime
+  busyTracker?: BusyTracker
+  attachments?: AttachmentStore
+  commands?: CommandBus
+  projects?: ProjectBus
+  relay?: RelayBus
+  channelBus?: ChannelBus
+  presence?: ChannelPresence
   // Per-session interactive terminal bridge (runtime-only, like `runtime`): the
   // worker pty WS + browser viewer WSs the server pipes between. Its presence is
   // `terminalOpen`. Hoisted in server.ts so the idle-reaper shares this instance.
-  terminal: TerminalBridge = createTerminalBridge(),
+  terminal?: TerminalBridge
   // Plumbs the WebSocket injector back to the caller: @hono/node-ws needs the http
   // server (only known after serve()) to handle upgrades. server.ts captures it and
   // calls it post-serve. Tests omit it (they use app.fetch, no real WS upgrade).
-  onInjectWs?: (inject: ReturnType<typeof createNodeWebSocket>['injectWebSocket']) => void,
-): Hono<AppEnv> => {
+  onInjectWs?: (inject: ReturnType<typeof createNodeWebSocket>['injectWebSocket']) => void
+  services?: ServiceRuntime
+}
+
+export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> => {
+  const {
+    bus = createEventBus(),
+    runtime = createSessionRuntime(),
+    busyTracker = createBusy(),
+    attachments = createAttachmentStore(defaultAttachmentDir()),
+    commands = createCommandBus(),
+    projects = createProjectBus(),
+    relay = createRelayBus(),
+    channelBus = createChannelBus(),
+    presence = createChannelPresence(),
+    terminal = createTerminalBridge(),
+    onInjectWs,
+    services = createServiceRuntime(),
+  } = options
   const app = new Hono<AppEnv>()
   const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app })
   onInjectWs?.(injectWebSocket)
@@ -77,6 +95,7 @@ export const createApp = (
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store, projects)
   registerWorkerRoutes(app, store, commands, runtime, projects, terminal)
+  registerServiceRoutes(app, store, commands, services)
   registerAdminRoutes(app, store, runtime, busyTracker, commands)
   registerSessionRoutes(
     app,
