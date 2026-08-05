@@ -44,7 +44,7 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
     // An open terminal is mid-conversation on this agentSessionId; regenerating it
-    // here would orphan the live claude. Make the user close the terminal first.
+    // here would orphan the live agent. Make the user close the terminal first.
     if (terminal.isOpen(s.id))
       return c.json({ error: 'terminal open — close it before clearing' }, 409)
     let view = s
@@ -144,7 +144,7 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
 
   // Open / close an interactive terminal for a hands-on, human-in-the-loop turn
   // alongside the headless relay (UI/CLI, no auth in v0). open tells the worker to
-  // spawn `claude --resume` in a pty + dial back its terminal WS — the terminal
+  // resume the agent session in a pty + dial back its terminal WS — the terminal
   // becomes `terminalOpen` once that WS attaches (the bridge), surfaced over the
   // 'sessions' project signal; the browser then connects its xterm WS. Only an idle
   // session can open one (an active headless child would fight the pty over the
@@ -159,13 +159,15 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
       bump(s.projectId)
       return c.json(await toView(s))
     }
-    if (s.agentKind !== 'claude-code')
-      return c.json({ error: 'terminal is only supported for claude-code sessions' }, 409)
     if (runtime.isActive(s.id))
       return c.json({ error: 'session active — stop it to open a terminal' }, 409)
     if (!commands.has(s.workerId))
       return c.json({ error: "worker offline — can't open a terminal" }, 409)
-    if (!s.agentSessionId || !s.worktreePath)
+    if (
+      !s.agentSessionId ||
+      !s.worktreePath ||
+      (s.agentKind === 'codex' && s.agentSessionId.startsWith('pending:'))
+    )
       return c.json({ error: 'session not materialized — resume it once first' }, 409)
     commands.publish(s.workerId, {
       cmd: 'session.terminal',

@@ -1,4 +1,5 @@
 import { existsSync, readdirSync } from 'node:fs'
+import { createRequire as createModuleRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,10 +7,37 @@ import { join } from 'node:path'
 // against runaway ptys (the server-side idle-reaper recycles abandoned ones).
 export const MAX_TERMINALS = 10
 
+export type PtyCommand = { file: string; args: string[] }
+
 // Resume the session's own JSONL if claude has written one, else start a fresh
 // conversation at that id.
-export const ptyArgs = (agentSessionId: string, hasJsonl: boolean): string[] =>
-  hasJsonl ? ['--resume', agentSessionId] : ['--session-id', agentSessionId]
+export const claudePtyCommand = (
+  agentSessionId: string,
+  hasJsonl: boolean,
+  env: NodeJS.ProcessEnv = process.env,
+): PtyCommand => ({
+  file: env.BATON_CLAUDE_BIN?.trim() || 'claude',
+  args: hasJsonl ? ['--resume', agentSessionId] : ['--session-id', agentSessionId],
+})
+
+const moduleRequire = createModuleRequire(import.meta.url)
+
+// Codex SDK sessions originate from `codex exec`; the interactive TUI includes
+// those sessions only when explicitly requested. Drive the packaged launcher
+// through Node so workers do not need a separate global Codex installation.
+export const codexPtyCommand = (
+  agentSessionId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): PtyCommand => {
+  const args = ['resume', '--include-non-interactive', agentSessionId]
+  const override = env.BATON_CODEX_BIN?.trim()
+  return override
+    ? { file: override, args }
+    : {
+        file: process.execPath,
+        args: [moduleRequire.resolve('@openai/codex/bin/codex.js'), ...args],
+      }
+}
 
 // Does claude already have a transcript for this session id? (~/.claude/projects/
 // <project>/<agentSessionId>.jsonl — one level down, like the bash `find`.)

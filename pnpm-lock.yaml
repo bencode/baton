@@ -21,7 +21,10 @@ importers:
         specifier: ^0.3.220
         version: 0.3.220(@anthropic-ai/sdk@0.100.1(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@openai/codex-sdk':
-        specifier: ^0.146.0
+        specifier: 0.146.0
+        version: 0.146.0
+      '@openai/codex':
+        specifier: 0.146.0
         version: 0.146.0
       mime:
         specifier: ^4.1.0

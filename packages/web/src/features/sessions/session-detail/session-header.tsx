@@ -130,6 +130,11 @@ export const SessionHeader = ({
   onRename,
 }: HeaderProps) => {
   const [open, setOpen] = useState(false)
+  const terminalReady =
+    session.agentKind !== 'codex' ||
+    (session.agentSessionId !== null &&
+      !session.agentSessionId.startsWith('pending:') &&
+      session.worktreePath !== null)
   return (
     <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-3 sm:px-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -189,7 +194,8 @@ export const SessionHeader = ({
             close terminal
           </button>
         ) : (
-          !active && (
+          !active &&
+          terminalReady && (
             <button
               type="button"
               onClick={onOpenTerminal}

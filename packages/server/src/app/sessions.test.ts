@@ -63,6 +63,55 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
   })
 
+  test('terminal accepts a materialized Codex thread and rejects a pending one', async () => {
+    const commands = createCommandBus()
+    const app = createApp(ctx.store, { commands })
+    const { projectId, workerId, workerToken } = await seedWorker(app, 'codex')
+    const auth = { authorization: `Bearer ${workerToken}` }
+    const createSession = async (name: string) =>
+      (
+        (await (await postJson(app, '/sessions', { projectId, workerId, name })).json()) as {
+          id: number
+        }
+      ).id
+    const materialize = (id: number, agentSessionId: string) =>
+      app.request(`/sessions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ agentSessionId, worktreePath: `/tmp/wt-${id}` }),
+        headers: { 'content-type': 'application/json', ...auth },
+      })
+
+    const pendingId = await createSession('pending')
+    const readyId = await createSession('ready')
+    await materialize(pendingId, 'pending:session-id')
+    await materialize(readyId, 'codex-thread')
+
+    const seen: WorkerCommand[] = []
+    const unsubscribe = commands.subscribe(workerId, command => seen.push(command))
+    try {
+      const pending = await postJson(app, `/sessions/${pendingId}/terminal`, { action: 'open' })
+      assert.equal(pending.status, 409)
+      assert.deepEqual(await pending.json(), {
+        error: 'session not materialized — resume it once first',
+      })
+
+      const ready = await postJson(app, `/sessions/${readyId}/terminal`, { action: 'open' })
+      assert.equal(ready.status, 200)
+    } finally {
+      unsubscribe()
+    }
+
+    assert.deepEqual(seen, [
+      {
+        cmd: 'session.terminal',
+        sessionId: readyId,
+        action: 'open',
+        agentSessionId: 'codex-thread',
+        worktreePath: `/tmp/wt-${readyId}`,
+      },
+    ])
+  })
+
   test('clear: regenerates agentSessionId, keeps worktree, appends a context_cleared notice', async () => {
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)

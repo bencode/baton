@@ -41,7 +41,7 @@ export type WorkerCommand =
   // Auto-title after a completed turn: the worker reads the durable event log
   // and generates a short name with the session's matching agent backend.
   | { cmd: 'session.title'; sessionId: Id; agentSessionId: string; worktreePath: string }
-  // Interactive terminal: open spawns `claude --resume` in a node-pty in the
+  // Interactive terminal: open resumes the worker's agent in a node-pty in the
   // session's worktree and dials an outbound WS back to the server (human-in-the-
   // loop, alongside the headless relay); close drops that WS, which kills the pty.
   // open carries the ids the worker needs to spawn so it doesn't have to re-fetch

@@ -4,10 +4,11 @@ import { type IPty, spawn } from 'node-pty'
 import { WebSocket } from 'ws'
 import type { WorkerConfig } from '../project-config.ts'
 import {
+  claudePtyCommand,
+  codexPtyCommand,
   hasSessionJsonl,
   isPositiveDim,
   MAX_TERMINALS,
-  ptyArgs,
   serverTerminalWsUrl,
 } from './pty.ts'
 
@@ -19,9 +20,10 @@ export type TerminalManager = {
 }
 
 // Owns the live interactive terminals (one pty per session, separate from the
-// headless children). Each terminal = `claude --resume` in a node-pty bridged to
-// the server over an OUTBOUND WebSocket (no inbound port, no ttyd): pty output →
-// ws → server → browser viewers; viewer input/resize (framed JSON) → ws → pty.
+// headless children). Each terminal runs the agent's interactive resume command
+// in a node-pty bridged to the server over an OUTBOUND WebSocket (no inbound port,
+// no ttyd): pty output → ws → server → browser viewers; viewer input/resize
+// (framed JSON) → ws → pty.
 // The server drives close by dropping our WS (close button / idle-reaper), which
 // kills the pty. `hasChild` is injected so a terminal never opens over a running
 // headless child; MAX_TERMINALS caps concurrency.
@@ -56,8 +58,11 @@ export const createTerminalManager = (deps: {
       return
     }
 
-    const claudeBin = process.env.BATON_CLAUDE_BIN ?? 'claude'
-    const term = spawn(claudeBin, ptyArgs(agentSessionId, hasSessionJsonl(agentSessionId)), {
+    const command =
+      cfg.agentKind === 'codex'
+        ? codexPtyCommand(agentSessionId)
+        : claudePtyCommand(agentSessionId, hasSessionJsonl(agentSessionId))
+    const term = spawn(command.file, command.args, {
       name: 'xterm-color',
       cols: 80,
       rows: 24,

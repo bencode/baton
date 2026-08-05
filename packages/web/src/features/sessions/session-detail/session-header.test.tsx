@@ -5,7 +5,7 @@ import { SessionHeader } from './session-header'
 
 afterEach(cleanup)
 
-const session = (shareToken: string | null): Session => ({
+const session = (shareToken: string | null, overrides: Partial<Session> = {}): Session => ({
   id: 1,
   projectId: 1,
   workerId: 1,
@@ -21,6 +21,7 @@ const session = (shareToken: string | null): Session => ({
   planMode: false,
   model: null,
   effort: null,
+  ...overrides,
 })
 
 const renderHeader = (s: Session) =>
@@ -52,4 +53,14 @@ test('share button copies the standalone /s/:token link', () => {
 test('no share button for legacy sessions without a shareToken', () => {
   renderHeader(session(null))
   expect(screen.queryByRole('button', { name: 'share' })).toBeNull()
+})
+
+test('terminal is available for a materialized Codex thread', () => {
+  renderHeader(session(null, { agentKind: 'codex', agentSessionId: 'codex-thread' }))
+  expect(screen.getByRole('button', { name: 'terminal' })).toBeTruthy()
+})
+
+test('terminal is hidden while a Codex thread id is pending', () => {
+  renderHeader(session(null, { agentKind: 'codex', agentSessionId: 'pending:session-id' }))
+  expect(screen.queryByRole('button', { name: 'terminal' })).toBeNull()
 })

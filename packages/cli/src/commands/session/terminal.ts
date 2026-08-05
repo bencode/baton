@@ -5,7 +5,7 @@ import { resolveSession } from './shared.ts'
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
 
-// Open (or --close) an interactive terminal (`claude --resume` in a pty) for a
+// Open (or --close) an interactive terminal (the agent's resume TUI in a pty) for a
 // session — hands-on / human-in-the-loop, alongside the headless relay. The worker
 // spawns the pty + dials its WS back to the server asynchronously, so after open we
 // poll the session view until terminalOpen flips true. There's no direct URL: the
