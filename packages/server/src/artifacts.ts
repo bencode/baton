@@ -40,17 +40,28 @@ export const sanitizeArtifactFilename = (name: string): string => {
   return safe || 'file'
 }
 
-const byteLimiter = (): Transform => {
+const removeArtifactDir = async (path: string): Promise<void> => {
+  try {
+    await rm(path, { recursive: true, force: true })
+  } catch (error) {
+    console.error(`[artifact-files] failed to remove ${path}`, error)
+  }
+}
+
+const byteLimiter = (maxBytes: number): Transform => {
   let size = 0
   return new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       size += chunk.byteLength
-      callback(size > MAX_ARTIFACT_BYTES ? new ArtifactTooLargeError() : null, chunk)
+      callback(size > maxBytes ? new ArtifactTooLargeError() : null, chunk)
     },
   })
 }
 
-export const createArtifactFileStore = (rootDir: string): ArtifactFileStore => {
+export const createArtifactFileStore = (
+  rootDir: string,
+  maxBytes: number = MAX_ARTIFACT_BYTES,
+): ArtifactFileStore => {
   const dirOf = (projectId: Id, storageId: string): string =>
     join(rootDir, String(projectId), storageId)
   const pathOf = (projectId: Id, storageId: string): string =>
@@ -62,20 +73,20 @@ export const createArtifactFileStore = (rootDir: string): ArtifactFileStore => {
       const path = pathOf(projectId, storageId)
       await mkdir(dir, { recursive: true })
       try {
-        if (body) await pipeline(Readable.fromWeb(body), byteLimiter(), createWriteStream(path))
+        if (body) await pipeline(Readable.fromWeb(body), byteLimiter(maxBytes), createWriteStream(path))
         else await writeFile(path, new Uint8Array())
         return { storageId, size: (await stat(path)).size }
       } catch (error) {
-        await rm(dir, { recursive: true, force: true }).catch(() => {})
+        await removeArtifactDir(dir)
         throw error
       }
     },
     path: pathOf,
     async forget(projectId, storageId) {
-      await rm(dirOf(projectId, storageId), { recursive: true, force: true }).catch(() => {})
+      await removeArtifactDir(dirOf(projectId, storageId))
     },
     async forgetProject(projectId) {
-      await rm(join(rootDir, String(projectId)), { recursive: true, force: true }).catch(() => {})
+      await removeArtifactDir(join(rootDir, String(projectId)))
     },
   }
 }

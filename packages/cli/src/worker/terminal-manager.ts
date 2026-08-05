@@ -29,8 +29,9 @@ export const createTerminalManager = (deps: {
   cfg: WorkerConfig
   log: (m: string) => void
   hasChild: (sessionId: Id) => boolean
+  prepareWorktree: (worktreePath: string) => void
 }): TerminalManager => {
-  const { cfg, log, hasChild } = deps
+  const { cfg, log, hasChild, prepareWorktree } = deps
   const terminals = new Map<Id, { pty: IPty; ws: WebSocket }>()
 
   const open = (sessionId: Id, agentSessionId: string, worktreePath: string): void => {
@@ -45,6 +46,13 @@ export const createTerminalManager = (deps: {
             : null
     if (why) {
       log(`terminal #${sessionId}: ${why} — refusing`)
+      return
+    }
+
+    try {
+      prepareWorktree(worktreePath)
+    } catch (error) {
+      log(`terminal #${sessionId}: worktree preparation failed: ${String(error)}`)
       return
     }
 
