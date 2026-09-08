@@ -39,6 +39,37 @@ describe('unstartedUserMessages', () => {
     assert.deepEqual(unstartedUserMessages(events), [])
   })
 
+  test('keeps the latest beat per loop and preserves identical manual messages', () => {
+    const events = [
+      ev(1, 'user_message', { text: 'same', loopId: 1 }),
+      ev(2, 'user_message', { text: 'same' }),
+      ev(3, 'user_message', { text: 'same', loopId: 2 }),
+      ev(4, 'user_message', { text: 'updated', loopId: 1 }),
+      ev(5, 'user_message', { text: 'same' }),
+    ]
+    assert.deepEqual(
+      unstartedUserMessages(events).map(e => e.id),
+      [2, 3, 4, 5],
+    )
+    assert.deepEqual(
+      unstartedUserMessages([...events, ev(6, 'turn_start', { messageId: 4 })]).map(e => e.id),
+      [2, 3, 5],
+    )
+  })
+
+  test('keeps a new pending beat while its predecessor is already running', () => {
+    const events = [
+      ev(1, 'user_message', { text: 'old', loopId: 1 }),
+      ev(2, 'turn_start', { messageId: 1 }),
+      ev(3, 'user_message', { text: 'new', loopId: 1 }),
+    ]
+    assert.deepEqual(
+      unstartedUserMessages(events).map(e => e.id),
+      [3],
+    )
+    assert.deepEqual([...startedMessageIds(events)], [1])
+  })
+
   test('ignores turn_start without a numeric messageId', () => {
     const events = [ev(1, 'user_message', { text: 'a' }), ev(2, 'turn_start', {})]
     assert.deepEqual(

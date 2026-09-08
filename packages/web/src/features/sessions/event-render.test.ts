@@ -33,6 +33,17 @@ describe('reduceEvents', () => {
     expect(pendingMessages(started)).toHaveLength(0)
   })
 
+  test('new loop beat replaces the pending row and never revives it after starting', () => {
+    const old = ev('user_message', { text: 'old', loopId: 1 })
+    const manual = ev('user_message', { text: 'old' })
+    const latest = ev('user_message', { text: 'new', loopId: 1 })
+    const events = [old, manual, latest]
+    expect(pendingMessages(events).map(m => m.text)).toEqual(['old', 'new'])
+    const started = [...events, ev('turn_start', { messageId: latest.id })]
+    expect(pendingMessages(started).map(m => m.key)).toEqual([String(manual.id)])
+    expect(reduceEvents(started)).toMatchObject([{ kind: 'user-bubble', text: 'new' }])
+  })
+
   test('system context_cleared → system-notice (other system → raw)', () => {
     seq = 0
     const out = reduceEvents([

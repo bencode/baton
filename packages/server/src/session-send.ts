@@ -13,7 +13,12 @@ export type DeliverDeps = {
   projects: ProjectBus
 }
 
-export type DeliverInput = { text: string; images?: string[]; attachments?: Attachment[] }
+export type DeliverInput = {
+  text: string
+  images?: string[]
+  attachments?: Attachment[]
+  loopId?: number
+}
 
 // Persist a user_message and wake the session's worker — the shared core behind
 // both the interactive send (POST /sessions/:id/messages) and the Loop scheduler.
@@ -34,6 +39,7 @@ export const deliverMessage = async (
   const attachments = input.attachments ?? []
   const payload = {
     text: input.text,
+    ...(input.loopId === undefined ? {} : { loopId: input.loopId }),
     ...(images.length > 0 ? { images } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
     // Stamp the turn with the session's plan mode + model/effort override so a

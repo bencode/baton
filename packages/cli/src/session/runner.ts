@@ -1,6 +1,11 @@
 import { spawnSync } from 'node:child_process'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { isAgentWorking, type SessionEvent, unstartedUserMessages } from '@baton/shared'
+import {
+  isAgentWorking,
+  messageLoopId,
+  type SessionEvent,
+  unstartedUserMessages,
+} from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
@@ -144,7 +149,8 @@ export const runDaemon = async (
   log(`runtime env keys: ${maskedEnvKeys(deps.env)}`)
 
   const state: DaemonState = { seen: new Set() }
-  const pendingQueue: SessionEvent[] = []
+  let pendingQueue: SessionEvent[] = []
+  const latestLoops = new Map<number, number>()
   let busy = false
   // True while reconcile() is awaiting the transcript — blocks the idle reaper
   // so a reconnect that's about to surface queued work can't be reaped mid-fetch
@@ -156,11 +162,24 @@ export const runDaemon = async (
   // /abort, like Esc) can cancel it without killing the session.
   let currentTurn: AbortController | undefined
 
+  // Remember completed/live beats too so an older reconnect snapshot cannot
+  // revive their predecessors after the newer beat has left the memory queue.
+  const trackLoopMessage = (event: SessionEvent): boolean => {
+    const loopId = messageLoopId(event)
+    if (loopId === undefined) return true
+    if (event.sequence < (latestLoops.get(loopId) ?? -1)) return false
+    latestLoops.set(loopId, event.sequence)
+    pendingQueue = pendingQueue.filter(
+      queued => messageLoopId(queued) !== loopId || queued.sequence >= event.sequence,
+    )
+    return true
+  }
+
   const drain = async (): Promise<void> => {
-    if (busy) return
+    if (busy || reconciling) return
     busy = true
     try {
-      while (pendingQueue.length > 0 && !signal.aborted) {
+      while (pendingQueue.length > 0 && !signal.aborted && !reconciling) {
         const msg = pendingQueue.shift()
         if (!msg) break
         const resuming = isAgentConversationResumable(config)
@@ -207,10 +226,11 @@ export const runDaemon = async (
     reconciling = true
     try {
       const events = await deps.worker.listEvents()
+      events.forEach(trackLoopMessage)
       const pending = unstartedUserMessages(events)
       let added = 0
       for (const ev of pending) {
-        if (state.seen.has(ev.sequence)) continue
+        if (state.seen.has(ev.sequence) || !trackLoopMessage(ev)) continue
         state.seen.add(ev.sequence)
         pendingQueue.push(ev)
         added++
@@ -218,7 +238,6 @@ export const runDaemon = async (
       if (added > 0) {
         log(`reconciled ${added} queued message(s) from transcript`)
         lastActivity = Date.now()
-        void drain()
       } else if (pendingQueue.length === 0 && !busy && !currentTurn && isAgentWorking(events)) {
         // No work to run, yet the transcript shows an open turn → a prior child
         // abandoned it. Heal it now (faster than the server's TTL sweep). Guarded
@@ -233,6 +252,7 @@ export const runDaemon = async (
       log(`reconcile failed: ${String(e)}`)
     } finally {
       reconciling = false
+      if (pendingQueue.length > 0) void drain()
     }
   }
 
@@ -244,6 +264,7 @@ export const runDaemon = async (
     state.seen,
     log,
     ev => {
+      if (!trackLoopMessage(ev)) return
       lastActivity = Date.now()
       pendingQueue.push(ev)
       void drain()

@@ -19,7 +19,7 @@ export const runDueLoops = async (deps: LoopSchedulerDeps, now: number): Promise
     // Session cascade-deleted between the due() snapshot and here → the loop row
     // is gone too; nothing to advance.
     if (!session) continue
-    const sent = await deliverMessage(session, { text: loop.message }, deps)
+    const sent = await deliverMessage(session, { text: loop.message, loopId: loop.id }, deps)
     await store.loops.update(loop.id, {
       lastRunAt: now,
       lastStatus: sent.delivered ? 'ok' : 'skipped_offline',

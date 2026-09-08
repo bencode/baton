@@ -268,8 +268,12 @@ const controllableES = (): {
   ctor: new (u: string) => EventSourceLike
   emit: (data: unknown) => void
   opened: Promise<void>
+  reopen: () => void
 } => {
-  let inst: { onmessage: ((e: { data: string }) => void) | null } | null = null
+  let inst: {
+    onmessage: ((e: { data: string }) => void) | null
+    onopen: (() => void) | null
+  } | null = null
   let resolveOpened = (): void => {}
   const opened = new Promise<void>(r => {
     resolveOpened = r
@@ -291,6 +295,7 @@ const controllableES = (): {
     ctor: FakeES as unknown as new (u: string) => EventSourceLike,
     emit: (data: unknown) => inst?.onmessage?.({ data: JSON.stringify(data) }),
     opened,
+    reopen: () => inst?.onopen?.(),
   }
 }
 
@@ -340,6 +345,166 @@ describe('runDaemon reconcile-on-connect', () => {
       ['turn_start', 'agent_event', 'turn_complete'],
     )
     assert.deepEqual(calls[0]?.payload, { messageId: 7 })
+  })
+
+  test('live loop beats replace queued predecessors without interrupting the running beat', {
+    timeout: 2000,
+  }, async t => {
+    const controller = new AbortController()
+    t.after(() => controller.abort())
+    const firstStarted = Promise.withResolvers<void>()
+    const finishFirst = Promise.withResolvers<void>()
+    t.after(() => finishFirst.resolve())
+    const starts: number[] = []
+    const prompts: unknown[] = []
+    let completions = 0
+    const worker: WorkerClient = {
+      setActive: async () => ({}),
+      materialize: async () => ({}),
+      listEvents: async () => [],
+      emitEvent: async (type, payload) => {
+        if (type === 'turn_start') starts.push((payload as { messageId: number }).messageId)
+        if (type === 'turn_complete' && ++completions === 5) controller.abort()
+        return {} as SessionEvent
+      },
+    }
+    const queryFn: QueryFn = params =>
+      (async function* () {
+        prompts.push(params.prompt)
+        if (prompts.length === 1) {
+          firstStarted.resolve()
+          await finishFirst.promise
+        }
+        yield { type: 'result', subtype: 'success', is_error: false } as never
+      })()
+    const es = controllableES()
+    const run = runDaemon(
+      cfg,
+      { worker, queryFn, eventSourceImpl: es.ctor, log: () => {} },
+      controller.signal,
+    )
+    await es.opened
+    const message = (id: number, text: string, loopId?: number): SessionEvent => ({
+      id,
+      sessionId: 1,
+      sequence: id,
+      type: 'user_message',
+      payload: { text, loopId },
+      createdAt: 0,
+    })
+    es.emit(message(1, 'running', 1))
+    await firstStarted.promise
+    es.emit(message(2, 'old', 1))
+    es.emit(message(3, 'old'))
+    es.emit(message(4, 'old', 2))
+    es.emit(message(5, 'latest', 1))
+    es.emit(message(6, 'last manual'))
+    assert.deepEqual(starts, [1])
+    finishFirst.resolve()
+    await run
+    assert.deepEqual(starts, [1, 3, 4, 5, 6])
+    assert.deepEqual(prompts, ['running', 'old', 'old', 'latest', 'last manual'])
+  })
+
+  test('reconnect replaces queued beats before draining resumes', { timeout: 2000 }, async t => {
+    const controller = new AbortController()
+    t.after(() => controller.abort())
+    const finishFirst = Promise.withResolvers<void>()
+    const firstStarted = Promise.withResolvers<void>()
+    const firstCompleted = Promise.withResolvers<void>()
+    const snapshot = Promise.withResolvers<SessionEvent[]>()
+    t.after(() => finishFirst.resolve())
+    t.after(() => snapshot.resolve([]))
+    const message = (id: number, loopId?: number): SessionEvent => ({
+      id,
+      sessionId: 1,
+      sequence: id,
+      type: 'user_message',
+      payload: { text: String(id), loopId },
+      createdAt: 0,
+    })
+    const starts: number[] = []
+    let reads = 0
+    let completions = 0
+    const worker: WorkerClient = {
+      setActive: async () => ({}),
+      materialize: async () => ({}),
+      listEvents: async () => (++reads === 1 ? [] : snapshot.promise),
+      emitEvent: async (type, payload) => {
+        if (type === 'turn_start') starts.push((payload as { messageId: number }).messageId)
+        if (type === 'turn_complete') {
+          if (++completions === 1) firstCompleted.resolve()
+          if (completions === 2) controller.abort()
+        }
+        return {} as SessionEvent
+      },
+    }
+    const queryFn: QueryFn = params =>
+      (async function* () {
+        if (params.prompt === '1') {
+          firstStarted.resolve()
+          await finishFirst.promise
+        }
+        yield { type: 'result', subtype: 'success', is_error: false } as never
+      })()
+    const es = controllableES()
+    const run = runDaemon(
+      cfg,
+      { worker, queryFn, eventSourceImpl: es.ctor, log: () => {} },
+      controller.signal,
+    )
+    await es.opened
+    es.emit(message(1))
+    await firstStarted.promise
+    es.emit(message(2, 1))
+    es.reopen()
+    finishFirst.resolve()
+    await firstCompleted.promise
+    snapshot.resolve([message(2, 1), message(3, 1)])
+    await run
+    assert.deepEqual(starts, [1, 3])
+  })
+
+  test('a stale reconnect snapshot cannot revive a beat superseded by a completed live message', {
+    timeout: 2000,
+  }, async t => {
+    const controller = new AbortController()
+    t.after(() => controller.abort())
+    const message = (id: number, loopId?: number): SessionEvent => ({
+      id,
+      sessionId: 1,
+      sequence: id,
+      type: 'user_message',
+      payload: { text: String(id), loopId },
+      createdAt: 0,
+    })
+    const es = controllableES()
+    const starts: number[] = []
+    let reads = 0
+    let completions = 0
+    const worker: WorkerClient = {
+      setActive: async () => ({}),
+      materialize: async () => ({}),
+      listEvents: async () => (++reads === 1 ? [] : [message(1, 1), message(3)]),
+      emitEvent: async (type, payload) => {
+        if (type === 'turn_start') starts.push((payload as { messageId: number }).messageId)
+        if (type === 'turn_complete') {
+          if (++completions === 1) es.reopen()
+          else controller.abort()
+        }
+        return {} as SessionEvent
+      },
+    }
+    const { qf } = recordingQuery([{ type: 'result', subtype: 'success', is_error: false }])
+    const run = runDaemon(
+      cfg,
+      { worker, queryFn: qf, eventSourceImpl: es.ctor, log: () => {} },
+      controller.signal,
+    )
+    await es.opened
+    es.emit(message(2, 1))
+    await run
+    assert.deepEqual(starts, [2, 3])
   })
 
   test('a failed first turn stays fresh so a valid model can recover on the next message', async () => {

@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { Loop, Session, SessionEvent, WorkerCommand } from '@baton/shared'
+import {
+  type Loop,
+  type Session,
+  type SessionEvent,
+  unstartedUserMessages,
+  type WorkerCommand,
+} from '@baton/shared'
 import type { CommandBus } from './command-bus.ts'
 import type { EventBus } from './event-bus.ts'
 import { type LoopSchedulerDeps, nextRunAfter, runDueLoops } from './loop-scheduler.ts'
 import type { ProjectBus } from './project-bus.ts'
 import type { SessionRuntime } from './session-runtime.ts'
+import { deliverMessage } from './session-send.ts'
 import type { LoopPatch, Store } from './store/types.ts'
 
 const loop: Loop = {
@@ -45,7 +52,15 @@ const makeDeps = (opts: { connected: boolean }) => {
     sessions: {
       get: async () => session,
       appendEvent: async (sessionId: number, type: string, payload: unknown) => {
-        const ev = { id: 99, sessionId, sequence: 0, type, payload, createdAt: 0 } as SessionEvent
+        const sequence = appended.length
+        const ev = {
+          id: 99 + sequence,
+          sessionId,
+          sequence,
+          type,
+          payload,
+          createdAt: 0,
+        } as SessionEvent
         appended.push(ev)
         return ev
       },
@@ -93,4 +108,17 @@ test('a due loop with an offline worker is skipped — nothing persisted, schedu
   // The beat still signals the project stream so an open loops panel refreshes
   // its row (deliverMessage published nothing on the offline path).
   assert.deepEqual(published, [{ projectId: 3, signal: { resource: 'loops' } }])
+})
+
+test('successive beats replace only their own pending message; manual sends stay separate', async () => {
+  const { deps, appended } = makeDeps({ connected: true })
+  await runDueLoops(deps, 1000)
+  await deliverMessage(session, { text: loop.message }, deps)
+  await runDueLoops(deps, 61_000)
+  assert.deepEqual(appended[0]?.payload, { text: loop.message, loopId: loop.id })
+  assert.deepEqual(appended[1]?.payload, { text: loop.message })
+  assert.deepEqual(
+    unstartedUserMessages(appended).map(e => e.id),
+    [100, 101],
+  )
 })

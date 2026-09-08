@@ -124,9 +124,10 @@ export const agentMessageText = (payload: unknown): { id: string; text: string }
 //
 // type discriminator (kept loose; payload shape is owned by the producer):
 //   - user_message:  payload = { text: string; attachments?: Attachment[]; images?: string[];
-//                    planMode?: boolean; model?: string; effort?: AgentEffort }
+//                    planMode?: boolean; model?: string; effort?: AgentEffort; loopId?: Id }
 //                    (images is legacy base64; attachments is the canonical path;
 //                    planMode=true → worker runs this turn read-only, SDK permissionMode:'plan';
+//                    loopId → recurring source; a newer beat supersedes its unstarted predecessors.
 //                    model/effort → the session's overrides, stamped per turn so a
 //                    resumed turn honours what an interactive one would)
 //   - turn_start:    payload = { messageId?: number }
@@ -174,14 +175,32 @@ export const startedMessageIds = (events: readonly SessionEvent[]): Set<Id> => {
   return ids
 }
 
+// Only scheduler-produced messages carry this identity; equal text alone never
+// makes manual messages or separate loops replace one another.
+export const messageLoopId = (event: SessionEvent): Id | undefined => {
+  if (event.type !== 'user_message') return undefined
+  const id = (event.payload as { loopId?: unknown } | null)?.loopId
+  return typeof id === 'number' ? id : undefined
+}
+
 // The authoritative pending queue: persisted user_messages with no matching
 // turn_start yet, in sequence order. State is derived purely from the durable
 // event log — never a transient in-memory queue — so both the web (renders the
 // QUEUED zone) and the session runner (drains it on (re)connect) agree, and a
-// missed live SSE delivery can't strand a message.
+// missed live SSE delivery can't strand a message. For each loop only its newest
+// beat is eligible, even after that beat starts: superseded beats never revive.
 export const unstartedUserMessages = (events: readonly SessionEvent[]): SessionEvent[] => {
   const started = startedMessageIds(events)
-  return events.filter(e => e.type === 'user_message' && !started.has(e.id))
+  const latest = new Map<Id, number>()
+  events.forEach(event => {
+    const loopId = messageLoopId(event)
+    if (loopId !== undefined) latest.set(loopId, Math.max(latest.get(loopId) ?? -1, event.sequence))
+  })
+  return events.filter(event => {
+    if (event.type !== 'user_message' || started.has(event.id)) return false
+    const loopId = messageLoopId(event)
+    return loopId === undefined || event.sequence === latest.get(loopId)
+  })
 }
 
 // --- turn liveness -----------------------------------------------------------
