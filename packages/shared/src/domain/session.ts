@@ -16,13 +16,8 @@ import type { Worker } from './worker.ts'
 export type SessionMode = 'worker' | 'skill'
 export type AgentKind = 'claude-code' | 'codex'
 
-// Reasoning effort for a turn — the union of what the two SDKs accept, since a
-// session's model is free-form and the two enums only partly overlap:
-//   claude-agent-sdk  Options.effort              low | medium | high | xhigh | max
-//   codex-sdk         ThreadOptions.modelReasoningEffort
-//                                        minimal | low | medium | high | xhigh
-// Each runner narrows this to its own SDK's enum (clamping the odd one out), so
-// an effort the target SDK can't express is degraded, never fatal.
+// Effort levels exposed by Baton. Codex accepts them directly; Claude maps
+// 'minimal' to 'low'. Additional SDK levels require explicit integration here.
 export type AgentEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 const EFFORTS: AgentEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']

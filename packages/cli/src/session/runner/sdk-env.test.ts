@@ -70,29 +70,25 @@ describe('codex env options', () => {
   })
 })
 
-// A session's effort is the union of both SDKs' enums, so each side has exactly
-// one level the other lacks. Neither may ever throw — the worst case is running
-// at the nearest supported depth.
 describe('effort narrowing', () => {
   test('levels both SDKs share pass through untouched', () => {
-    for (const level of ['low', 'medium', 'high', 'xhigh'] as const) {
+    for (const level of ['low', 'medium', 'high', 'xhigh', 'max'] as const) {
       assert.equal(claudeEffort(level), level)
       assert.equal(codexEffort(level), level)
     }
   })
 
-  test("each SDK clamps the level it can't express to its nearest neighbour", () => {
-    assert.equal(claudeEffort('minimal'), 'low') // claude has no 'minimal'
-    assert.equal(codexEffort('max'), 'xhigh') // codex-sdk's typedef stops at 'xhigh'
-    assert.equal(claudeEffort('max'), 'max')
+  test('minimal maps to low for Claude and passes through for Codex', () => {
+    assert.equal(claudeEffort('minimal'), 'low')
     assert.equal(codexEffort('minimal'), 'minimal')
   })
 
   test('unset or unrecognized → undefined (the SDK default), never a throw', () => {
     assert.equal(claudeEffort(undefined), undefined)
     assert.equal(codexEffort(undefined), undefined)
-    // 'ultra' exists in the codex binary but not yet in its SDK typedef.
+    // These SDK levels are not exposed by Baton's shared effort type.
     assert.equal(codexEffort('ultra'), undefined)
+    assert.equal(codexEffort('persistent'), undefined)
     assert.equal(claudeEffort('higgh'), undefined)
   })
 })

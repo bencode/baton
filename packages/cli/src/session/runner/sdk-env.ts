@@ -60,13 +60,7 @@ export const codexApprovalPolicy = (): ApprovalMode => {
   return 'never'
 }
 
-// A session's effort (shared AgentEffort) is the union of what the two SDKs take;
-// each SDK gets it narrowed to its own enum. Where a level has no counterpart we
-// clamp to the nearest one the target supports rather than drop it — asking for
-// more thinking and getting the most available beats silently getting the default.
-// Anything unrecognized → undefined (the SDK's own default).
-
-// claude-agent-sdk EffortLevel: low | medium | high | xhigh | max (no 'minimal').
+// Claude has no 'minimal'; use its lowest effort for that shared session setting.
 export const claudeEffort = (raw: string | undefined): EffortLevel | undefined => {
   if (raw === 'minimal') return 'low'
   if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh' || raw === 'max')
@@ -74,12 +68,16 @@ export const claudeEffort = (raw: string | undefined): EffortLevel | undefined =
   return undefined
 }
 
-// codex-sdk ModelReasoningEffort: minimal | low | medium | high | xhigh (no 'max').
-// The codex binary itself already knows 'ultra' above 'xhigh', but the SDK's
-// typedef stops at 'xhigh' — until it catches up, 'max' clamps down to 'xhigh'.
+// Only forward effort levels exposed by Baton.
 export const codexEffort = (raw: string | undefined): ModelReasoningEffort | undefined => {
-  if (raw === 'max') return 'xhigh'
-  if (raw === 'minimal' || raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh')
+  if (
+    raw === 'minimal' ||
+    raw === 'low' ||
+    raw === 'medium' ||
+    raw === 'high' ||
+    raw === 'xhigh' ||
+    raw === 'max'
+  )
     return raw
   return undefined
 }

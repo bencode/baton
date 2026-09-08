@@ -23,8 +23,10 @@ export type SlashCommand = {
 // which provider you meant — it only ever offers that session's own models. These
 // are hints, not a whitelist: any name/effort typed out still passes through.
 const MODEL_SUGGESTIONS: Record<AgentKind, string[]> = {
-  'claude-code': ['opus', 'opus xhigh', 'opus max', 'sonnet', 'sonnet high', 'haiku'],
+  'claude-code': ['opus', 'opus xhigh', 'opus max', 'sonnet', 'sonnet high', 'haiku', 'fable'],
   codex: [
+    'gpt-6-astra',
+    'gpt-6-astra xhigh',
     'gpt-5.6-sol',
     'gpt-5.6-sol xhigh',
     'gpt-5.6-terra',
