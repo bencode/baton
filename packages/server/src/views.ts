@@ -24,7 +24,7 @@ export const sessionWithView = async (
   session: Session,
   store: Store,
   runtime: SessionRuntime,
-  busyTracker: BusyTracker,
+  _busyTracker: BusyTracker,
   commands: CommandBus,
   terminal: TerminalBridge,
   // Enabled-loop count for this session (caller-supplied so the list path can
@@ -34,15 +34,16 @@ export const sessionWithView = async (
   const worker = await store.workers.get(session.workerId)
   // connected = the worker's command stream is open (commands.has) — can take
   // session.start. attached = the worker has a live child process for THIS session
-  // (POST /sessions/:id/status). busy additionally requires an unresolved
-  // turn_start; either attached/busy false → busy=false.
+  // (POST /sessions/:id/status). Busy is independent: losing a connection does
+  // not prove that an execution has stopped.
   const attached = runtime.isActive(session.id)
+  const execution = await store.turns.state(session.id)
   return {
     ...session,
     worker: worker ?? unknownWorker(session.workerId, session.projectId),
     connected: worker ? commands.has(worker.id) : false,
     attached,
-    busy: attached && busyTracker.read(session.id),
+    busy: execution.attempt?.status === 'running' || execution.attempt?.status === 'stopping',
     activeLoops,
     terminalOpen: terminal.isOpen(session.id),
   }

@@ -33,6 +33,7 @@ export type WorkerView = Worker & { connected: boolean }
 //   stop   — kill the child, keep the row + worktree (session goes inactive)
 //   delete — kill the child + remove the worktree (server drops the row)
 export type WorkerCommand =
+  | { cmd: 'session.reconcile'; sessionId: Id }
   | { cmd: 'session.start'; sessionId: Id; name: string }
   | { cmd: 'session.stop'; sessionId: Id }
   // worktreePath carried so the worker can remove it even if it isn't currently

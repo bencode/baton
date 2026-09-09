@@ -16,6 +16,7 @@ const HISTORY_WINDOW = 200
 const OLDER_PAGE = 600
 
 export type StreamState = {
+  connectionRevision: number
   events: SessionEvent[]
   status: 'connecting' | 'open' | 'closed' | 'error'
   hasOlder: boolean
@@ -34,6 +35,8 @@ export const mergeEvents = (existing: SessionEvent[], incoming: SessionEvent[]):
 
 export const useSessionStream = (sessionId: Id | null): StreamState => {
   const api = useApi()
+  const [connectionRevision, setConnectionRevision] = useState(0)
+  const [historyExhausted, setHistoryExhausted] = useState(false)
   const [events, setEvents] = useState<SessionEvent[]>([])
   const [status, setStatus] = useState<StreamState['status']>('connecting')
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -68,17 +71,24 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     setLoadingOlder(true)
     try {
       const older = await api.sessions.listEvents(sessionId, { before, limit: OLDER_PAGE })
-      if (boundSidRef.current === sessionId) apply(older)
+      if (boundSidRef.current === sessionId) {
+        apply(older)
+        if (older.length < OLDER_PAGE) setHistoryExhausted(true)
+      }
     } catch (err) {
       console.error('[session-stream] load older failed', err)
     } finally {
-      loadingOlderRef.current = false
-      setLoadingOlder(false)
+      if (boundSidRef.current === sessionId) {
+        loadingOlderRef.current = false
+        setLoadingOlder(false)
+      }
     }
   }, [sessionId, api, apply])
 
   useEffect(() => {
     boundSidRef.current = sessionId
+    loadingOlderRef.current = false
+    setLoadingOlder(false)
     if (sessionId === null) {
       setEvents([])
       setStatus('closed')
@@ -88,15 +98,19 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     setStatus('connecting')
     lastSeqRef.current = 0
     oldestSeqRef.current = null
+    setHistoryExhausted(false)
     let alive = true
     let opened = false
     let loaded = false // the initial window load has succeeded at least once
-    const runBackfill = (load: Promise<SessionEvent[]>, onLoaded?: () => void) =>
+    const runBackfill = (
+      load: Promise<SessionEvent[]>,
+      onLoaded?: (history: SessionEvent[]) => void,
+    ) =>
       load
         .then(history => {
           if (!alive) return
           apply(history)
-          onLoaded?.()
+          onLoaded?.(history)
           // A failed backfill parks status on 'error'; a later success while the
           // tail is up means we're genuinely live again.
           if (es.readyState === EventSource.OPEN) setStatus('open')
@@ -112,7 +126,8 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     // Initial open loads the recent window; reconnects pull only the gap since
     // the last seen sequence (or the window again if the initial load failed).
     const loadInitial = () =>
-      runBackfill(api.sessions.listEvents(sessionId, { limit: HISTORY_WINDOW }), () => {
+      runBackfill(api.sessions.listEvents(sessionId, { limit: HISTORY_WINDOW }), history => {
+        setHistoryExhausted(history.length < HISTORY_WINDOW)
         loaded = true
       })
     const loadGap = () =>
@@ -122,6 +137,7 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     const openStream = (): EventSource => {
       const stream = new EventSource(api.sessionStreamUrl(sessionId))
       stream.onopen = () => {
+        setConnectionRevision(value => value + 1)
         setStatus('open')
         if (opened) loaded ? loadGap() : loadInitial()
         opened = true
@@ -129,8 +145,8 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
       stream.onmessage = e => {
         try {
           apply([JSON.parse(e.data) as SessionEvent])
-        } catch {
-          // ignore malformed payloads
+        } catch (error) {
+          console.error('[session-stream] invalid event', error)
         }
       }
       stream.onerror = () => setStatus('error')
@@ -162,6 +178,6 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
   }, [sessionId, api, apply])
 
   const first = events[0]
-  const hasOlder = first !== undefined && first.sequence > 0
-  return { events, status, hasOlder, loadingOlder, loadOlder }
+  const hasOlder = first !== undefined && first.sequence > 0 && !historyExhausted
+  return { connectionRevision, events, status, hasOlder, loadingOlder, loadOlder }
 }

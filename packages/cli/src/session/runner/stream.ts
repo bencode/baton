@@ -1,12 +1,12 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEvent, AgentItem } from '@baton/shared'
-import type { WorkerClient } from '../../client.ts'
+import type { AttemptClient } from '../../client.ts'
 
 export type TurnResult = { subtype: string; isError: boolean; resultText: string }
 
 export const streamAgentEvents = async (
   events: AsyncIterable<AgentEvent>,
-  worker: WorkerClient,
+  worker: AttemptClient,
 ): Promise<TurnResult | null> => {
   let result: TurnResult | null = null
   for await (const event of events) {
@@ -30,7 +30,7 @@ export const streamAgentEvents = async (
 
 export const streamClaudeSdkEvents = (
   messages: AsyncIterable<SDKMessage>,
-  worker: WorkerClient,
+  worker: AttemptClient,
 ): Promise<TurnResult | null> => streamAgentEvents(claudeToAgentEvents(messages), worker)
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>

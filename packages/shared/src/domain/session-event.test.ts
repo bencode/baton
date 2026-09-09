@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {
   agentMessageText,
+  cancelledMessageIds,
   closesTurn,
   isAgentWorking,
   opensTurn,
@@ -70,6 +71,17 @@ describe('unstartedUserMessages', () => {
     assert.deepEqual([...startedMessageIds(events)], [1])
   })
 
+  test('cancelling the latest loop beat never revives its predecessor', () => {
+    assert.deepEqual(
+      unstartedUserMessages([
+        ev(1, 'user_message', { text: 'old', loopId: 1 }),
+        ev(2, 'user_message', { text: 'latest', loopId: 1 }),
+        ev(3, 'message_cancelled', { messageId: 2 }),
+      ]),
+      [],
+    )
+  })
+
   test('ignores turn_start without a numeric messageId', () => {
     const events = [ev(1, 'user_message', { text: 'a' }), ev(2, 'turn_start', {})]
     assert.deepEqual(
@@ -85,6 +97,19 @@ describe('unstartedUserMessages', () => {
       ev(4, 'turn_start', null),
     ])
     assert.deepEqual([...ids], [1])
+  })
+
+  test('cancelled messages are excluded from the pending queue', () => {
+    const events = [
+      ev(1, 'user_message', { text: 'a' }),
+      ev(2, 'user_message', { text: 'b' }),
+      ev(3, 'message_cancelled', { messageId: 1 }),
+    ]
+    assert.deepEqual([...cancelledMessageIds(events)], [1])
+    assert.deepEqual(
+      unstartedUserMessages(events).map(e => e.id),
+      [2],
+    )
   })
 })
 
@@ -115,7 +140,7 @@ describe('agentMessageText', () => {
 
 describe('turn liveness predicates', () => {
   test('opensTurn / closesTurn classify only boundary events', () => {
-    assert.equal(opensTurn(ev(1, 'user_message', {})), true)
+    assert.equal(opensTurn(ev(1, 'user_message', {})), false)
     assert.equal(opensTurn(ev(2, 'turn_start', {})), true)
     assert.equal(closesTurn(ev(3, 'turn_complete', {})), true)
     assert.equal(closesTurn(ev(4, 'turn_error', { message: 'x' })), true)
@@ -141,6 +166,23 @@ describe('turn liveness predicates', () => {
         ev(1, 'turn_start', {}),
         ev(2, 'sdk_event', {}),
         ev(3, 'turn_heartbeat', {}),
+      ]),
+      true,
+    )
+  })
+
+  test('isAgentWorking: cancellation closes pending work without closing a running turn', () => {
+    const pending = ev(1, 'user_message', { text: 'pending' })
+    assert.equal(isAgentWorking([pending, ev(2, 'message_cancelled', { messageId: 1 })]), false)
+
+    const running = ev(3, 'user_message', { text: 'running' })
+    const queued = ev(5, 'user_message', { text: 'queued' })
+    assert.equal(
+      isAgentWorking([
+        running,
+        ev(4, 'turn_start', { messageId: 3 }),
+        queued,
+        ev(6, 'message_cancelled', { messageId: 5 }),
       ]),
       true,
     )

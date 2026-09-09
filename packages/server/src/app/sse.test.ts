@@ -66,10 +66,14 @@ describe('server HTTP — SSE chat stream', () => {
         { active: true },
         { authorization: `Bearer ${reg.apiToken}` },
       )
-      // Persisted before any client connects — now part of the replayable history.
+      await ctx.store.sessions.materialize(s.id, {
+        agentSessionId: 'uuid',
+        worktreePath: '/tmp/sse-test',
+      })
+      // Queue invalidations are durable; submission does not fabricate a message.
       await post(`/sessions/${s.id}/messages`, { text: 'pre' })
 
-      // (A) full stream replays the pre-connect message.
+      // (A) full stream replays the pre-connect invalidation.
       const ctlA = new AbortController()
       try {
         const res = await fetch(`${base}/sessions/${s.id}/stream`, {
@@ -79,7 +83,10 @@ describe('server HTTP — SSE chat stream', () => {
         assert.equal(res.status, 200)
         const reader = res.body?.getReader()
         assert.ok(reader)
-        assert.match(await readUntil(reader, 1, 1500), /"text":"pre"/)
+        const chunk = await readUntil(reader, 1, 1500)
+        assert.match(chunk, /"type":"queue_changed"/)
+        assert.match(chunk, /"revision":1/)
+        assert.doesNotMatch(chunk, /"type":"user_message"/)
       } finally {
         ctlA.abort()
       }
@@ -96,8 +103,24 @@ describe('server HTTP — SSE chat stream', () => {
         // The POST round-trip outlasts the server's subscribe, so it's delivered live.
         await post(`/sessions/${s.id}/messages`, { text: 'live' })
         const chunk = await readUntil(reader, 1, 1500)
-        assert.match(chunk, /"text":"live"/)
-        assert.doesNotMatch(chunk, /"text":"pre"/)
+        assert.match(chunk, /"revision":2/)
+        assert.doesNotMatch(chunk, /"revision":1/)
+        const claim = await post(
+          `/sessions/${s.id}/turns/claim`,
+          { claimId: 'sse-test', runnerToken: 'runner' },
+          { authorization: `Bearer ${reg.apiToken}` },
+        )
+        assert.equal(claim.status, 200)
+        const execution = await readUntil(reader, 3, 1500)
+        const events = execution
+          .split('\n')
+          .filter(line => line.startsWith('data:'))
+          .map(line => JSON.parse(line.slice(5)) as { type: string; payload: { text?: string } })
+        assert.deepEqual(
+          events.map(event => event.type),
+          ['user_message', 'queue_changed', 'turn_start'],
+        )
+        assert.equal(events[0]?.payload.text, 'pre\n\nlive')
       } finally {
         ctlB.abort()
       }

@@ -111,6 +111,21 @@ test('sessions.sendMessage POSTs text to /sessions/:id/messages', async () => {
   expect(JSON.parse(init?.body as string)).toEqual({ text: 'hi' })
 })
 
+test('sessions.cancelInput DELETEs one queued message', async () => {
+  const event = {
+    id: 2,
+    sessionId: 7,
+    sequence: 1,
+    type: 'message_cancelled',
+    payload: { messageId: 11 },
+  }
+  const fetchMock = vi.fn<typeof fetch>(async () => res(event))
+  vi.stubGlobal('fetch', fetchMock)
+  await expect(createApi().sessions.cancelInput(7, 11)).resolves.toEqual(event)
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/sessions/7/queue/11')
+  expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('DELETE')
+})
+
 test('sessions.get fetches by int id (no more S-N codes)', async () => {
   const item = { id: 42, name: 's', createdAt: 0 }
   const fetchMock = vi.fn<typeof fetch>(async () => res(item))

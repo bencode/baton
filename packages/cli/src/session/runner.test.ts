@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import type { SessionEvent } from '@baton/shared'
+import type { ClaimedExecution } from '@baton/shared'
 import type { WorkerClient } from '../client.ts'
 import type { SessionConfig } from '../project-config.ts'
 import type { QueryFn } from './runner/query.ts'
@@ -11,191 +8,8 @@ import {
   type EventSourceLike,
   isAgentConversationResumable,
   runDaemon,
-  runTurn,
   shouldReap,
 } from './runner.ts'
-
-// Build a fake query that records the params it was called with and yields the
-// given SDK messages. `seen` lets a test inspect prompt + options afterwards.
-const recordingQuery = (
-  messages: unknown[],
-): { qf: QueryFn; seen: { prompt?: string; options?: Record<string, unknown> } } => {
-  const seen: { prompt?: string; options?: Record<string, unknown> } = {}
-  const qf: QueryFn = params => {
-    seen.prompt = params.prompt
-    seen.options = params.options as Record<string, unknown>
-    return (async function* () {
-      for (const m of messages) yield m as never
-    })()
-  }
-  return { qf, seen }
-}
-
-describe('runTurn', () => {
-  test('posts turn_start + N agent_event + turn_complete; presets sessionId vs resume', async () => {
-    const cfg: SessionConfig = {
-      server: 'http://localhost:3280',
-      sessionId: 1,
-      name: 'dogfood',
-      agentKind: 'claude-code',
-      agentSessionId: '00000000-0000-0000-0000-000000000001',
-      worktreePath: '/tmp/wt',
-    }
-    const calls: Array<{ type: string; payload: unknown }> = []
-    const worker = {
-      close: async () => {},
-      emitEvent: async (type: string, payload: unknown) => {
-        calls.push({ type, payload })
-        return {} as never
-      },
-    } as unknown as WorkerClient
-
-    const { qf, seen } = recordingQuery([
-      { type: 'assistant', message: { content: 'hi' } },
-      { type: 'tool_use', name: 'Read' },
-      { type: 'result', subtype: 'success', is_error: false },
-    ])
-
-    // first turn → sessionId preset (= CLI --session-id)
-    const code1 = await runTurn(
-      cfg,
-      worker,
-      {
-        id: 99,
-        sessionId: 1,
-        sequence: 0,
-        type: 'user_message',
-        payload: { text: 'hi' },
-        createdAt: 0,
-      },
-      false,
-      qf,
-    )
-    assert.equal(seen.options?.sessionId, cfg.agentSessionId)
-    assert.equal(seen.options?.resume, undefined)
-    assert.equal(seen.options?.cwd, cfg.worktreePath)
-    assert.deepEqual(
-      calls.map(c => c.type),
-      ['turn_start', 'agent_event', 'agent_event', 'turn_complete'],
-    )
-    assert.deepEqual(calls[0]?.payload, { messageId: 99 })
-    assert.deepEqual(calls[3]?.payload, { subtype: 'success' })
-    assert.equal(code1, 0)
-
-    // second turn → resume (= CLI --resume)
-    calls.length = 0
-    await runTurn(
-      cfg,
-      worker,
-      {
-        id: 100,
-        sessionId: 1,
-        sequence: 5,
-        type: 'user_message',
-        payload: { text: 'again' },
-        createdAt: 0,
-      },
-      true,
-      qf,
-    )
-    assert.equal(seen.options?.resume, cfg.agentSessionId)
-    assert.equal(seen.options?.sessionId, undefined)
-  })
-
-  test('empty text → turn_error, no query', async () => {
-    const cfg: SessionConfig = {
-      server: 's',
-      sessionId: 1,
-      name: 'x',
-      agentKind: 'claude-code',
-      agentSessionId: 'uuid',
-      worktreePath: '/tmp/wt',
-    }
-    const calls: Array<{ type: string }> = []
-    const worker = {
-      close: async () => {},
-      emitEvent: async (type: string) => {
-        calls.push({ type })
-        return {} as never
-      },
-    } as unknown as WorkerClient
-    let called = false
-    const qf: QueryFn = () => {
-      called = true
-      throw new Error('should not be called')
-    }
-    await runTurn(
-      cfg,
-      worker,
-      { id: 1, sessionId: 1, sequence: 0, type: 'user_message', payload: {}, createdAt: 0 },
-      false,
-      qf,
-    )
-    assert.equal(called, false)
-    assert.deepEqual(
-      calls.map(c => c.type),
-      ['turn_start', 'turn_error'],
-    )
-  })
-
-  test('attachments are downloaded into the worktree and cited in the prompt', async () => {
-    const wt = mkdtempSync(join(tmpdir(), 'baton-turn-'))
-    const cfg: SessionConfig = {
-      server: 'http://srv',
-      sessionId: 1,
-      name: 'x',
-      agentKind: 'claude-code',
-      agentSessionId: 'uuid',
-      worktreePath: wt,
-    }
-    const worker = {
-      close: async () => {},
-      emitEvent: async () => ({}) as never,
-    } as unknown as WorkerClient
-    const fetchImpl = (async () => new Response('PNGDATA')) as unknown as typeof fetch
-
-    const { qf, seen } = recordingQuery([{ type: 'result', subtype: 'success', is_error: false }])
-
-    try {
-      const code = await runTurn(
-        cfg,
-        worker,
-        {
-          id: 1,
-          sessionId: 1,
-          sequence: 0,
-          type: 'user_message',
-          payload: {
-            text: 'describe',
-            attachments: [
-              {
-                id: 'a',
-                sessionId: 1,
-                filename: 'shot.png',
-                contentType: 'image/png',
-                size: 7,
-                url: '/sessions/1/attachments/a',
-                createdAt: 0,
-              },
-            ],
-          },
-          createdAt: 0,
-        },
-        false,
-        qf,
-        () => {},
-        undefined,
-        fetchImpl,
-      )
-      assert.equal(code, 0)
-      assert.match(seen.prompt ?? '', /attachments\/shot\.png/)
-      assert.ok((seen.prompt ?? '').includes('describe'))
-      assert.equal(readFileSync(join(wt, 'attachments/shot.png'), 'utf8'), 'PNGDATA')
-    } finally {
-      rmSync(wt, { recursive: true, force: true })
-    }
-  })
-})
 
 describe('isAgentConversationResumable', () => {
   const claude: SessionConfig = {
@@ -242,492 +56,222 @@ describe('isAgentConversationResumable', () => {
   })
 })
 
-// EventSource stub that fires onopen on the next tick (after runDaemon assigns
-// the handler), driving the reconcile-on-connect path without a real stream.
-const openOnConnect = (): (new (u: string) => EventSourceLike) => {
-  class FakeES {
-    onmessage: ((e: { data: string }) => void) | null = null
-    onerror: (() => void) | null = null
-    onopen: (() => void) | null = null
-    closed = false
-    constructor(public url: string) {
-      setTimeout(() => this.onopen?.(), 0)
-    }
-    close(): void {
-      this.closed = true
-    }
-  }
-  return FakeES as unknown as new (
-    u: string,
-  ) => EventSourceLike
+const cfg: SessionConfig = {
+  server: 'http://srv',
+  sessionId: 1,
+  name: 'x',
+  agentKind: 'claude-code',
+  agentSessionId: 'uuid',
+  worktreePath: '/tmp/wt',
 }
-
-// Like openOnConnect, but also exposes `emit` to push a live SSE event after the
-// daemon has subscribed — drives the interrupt path. `opened` resolves on onopen.
-const controllableES = (): {
-  ctor: new (u: string) => EventSourceLike
-  emit: (data: unknown) => void
-  opened: Promise<void>
-  reopen: () => void
-} => {
-  let inst: {
-    onmessage: ((e: { data: string }) => void) | null
-    onopen: (() => void) | null
-  } | null = null
-  let resolveOpened = (): void => {}
-  const opened = new Promise<void>(r => {
-    resolveOpened = r
-  })
-  class FakeES {
-    onmessage: ((e: { data: string }) => void) | null = null
-    onerror: (() => void) | null = null
+const claimed = (): ClaimedExecution => ({
+  kind: 'execute',
+  config: cfg,
+  turn: {
+    id: 1,
+    sessionId: 1,
+    userEventSequence: 0,
+    status: 'running',
+    createdAt: 0,
+    finishedAt: null,
+  },
+  attempt: {
+    id: 1,
+    turnId: 1,
+    number: 1,
+    claimId: 'c',
+    runnerToken: 'r',
+    status: 'running',
+    leaseUntil: Date.now() + 60_000,
+    stopReason: null,
+    stopRequestedAt: null,
+    startedAt: 0,
+    finishedAt: null,
+    result: null,
+  },
+  message: {
+    id: 1,
+    sessionId: 1,
+    sequence: 0,
+    type: 'user_message',
+    createdAt: 0,
+    payload: { text: 'A\n\nB', planMode: false, inputIds: [1, 2] },
+  },
+})
+const streamStub = () => {
+  let instance: EventSourceLike | undefined
+  class Stream implements EventSourceLike {
     onopen: (() => void) | null = null
-    constructor(public url: string) {
-      inst = this
-      setTimeout(() => {
-        this.onopen?.()
-        resolveOpened()
-      }, 0)
+    onerror: (() => void) | null = null
+    onmessage: ((event: { data: string }) => void) | null = null
+    constructor() {
+      instance = this
     }
-    close(): void {}
+    close() {}
   }
   return {
-    ctor: FakeES as unknown as new (u: string) => EventSourceLike,
-    emit: (data: unknown) => inst?.onmessage?.({ data: JSON.stringify(data) }),
-    opened,
-    reopen: () => inst?.onopen?.(),
+    Stream,
+    open: () => instance?.onopen?.(),
+    emit: (payload: unknown) => instance?.onmessage?.({ data: JSON.stringify(payload) }),
   }
 }
+const tick = () => new Promise(resolve => setImmediate(resolve))
 
-describe('runDaemon reconcile-on-connect', () => {
-  const cfg: SessionConfig = {
-    server: 'http://srv',
-    sessionId: 1,
-    name: 'x',
-    agentKind: 'claude-code',
-    agentSessionId: 'uuid-without-transcript',
-    worktreePath: '/tmp/wt',
+test('claim transport retry keeps claimId; the returned batch invokes SDK once', async () => {
+  const controller = new AbortController()
+  const stream = streamStub()
+  const claims: string[] = []
+  let queries = 0
+  const worker: WorkerClient = {
+    setActive: async () => undefined,
+    claim: async input => {
+      claims.push(input.claimId)
+      if (claims.length === 1) throw new Error('lost claim response')
+      return claimed()
+    },
+    state: async () => ({
+      paused: false,
+      contextResetRequested: false,
+      pendingCount: 0,
+      turn: null,
+      attempt: null,
+    }),
+    stopped: async () => ({ outcome: 'aborted' }),
+    forAttempt: () => ({
+      heartbeat: async () => ({ abortRequested: false, leaseUntil: Date.now() + 60_000 }),
+      emitEvent: async type => ({ ...claimed().message, type }),
+      finish: async input => {
+        controller.abort()
+        return input
+      },
+      materialize: async () => undefined,
+    }),
   }
+  const query: QueryFn = params =>
+    (async function* () {
+      queries++
+      assert.equal(params.prompt, 'A\n\nB')
+      yield { type: 'result', subtype: 'success', is_error: false } as never
+    })()
+  const running = runDaemon(
+    { ...cfg },
+    { worker, runnerToken: 'r', queryFn: query, eventSourceImpl: stream.Stream, log: () => {} },
+    controller.signal,
+  )
+  stream.open()
+  await tick()
+  stream.open()
+  await running
+  assert.equal(queries, 1)
+  assert.equal(claims.length, 2)
+  assert.equal(claims[0], claims[1])
+})
 
-  test('drains an unstarted user_message from the transcript and runs its turn', async () => {
-    const controller = new AbortController()
-    const calls: Array<{ type: string; payload: unknown }> = []
-    // A stranded message: persisted, but no turn_start ever ran (the bug case).
-    const events: SessionEvent[] = [
-      {
-        id: 7,
-        sessionId: 1,
-        sequence: 0,
-        type: 'user_message',
-        payload: { text: 'stranded' },
-        createdAt: 0,
-      },
-    ]
-    const worker = {
-      setActive: async () => ({}),
-      listEvents: async () => events,
-      emitEvent: async (type: string, payload: unknown) => {
-        calls.push({ type, payload })
-        if (type === 'turn_complete') controller.abort() // exit once the turn lands
-        return {} as never
-      },
-    } as unknown as WorkerClient
-    const { qf } = recordingQuery([{ type: 'result', subtype: 'success', is_error: false }])
-
-    await runDaemon(
-      cfg,
-      { worker, queryFn: qf, eventSourceImpl: openOnConnect(), log: () => {} },
-      controller.signal,
-    )
-
-    assert.deepEqual(
-      calls.map(c => c.type),
-      ['turn_start', 'agent_event', 'turn_complete'],
-    )
-    assert.deepEqual(calls[0]?.payload, { messageId: 7 })
+test('late interrupt from an old attempt does not stop the current attempt; matching interrupt does', async () => {
+  const controller = new AbortController()
+  const stream = streamStub()
+  let signal: AbortSignal | undefined
+  let entered: () => void = () => {}
+  const querying = new Promise<void>(resolve => {
+    entered = resolve
   })
-
-  test('live loop beats replace queued predecessors without interrupting the running beat', {
-    timeout: 2000,
-  }, async t => {
-    const controller = new AbortController()
-    t.after(() => controller.abort())
-    const firstStarted = Promise.withResolvers<void>()
-    const finishFirst = Promise.withResolvers<void>()
-    t.after(() => finishFirst.resolve())
-    const starts: number[] = []
-    const prompts: unknown[] = []
-    let completions = 0
-    const worker: WorkerClient = {
-      setActive: async () => ({}),
-      materialize: async () => ({}),
-      listEvents: async () => [],
-      emitEvent: async (type, payload) => {
-        if (type === 'turn_start') starts.push((payload as { messageId: number }).messageId)
-        if (type === 'turn_complete' && ++completions === 5) controller.abort()
-        return {} as SessionEvent
+  const worker: WorkerClient = {
+    setActive: async () => undefined,
+    claim: async () => claimed(),
+    state: async () => ({
+      paused: false,
+      contextResetRequested: false,
+      pendingCount: 0,
+      turn: null,
+      attempt: null,
+    }),
+    stopped: async () => ({ outcome: 'aborted' }),
+    forAttempt: () => ({
+      heartbeat: async () => ({ abortRequested: false, leaseUntil: Date.now() + 60_000 }),
+      emitEvent: async type => ({ ...claimed().message, type }),
+      finish: async input => {
+        assert.equal(input.outcome, 'aborted')
+        controller.abort()
+        return input
       },
-    }
-    const queryFn: QueryFn = params =>
-      (async function* () {
-        prompts.push(params.prompt)
-        if (prompts.length === 1) {
-          firstStarted.resolve()
-          await finishFirst.promise
-        }
-        yield { type: 'result', subtype: 'success', is_error: false } as never
-      })()
-    const es = controllableES()
-    const run = runDaemon(
-      cfg,
-      { worker, queryFn, eventSourceImpl: es.ctor, log: () => {} },
-      controller.signal,
-    )
-    await es.opened
-    const message = (id: number, text: string, loopId?: number): SessionEvent => ({
-      id,
-      sessionId: 1,
-      sequence: id,
-      type: 'user_message',
-      payload: { text, loopId },
-      createdAt: 0,
-    })
-    es.emit(message(1, 'running', 1))
-    await firstStarted.promise
-    es.emit(message(2, 'old', 1))
-    es.emit(message(3, 'old'))
-    es.emit(message(4, 'old', 2))
-    es.emit(message(5, 'latest', 1))
-    es.emit(message(6, 'last manual'))
-    assert.deepEqual(starts, [1])
-    finishFirst.resolve()
-    await run
-    assert.deepEqual(starts, [1, 3, 4, 5, 6])
-    assert.deepEqual(prompts, ['running', 'old', 'old', 'latest', 'last manual'])
+      materialize: async () => undefined,
+    }),
+  }
+  const query: QueryFn = params =>
+    (async function* () {
+      signal = params.options?.abortController?.signal
+      entered()
+      await new Promise<void>(resolve =>
+        signal?.addEventListener('abort', () => resolve(), { once: true }),
+      )
+    })()
+  const running = runDaemon(
+    { ...cfg },
+    { worker, runnerToken: 'r', queryFn: query, eventSourceImpl: stream.Stream, log: () => {} },
+    controller.signal,
+  )
+  stream.open()
+  await querying
+  stream.emit({ type: 'system', payload: { action: 'interrupt', attemptId: 999 } })
+  assert.equal(signal?.aborted, false)
+  stream.emit({ type: 'system', payload: { action: 'interrupt', attemptId: 1 } })
+  await running
+  assert.equal(signal?.aborted, true)
+})
+
+test('uncertain finish strands the execution and never invokes SDK again on reconnect', async () => {
+  const controller = new AbortController()
+  const stream = streamStub()
+  let queries = 0
+  let failed: () => void = () => {}
+  const stranded = new Promise<void>(resolve => {
+    failed = resolve
   })
-
-  test('reconnect replaces queued beats before draining resumes', { timeout: 2000 }, async t => {
-    const controller = new AbortController()
-    t.after(() => controller.abort())
-    const finishFirst = Promise.withResolvers<void>()
-    const firstStarted = Promise.withResolvers<void>()
-    const firstCompleted = Promise.withResolvers<void>()
-    const snapshot = Promise.withResolvers<SessionEvent[]>()
-    t.after(() => finishFirst.resolve())
-    t.after(() => snapshot.resolve([]))
-    const message = (id: number, loopId?: number): SessionEvent => ({
-      id,
-      sessionId: 1,
-      sequence: id,
-      type: 'user_message',
-      payload: { text: String(id), loopId },
-      createdAt: 0,
-    })
-    const starts: number[] = []
-    let reads = 0
-    let completions = 0
-    const worker: WorkerClient = {
-      setActive: async () => ({}),
-      materialize: async () => ({}),
-      listEvents: async () => (++reads === 1 ? [] : snapshot.promise),
-      emitEvent: async (type, payload) => {
-        if (type === 'turn_start') starts.push((payload as { messageId: number }).messageId)
-        if (type === 'turn_complete') {
-          if (++completions === 1) firstCompleted.resolve()
-          if (completions === 2) controller.abort()
-        }
-        return {} as SessionEvent
+  const worker: WorkerClient = {
+    setActive: async () => undefined,
+    claim: async () => claimed(),
+    state: async () => ({
+      paused: false,
+      contextResetRequested: false,
+      pendingCount: 0,
+      turn: null,
+      attempt: null,
+    }),
+    stopped: async () => ({ outcome: 'aborted' }),
+    forAttempt: () => ({
+      heartbeat: async () => ({ abortRequested: false, leaseUntil: Date.now() + 60_000 }),
+      emitEvent: async type => ({ ...claimed().message, type }),
+      finish: async () => {
+        throw new Error('finish response lost')
       },
-    }
-    const queryFn: QueryFn = params =>
-      (async function* () {
-        if (params.prompt === '1') {
-          firstStarted.resolve()
-          await finishFirst.promise
-        }
-        yield { type: 'result', subtype: 'success', is_error: false } as never
-      })()
-    const es = controllableES()
-    const run = runDaemon(
-      cfg,
-      { worker, queryFn, eventSourceImpl: es.ctor, log: () => {} },
-      controller.signal,
-    )
-    await es.opened
-    es.emit(message(1))
-    await firstStarted.promise
-    es.emit(message(2, 1))
-    es.reopen()
-    finishFirst.resolve()
-    await firstCompleted.promise
-    snapshot.resolve([message(2, 1), message(3, 1)])
-    await run
-    assert.deepEqual(starts, [1, 3])
-  })
-
-  test('a stale reconnect snapshot cannot revive a beat superseded by a completed live message', {
-    timeout: 2000,
-  }, async t => {
-    const controller = new AbortController()
-    t.after(() => controller.abort())
-    const message = (id: number, loopId?: number): SessionEvent => ({
-      id,
-      sessionId: 1,
-      sequence: id,
-      type: 'user_message',
-      payload: { text: String(id), loopId },
-      createdAt: 0,
-    })
-    const es = controllableES()
-    const starts: number[] = []
-    let reads = 0
-    let completions = 0
-    const worker: WorkerClient = {
-      setActive: async () => ({}),
-      materialize: async () => ({}),
-      listEvents: async () => (++reads === 1 ? [] : [message(1, 1), message(3)]),
-      emitEvent: async (type, payload) => {
-        if (type === 'turn_start') starts.push((payload as { messageId: number }).messageId)
-        if (type === 'turn_complete') {
-          if (++completions === 1) es.reopen()
-          else controller.abort()
-        }
-        return {} as SessionEvent
+      materialize: async () => undefined,
+    }),
+  }
+  const query: QueryFn = () =>
+    (async function* () {
+      queries++
+      yield { type: 'result', subtype: 'success', is_error: false } as never
+    })()
+  const running = runDaemon(
+    { ...cfg },
+    {
+      worker,
+      runnerToken: 'r',
+      queryFn: query,
+      eventSourceImpl: stream.Stream,
+      log: message => {
+        if (message.startsWith('[execution]')) failed()
       },
-    }
-    const { qf } = recordingQuery([{ type: 'result', subtype: 'success', is_error: false }])
-    const run = runDaemon(
-      cfg,
-      { worker, queryFn: qf, eventSourceImpl: es.ctor, log: () => {} },
-      controller.signal,
-    )
-    await es.opened
-    es.emit(message(2, 1))
-    await run
-    assert.deepEqual(starts, [2, 3])
-  })
-
-  test('a failed first turn stays fresh so a valid model can recover on the next message', async () => {
-    const controller = new AbortController()
-    const freshConfig: SessionConfig = {
-      ...cfg,
-      agentSessionId: '00000000-0000-4000-8000-000000000045',
-    }
-    const calls: Array<{ type: string; payload: unknown }> = []
-    const options: Array<Record<string, unknown>> = []
-    let attempts = 0
-    let completions = 0
-    let firstTurnDone = (): void => {}
-    const firstCompleted = new Promise<void>(resolve => {
-      firstTurnDone = resolve
-    })
-    const worker = {
-      setActive: async () => ({}),
-      listEvents: async () => [],
-      emitEvent: async (type: string, payload: unknown) => {
-        calls.push({ type, payload })
-        if (type === 'turn_complete') {
-          completions++
-          if (completions === 1) firstTurnDone()
-          else controller.abort()
-        }
-        return {} as never
-      },
-    } as unknown as WorkerClient
-    const queryFn: QueryFn = params => {
-      attempts++
-      options.push(params.options as Record<string, unknown>)
-      const attempt = attempts
-      return (async function* () {
-        if (attempt === 1) throw new Error('model unavailable')
-        yield { type: 'result', subtype: 'success', is_error: false, result: 'recovered' } as never
-      })()
-    }
-    const es = controllableES()
-    const run = runDaemon(
-      freshConfig,
-      { worker, queryFn, eventSourceImpl: es.ctor, log: () => {} },
-      controller.signal,
-    )
-    await es.opened
-    es.emit({
-      id: 7,
-      sessionId: 1,
-      sequence: 1,
-      type: 'user_message',
-      payload: { text: 'first', model: 'unavailable-model' },
-      createdAt: 0,
-    })
-    await firstCompleted
-    es.emit({
-      id: 8,
-      sessionId: 1,
-      sequence: 2,
-      type: 'user_message',
-      payload: { text: 'retry', model: 'sonnet' },
-      createdAt: 0,
-    })
-    await run
-
-    assert.equal(attempts, 2)
-    assert.equal(options[0]?.sessionId, freshConfig.agentSessionId)
-    assert.equal(options[0]?.resume, undefined)
-    assert.equal(options[0]?.model, 'unavailable-model')
-    assert.equal(options[1]?.sessionId, freshConfig.agentSessionId)
-    assert.equal(options[1]?.resume, undefined)
-    assert.equal(options[1]?.model, 'sonnet')
-    assert.deepEqual(
-      calls.map(call => call.type),
-      ['turn_start', 'turn_error', 'turn_complete', 'turn_start', 'agent_event', 'turn_complete'],
-    )
-  })
-
-  test('does not re-run a user_message that already has a turn_start', async () => {
-    const controller = new AbortController()
-    const calls: Array<{ type: string }> = []
-    const events: SessionEvent[] = [
-      {
-        id: 7,
-        sessionId: 1,
-        sequence: 0,
-        type: 'user_message',
-        payload: { text: 'done' },
-        createdAt: 0,
-      },
-      {
-        id: 8,
-        sessionId: 1,
-        sequence: 1,
-        type: 'turn_start',
-        payload: { messageId: 7 },
-        createdAt: 0,
-      },
-      { id: 9, sessionId: 1, sequence: 2, type: 'turn_complete', payload: {}, createdAt: 0 },
-    ]
-    const worker = {
-      setActive: async () => ({}),
-      listEvents: async () => events,
-      emitEvent: async (type: string) => {
-        calls.push({ type })
-        return {} as never
-      },
-    } as unknown as WorkerClient
-    const qf: QueryFn = () => {
-      throw new Error('should not run a turn for an already-started message')
-    }
-    // Nothing to reconcile → nothing drains; abort shortly so the daemon exits.
-    setTimeout(() => controller.abort(), 20)
-
-    await runDaemon(
-      cfg,
-      { worker, queryFn: qf, eventSourceImpl: openOnConnect(), log: () => {} },
-      controller.signal,
-    )
-
-    assert.deepEqual(calls, [])
-  })
-
-  test('heals an orphaned open turn (turn_start, no close) left by a prior child', async () => {
-    const controller = new AbortController()
-    const calls: Array<{ type: string; payload: unknown }> = []
-    // A dangling open turn: turn_start with no trailing close (prior child died).
-    const events: SessionEvent[] = [
-      {
-        id: 7,
-        sessionId: 1,
-        sequence: 0,
-        type: 'user_message',
-        payload: { text: 'x' },
-        createdAt: 0,
-      },
-      {
-        id: 8,
-        sessionId: 1,
-        sequence: 1,
-        type: 'turn_start',
-        payload: { messageId: 7 },
-        createdAt: 0,
-      },
-    ]
-    const worker = {
-      setActive: async () => ({}),
-      listEvents: async () => events,
-      emitEvent: async (type: string, payload: unknown) => {
-        calls.push({ type, payload })
-        if (type === 'turn_error') controller.abort() // exit once healed
-        return {} as never
-      },
-    } as unknown as WorkerClient
-    const qf: QueryFn = () => {
-      throw new Error('should not run a turn for an orphaned open turn')
-    }
-
-    await runDaemon(
-      cfg,
-      { worker, queryFn: qf, eventSourceImpl: openOnConnect(), log: () => {} },
-      controller.signal,
-    )
-
-    assert.deepEqual(
-      calls.map(c => c.type),
-      ['turn_error'],
-    )
-    assert.equal((calls[0]?.payload as { synthetic?: boolean }).synthetic, true)
-  })
-
-  test('interrupt with no live turn closes a later-orphaned open turn', async () => {
-    const controller = new AbortController()
-    const calls: Array<{ type: string; payload: unknown }> = []
-    // Empty at connect (reconcile heals nothing); the orphan appears afterwards.
-    let phase = 0
-    const orphan: SessionEvent[] = [
-      {
-        id: 7,
-        sessionId: 1,
-        sequence: 0,
-        type: 'user_message',
-        payload: { text: 'x' },
-        createdAt: 0,
-      },
-      {
-        id: 8,
-        sessionId: 1,
-        sequence: 1,
-        type: 'turn_start',
-        payload: { messageId: 7 },
-        createdAt: 0,
-      },
-    ]
-    const worker = {
-      setActive: async () => ({}),
-      listEvents: async () => (phase === 0 ? [] : orphan),
-      emitEvent: async (type: string, payload: unknown) => {
-        calls.push({ type, payload })
-        if (type === 'turn_error') controller.abort()
-        return {} as never
-      },
-    } as unknown as WorkerClient
-    const qf: QueryFn = () => {
-      throw new Error('should not run a turn')
-    }
-    const es = controllableES()
-    const run = runDaemon(
-      cfg,
-      { worker, queryFn: qf, eventSourceImpl: es.ctor, log: () => {} },
-      controller.signal,
-    )
-    await es.opened
-    await new Promise(r => setTimeout(r, 10)) // let the connect-time reconcile settle (no heal)
-    phase = 1
-    es.emit({ id: 9, sessionId: 1, sequence: 2, type: 'system', payload: { action: 'interrupt' } })
-    await run
-
-    assert.deepEqual(
-      calls.map(c => c.type),
-      ['turn_error'],
-    )
-    assert.equal((calls[0]?.payload as { synthetic?: boolean }).synthetic, true)
-  })
+    },
+    controller.signal,
+  )
+  stream.open()
+  await stranded
+  stream.open()
+  await tick()
+  controller.abort()
+  await running
+  assert.equal(queries, 1)
 })
 
 describe('shouldReap', () => {

@@ -1,19 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import {
-  type Loop,
-  type Session,
-  type SessionEvent,
-  unstartedUserMessages,
-  type WorkerCommand,
-} from '@baton/shared'
+import type { Loop, Session, SessionEvent, WorkerCommand } from '@baton/shared'
 import type { CommandBus } from './command-bus.ts'
 import type { EventBus } from './event-bus.ts'
 import { type LoopSchedulerDeps, nextRunAfter, runDueLoops } from './loop-scheduler.ts'
 import type { ProjectBus } from './project-bus.ts'
 import type { SessionRuntime } from './session-runtime.ts'
-import { deliverMessage } from './session-send.ts'
-import type { LoopPatch, Store } from './store/types.ts'
+import type { EnqueueInput, LoopPatch, Store } from './store/types.ts'
 
 const loop: Loop = {
   id: 1,
@@ -39,6 +32,7 @@ const session = {
 const makeDeps = (opts: { connected: boolean }) => {
   const updates: { id: number; patch: LoopPatch }[] = []
   const appended: SessionEvent[] = []
+  const submitted: EnqueueInput[] = []
   const started: WorkerCommand[] = []
   const published: { projectId: number; signal: unknown }[] = []
   const store = {
@@ -49,22 +43,24 @@ const makeDeps = (opts: { connected: boolean }) => {
         return { ...loop, ...patch } as Loop
       },
     },
-    sessions: {
-      get: async () => session,
-      appendEvent: async (sessionId: number, type: string, payload: unknown) => {
-        const sequence = appended.length
-        const ev = {
-          id: 99 + sequence,
+    sessions: { get: async () => session },
+    inputs: {
+      submit: async (sessionId: number, input: EnqueueInput) => {
+        submitted.push(input)
+        const event: SessionEvent = {
+          id: 99,
           sessionId,
-          sequence,
-          type,
-          payload,
+          sequence: 0,
+          type: 'queue_changed',
+          payload: { revision: 1 },
           createdAt: 0,
-        } as SessionEvent
-        appended.push(ev)
-        return ev
+        }
+        appended.push(event)
+        return {
+          value: { input: { id: 1 }, queue: { revision: 1, items: [] }, sinceSequence: 0 },
+          events: [event],
+        }
       },
-      touch: async () => session,
     },
   } as unknown as Store
   const commands = {
@@ -81,7 +77,7 @@ const makeDeps = (opts: { connected: boolean }) => {
       publish: (projectId: number, signal: unknown) => published.push({ projectId, signal }),
     } as unknown as ProjectBus,
   }
-  return { deps, updates, appended, started, published }
+  return { deps, updates, appended, submitted, started, published }
 }
 
 test('nextRunAfter advances one full interval from now', () => {
@@ -89,10 +85,11 @@ test('nextRunAfter advances one full interval from now', () => {
 })
 
 test('a due loop with a connected worker delivers, wakes it, advances with ok', async () => {
-  const { deps, updates, appended, started } = makeDeps({ connected: true })
+  const { deps, updates, appended, submitted, started } = makeDeps({ connected: true })
   await runDueLoops(deps, 1000)
   assert.equal(appended.length, 1) // message persisted
-  assert.equal(appended[0]?.type, 'user_message')
+  assert.equal(appended[0]?.type, 'queue_changed')
+  assert.deepEqual(submitted, [{ text: loop.message, loopId: loop.id }])
   assert.deepEqual(started, [{ cmd: 'session.start', sessionId: 7, name: 's' }]) // worker woken
   assert.equal(updates[0]?.patch.lastStatus, 'ok')
   assert.equal(updates[0]?.patch.nextRunAt, 61_000)
@@ -108,17 +105,4 @@ test('a due loop with an offline worker is skipped — nothing persisted, schedu
   // The beat still signals the project stream so an open loops panel refreshes
   // its row (deliverMessage published nothing on the offline path).
   assert.deepEqual(published, [{ projectId: 3, signal: { resource: 'loops' } }])
-})
-
-test('successive beats replace only their own pending message; manual sends stay separate', async () => {
-  const { deps, appended } = makeDeps({ connected: true })
-  await runDueLoops(deps, 1000)
-  await deliverMessage(session, { text: loop.message }, deps)
-  await runDueLoops(deps, 61_000)
-  assert.deepEqual(appended[0]?.payload, { text: loop.message, loopId: loop.id })
-  assert.deepEqual(appended[1]?.payload, { text: loop.message })
-  assert.deepEqual(
-    unstartedUserMessages(appended).map(e => e.id),
-    [100, 101],
-  )
 })

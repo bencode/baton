@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test 'src/**/*.test.ts'",
     "db:migrate": "prisma migrate dev",
+    "db:backfill-inputs": "tsx src/migrate-session-inputs.ts",
     "db:generate": "prisma generate",
     "db:reset": "prisma migrate reset --force"
   },

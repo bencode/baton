@@ -1,12 +1,15 @@
 import type {
   AgentKind,
   Attachment,
+  Attempt,
+  AttemptResult,
   Channel,
   ChannelMessage,
   Id,
   Loop,
   LoopStatus,
   MemberKind,
+  PendingInput,
   Project,
   Requirement,
   RequirementStatus,
@@ -18,6 +21,7 @@ import type {
   Task,
   TaskComment,
   TaskStatus,
+  Turn,
   Worker,
   Workspace,
 } from '@baton/shared'
@@ -36,10 +40,44 @@ import type {
   User as DbUser,
   Worker as DbWorker,
   Workspace as DbWorkspace,
+  SessionPendingInput,
+  SessionTurn,
+  SessionTurnAttempt,
 } from '@prisma/client'
 import type { StoredArtifact, UserRecord } from './types.ts'
 
 const parseJson = <T>(s: string): T => JSON.parse(s) as T
+
+export const toPendingInput = (r: SessionPendingInput): PendingInput => ({
+  id: r.id,
+  sessionId: r.sessionId,
+  text: r.text,
+  planMode: r.planMode,
+  model: r.model,
+  replyExpected: r.replyExpected,
+  images: parseJson<string[]>(r.images),
+  attachments: parseJson<Attachment[]>(r.attachments),
+  effort: isAgentEffort(r.effort) ? r.effort : null,
+  createdAt: r.createdAt.getTime(),
+})
+export const toTurn = (r: SessionTurn): Turn => ({
+  id: r.id,
+  sessionId: r.sessionId,
+  userEventSequence: r.userEventSequence,
+  status: r.status as Turn['status'],
+  createdAt: r.createdAt.getTime(),
+  finishedAt: r.finishedAt?.getTime() ?? null,
+})
+export const toAttempt = (r: SessionTurnAttempt): Attempt => ({
+  ...r,
+  status: r.status as Attempt['status'],
+  stopReason: r.stopReason as Attempt['stopReason'],
+  leaseUntil: r.leaseUntil.getTime(),
+  startedAt: r.startedAt.getTime(),
+  stopRequestedAt: r.stopRequestedAt?.getTime() ?? null,
+  finishedAt: r.finishedAt?.getTime() ?? null,
+  result: r.result ? parseJson<AttemptResult>(r.result) : null,
+})
 
 export const toWorkspace = (r: DbWorkspace): Workspace => ({
   id: r.id,
@@ -128,6 +166,7 @@ export const toSessionEvent = (r: DbSessionEvent): SessionEvent => ({
   sequence: r.sequence,
   type: r.type as SessionEventType,
   payload: parseJson<unknown>(r.payload),
+  ...(r.attemptId === null ? {} : { attemptId: r.attemptId }),
   createdAt: r.createdAt.getTime(),
 })
 

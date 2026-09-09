@@ -47,8 +47,31 @@ export const sessionRunCommand = defineCommand({
   meta: { name: 'run', description: 'run a session child (spawned by the worker daemon)' },
   args: {
     session: { type: 'positional', required: true, description: 'session int id' },
+    'runner-token': { type: 'string', required: true, description: 'internal process identity' },
   },
   run: async ({ args }) => {
+    if (!process.connected) throw new Error('session runner requires supervisor IPC')
+    await new Promise<void>((resolve, reject) => {
+      const onMessage = (message: unknown): void => {
+        if (
+          typeof message !== 'object' ||
+          message === null ||
+          !('type' in message) ||
+          message.type !== 'execute'
+        )
+          return
+        process.off('message', onMessage)
+        process.off('disconnect', onDisconnect)
+        resolve()
+      }
+      const onDisconnect = (): void => {
+        process.off('message', onMessage)
+        reject(new Error('supervisor disconnected before start'))
+      }
+      process.on('message', onMessage)
+      process.once('disconnect', onDisconnect)
+      process.send?.({ type: 'ready' })
+    })
     const server = process.env.BATON_SERVER
     const workerToken = process.env.BATON_WORKER_TOKEN
     if (!server || !workerToken)
@@ -74,10 +97,13 @@ export const sessionRunCommand = defineCommand({
     const stop = (): void => ac.abort()
     process.on('SIGINT', stop)
     process.on('SIGTERM', stop)
+    process.on('disconnect', stop)
+    if (!process.connected) stop()
     await runDaemon(
       config,
       {
         worker,
+        runnerToken: args['runner-token'],
         eventSourceImpl: authedEventSource(workerToken),
         fetchImpl: bearerFetch(workerToken),
       },

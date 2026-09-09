@@ -24,8 +24,15 @@ import {
   restoreWorktree,
   syncBaseBranch,
 } from '../session/worktree.ts'
-import { killProcessGroup } from './proc.ts'
 import { syncBundledArtifactSkill } from './bundled-skills.ts'
+import { killProcessGroup } from './proc.ts'
+import {
+  RUNNER_RECORD,
+  type RunnerRecord,
+  readRunnerRecord,
+  stopRecordedRunner,
+  writeRunnerRecord,
+} from './session-process.ts'
 
 // Node-runnable entry to re-exec for the session child (`baton session run`).
 // Dev: the tsx shim (bin/baton.mjs) that loads src/index.ts. Published bundle:
@@ -38,12 +45,12 @@ const binPath = (): string => {
 
 export type SessionSupervisor = {
   start(sessionId: Id, name: string): Promise<void>
-  stop(sessionId: Id): void
-  remove(sessionId: Id, worktreePath: string | null): void
+  stop(sessionId: Id): Promise<void>
+  remove(sessionId: Id, worktreePath: string | null): Promise<void>
   title(sessionId: Id, agentSessionId: string, worktreePath: string): Promise<void>
-  reconcile(): Promise<void>
+  reconcile(sessionId?: Id): Promise<void>
   has(sessionId: Id): boolean
-  killAll(): void
+  killAll(): Promise<void>
 }
 
 export type BaseBranchSync = (repo: string, branch: string) => Promise<string>
@@ -79,6 +86,19 @@ export const createSessionSupervisor = (deps: {
   // Track the worktree path alongside the child so we can git-remove it on delete —
   // by then the server row is gone, so we can't re-fetch it.
   const children = new Map<Id, { child: ChildProcess; worktreePath: string }>()
+  const lifecycle = new Map<Id, Promise<void>>()
+  const enqueue = (id: Id, action: () => Promise<void>): Promise<void> => {
+    const previous = lifecycle.get(id)
+    const pending = previous
+      ? previous.catch(error => log(`previous lifecycle #${id}: ${String(error)}`)).then(action)
+      : action()
+    lifecycle.set(id, pending)
+    const clear = (): void => {
+      if (lifecycle.get(id) === pending) lifecycle.delete(id)
+    }
+    void pending.then(clear, clear)
+    return pending
+  }
   const starts = new Map<Id, { epoch: number; promise: Promise<void> }>()
   const startEpochs = new Map<Id, number>()
   const currentStartEpoch = (sessionId: Id): number => startEpochs.get(sessionId) ?? 0
@@ -88,23 +108,96 @@ export const createSessionSupervisor = (deps: {
 
   // Spawn the session child, handing it the worker credentials via env so it can
   // authenticate session writes with the worker token.
-  const spawnChild = (sessionId: Id, worktreePath: string): void => {
+  const stopRecord = async (sessionId: Id, worktreePath: string, token?: string): Promise<void> => {
+    const record = await readRunnerRecord(worktreePath)
+    if (!record) {
+      if (token) throw new Error('missing record for an unfinished execution')
+      return
+    }
+    if (token && token !== record.runnerToken)
+      throw new Error('runner identity does not match the attempt')
+    await stopRecordedRunner(record, { server: cfg.server, workerId: cfg.workerId, sessionId })
+  }
+
+  const spawnChild = async (
+    sessionId: Id,
+    worktreePath: string,
+    wasCanceled: () => boolean,
+  ): Promise<void> => {
     if (children.has(sessionId)) return
-    const child = spawn(process.execPath, [binPath(), 'session', 'run', String(sessionId)], {
-      detached: true,
-      stdio: 'inherit',
-      env: { ...process.env, BATON_SERVER: cfg.server, BATON_WORKER_TOKEN: cfg.apiToken },
+    await stopRecord(sessionId, worktreePath)
+    const runnerToken = randomUUID()
+    const child = spawn(
+      process.execPath,
+      [binPath(), 'session', 'run', String(sessionId), '--runner-token', runnerToken],
+      {
+        detached: true,
+        stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+        env: { ...process.env, BATON_SERVER: cfg.server, BATON_WORKER_TOKEN: cfg.apiToken },
+      },
+    )
+    const entry = { child, worktreePath }
+    children.set(sessionId, entry)
+    let readyTimer: ReturnType<typeof setTimeout>
+    const ready = new Promise<void>((resolve, reject) => {
+      child.on('message', message => {
+        if (
+          typeof message === 'object' &&
+          message !== null &&
+          'type' in message &&
+          message.type === 'ready'
+        )
+          resolve()
+      })
+      child.once('error', reject)
+      child.once('exit', () => reject(new Error('session child exited before ready')))
+      readyTimer = setTimeout(() => reject(new Error('session child readiness timeout')), 30_000)
     })
-    children.set(sessionId, { child, worktreePath })
-    log(`spawned session #${sessionId} (${worktreePath})`)
-    // The child reports itself active once its stream subscription is open (see
-    // runner.ts) — so `attached` means "ready to receive", not just "spawned". We
-    // only own the inactive report here (on exit), reliable even if it crashes.
+    const readiness = ready.finally(() => clearTimeout(readyTimer))
+    // Observe rejection before the record write finishes.
+    void readiness.catch(error => log(`[runner-ready] ${String(error)}`))
     child.on('exit', code => {
+      if (children.get(sessionId) !== entry) return
       children.delete(sessionId)
-      log(`session #${sessionId} child exited (code=${code ?? -1})`)
-      void client.sessions.setStatus(sessionId, false, cfg.apiToken).catch(() => {})
+      log(`session #${sessionId} exited (${code})`)
+      void client.sessions
+        .setStatus(sessionId, false, cfg.apiToken)
+        .catch(error => log(`inactive report failed: ${String(error)}`))
     })
+    child.on('message', message => {
+      if (children.get(sessionId) !== entry) return
+      if (
+        typeof message === 'object' &&
+        message !== null &&
+        'type' in message &&
+        message.type === 'execution-stuck'
+      )
+        void stop(sessionId).catch(error => log(`stuck execution cleanup failed: ${String(error)}`))
+    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        child.once('spawn', resolve)
+        child.once('error', reject)
+      })
+      if (!child.pid) throw new Error('session child has no PID')
+      const record: RunnerRecord = {
+        server: cfg.server,
+        workerId: cfg.workerId,
+        sessionId,
+        runnerToken,
+        pid: child.pid,
+        pgid: child.pid,
+      }
+      await writeRunnerRecord(worktreePath, record)
+      await readiness
+      if (wasCanceled()) return
+      await new Promise<void>((resolve, reject) =>
+        child.send({ type: 'execute' }, error => (error ? reject(error) : resolve())),
+      )
+    } catch (error) {
+      killProcessGroup(child)
+      throw error
+    }
   }
 
   // Materialize on first sight (mint agentSessionId + git worktree, PATCH back),
@@ -122,6 +215,14 @@ export const createSessionSupervisor = (deps: {
       return log(`session #${sessionId} has an open terminal — skipping headless start`)
     if (children.has(sessionId)) return log(`session #${sessionId} already running`)
     const session = await client.sessions.get(sessionId)
+    const execution = await client.sessions.execution(sessionId)
+    if (
+      execution.paused ||
+      execution.contextResetRequested ||
+      execution.attempt?.status === 'running' ||
+      execution.attempt?.status === 'stopping'
+    )
+      return
     if (wasCanceled()) return log(`session #${sessionId} start canceled before materializing`)
     let worktreePath = session.worktreePath
     if (!session.agentSessionId || !worktreePath) {
@@ -151,6 +252,8 @@ export const createSessionSupervisor = (deps: {
     // a rotated token; no live child yet, so no race); keep it out of agent commits.
     ensureExcluded(repo, PROJECT_CONFIG_NAME)
     ensureExcluded(repo, '.baton-services/')
+    ensureExcluded(repo, RUNNER_RECORD)
+    ensureExcluded(repo, '.baton-runner.json.*.tmp')
     saveProjectConfig(join(worktreePath, PROJECT_CONFIG_NAME), worktreeConfig(cfg, sessionId))
     syncBundledArtifactSkill(repo, worktreePath)
     // Re-check: the top guard ran before the awaits above (get / materialize), so a
@@ -158,19 +261,15 @@ export const createSessionSupervisor = (deps: {
     // don't spawn a headless child over it.
     if (hasTerminal(sessionId))
       return log(`session #${sessionId} terminal opened mid-start — skipping headless start`)
-    spawnChild(sessionId, worktreePath)
+    if (wasCanceled()) return
+    await spawnChild(sessionId, worktreePath, wasCanceled)
   }
 
   const start = (sessionId: Id, name: string): Promise<void> => {
     const epoch = currentStartEpoch(sessionId)
     const existing = starts.get(sessionId)
     if (existing?.epoch === epoch) return existing.promise
-    const pending = existing
-      ? existing.promise.then(
-          () => startOne(sessionId, name, epoch),
-          () => startOne(sessionId, name, epoch),
-        )
-      : startOne(sessionId, name, epoch)
+    const pending = enqueue(sessionId, () => startOne(sessionId, name, epoch))
     starts.set(sessionId, { epoch, promise: pending })
     const clear = (): void => {
       if (starts.get(sessionId)?.promise === pending) starts.delete(sessionId)
@@ -180,29 +279,28 @@ export const createSessionSupervisor = (deps: {
   }
 
   // Stop: kill the child but keep the worktree (session goes inactive, resumable).
-  const stop = (sessionId: Id): void => {
+  const stop = (sessionId: Id): Promise<void> => {
     cancelStart(sessionId)
-    closeTerminal(sessionId) // tear down an open terminal too, if any
-    const entry = children.get(sessionId)
-    if (!entry) return
-    killProcessGroup(entry.child)
-    children.delete(sessionId)
-    log(`stopped session #${sessionId}`)
+    return enqueue(sessionId, async () => {
+      const entry = children.get(sessionId)
+      const session = await client.sessions.get(sessionId)
+      if (session.worktreePath) await stopRecord(sessionId, session.worktreePath)
+      if (entry && children.get(sessionId) === entry) children.delete(sessionId)
+    })
   }
 
-  // Delete: kill the child (if tracked) AND remove the worktree. The path comes
-  // from our tracked entry, or the command itself when we aren't tracking a child.
-  const remove = (sessionId: Id, worktreePath: string | null): void => {
+  const remove = (sessionId: Id, worktreePath: string | null): Promise<void> => {
     cancelStart(sessionId)
-    closeTerminal(sessionId) // kill an open terminal before removing the worktree
-    const entry = children.get(sessionId)
-    if (entry) {
-      killProcessGroup(entry.child)
-      children.delete(sessionId)
-    }
-    const wt = entry?.worktreePath ?? worktreePath
-    if (wt) removeWorktree(repo, wt)
-    log(`deleted session #${sessionId} (removed worktree)`)
+    closeTerminal(sessionId)
+    return enqueue(sessionId, async () => {
+      const entry = children.get(sessionId)
+      const path = entry?.worktreePath ?? worktreePath
+      if (path) {
+        await stopRecord(sessionId, path)
+        removeWorktree(repo, path)
+      }
+      if (children.get(sessionId) === entry) children.delete(sessionId)
+    })
   }
 
   // Read the provider-neutral event log first so both agents share the same title
@@ -213,7 +311,7 @@ export const createSessionSupervisor = (deps: {
     worktreePath: string,
   ): Promise<void> => {
     const session = await client.sessions.get(sessionId)
-    const events = await client.sessions.listEvents(sessionId).catch(() => [])
+    const events = await client.sessions.listEvents(sessionId)
     const exchange =
       parseFirstExchangeFromEvents(events) ??
       (session.agentKind === 'claude-code' ? readFirstExchange(agentSessionId) : null)
@@ -237,19 +335,55 @@ export const createSessionSupervisor = (deps: {
     log(`✎ titled session #${sessionId} → ${outcome.title}`)
   }
 
-  // On (re)connect, kill any child whose session no longer exists server-side —
-  // heals a session.delete dropped while disconnected. We do NOT auto-start: resume
-  // is explicit.
-  const reconcile = async (): Promise<void> => {
-    const owned = (await client.sessions.listByProject(cfg.projectId)).filter(
-      s => s.workerId === cfg.workerId,
-    )
-    const live = new Set(owned.map(s => s.id))
-    for (const [sid, entry] of children) {
-      if (!live.has(sid)) {
-        killProcessGroup(entry.child)
-        children.delete(sid)
-        log(`reconcile: stopped orphan session #${sid}`)
+  // Re-read durable state inside the lifecycle queue, so a stale reconcile
+  // cannot kill a replacement child started by a simultaneous command.
+  const reconcile = async (sessionId?: Id): Promise<void> => {
+    const sessions =
+      sessionId === undefined
+        ? (await client.sessions.listByProject(cfg.projectId)).filter(
+            s => s.workerId === cfg.workerId,
+          )
+        : [await client.sessions.get(sessionId)]
+    for (const candidate of sessions)
+      await enqueue(candidate.id, async () => {
+        const session = await client.sessions.get(candidate.id)
+        let execution = await client.sessions.execution(session.id)
+        if (execution.attempt?.status === 'stopping') {
+          if (!session.worktreePath) throw new Error('unfinished execution without worktree')
+          if (
+            children.has(session.id) &&
+            Date.now() - (execution.attempt.stopRequestedAt ?? 0) < 10_000
+          )
+            return
+          await stopRecord(session.id, session.worktreePath, execution.attempt.runnerToken)
+          children.delete(session.id)
+          await client.sessions.stopped(
+            session.id,
+            execution.attempt.id,
+            execution.attempt.runnerToken,
+          )
+          execution = await client.sessions.execution(session.id)
+        }
+        if (execution.paused) {
+          if (session.worktreePath) await stopRecord(session.id, session.worktreePath)
+          return
+        }
+        if (execution.attempt?.status === 'running') {
+          if (!children.has(session.id) && session.worktreePath)
+            await stopRecord(session.id, session.worktreePath, execution.attempt.runnerToken)
+          return
+        }
+        if (execution.pendingCount || execution.turn?.status === 'recovering')
+          await startOne(session.id, session.name, currentStartEpoch(session.id))
+      })
+    if (sessionId === undefined) {
+      const live = new Set(sessions.map(s => s.id))
+      for (const [id, entry] of children) {
+        if (!live.has(id))
+          await enqueue(id, async () => {
+            await stopRecord(id, entry.worktreePath)
+            if (children.get(id) === entry) children.delete(id)
+          })
       }
     }
   }
@@ -261,8 +395,8 @@ export const createSessionSupervisor = (deps: {
     title,
     reconcile,
     has: sessionId => children.has(sessionId),
-    killAll: () => {
-      for (const { child } of children.values()) killProcessGroup(child)
+    killAll: async () => {
+      for (const id of new Set([...children.keys(), ...starts.keys()])) await stop(id)
     },
   }
 }

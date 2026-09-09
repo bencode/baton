@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto'
 import { parseEffort } from '@baton/shared'
 import { loadScopedSession } from '../../middleware/domain-scope.ts'
 import { intParam } from '../../views.ts'
 import type { RegisterSessionGroup } from './helpers.ts'
+import { controlExecution } from './turns.ts'
 
 // Runtime control + per-session settings: child up/down status, context clear,
 // plan-mode and model toggles, interrupt, and the auto-title trigger.
@@ -33,13 +33,8 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
     return c.json(await toView(owned.session))
   })
 
-  // Clear context — reset the claude conversation while keeping the session row,
-  // worktree, share url, and DingTalk binding. We give the session a fresh
-  // agentSessionId (next turn finds no transcript → a brand-new `--session-id`
-  // conversation; code in the worktree is kept), then restart the child so it
-  // reads the new id (the runner caches it in memory). A 'system' event records
-  // it in the transcript. Materialized sessions only — a fresh one has nothing
-  // to clear.
+  // Stop any current attempt before resetting the provider conversation.
+  // Pending input, worktree and paused state are preserved.
   app.post('/sessions/:id/clear', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
@@ -47,32 +42,15 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
     // here would orphan the live agent. Make the user close the terminal first.
     if (terminal.isOpen(s.id))
       return c.json({ error: 'terminal open — close it before clearing' }, 409)
-    let view = s
-    if (s.agentSessionId && s.worktreePath) {
-      const nextId = randomUUID()
-      view = await store.sessions.materialize(s.id, {
-        agentSessionId: s.agentKind === 'codex' ? `pending:${nextId}` : nextId,
-        worktreePath: s.worktreePath,
-      })
-      // Restart the running child so it picks up the new id — but only if it's
-      // actually active. Clearing a stopped session just regenerates the id
-      // (the next resume reads it); don't silently revive a deliberately-stopped
-      // one. The stop→start restart shares the same (rare) status race as
-      // stop→resume; a manual resume recovers if it ever lands wrong.
-      if (runtime.isActive(s.id)) {
-        commands.publish(s.workerId, { cmd: 'session.stop', sessionId: s.id })
-        commands.publish(s.workerId, { cmd: 'session.start', sessionId: s.id, name: s.name })
-      }
-    }
-    const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'context_cleared' })
-    bus.publish(s.id, ev)
-    return c.json(await toView(view))
+    const execution = await controlExecution(ctx, s, 'context_clear')
+    const updated = await store.sessions.get(s.id)
+    return c.json(await toView(updated ?? s), execution.contextResetRequested ? 202 : 200)
   })
 
   // Toggle the session-wide read-only plan mode (web /plan or Shift+Tab). The
   // flag is persisted on the session, so it survives reloads and syncs across
   // clients; the worker never reads it directly — the server stamps each
-  // user_message with the session's planMode (below), and the runner runs that
+  // PendingInput with the session's planMode, and the runner runs that
   // turn with permissionMode:'plan'. Idempotent: the body carries the target
   // value. A 'system' event records the switch in the transcript; bump() so the
   // rail/detail refetch the new flag.
@@ -90,7 +68,7 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
 
   // Set the session's model + effort override (web /model <name> [effort]; bare
   // /model resets both). Same shape as /mode: persisted on the session, stamped
-  // onto each user_message (below), and the runner hands them to the SDK.
+  // onto each PendingInput, and the runner hands them to the SDK.
   //
   // The two args are validated asymmetrically, on purpose. The model name passes
   // through verbatim — no whitelist (gateway model ids vary); a bad name surfaces
@@ -119,17 +97,7 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
   app.post('/sessions/:id/abort', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
-    const ev = await store.sessions.appendEvent(s.id, 'system', { action: 'interrupt' })
-    bus.publish(s.id, ev)
-    // Drive the authority too, not just the breadcrumb: a healthy runner aborts
-    // its live turn and emits the close (fast path). But if the runner is wedged
-    // or the session stream is dead, the interrupt event never reaches it — so
-    // mark the open turn stale, and the next sweep tick (≤30s) synthesizes the
-    // close. Either way the user's interrupt actually clears the "thinking" state.
-    if (busyTracker.read(s.id)) {
-      busyTracker.markStale(s.id)
-      bump(s.projectId)
-    }
+    await controlExecution(ctx, s, 'interrupt')
     return c.json(await toView(s))
   })
 
@@ -159,6 +127,11 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
       bump(s.projectId)
       return c.json(await toView(s))
     }
+    if ((await store.turns.state(s.id)).turn)
+      return c.json(
+        { error: 'execution unfinished — wait for it to stop before opening a terminal' },
+        409,
+      )
     if (runtime.isActive(s.id))
       return c.json({ error: 'session active — stop it to open a terminal' }, 409)
     if (!commands.has(s.workerId))

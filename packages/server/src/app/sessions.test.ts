@@ -164,7 +164,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
   })
 
-  test('messages: POST /sessions/:id/messages persists a user_message (per-session sequence)', async () => {
+  test('messages: POST /sessions/:id/messages persists PendingInput without fabricating a user_message', async () => {
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)
     await postJson(
@@ -177,11 +177,14 @@ describe('server HTTP — sessions + chat protocol', () => {
     )
     const res = await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
     assert.equal(res.status, 201)
-    const ev = (await res.json()) as { type: string; sequence: number; payload: { text: string } }
-    assert.equal(ev.type, 'user_message')
-    // Persisted now → sequence is the per-session 0-based position (fresh db).
-    assert.equal(ev.sequence, 0)
-    assert.equal(ev.payload.text, 'hi')
+    const ev = (await res.json()) as { sinceSequence: number; input: { text: string } }
+    assert.equal(ev.input.text, 'hi')
+    assert.equal(
+      (await ctx.store.sessions.listEvents(session.id)).some(
+        event => event.type === 'user_message',
+      ),
+      false,
+    )
 
     // 400 on empty text + images
     assert.equal(
@@ -207,24 +210,24 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(session.planMode, false)
     const m0 = (await (
       await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
-    ).json()) as { payload: { planMode?: boolean } }
-    assert.equal(m0.payload.planMode, undefined)
+    ).json()) as { input: { planMode: boolean } }
+    assert.equal(m0.input.planMode, false)
 
     // Enter plan mode → view reflects it, and the next message is stamped.
     const on = await postJson(app, `/sessions/${session.id}/mode`, { planMode: true })
     assert.equal(((await on.json()) as { planMode: boolean }).planMode, true)
     const m1 = (await (
       await postJson(app, `/sessions/${session.id}/messages`, { text: 'plan it' })
-    ).json()) as { payload: { planMode?: boolean } }
-    assert.equal(m1.payload.planMode, true)
+    ).json()) as { input: { planMode: boolean } }
+    assert.equal(m1.input.planMode, true)
 
     // Exit plan mode → view flips back, messages stop carrying the flag.
     const off = await postJson(app, `/sessions/${session.id}/mode`, { planMode: false })
     assert.equal(((await off.json()) as { planMode: boolean }).planMode, false)
     const m2 = (await (
       await postJson(app, `/sessions/${session.id}/messages`, { text: 'go' })
-    ).json()) as { payload: { planMode?: boolean } }
-    assert.equal(m2.payload.planMode, undefined)
+    ).json()) as { input: { planMode: boolean } }
+    assert.equal(m2.input.planMode, false)
   })
 
   test('model: /model set persists on the view + stamps subsequent messages; empty resets', async () => {
@@ -243,9 +246,9 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(view.effort, 'max')
     const m1 = (await (
       await postJson(app, `/sessions/${session.id}/messages`, { text: 'hi' })
-    ).json()) as { payload: { model?: string; effort?: string } }
-    assert.equal(m1.payload.model, 'opus')
-    assert.equal(m1.payload.effort, 'max')
+    ).json()) as { input: { model: string | null; effort: string | null } }
+    assert.equal(m1.input.model, 'opus')
+    assert.equal(m1.input.effort, 'max')
 
     // Bare /model (empty body) resets both → messages stop carrying either.
     const off = await postJson(app, `/sessions/${session.id}/model`, {})
@@ -254,9 +257,9 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(reset.effort, null)
     const m2 = (await (
       await postJson(app, `/sessions/${session.id}/messages`, { text: 'go' })
-    ).json()) as { payload: { model?: string; effort?: string } }
-    assert.equal(m2.payload.model, undefined)
-    assert.equal(m2.payload.effort, undefined)
+    ).json()) as { input: { model: string | null; effort: string | null } }
+    assert.equal(m2.input.model, null)
+    assert.equal(m2.input.effort, null)
   })
 
   test('model: an unknown effort is rejected outright, leaving the override untouched', async () => {
@@ -289,8 +292,8 @@ describe('server HTTP — sessions + chat protocol', () => {
       { active: true },
       { authorization: `Bearer ${workerToken}` },
     )
-    await postJson(app, `/sessions/${session.id}/messages`, { text: 'one' })
-    await postJson(app, `/sessions/${session.id}/messages`, { text: 'two' })
+    await ctx.store.sessions.appendEvent(session.id, 'user_message', { text: 'one' })
+    await ctx.store.sessions.appendEvent(session.id, 'user_message', { text: 'two' })
     // The transcript is now persisted server-side (not browser-only): the store
     // holds both in order — what the stream replays on (re)connect.
     const events = await ctx.store.sessions.listEvents(session.id)
@@ -356,9 +359,8 @@ describe('server HTTP — sessions + chat protocol', () => {
 
     const res = await postJson(app, `/sessions/${session.id}/messages`, { text: '', images: [img] })
     assert.equal(res.status, 201)
-    const ev = (await res.json()) as { type: string; payload: { text: string; images: string[] } }
-    assert.equal(ev.type, 'user_message')
-    assert.deepEqual(ev.payload.images, [img])
+    const ev = (await res.json()) as { input: { text: string; images: string[] } }
+    assert.deepEqual(ev.input.images, [img])
 
     assert.equal(
       (await postJson(app, `/sessions/${session.id}/messages`, { images: [] })).status,
@@ -370,48 +372,6 @@ describe('server HTTP — sessions + chat protocol', () => {
       (await postJson(app, `/sessions/${session.id}/messages`, { images: [huge] })).status,
       413,
     )
-  })
-
-  test('busy is driven by busyTracker via turn_start/turn_complete events', async () => {
-    // Events are not persisted server-side anymore. busy comes from busyTracker,
-    // which is toggled on turn_start (true) and turn_complete/error (false).
-    // Still requires attached=true so a SIGKILL'd daemon (its command stream drops
-    // → runtime clears active) falls back to busy=false.
-    const app = createApp(ctx.store)
-    const { session, workerToken } = await seedSession(app)
-    const auth = { authorization: `Bearer ${workerToken}` }
-
-    // Unauthorized rejected.
-    assert.equal(
-      (await postJson(app, `/sessions/${session.id}/events`, { type: 'sdk_event', payload: {} }))
-        .status,
-      401,
-    )
-
-    // Report active first (real worker order). Without it attached=false → busy=false.
-    await postJson(app, `/sessions/${session.id}/status`, { active: true }, auth)
-
-    // turn_start → busy=true.
-    await postJson(app, `/sessions/${session.id}/events`, { type: 'turn_start', payload: {} }, auth)
-    const busy = (await (await app.request(`/sessions/${session.id}`)).json()) as { busy: boolean }
-    assert.equal(busy.busy, true)
-
-    // sdk_event in between does not change busy.
-    await postJson(app, `/sessions/${session.id}/events`, { type: 'sdk_event', payload: {} }, auth)
-    const stillBusy = (await (await app.request(`/sessions/${session.id}`)).json()) as {
-      busy: boolean
-    }
-    assert.equal(stillBusy.busy, true)
-
-    // turn_complete → busy=false.
-    await postJson(
-      app,
-      `/sessions/${session.id}/events`,
-      { type: 'turn_complete', payload: { exitCode: 0 } },
-      auth,
-    )
-    const idle = (await (await app.request(`/sessions/${session.id}`)).json()) as { busy: boolean }
-    assert.equal(idle.busy, false)
   })
 
   test('rename: nameless auto-titles while unlocked; human rename locks against auto-title', async () => {
@@ -470,28 +430,26 @@ describe('server HTTP — sessions + chat protocol', () => {
     })
 
     const seen: WorkerCommand[] = []
-    const unsubscribe = commands.subscribe(workerId, command => seen.push(command))
+    const unsubscribe = commands.subscribe(workerId, command => {
+      if (command.cmd === 'session.title') seen.push(command)
+    })
+    const run = async (outcome: 'completed' | 'failed', claimId: string) => {
+      await ctx.store.inputs.submit(session.id, { text: 'hi' })
+      const claim = await ctx.store.turns.claim(session.id, { claimId, runnerToken: 'r' })
+      if (claim.value.kind !== 'execute') throw new Error('expected execution')
+      await postJson(
+        app,
+        `/sessions/${session.id}/attempts/${claim.value.attempt.id}/finish`,
+        { runnerToken: 'r', outcome },
+        auth,
+      )
+    }
     try {
-      await postJson(
-        app,
-        `/sessions/${session.id}/events`,
-        { type: 'turn_error', payload: { message: 'failed' } },
-        auth,
-      )
+      await run('failed', 'a')
       assert.deepEqual(seen, [])
-      await postJson(
-        app,
-        `/sessions/${session.id}/events`,
-        { type: 'turn_complete', payload: {} },
-        auth,
-      )
+      await run('completed', 'b')
       await postJson(app, `/sessions/${session.id}/rename`, { name: 'Human Name' })
-      await postJson(
-        app,
-        `/sessions/${session.id}/events`,
-        { type: 'turn_complete', payload: {} },
-        auth,
-      )
+      await run('completed', 'c')
     } finally {
       unsubscribe()
     }
@@ -504,20 +462,5 @@ describe('server HTTP — sessions + chat protocol', () => {
         worktreePath: '/tmp/wt',
       },
     ])
-  })
-
-  test('busy=false when daemon never heartbeated (orphan turn_start, sticky-yellow fix)', async () => {
-    // Daemon emitted turn_start without ever sending the session heartbeat:
-    // attached=false → busy collapses to false regardless of busyTracker.
-    const app = createApp(ctx.store)
-    const { session, workerToken } = await seedSession(app)
-    const auth = { authorization: `Bearer ${workerToken}` }
-    await postJson(app, `/sessions/${session.id}/events`, { type: 'turn_start', payload: {} }, auth)
-    const view = (await (await app.request(`/sessions/${session.id}`)).json()) as {
-      attached: boolean
-      busy: boolean
-    }
-    assert.equal(view.attached, false)
-    assert.equal(view.busy, false)
   })
 })

@@ -1,7 +1,9 @@
 import type { AgentKind, Id, SessionMode } from '@baton/shared'
 import { assertProjectAccess, loadScopedSession } from '../../middleware/domain-scope.ts'
+import { ExecutionConflict } from '../../store/types.ts'
 import { intParam } from '../../views.ts'
 import type { RegisterSessionGroup } from './helpers.ts'
+import { controlExecution } from './turns.ts'
 
 // Session lifecycle: create the collaboration row + spawn command, read it, the
 // worker-bearer materialize / auto-title PATCH, resume / stop control, human
@@ -75,10 +77,17 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
       name?: string
     }
     if (body.agentSessionId && body.worktreePath) {
-      const updated = await store.sessions.materialize(owned.id, {
-        agentSessionId: body.agentSessionId,
-        worktreePath: body.worktreePath,
-      })
+      const updated = await store.sessions
+        .materialize(owned.id, {
+          agentSessionId: body.agentSessionId,
+          worktreePath: body.worktreePath,
+        })
+        .catch(error => {
+          if (error instanceof ExecutionConflict) return null
+          throw error
+        })
+      if (!updated)
+        return c.json({ error: 'execution in progress; use attempt materialization' }, 409)
       bump(owned.session.projectId)
       return c.json(await toView(updated))
     }
@@ -100,13 +109,15 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
     // headless start anyway; reject up front so the UI/CLI says why.
     if (terminal.isOpen(s.id))
       return c.json({ error: 'terminal open — close it to resume the headless session' }, 409)
+    await controlExecution(ctx, s, 'resume')
     commands.publish(s.workerId, { cmd: 'session.start', sessionId: s.id, name: s.name })
     return c.json(await toView(s))
   })
   app.post('/sessions/:id/stop', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
-    commands.publish(s.workerId, { cmd: 'session.stop', sessionId: s.id })
+    terminal.closeWorker(s.id)
+    await controlExecution(ctx, s, 'session_stop')
     return c.json(await toView(s))
   })
 

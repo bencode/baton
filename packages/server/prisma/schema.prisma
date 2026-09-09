@@ -30,6 +30,7 @@ model User {
   createdAt    DateTime @default(now())
 
   workspaces UserWorkspace[]
+
   @@index([apiToken])
 }
 
@@ -180,32 +181,38 @@ model TaskComment {
 // per-session apiToken anymore: the Worker authenticates all session writes with
 // its own token (it created every session).
 model Session {
-  id             Int       @id @default(autoincrement())
-  projectId      Int
-  workerId       Int // FK → Worker(id). onDelete Cascade: destroy worker takes its sessions with it.
-  mode           String /// 'worker' | 'skill' (collaboration dimension; orthogonal to agent kind)
-  name           String
-  nameLocked     Boolean   @default(false) // true once a human names it; suppresses auto-title. Server-internal (not in SessionView).
-  agentKind      String /// 'claude-code' (v0). Future: 'codex' | …
-  agentSessionId String? // claude-code: UUID; null until the Worker materializes.
-  worktreePath   String? // local cwd on the worker; null until the Worker materializes.
-  shareToken     String? // unguessable key for the standalone /s/:token page; null on legacy rows (32-byte random ⇒ effectively unique)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                    Int                   @id @default(autoincrement())
+  projectId             Int
+  workerId              Int // FK → Worker(id). onDelete Cascade: destroy worker takes its sessions with it.
+  mode                  String /// 'worker' | 'skill' (collaboration dimension; orthogonal to agent kind)
+  name                  String
+  nameLocked            Boolean               @default(false) // true once a human names it; suppresses auto-title. Server-internal (not in SessionView).
+  agentKind             String /// 'claude-code' (v0). Future: 'codex' | …
+  agentSessionId        String? // claude-code: UUID; null until the Worker materializes.
+  worktreePath          String? // local cwd on the worker; null until the Worker materializes.
+  shareToken            String? // unguessable key for the standalone /s/:token page; null on legacy rows (32-byte random ⇒ effectively unique)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
   // Last time someone sent this session a message (touched on each user_message).
   // updatedAt only bumps on row writes (rename/materialize) and can't be set
   // manually (@updatedAt); this is the honest "last active" for the rail.
-  lastActiveAt   DateTime  @default(now())
+  lastActiveAt          DateTime              @default(now())
   // Session-wide read-only "plan mode" toggle. When true the worker runs each
   // turn with the SDK's permissionMode:'plan' (propose, no edits). Persisted so
   // it survives reloads and stays in sync across clients; surfaced on SessionView.
-  planMode       Boolean   @default(false)
+  planMode              Boolean               @default(false)
   // Model override for this session's turns (web /model). Passed verbatim to
   // the SDK's options.model; null = the CLI default model.
-  model          String?
+  model                 String?
   // Reasoning effort for this session's turns (web /model <name> <effort>).
   // AgentEffort; each runner narrows it to its own SDK's enum. null = SDK default.
-  effort         String?
+  effort                String?
+  paused                Boolean               @default(false)
+  contextResetRequested Boolean               @default(false)
+  queueRevision         Int                   @default(0)
+  nextEventSequence     Int                   @default(0)
+  pendingInputs         SessionPendingInput[]
+  turns                 SessionTurn[]
 
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   worker  Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)
@@ -251,17 +258,73 @@ model Worker {
 // payload is JSON text, (de)serialized by the Store mapping layer. Retention /
 // auth come later; v0 keeps everything.
 model SessionEvent {
-  id        Int      @id @default(autoincrement())
+  id        Int                 @id @default(autoincrement())
   sessionId Int
   sequence  Int
   type      String /// 'user_message' | 'sdk_event' | 'turn_start' | 'turn_complete' | 'turn_error' | 'system'
   payload   String // JSON
-  createdAt DateTime @default(now())
+  attemptId Int?
+  attempt   SessionTurnAttempt? @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  createdAt DateTime            @default(now())
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, sequence])
+  @@index([attemptId, sequence])
   @@index([sessionId])
+}
+
+model SessionPendingInput {
+  id            Int      @id @default(autoincrement())
+  sessionId     Int
+  loopId        Int?
+  text          String
+  images        String   @default("[]")
+  attachments   String   @default("[]")
+  planMode      Boolean
+  model         String?
+  effort        String?
+  replyExpected Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, id])
+  @@unique([sessionId, loopId])
+}
+
+model SessionTurn {
+  id                Int                  @id @default(autoincrement())
+  sessionId         Int
+  userEventSequence Int
+  status            String
+  openKey           String?              @unique
+  createdAt         DateTime             @default(now())
+  finishedAt        DateTime?
+  session           Session              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  attempts          SessionTurnAttempt[]
+
+  @@unique([sessionId, userEventSequence])
+  @@index([sessionId, status])
+}
+
+model SessionTurnAttempt {
+  id              Int            @id @default(autoincrement())
+  turnId          Int
+  number          Int
+  claimId         String         @unique
+  runnerToken     String
+  status          String
+  leaseUntil      DateTime
+  stopReason      String?
+  stopRequestedAt DateTime?
+  startedAt       DateTime       @default(now())
+  finishedAt      DateTime?
+  result          String?
+  turn            SessionTurn    @relation(fields: [turnId], references: [id], onDelete: Cascade)
+  events          SessionEvent[]
+
+  @@unique([turnId, number])
+  @@index([status, leaseUntil])
 }
 
 // A Loop is a recurring scheduled wake-up for a Session: every `intervalSec`
@@ -319,15 +382,15 @@ model Channel {
 // `sender`/`senderKind` are soft attribution (no FK). `to` is a JSON array of
 // recipient names (null = broadcast to the room).
 model ChannelMessage {
-  id         Int      @id @default(autoincrement())
-  channelId  String
-  seq        Int
-  sender     String
-  senderKind String   @default("agent")
-  text       String
-  to         String?
+  id          Int      @id @default(autoincrement())
+  channelId   String
+  seq         Int
+  sender      String
+  senderKind  String   @default("agent")
+  text        String
+  to          String?
   attachments String? // JSON Attachment[] (null = none)
-  createdAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 

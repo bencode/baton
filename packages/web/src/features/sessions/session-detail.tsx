@@ -2,7 +2,7 @@ import type { AgentEffort, Attachment, Id } from '@baton/shared'
 import { useMemo, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { renamePasted } from '../../utils/attachment'
-import { pendingMessages, reduceEvents } from './event-render'
+import { reduceEvents } from './event-render'
 import { CommandHelp } from './session-detail/command-menu'
 import { parseModelArgs, type SlashCommand } from './session-detail/commands'
 import { Composer } from './session-detail/composer'
@@ -13,6 +13,7 @@ import { SessionHeader } from './session-detail/session-header'
 import { TerminalView } from './session-detail/terminal-view'
 import { useTranscriptScroll } from './session-detail/use-transcript-scroll'
 import { WorkingIndicator } from './session-detail/working-indicator'
+import { useSessionQueue } from './use-session-queue'
 import { useSessionStream } from './use-session-stream'
 import { useSession, useSessions } from './use-sessions'
 
@@ -28,14 +29,22 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const projectId = sessionShallow?.projectId ?? null
   const { data: liveSessions } = useSessions(projectId)
   const session = liveSessions?.find(s => s.id === sessionId) ?? sessionShallow
-  const { events, status, hasOlder, loadingOlder, loadOlder } = useSessionStream(
-    session?.id ?? null,
-  )
+  const { events, status, hasOlder, loadingOlder, loadOlder, connectionRevision } =
+    useSessionStream(session?.id ?? null)
   const items = useMemo(
     () => reduceEvents(events, { agentKind: session?.agentKind }),
     [events, session?.agentKind],
   )
-  const queued = useMemo(() => pendingMessages(events), [events])
+  const queueRevision = useMemo(
+    () =>
+      events.reduce((revision, event) => {
+        if (event.type !== 'queue_changed') return revision
+        const value = (event.payload as { revision?: unknown } | null)?.revision
+        return typeof value === 'number' ? Math.max(revision, value) : revision
+      }, -1),
+    [events],
+  )
+  const queue = useSessionQueue(session?.id ?? null, queueRevision, connectionRevision)
   const [draft, setDraft] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(false)
@@ -89,7 +98,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     setSending(true)
     setSendError(null)
     try {
-      await api.sessions.sendMessage(sessionId, text, attachments)
+      const submitted = await api.sessions.sendMessage(sessionId, text, attachments)
+      queue.applySnapshot(submitted.queue)
       setDraft('')
       setAttachments([])
     } catch (e) {
@@ -103,12 +113,15 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     }
   }
 
-  // Lifecycle control: the 2s session poll refreshes `attached` after these land.
+  const reportControlError = (error: unknown) =>
+    setSendError(error instanceof Error ? error.message : String(error))
+
+  // Lifecycle state is refreshed through the project stream and session poll.
   const resume = () => {
     setSendError(null)
-    void api.sessions.resume(sessionId).catch(() => {})
+    void api.sessions.resume(sessionId).catch(reportControlError)
   }
-  const stop = () => void api.sessions.stop(sessionId).catch(() => {})
+  const stop = () => void api.sessions.stop(sessionId).catch(reportControlError)
   // Open / close the interactive terminal. session.terminalOpen flips true (via the
   // project stream) once the worker's pty WS bridges, which renders <TerminalView>.
   const openTerminal = () =>
@@ -116,19 +129,20 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const closeTerminal = () =>
     void api.sessions.closeTerminal(sessionId).catch(err => console.error('close terminal', err))
   // Interrupt the in-flight turn (the 停止 button + /abort); session stays alive.
-  const abort = () => void api.sessions.abort(sessionId).catch(() => {})
+  const abort = () => void api.sessions.abort(sessionId).catch(reportControlError)
   // Rename propagates back via the project stream (rail/tab/header all refetch).
-  const rename = (name: string) => void api.sessions.rename(sessionId, name).catch(() => {})
+  const rename = (name: string) =>
+    void api.sessions.rename(sessionId, name).catch(reportControlError)
 
   // Toggle the session-wide read-only plan mode. Persisted server-side; the new
   // flag rides back over the project stream (session.planMode), so the badge and
   // every client stay in sync. Shift+Tab in the composer hits the same path.
   const togglePlanMode = () =>
-    void api.sessions.setMode(sessionId, !session.planMode).catch(() => {})
+    void api.sessions.setMode(sessionId, !session.planMode).catch(reportControlError)
 
   // Set/reset the session's model + effort override. Persisted server-side like
   // planMode; rides back over the project stream (session.model/effort), and the
-  // server stamps both onto each user_message → the runner hands them to the SDK.
+  // server snapshots both onto PendingInput → claim preserves them for the SDK.
   const setModel = (model: string | null, effort: AgentEffort | null) =>
     void api.sessions
       .setModel(sessionId, model, effort)
@@ -140,7 +154,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   // permissionMode:'plan' until toggled back); /model <name> [effort] overrides
   // the model and reasoning effort (bare /model resets both).
   const runCommand = (command: SlashCommand, args: string) => {
-    if (command.kind === 'clear') void api.sessions.clear(sessionId).catch(() => {})
+    if (command.kind === 'clear') void api.sessions.clear(sessionId).catch(reportControlError)
     else if (command.kind === 'abort') abort()
     else if (command.kind === 'help') setShowHelp(true)
     else if (command.kind === 'plan') togglePlanMode()
@@ -154,11 +168,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     }
   }
 
-  // Show the breathing indicator while a turn is open. Trust the server's `busy`
-  // — the single source of truth: it already folds in `attached`, an open turn,
-  // AND a liveness TTL, so a dead/wedged worker's turn stops looking busy on its
-  // own (no more "stuck thinking forever"). `sending` covers the brief optimistic
-  // window before our user_message round-trips back over SSE and flips busy true.
+  // Busy describes a durable execution, not whether the worker is attached.
   const working = sending || session.busy
 
   return (
@@ -195,7 +205,12 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
             onLoadOlder={onLoadOlder}
           />
           {working && <WorkingIndicator onAbort={abort} />}
-          <QueuedMessages queued={queued} />
+          <QueuedMessages
+            queued={queue.items}
+            cancelling={queue.cancelling}
+            error={queue.error}
+            onCancel={inputId => void queue.cancel(inputId)}
+          />
           {showHelp && (
             <div className="shrink-0 bg-white px-3">
               <CommandHelp agentKind={session.agentKind} onClose={() => setShowHelp(false)} />

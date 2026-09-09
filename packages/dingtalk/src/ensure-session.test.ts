@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import type { Attachment, Id, SessionEvent, SessionView } from '@baton/shared'
+import type { Attachment, Id, SessionView } from '@baton/shared'
 import type { BindingStore } from './bindings.ts'
 import type { BatonClient } from './client.ts'
 import { ensureSession } from './ensure-session.ts'
@@ -9,7 +9,6 @@ import { ensureSession } from './ensure-session.ts'
 const view = (id: Id, attached: boolean): SessionView =>
   ({ id, attached }) as unknown as SessionView
 // ensureSession never inspects send/upload results; satisfy the types cheaply.
-const evt = (): SessionEvent => ({}) as unknown as SessionEvent
 const att = (): Attachment => ({}) as unknown as Attachment
 
 const memBindings = (seed: Record<string, Id> = {}): BindingStore => {
@@ -36,7 +35,9 @@ describe('ensureSession', () => {
       },
       getSession: async id => view(id, true),
       resumeSession: async id => view(id, true),
-      sendMessage: async () => evt(),
+      sendMessage: async () => {
+        throw new Error('ensureSession must not send a message')
+      },
       streamUrl: () => '',
       uploadAttachment: async () => att(),
     }
@@ -59,7 +60,9 @@ describe('ensureSession', () => {
         calls.push('resume')
         return view(id, true)
       },
-      sendMessage: async () => evt(),
+      sendMessage: async () => {
+        throw new Error('ensureSession must not send a message')
+      },
       streamUrl: () => '',
       uploadAttachment: async () => att(),
     }
@@ -81,7 +84,9 @@ describe('ensureSession', () => {
         calls.push('resume')
         return view(id, true)
       },
-      sendMessage: async () => evt(),
+      sendMessage: async () => {
+        throw new Error('ensureSession must not send a message')
+      },
       streamUrl: () => '',
       uploadAttachment: async () => att(),
     }
@@ -97,7 +102,9 @@ describe('ensureSession', () => {
       createSession: async () => view(3, false),
       getSession: async id => view(id, false),
       resumeSession: async id => view(id, false),
-      sendMessage: async () => evt(),
+      sendMessage: async () => {
+        throw new Error('ensureSession must not send a message')
+      },
       streamUrl: () => '',
       uploadAttachment: async () => att(),
     }
@@ -123,7 +130,9 @@ describe('ensureSession', () => {
         return view(id, true)
       },
       resumeSession: async id => view(id, true),
-      sendMessage: async () => evt(),
+      sendMessage: async () => {
+        throw new Error('ensureSession must not send a message')
+      },
       streamUrl: () => '',
       uploadAttachment: async () => att(),
     }

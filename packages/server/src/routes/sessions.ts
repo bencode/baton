@@ -12,6 +12,8 @@ import { registerSessionControl } from './sessions/control.ts'
 import { createSessionCtx } from './sessions/helpers.ts'
 import { registerSessionIo } from './sessions/io.ts'
 import { registerSessionLifecycle } from './sessions/lifecycle.ts'
+import { registerSessionQueue } from './sessions/queue.ts'
+import { registerSessionTurns } from './sessions/turns.ts'
 
 // The /sessions/* HTTP surface, split into cohesive groups that share one
 // derived context (see ./sessions/helpers.ts):
@@ -43,4 +45,6 @@ export const registerSessionRoutes = (
   registerSessionLifecycle(app, ctx)
   registerSessionControl(app, ctx)
   registerSessionIo(app, ctx)
+  registerSessionQueue(app, ctx)
+  registerSessionTurns(app, ctx)
 }

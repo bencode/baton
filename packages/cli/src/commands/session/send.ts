@@ -31,7 +31,7 @@ export const sessionSendCommand = defineCommand({
     if (args.json) console.log(toJson(ev))
     else {
       const note = attachments ? ` +${attachments.length} attachment(s)` : ''
-      console.log(`sent (seq ${ev.sequence}) → ${s.name} (#${s.id})${note}: ${text}`)
+      console.log(`queued (input ${ev.input.id}) → ${s.name} (#${s.id})${note}: ${text}`)
     }
   },
 })
