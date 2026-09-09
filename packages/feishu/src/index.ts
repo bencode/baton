@@ -131,15 +131,16 @@ const main = (): void => {
       )
       const ev = await client.sendMessage(sessionId, prompt, attachments)
       log(
-        `→ delivered to session #${sessionId} (msg ${ev.id}, ${attachments.length} img), waiting…`,
+        `→ delivered to session #${sessionId} (msg ${ev.input.id}, ${attachments.length} img), waiting…`,
       )
       // `?since` bounds the replay to our message onward — no full-history re-read.
       const { outcome, text } = await waitForTurn(
-        `${client.streamUrl(sessionId)}?since=${ev.sequence}`,
-        ev.id,
+        `${client.streamUrl(sessionId)}?since=${ev.sinceSequence}`,
+        ev.input.id,
         TURN_TIMEOUT_MS,
         authedFetch,
       )
+      if (outcome === 'coalesced' || outcome === 'cancelled') return
       await reply(lark, msg.conversationId, replyText(sessionId, link, text))
       log(`→ replied (${outcome}, ${text.length} chars) ${link}`)
     } catch (e) {

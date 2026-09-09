@@ -1,13 +1,16 @@
 import type {
   AgentKind,
   Attachment,
+  ExecutionState,
   Id,
   Session,
   SessionEvent,
   SessionMode,
   SessionView,
+  SubmitInputResult,
 } from '@baton/shared'
 import { request } from './request.ts'
+import { sessionExecutionClient } from './session-execution.ts'
 
 // Create a session (collaboration metadata only). agentSessionId/worktreePath
 // are filled later by the owning worker via `materialize`. Returns the session
@@ -21,6 +24,8 @@ export type SessionCreateInput = {
 }
 
 export type SessionsClient = {
+  execution(id: Id): Promise<ExecutionState>
+  stopped(id: Id, attemptId: Id, runnerToken: string): Promise<unknown>
   create(input: SessionCreateInput): Promise<SessionView>
   materialize(
     id: Id,
@@ -52,7 +57,7 @@ export type SessionsClient = {
     text: string,
     attachments?: Attachment[],
     planMode?: boolean,
-  ): Promise<SessionEvent>
+  ): Promise<SubmitInputResult>
   uploadAttachment(
     id: Id,
     input: { filename: string; contentType: string; body: Blob },
@@ -63,6 +68,9 @@ export type SessionsClient = {
 export const sessionsClient = (baseUrl: string): SessionsClient => {
   const u = (p: string): string => `${baseUrl}${p}`
   return {
+    execution: id => sessionExecutionClient(baseUrl, id).state(),
+    stopped: (id, attemptId, runnerToken) =>
+      sessionExecutionClient(baseUrl, id).stopped(attemptId, runnerToken),
     create: input => request(u('/sessions'), { method: 'POST', body: input }),
     materialize: (id, input, workerToken) =>
       request(u(`/sessions/${id}`), {

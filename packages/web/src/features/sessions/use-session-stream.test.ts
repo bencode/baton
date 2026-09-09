@@ -108,3 +108,25 @@ test('returning to the foreground reopens the stream and backfills the gap', asy
   // The reopen pulls only the gap since the last seen sequence, not the window.
   expect(listEvents.mock.calls.at(-1)?.[1]).toHaveProperty('since')
 })
+
+test('history pagination stops after a short page even when migration left sequence holes', async () => {
+  const listEvents = vi
+    .fn()
+    .mockResolvedValueOnce(Array.from({ length: 200 }, (_, index) => ev(index + 100, index + 900)))
+    .mockResolvedValueOnce([ev(1, 7)])
+    .mockResolvedValue([])
+  const api = { sessionStreamUrl: () => '/stream', sessions: { listEvents } } as unknown as Api
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(ApiContext.Provider, { value: api }, children)
+  const hook = renderHook(() => useSessionStream(1), { wrapper })
+  await flush()
+  expect(hook.result.current.hasOlder).toBe(true)
+  await act(async () => hook.result.current.loadOlder())
+  expect(listEvents.mock.calls[1]?.[1]).toEqual({ before: 900, limit: 600 })
+  expect(hook.result.current.events[0]?.sequence).toBe(7)
+  expect(hook.result.current.hasOlder).toBe(false)
+  await act(async () => instance(0).open())
+  const connected = hook.result.current.connectionRevision
+  await act(async () => instance(0).open())
+  expect(hook.result.current.connectionRevision).toBe(connected + 1)
+})

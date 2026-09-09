@@ -117,31 +117,14 @@ export const agentMessageText = (payload: unknown): { id: string; text: string }
   return trimmed ? { id, text: trimmed } : null
 }
 
-// A chat / SDK transcript event. Persisted server-side (SessionEvent table,
-// per-session monotonic `sequence`); the web loads history from the server and
-// tails new events live over SSE. A user_message with no matching turn_start is
-// the authoritative pending queue (see unstartedUserMessages below).
-//
-// type discriminator (kept loose; payload shape is owned by the producer):
-//   - user_message:  payload = { text: string; attachments?: Attachment[]; images?: string[];
-//                    planMode?: boolean; model?: string; effort?: AgentEffort; loopId?: Id }
-//                    (images is legacy base64; attachments is the canonical path;
-//                    planMode=true → worker runs this turn read-only, SDK permissionMode:'plan';
-//                    loopId → recurring source; a newer beat supersedes its unstarted predecessors.
-//                    model/effort → the session's overrides, stamped per turn so a
-//                    resumed turn honours what an interactive one would)
-//   - turn_start:    payload = { messageId?: number }
-//   - agent_event:   payload = provider-neutral AgentEvent (new canonical stream)
-//   - sdk_event:     legacy payload = a parsed line from `claude --output-format stream-json`
-//   - turn_heartbeat: payload = {} — periodic liveness ping while a turn runs, so
-//                    the server can tell a live-but-quiet turn (long single tool
-//                    call, no sdk_event) from an abandoned one. Non-rendering,
-//                    non-boundary; only refreshes turn liveness.
-//   - turn_complete: payload = { exitCode: number }
-//   - turn_error:    payload = { message: string }
-//   - system:        payload = arbitrary control metadata
+// Persisted transcript of actual activity. Queue lives in PendingInput; claim
+// creates user_message (UserMessagePayload). Execution output carries attemptId.
+// message_cancelled / turn_heartbeat remain readable for legacy history only.
 export type SessionEventType =
   | 'user_message'
+  | 'queue_changed'
+  | 'turn_aborted'
+  | 'message_cancelled'
   | 'turn_start'
   | 'agent_event'
   | 'sdk_event'
@@ -156,8 +139,9 @@ export type SessionEvent = {
   sequence: number
   type: SessionEventType
   payload: unknown
+  attemptId?: Id
   // Kept on the type for wire compat — never set. Was the old 'daemon claimed
-  // this user_message' handshake; queue state is now derived (see below).
+  // this user_message' handshake; PendingInput is now the queue.
   processedAt?: number
   createdAt: number
 }
@@ -175,49 +159,66 @@ export const startedMessageIds = (events: readonly SessionEvent[]): Set<Id> => {
   return ids
 }
 
-// Only scheduler-produced messages carry this identity; equal text alone never
-// makes manual messages or separate loops replace one another.
+export const cancelledMessageIds = (events: readonly SessionEvent[]): Set<Id> => {
+  const ids = new Set<Id>()
+  for (const e of events) {
+    if (e.type !== 'message_cancelled') continue
+    const id = (e.payload as { messageId?: unknown } | null)?.messageId
+    if (typeof id === 'number') ids.add(id)
+  }
+  return ids
+}
+
 export const messageLoopId = (event: SessionEvent): Id | undefined => {
   if (event.type !== 'user_message') return undefined
   const id = (event.payload as { loopId?: unknown } | null)?.loopId
   return typeof id === 'number' ? id : undefined
 }
 
-// The authoritative pending queue: persisted user_messages with no matching
-// turn_start yet, in sequence order. State is derived purely from the durable
-// event log — never a transient in-memory queue — so both the web (renders the
-// QUEUED zone) and the session runner (drains it on (re)connect) agree, and a
-// missed live SSE delivery can't strand a message. For each loop only its newest
-// beat is eligible, even after that beat starts: superseded beats never revive.
-export const unstartedUserMessages = (events: readonly SessionEvent[]): SessionEvent[] => {
-  const started = startedMessageIds(events)
+// Starting or cancelling the latest beat must not revive its predecessors.
+export const supersededLoopMessageIds = (events: readonly SessionEvent[]): Set<Id> => {
   const latest = new Map<Id, number>()
   events.forEach(event => {
     const loopId = messageLoopId(event)
     if (loopId !== undefined) latest.set(loopId, Math.max(latest.get(loopId) ?? -1, event.sequence))
   })
-  return events.filter(event => {
-    if (event.type !== 'user_message' || started.has(event.id)) return false
-    const loopId = messageLoopId(event)
-    return loopId === undefined || event.sequence === latest.get(loopId)
-  })
+  return new Set(
+    events
+      .filter(event => {
+        const loopId = messageLoopId(event)
+        return loopId !== undefined && event.sequence !== latest.get(loopId)
+      })
+      .map(event => event.id),
+  )
+}
+
+// Offline migration only: identify legacy submissions that never ran.
+// New claimed messages have inputIds and never belong to this legacy queue.
+export const unstartedUserMessages = (events: readonly SessionEvent[]): SessionEvent[] => {
+  const started = startedMessageIds(events)
+  const cancelled = cancelledMessageIds(events)
+  const superseded = supersededLoopMessageIds(events)
+  return events.filter(
+    e =>
+      e.type === 'user_message' &&
+      !started.has(e.id) &&
+      !cancelled.has(e.id) &&
+      !superseded.has(e.id) &&
+      !Array.isArray((e.payload as { inputIds?: unknown } | null)?.inputIds),
+  )
 }
 
 // --- turn liveness -----------------------------------------------------------
 
 // These events mark a turn's start / end; everything else (sdk_event,
 // turn_heartbeat, system, …) leaves the open/closed state untouched.
-export const opensTurn = (e: SessionEvent): boolean =>
-  e.type === 'user_message' || e.type === 'turn_start'
+export const opensTurn = (e: SessionEvent): boolean => e.type === 'turn_start'
 export const closesTurn = (e: SessionEvent): boolean =>
-  e.type === 'turn_complete' || e.type === 'turn_error'
+  e.type === 'turn_complete' || e.type === 'turn_error' || e.type === 'turn_aborted'
 
-// Is a turn currently open? Look at the last start-or-end event — if it opened a
-// turn, that turn hasn't closed yet. findLast (not some) because order matters: a
-// completed history is full of turn_start events. Shared by the web indicator,
-// the runner's orphan reconcile, and the server's busy sweep so all three agree
-// on "is there a dangling open turn".
+// Legacy transcript-only predicate; live busy state comes from durable Attempts.
 export const isAgentWorking = (events: readonly SessionEvent[]): boolean => {
+  if (unstartedUserMessages(events).length > 0) return true
   const last = events.findLast(e => opensTurn(e) || closesTurn(e))
   return last ? opensTurn(last) : false
 }

@@ -86,15 +86,16 @@ const main = (): void => {
       const attachments = await collectImages(client, cfg, sessionId, msg.imageCodes, log)
       const ev = await client.sendMessage(sessionId, prompt, attachments)
       log(
-        `→ delivered to session #${sessionId} (msg ${ev.id}, ${attachments.length} img), waiting…`,
+        `→ delivered to session #${sessionId} (msg ${ev.input.id}, ${attachments.length} img), waiting…`,
       )
       // `?since` bounds the replay to our message onward — no full-history re-read.
       const { outcome, text } = await waitForTurn(
-        `${client.streamUrl(sessionId)}?since=${ev.sequence}`,
-        ev.id,
+        `${client.streamUrl(sessionId)}?since=${ev.sinceSequence}`,
+        ev.input.id,
         TURN_TIMEOUT_MS,
         authedFetch,
       )
+      if (outcome === 'coalesced' || outcome === 'cancelled') return
       // Deep link uses the unguessable share token (opens without a manual login).
       const view = await client.getSession(sessionId)
       const link = `${cfg.webBase}/s/${view.shareToken ?? sessionId}`

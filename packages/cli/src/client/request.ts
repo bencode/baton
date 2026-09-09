@@ -1,6 +1,15 @@
 export type ReqInit = { method: string; body?: unknown; headers?: Record<string, string> }
 export type RawReqInit = { method: string; body?: Blob; headers?: Record<string, string> }
 
+export class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message)
+  }
+}
+
 // Cross-cutting auth for the gated back-office routes: when BATON_USER/PASS are
 // set, createClient primes a one-time login (see client/auth.ts) that resolves
 // `loginGate` after stashing the session cookie in `authHeaders`. Every request
@@ -27,7 +36,8 @@ export const request = async <T>(url: string, init: ReqInit): Promise<T> => {
     headers: { ...baseHeaders, ...authHeaders, ...(init.headers ?? {}) },
     ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
   })
-  if (!res.ok) throw new Error(`${init.method} ${url} → ${res.status}: ${await res.text()}`)
+  if (!res.ok)
+    throw new HttpError(res.status, `${init.method} ${url} → ${res.status}: ${await res.text()}`)
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
@@ -39,7 +49,8 @@ export const rawRequest = async <T>(url: string, init: RawReqInit): Promise<T> =
     headers: { ...authHeaders, ...(init.headers ?? {}) },
     ...(init.body !== undefined ? { body: init.body } : {}),
   })
-  if (!res.ok) throw new Error(`${init.method} ${url} → ${res.status}: ${await res.text()}`)
+  if (!res.ok)
+    throw new HttpError(res.status, `${init.method} ${url} → ${res.status}: ${await res.text()}`)
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }

@@ -5,6 +5,8 @@ import { prismaChannels } from './prisma/channels.ts'
 import { prismaLoops } from './prisma/loops.ts'
 import { prismaProjects } from './prisma/projects.ts'
 import { prismaRequirements } from './prisma/requirements.ts'
+import { prismaSessionInputs } from './prisma/session-inputs.ts'
+import { prismaSessionTurns } from './prisma/session-turns.ts'
 import { prismaSessions } from './prisma/sessions.ts'
 import { prismaTaskComments } from './prisma/task-comments.ts'
 import { prismaTasks } from './prisma/tasks.ts'
@@ -26,6 +28,8 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
   channels: prismaChannels(prisma),
   loops: prismaLoops(prisma),
   sessions: prismaSessions(prisma),
+  inputs: prismaSessionInputs(prisma),
+  turns: prismaSessionTurns(prisma),
   workers: prismaWorkers(prisma),
   users: prismaUsers(prisma),
   getRequirementWithTasks: async id => {

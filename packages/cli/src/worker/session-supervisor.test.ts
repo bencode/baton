@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { once } from 'node:events'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { ApiClient } from '../client.ts'
 import type { WorkerConfig } from '../project-config.ts'
+import { writeRunnerRecord } from './session-process.ts'
 import { createSessionSupervisor } from './session-supervisor.ts'
 
 const cfg: WorkerConfig = {
@@ -25,6 +32,13 @@ describe('createSessionSupervisor base sync', () => {
     })
     const client = {
       sessions: {
+        execution: async () => ({
+          paused: false,
+          contextResetRequested: false,
+          pendingCount: 0,
+          turn: null,
+          attempt: null,
+        }),
         get: async (id: number) => ({
           id,
           agentKind: 'codex',
@@ -70,6 +84,13 @@ describe('createSessionSupervisor base sync', () => {
     })
     const client = {
       sessions: {
+        execution: async () => ({
+          paused: false,
+          contextResetRequested: false,
+          pendingCount: 0,
+          turn: null,
+          attempt: null,
+        }),
         get: async (id: number) => {
           getCalls++
           return {
@@ -110,6 +131,13 @@ describe('createSessionSupervisor base sync', () => {
     })
     const client = {
       sessions: {
+        execution: async () => ({
+          paused: false,
+          contextResetRequested: false,
+          pendingCount: 0,
+          turn: null,
+          attempt: null,
+        }),
         get: async (id: number) => ({
           id,
           agentKind: 'codex',
@@ -133,10 +161,78 @@ describe('createSessionSupervisor base sync', () => {
 
     const starting = supervisor.start(101, 'first')
     await new Promise(resolve => setImmediate(resolve))
-    supervisor.stop(101)
+    const stopping = supervisor.stop(101)
     resolveSync('refs/heads/main')
     await starting
+    await stopping
     assert.equal(materializeCalls, 0)
     assert.equal(supervisor.has(101), false)
   })
+})
+
+test('recovery confirms a recorded runner has exited before acknowledging stop; missing identity blocks', async () => {
+  const worktreePath = await mkdtemp(join(tmpdir(), 'baton-recovery-test-'))
+  const runnerToken = randomUUID()
+  const child = spawn(
+    process.execPath,
+    ['-e', 'setInterval(() => {}, 1000)', '--', '--runner-token', runnerToken],
+    { detached: true, stdio: 'ignore' },
+  )
+  const exited = once(child, 'exit')
+  let stopping = true
+  let acknowledgements = 0
+  try {
+    await once(child, 'spawn')
+    assert.ok(child.pid)
+    const pid = child.pid
+    const client = {
+      sessions: {
+        get: async () => ({ id: 101, workerId: cfg.workerId, worktreePath, name: 'test' }),
+        execution: async () => ({
+          paused: true,
+          contextResetRequested: false,
+          pendingCount: 2,
+          turn: stopping ? { id: 1, status: 'running' } : null,
+          attempt: stopping ? { id: 2, status: 'stopping', runnerToken, stopRequestedAt: 0 } : null,
+        }),
+        stopped: async () => {
+          assert.throws(() => process.kill(-pid, 0), { code: 'ESRCH' })
+          acknowledgements++
+          stopping = false
+          return { outcome: 'aborted' }
+        },
+      },
+    } as unknown as ApiClient
+    const supervisor = createSessionSupervisor({
+      client,
+      cfg,
+      repo: process.cwd(),
+      log: () => {},
+      hasTerminal: () => false,
+      closeTerminal: () => {},
+    })
+    await assert.rejects(supervisor.reconcile(101), /missing record/)
+    assert.equal(acknowledgements, 0)
+    assert.doesNotThrow(() => process.kill(pid, 0))
+    await writeRunnerRecord(worktreePath, {
+      server: cfg.server,
+      workerId: cfg.workerId,
+      sessionId: 101,
+      runnerToken,
+      pid,
+      pgid: pid,
+    })
+    await supervisor.reconcile(101)
+    await exited
+    assert.equal(acknowledgements, 1)
+    assert.equal(supervisor.has(101), false)
+    await supervisor.reconcile(101)
+    assert.equal(acknowledgements, 1)
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+      await exited
+    }
+    await rm(worktreePath, { recursive: true, force: true })
+  }
 })

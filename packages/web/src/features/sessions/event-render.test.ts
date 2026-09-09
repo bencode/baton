@@ -1,6 +1,6 @@
 import type { SessionEvent, SessionEventType } from '@baton/shared'
 import { describe, expect, test } from 'vitest'
-import { isAgentWorking, pendingMessages, reduceEvents } from './event-render'
+import { isAgentWorking, reduceEvents } from './event-render'
 
 let seq = 0
 const ev = (type: SessionEventType, payload: unknown): SessionEvent => ({
@@ -21,27 +21,17 @@ describe('reduceEvents', () => {
     expect(out[0]).toMatchObject({ kind: 'user-bubble', text: 'hello' })
   })
 
-  test('user_message without its turn_start → queued, not inline; turn_start moves it inline', () => {
-    seq = 0
-    const um = ev('user_message', { text: 'queued one' })
-    // No turn_start yet → out of the transcript, surfaced as queued instead.
-    expect(reduceEvents([um])).toHaveLength(0)
-    expect(pendingMessages([um])).toMatchObject([{ text: 'queued one' }])
-    // Its turn_start arrives → inline in transcript, gone from the queue.
-    const started = [um, ev('turn_start', { messageId: um.id })]
-    expect(reduceEvents(started)[0]).toMatchObject({ kind: 'user-bubble', text: 'queued one' })
-    expect(pendingMessages(started)).toHaveLength(0)
+  test('persisted user messages render independently of the loaded turn_start window', () => {
+    const message = ev('user_message', { text: 'claimed', inputIds: [1, 2] })
+    expect(reduceEvents([message])).toMatchObject([{ kind: 'user-bubble', text: 'claimed' }])
+    expect(reduceEvents([ev('queue_changed', { revision: 1, addedIds: [3] })])).toEqual([])
   })
 
-  test('new loop beat replaces the pending row and never revives it after starting', () => {
-    const old = ev('user_message', { text: 'old', loopId: 1 })
-    const manual = ev('user_message', { text: 'old' })
-    const latest = ev('user_message', { text: 'new', loopId: 1 })
-    const events = [old, manual, latest]
-    expect(pendingMessages(events).map(m => m.text)).toEqual(['old', 'new'])
-    const started = [...events, ev('turn_start', { messageId: latest.id })]
-    expect(pendingMessages(started).map(m => m.key)).toEqual([String(manual.id)])
-    expect(reduceEvents(started)).toMatchObject([{ kind: 'user-bubble', text: 'new' }])
+  test('message_cancelled removes a pending message without rendering a raw event', () => {
+    seq = 0
+    const message = ev('user_message', { text: 'remove me' })
+    const events = [message, ev('message_cancelled', { messageId: message.id })]
+    expect(reduceEvents(events)).toEqual([])
   })
 
   test('system context_cleared → system-notice (other system → raw)', () => {

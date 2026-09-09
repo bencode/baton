@@ -105,7 +105,7 @@ describe('server HTTP — attachments', () => {
     assert.equal(dl.status, 404)
   })
 
-  test('message carries attachment descriptors in its payload', async () => {
+  test('input and claimed message preserve attachment descriptors', async () => {
     const app = createApp(ctx.store)
     const { session, workerToken } = await seedSession(app)
     // messages require an active session
@@ -130,12 +130,23 @@ describe('server HTTP — attachments', () => {
       attachments: [meta],
     })
     assert.equal(res.status, 201)
-    const ev = (await res.json()) as { payload: { text: string; attachments: Attachment[] } }
-    assert.deepEqual(ev.payload.attachments, [meta])
+    const submitted = (await res.json()) as { input: { attachments: Attachment[] } }
+    assert.deepEqual(submitted.input.attachments, [meta])
 
     // attachments-only (no text) is valid
     const only = await postJson(app, `/sessions/${session.id}/messages`, { attachments: [meta] })
     assert.equal(only.status, 201)
+    await ctx.store.sessions.materialize(session.id, {
+      agentSessionId: 'uuid',
+      worktreePath: '/tmp/attachment-test',
+    })
+    const claim = await ctx.store.turns.claim(session.id, {
+      claimId: 'attachment-test',
+      runnerToken: 'runner',
+    })
+    assert.equal(claim.value.kind, 'execute')
+    if (claim.value.kind !== 'execute') throw new Error('expected execution')
+    assert.deepEqual(claim.value.message.payload.attachments, [meta, meta])
 
     // still rejects truly empty
     assert.equal((await postJson(app, `/sessions/${session.id}/messages`, {})).status, 400)

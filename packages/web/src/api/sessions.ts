@@ -1,4 +1,13 @@
-import type { AgentEffort, Attachment, Id, SessionEvent, SessionView } from '@baton/shared'
+import type {
+  AgentEffort,
+  Attachment,
+  CancelInputResult,
+  Id,
+  SessionEvent,
+  SessionQueueSnapshot,
+  SessionView,
+  SubmitInputResult,
+} from '@baton/shared'
 import { request, type Url } from './request'
 
 // Transcript window query: `limit` = most recent n (open), `before` pages older,
@@ -34,7 +43,9 @@ export type SessionsApi = {
   autotitle(id: Id): Promise<SessionView>
   // Delete the session (worker tears down its child + worktree; row dropped).
   remove(id: Id): Promise<void>
-  sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
+  sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SubmitInputResult>
+  listQueue(id: Id): Promise<SessionQueueSnapshot>
+  cancelInput(id: Id, inputId: Id): Promise<CancelInputResult>
   uploadAttachment(id: Id, file: File): Promise<Attachment>
   // Persisted transcript history (the stream then only tails live). See EventQuery.
   listEvents(id: Id, query?: EventQuery): Promise<SessionEvent[]>
@@ -64,6 +75,9 @@ export const sessionsApi = (u: Url): SessionsApi => ({
       method: 'POST',
       body: { text, ...(attachments && attachments.length > 0 ? { attachments } : {}) },
     }),
+  listQueue: id => request(u(`/sessions/${id}/queue`), { method: 'GET' }),
+  cancelInput: (id, inputId) =>
+    request(u(`/sessions/${id}/queue/${inputId}`), { method: 'DELETE' }),
   // Raw-body upload (the JSON `request` helper can't carry binary): the File
   // streams as the request body, filename on the query, media type on the header.
   uploadAttachment: async (id, file) => {

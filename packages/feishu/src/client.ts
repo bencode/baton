@@ -1,4 +1,4 @@
-import type { Attachment, Id, SessionEvent, SessionView } from '@baton/shared'
+import type { Attachment, Id, SessionView, SubmitInputResult } from '@baton/shared'
 
 // A thin client over baton's session endpoints. The bridge is a pure API
 // consumer — it adds nothing to the server. Once the server enforces auth (a
@@ -48,7 +48,7 @@ export type BatonClient = {
   resumeSession(id: Id): Promise<SessionView>
   // Returns the synthesized user_message event — its `sequence` lets us wait for
   // the matching turn_complete (one after this message).
-  sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SessionEvent>
+  sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SubmitInputResult>
   // Upload raw bytes (a downloaded chat image) as a session attachment.
   uploadAttachment(
     id: Id,
@@ -85,7 +85,7 @@ export const createBatonClient = (server: string, auth?: BatonAuth): BatonClient
     sendMessage: (id, text, attachments) =>
       request(u(`/sessions/${id}/messages`), {
         method: 'POST',
-        body: attachments && attachments.length > 0 ? { text, attachments } : { text },
+        body: { text, replyExpected: true, ...(attachments?.length ? { attachments } : {}) },
       }),
     uploadAttachment: async (id, input) => {
       if (loginGate) await loginGate

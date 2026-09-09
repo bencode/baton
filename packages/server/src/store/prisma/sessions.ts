@@ -1,7 +1,8 @@
 import type { PrismaClient } from '@prisma/client'
 import { toSession, toSessionEvent } from '../mappers.ts'
-import type { Store } from '../types.ts'
+import { ExecutionConflict, type Store } from '../types.ts'
 import { issueToken } from './codec.ts'
+import { appendSessionEvent, lockSession } from './session-events.ts'
 
 export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
   create: async input => {
@@ -25,13 +26,17 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
     const r = await prisma.session.findFirst({ where: { shareToken: token } })
     return r ? toSession(r) : null
   },
-  materialize: async (id, input) => {
-    const s = await prisma.session.update({
-      where: { id },
-      data: { agentSessionId: input.agentSessionId, worktreePath: input.worktreePath },
-    })
-    return toSession(s)
-  },
+  materialize: (id, input) =>
+    prisma.$transaction(async tx => {
+      await lockSession(tx, id)
+      if (await tx.sessionTurn.findUnique({ where: { openKey: String(id) } }))
+        throw new ExecutionConflict('use attempt-scoped materialization during execution')
+      const s = await tx.session.update({
+        where: { id },
+        data: { agentSessionId: input.agentSessionId, worktreePath: input.worktreePath },
+      })
+      return toSession(s)
+    }),
   // Human rename: sets the name AND locks it (wins over any later auto-title).
   rename: async (id, name) => {
     const s = await prisma.session.update({ where: { id }, data: { name, nameLocked: true } })
@@ -74,20 +79,7 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
   // (sessionId, sequence) unique key.
   appendEvent: async (sessionId, type, payload) =>
     prisma.$transaction(async tx => {
-      const top = await tx.sessionEvent.findFirst({
-        where: { sessionId },
-        orderBy: { sequence: 'desc' },
-        select: { sequence: true },
-      })
-      const ev = await tx.sessionEvent.create({
-        data: {
-          sessionId,
-          sequence: (top?.sequence ?? -1) + 1,
-          type,
-          payload: JSON.stringify(payload),
-        },
-      })
-      return toSessionEvent(ev)
+      return await appendSessionEvent(tx, sessionId, type, payload)
     }),
   listEvents: async sessionId =>
     (

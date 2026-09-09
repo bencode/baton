@@ -1,6 +1,6 @@
 import type { AgentEvent, AgentItem, AgentUsage } from '@baton/shared'
 import { Codex, type Input, type ThreadOptions } from '@openai/codex-sdk'
-import type { WorkerClient } from '../../client.ts'
+import type { AttemptClient } from '../../client.ts'
 import type { SessionConfig } from '../../project-config.ts'
 import {
   additionalDirs,
@@ -174,7 +174,7 @@ const withPlanPrefix = (input: CodexInput): CodexInput => {
 export async function* startCodexEvents(
   config: SessionConfig,
   input: CodexInput,
-  worker: WorkerClient,
+  worker: AttemptClient,
   opts: CodexRunOptions,
 ): AsyncIterable<AgentEvent> {
   const env = compactEnv(buildSdkEnv(opts.envOverlay))

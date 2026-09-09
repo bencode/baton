@@ -87,7 +87,12 @@ export const runWorkerDaemon = async (
         void supervisor
           .start(cmd.sessionId, cmd.name)
           .catch(err => log(`start failed: ${String(err)}`))
-      else if (cmd.cmd === 'session.stop') supervisor.stop(cmd.sessionId)
+      else if (cmd.cmd === 'session.stop')
+        void supervisor.stop(cmd.sessionId).catch(error => log(`stop failed: ${String(error)}`))
+      else if (cmd.cmd === 'session.reconcile')
+        void supervisor
+          .reconcile(cmd.sessionId)
+          .catch(error => log(`reconcile failed: ${String(error)}`))
       else if (cmd.cmd === 'session.delete')
         void services
           .stopSession(cmd.sessionId)
@@ -109,8 +114,8 @@ export const runWorkerDaemon = async (
         void services
           .stop(cmd.requestId, cmd.name)
           .catch(err => log(`service stop failed: ${String(err)}`))
-    } catch {
-      // skip malformed commands
+    } catch (error) {
+      log(`invalid command: ${String(error)}`)
     }
   }
   es.onerror = () => log('command stream error (eventsource will retry)')
@@ -126,7 +131,7 @@ export const runWorkerDaemon = async (
   es.close()
   liveness.stop()
   services.killAll()
-  supervisor.killAll()
+  await supervisor.killAll()
   terminals.killAll()
   // Watchdog exit: cleanup ran above, now hand a non-zero code to the supervisor.
   if (fatal) process.exit(1)

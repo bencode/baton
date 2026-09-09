@@ -55,7 +55,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     })
     // Close turns whose worker went silent past the TTL (the "stuck thinking"
     // safety net), started + stopped with the server lifecycle like the prune.
-    const busySweep = startBusySweep({ store: opts.store, bus, projects, busy })
+    const busySweep = startBusySweep({ store: opts.store, bus, projects, busy, commands })
     // Recurring scheduled wake-ups (Loop): every tick, send due loops' messages
     // through the same path an interactive send takes. BATON_LOOP_TICK_MS overrides
     // the 30s default (tests). Unref'd; stopped with the lifecycle.

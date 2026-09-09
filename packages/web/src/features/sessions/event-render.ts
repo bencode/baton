@@ -3,9 +3,8 @@ import {
   type AgentItem,
   type AgentKind,
   type Attachment,
+  cancelledMessageIds,
   type SessionEvent,
-  startedMessageIds,
-  unstartedUserMessages,
 } from '@baton/shared'
 import type { RateLimitInfo, TurnEndSummary } from './event-payload'
 import {
@@ -76,21 +75,7 @@ export type ReduceEventsOptions = {
 const defaultHeaderModel = (agentKind?: AgentKind): string =>
   agentKind === 'codex' ? 'codex' : agentKind === 'claude-code' ? 'claude' : 'agent'
 
-// --- queued (pending) messages ----------------------------------------------
-
-// A user message sent while a turn is running sits in the worker's queue until
-// its own turn starts. We surface those in a separate "queued" zone rather than
-// inlining them into the transcript, where they'd misrepresent a processed turn.
-export type QueuedMessage = {
-  text: string
-  images?: string[]
-  attachments?: Attachment[]
-  key: string
-}
-
-// Extract the renderable payload of a user_message event — shared by the inline
-// transcript bubble and the queued zone so both read the envelope identically.
-const userBubble = (e: SessionEvent): QueuedMessage => {
+const userBubble = (e: SessionEvent): Extract<RenderItem, { kind: 'user-bubble' }> => {
   const text = isRecord(e.payload) && typeof e.payload.text === 'string' ? e.payload.text : ''
   const images =
     isRecord(e.payload) && Array.isArray(e.payload.images)
@@ -100,15 +85,8 @@ const userBubble = (e: SessionEvent): QueuedMessage => {
     isRecord(e.payload) && Array.isArray(e.payload.attachments)
       ? (e.payload.attachments as Attachment[])
       : undefined
-  return { text, images, attachments, key: String(e.id) }
+  return { kind: 'user-bubble', text, images, attachments, key: String(e.id) }
 }
-
-// User messages still waiting in the queue (no turn_start yet), in send order.
-// Derivation lives in @baton/shared (startedMessageIds / unstartedUserMessages)
-// so the session runner drains the exact same authoritative queue — a message
-// moves out of this zone the instant its turn_start arrives.
-export const pendingMessages = (events: SessionEvent[]): QueuedMessage[] =>
-  unstartedUserMessages(events).map(userBubble)
 
 // --- reducer -----------------------------------------------------------------
 
@@ -117,9 +95,7 @@ export const reduceEvents = (
   options: ReduceEventsOptions = {},
 ): RenderItem[] => {
   const items: RenderItem[] = []
-  // Queued messages render in their own zone (see pendingMessages); keep them
-  // out of the transcript until their turn_start lands.
-  const started = startedMessageIds(events)
+  const cancelled = cancelledMessageIds(events)
   const pendingTools = new Map<string, Extract<RenderItem, { kind: 'tool-block' }>>()
   const pendingAgentItems = new Map<string, RenderItem>()
   // Fold a tool_result block back into its tool-block (by tool_use_id). Used in
@@ -301,23 +277,31 @@ export const reduceEvents = (
     // the per-item React key.
     const key = String(e.id)
     if (e.type === 'user_message') {
-      // Not yet started → it's queued; pendingMessages() renders it elsewhere.
-      if (!started.has(e.id)) continue
+      if (cancelled.has(e.id)) continue
       const { text, images, attachments } = userBubble(e)
       items.push({ kind: 'user-bubble', text, images, attachments, key })
       continue
     }
+    if (e.type === 'message_cancelled') continue
     // Provider item ids only need to be stable within a turn. Claude's canonical
     // adapter restarts its local counters for every turn, and Codex may also reuse
     // ids, so carrying these maps across a turn boundary would update an earlier
     // reply in place instead of appending the new one at the current position.
     if (e.type === 'turn_start') {
+      pendingResult = undefined
+      pendingRateLimit = undefined
       pendingAgentItems.clear()
       pendingTools.clear()
       continue
     }
     // turn_heartbeat is a liveness ping — it does not render.
-    if (e.type === 'turn_heartbeat') continue
+    if (e.type === 'turn_heartbeat' || e.type === 'queue_changed') continue
+    if (e.type === 'turn_aborted') {
+      items.push({ kind: 'system-notice', text: 'Turn stopped', key })
+      pendingResult = undefined
+      pendingRateLimit = undefined
+      continue
+    }
     if (e.type === 'turn_error') {
       const msg =
         isRecord(e.payload) && typeof e.payload.message === 'string' ? e.payload.message : 'error'

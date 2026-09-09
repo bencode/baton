@@ -1,9 +1,9 @@
-import type { Attachment, Session, SessionEvent } from '@baton/shared'
+import type { Session, SubmitInputResult } from '@baton/shared'
 import type { CommandBus } from './command-bus.ts'
 import type { EventBus } from './event-bus.ts'
 import type { ProjectBus } from './project-bus.ts'
 import type { SessionRuntime } from './session-runtime.ts'
-import type { Store } from './store/types.ts'
+import type { EnqueueInput, Store } from './store/types.ts'
 
 export type DeliverDeps = {
   store: Store
@@ -13,50 +13,28 @@ export type DeliverDeps = {
   projects: ProjectBus
 }
 
-export type DeliverInput = {
-  text: string
-  images?: string[]
-  attachments?: Attachment[]
-  loopId?: number
-}
+export type DeliverInput = EnqueueInput
 
-// Persist a user_message and wake the session's worker — the shared core behind
-// both the interactive send (POST /sessions/:id/messages) and the Loop scheduler.
-// An active session's child receives it live; an idle session whose worker is
-// connected is auto-resumed (publish session.start → the runner spawns and
-// reconciles this message from the durable transcript). Returns delivered:false
-// when the worker is offline — NOTHING is persisted then, and the caller decides
-// what that means (409 for an interactive send, skip for the scheduler).
+// Persist PendingInput and notify the worker. An offline submission is rejected
+// before writing; Loop uses the same path and skips its beat when offline.
 export const deliverMessage = async (
   session: Session,
   input: DeliverInput,
   deps: DeliverDeps,
-): Promise<{ delivered: boolean; event?: SessionEvent }> => {
+): Promise<{ delivered: false } | { delivered: true; result: SubmitInputResult }> => {
   const { store, bus, commands, runtime, projects } = deps
   const active = runtime.isActive(session.id)
   if (!active && !commands.has(session.workerId)) return { delivered: false }
-  const images = input.images ?? []
-  const attachments = input.attachments ?? []
-  const payload = {
-    text: input.text,
-    ...(input.loopId === undefined ? {} : { loopId: input.loopId }),
-    ...(images.length > 0 ? { images } : {}),
-    ...(attachments.length > 0 ? { attachments } : {}),
-    // Stamp the turn with the session's plan mode + model/effort override so a
-    // resumed (or scheduled) turn honours the same settings an interactive one would.
-    ...(session.planMode ? { planMode: true } : {}),
-    ...(session.model ? { model: session.model } : {}),
-    ...(session.effort ? { effort: session.effort } : {}),
-  }
-  const ev = await store.sessions.appendEvent(session.id, 'user_message', payload)
-  await store.sessions.touch(session.id).catch(() => {})
+  const mutation = await store.inputs.submit(session.id, input)
   projects.publish(session.projectId, { resource: 'sessions' })
-  bus.publish(session.id, ev)
+  mutation.events.forEach(event => {
+    bus.publish(session.id, event)
+  })
   if (!active)
     commands.publish(session.workerId, {
       cmd: 'session.start',
       sessionId: session.id,
       name: session.name,
     })
-  return { delivered: true, event: ev }
+  return { delivered: true, result: mutation.value }
 }
