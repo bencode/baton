@@ -99,15 +99,22 @@ export const sessionRunCommand = defineCommand({
     process.on('SIGTERM', stop)
     process.on('disconnect', stop)
     if (!process.connected) stop()
-    await runDaemon(
-      config,
-      {
-        worker,
-        runnerToken: args['runner-token'],
-        eventSourceImpl: authedEventSource(workerToken),
-        fetchImpl: bearerFetch(workerToken),
-      },
-      ac.signal,
-    )
+    try {
+      await runDaemon(
+        config,
+        {
+          worker,
+          runnerToken: args['runner-token'],
+          eventSourceImpl: authedEventSource(workerToken),
+          fetchImpl: bearerFetch(workerToken),
+        },
+        ac.signal,
+      )
+    } finally {
+      process.off('SIGINT', stop)
+      process.off('SIGTERM', stop)
+      process.off('disconnect', stop)
+      if (process.connected) process.disconnect?.()
+    }
   },
 })
