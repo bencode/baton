@@ -55,6 +55,7 @@ export const LeftPanel = ({ workspaceId, projectId, activeId, open, close }: Lef
             Workers
           </h2>
           <WorkersPanel
+            key={projectId}
             projectId={projectId}
             workers={workers}
             sessions={sessions}

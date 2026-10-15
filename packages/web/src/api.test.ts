@@ -175,3 +175,74 @@ test('sessions.uploadAttachment POSTs the file as raw body with filename query',
   expect(init?.body).toBe(file)
   expect((init?.headers as Record<string, string>)['content-type']).toBe('text/plain')
 })
+
+test('worker creation endpoints use cookies, the confirmed payload, and request deadlines', async () => {
+  const fetchMock = vi.fn<typeof fetch>(async () => res([]))
+  vi.stubGlobal('fetch', fetchMock)
+  const api = createApi('/custom')
+  await api.workerCreations.templates(42)
+  await api.workerCreations.listByProject(42)
+  await api.workerCreations.create(42, {
+    templateId: 'mini-local',
+    name: 'app',
+    agentKind: 'codex',
+  })
+  expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+    '/custom/projects/42/worker-templates',
+    '/custom/projects/42/worker-creations',
+    '/custom/projects/42/worker-creations',
+  ])
+  fetchMock.mock.calls.forEach(([, init]) => {
+    expect(init?.credentials).toBe('same-origin')
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
+  })
+  const init = fetchMock.mock.calls[2]?.[1]
+  expect(init?.method).toBe('POST')
+  expect(JSON.parse(init?.body as string)).toEqual({
+    templateId: 'mini-local',
+    name: 'app',
+    agentKind: 'codex',
+  })
+})
+
+test('ApiError preserves the existing error message and exposes HTTP status', async () => {
+  const { ApiError } = await import('./api')
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async () => res({ error: 'name used' }, 409)),
+  )
+  await expect(
+    createApi().workerCreations.create(42, {
+      templateId: 'mini-local',
+      name: 'app',
+      agentKind: 'codex',
+    }),
+  ).rejects.toMatchObject({
+    status: 409,
+    message: 'POST /api/projects/42/worker-creations → 409: {"error":"name used"}',
+  })
+  await expect(createApi().workspaces.get(1)).rejects.toBeInstanceOf(ApiError)
+  expect(new ApiError('error', 500)).toBeInstanceOf(Error)
+})
+
+test('worker creation requests forward a ten-second deadline and expose abort errors', async () => {
+  const controller = new AbortController()
+  const deadline = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
+  const fetchMock = vi.fn<typeof fetch>(async (_url, init) => {
+    if (!init?.signal) return res({ ok: true })
+    const signal = init.signal
+    return new Promise<Response>((_resolve, reject) =>
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+    )
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  await createApi().health()
+  expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeUndefined()
+  expect(deadline).not.toHaveBeenCalled()
+  const response = createApi().workerCreations.listByProject(42)
+  const assertion = expect(response).rejects.toMatchObject({ name: 'TimeoutError' })
+  expect(deadline).toHaveBeenCalledWith(10_000)
+  expect(fetchMock.mock.calls[1]?.[1]?.signal).toBe(controller.signal)
+  controller.abort(new DOMException('Timed out', 'TimeoutError'))
+  await assertion
+})

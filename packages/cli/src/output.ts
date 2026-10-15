@@ -5,6 +5,8 @@ import type {
   SessionView,
   Task,
   TaskComment,
+  WorkerCreation,
+  WorkerTemplate,
   WorkerView,
   Workspace,
 } from '@baton/shared'
@@ -12,6 +14,10 @@ import type {
 export const toJson = (data: unknown): string => JSON.stringify(data, null, 2)
 
 export const fmtWorkspace = (w: Workspace): string => `${w.id}  ${w.name}`
+export const fmtWorkerTemplate = (t: WorkerTemplate): string =>
+  `${t.id}  ${t.name}  [${t.available ? 'available' : 'unavailable'}]  ${t.agentKinds.join(', ')}`
+export const fmtWorkerCreation = (c: WorkerCreation): string =>
+  `${c.id}  [${c.status}/${c.step ?? 'pending'}]  ${c.name}  ${c.agentKind}${c.workerId === null ? '' : `  W-${c.workerId}`}${c.error ? `  ${c.error}` : ''}`
 export const fmtProject = (p: Project): string => `${p.id}  ${p.name}`
 export const fmtRequirement = (r: Requirement): string => `${r.code}  [${r.status}]  ${r.title}`
 export const fmtTask = (t: Task): string => `${t.code}  [${t.status}]  ${t.title}`

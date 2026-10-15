@@ -4,6 +4,7 @@ import { channel } from './commands/channel.ts'
 import { init } from './commands/init.ts'
 import { loop } from './commands/loop.ts'
 import { project } from './commands/project.ts'
+import { provisioner } from './commands/provisioner.ts'
 import { relay } from './commands/relay.ts'
 import { requirement } from './commands/requirement.ts'
 import { service } from './commands/service.ts'
@@ -21,6 +22,7 @@ const main = defineCommand({
   subCommands: {
     init,
     worker,
+    provisioner,
     session,
     service,
     artifact,

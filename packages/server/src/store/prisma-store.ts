@@ -11,6 +11,7 @@ import { prismaSessions } from './prisma/sessions.ts'
 import { prismaTaskComments } from './prisma/task-comments.ts'
 import { prismaTasks } from './prisma/tasks.ts'
 import { prismaUsers } from './prisma/users.ts'
+import { prismaWorkerCreations } from './prisma/worker-creations.ts'
 import { prismaWorkers } from './prisma/workers.ts'
 import { prismaWorkspaces } from './prisma/workspaces.ts'
 import type { Store } from './types.ts'
@@ -19,6 +20,7 @@ import type { Store } from './types.ts'
 // lives in prisma/<name>.ts and returns its sub-shape of Store; this file
 // stitches them together and handles the cross-cutting helpers.
 export const createPrismaStore = (prisma: PrismaClient): Store => ({
+  workerCreations: prismaWorkerCreations(prisma),
   workspaces: prismaWorkspaces(prisma),
   projects: prismaProjects(prisma),
   artifacts: prismaArtifacts(prisma),

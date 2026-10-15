@@ -65,13 +65,14 @@ model Project {
   description String?
   createdAt   DateTime @default(now())
 
-  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  requirements Requirement[]
-  tasks        Task[]
-  sessions     Session[]
-  workers      Worker[]
-  counters     CodeCounter[]
-  artifacts    Artifact[]
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requirements    Requirement[]
+  tasks           Task[]
+  sessions        Session[]
+  workers         Worker[]
+  workerCreations WorkerCreation[]
+  counters        CodeCounter[]
+  artifacts       Artifact[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -241,13 +242,37 @@ model Worker {
   apiToken  String   @unique
   createdAt DateTime @default(now())
 
-  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sessions Session[]
+  creation WorkerCreation?
 
   // No more closedAt: destroy = DELETE row. (projectId, machineId) and
   // (projectId, name) are unconditionally unique now.
   @@unique([projectId, machineId])
   @@unique([projectId, name])
+}
+
+model WorkerCreation {
+  id         Int       @id @default(autoincrement())
+  projectId  Int
+  templateId String
+  name       String
+  agentKind  String
+  machineId  String    @unique @default(uuid())
+  status     String    @default("pending")
+  step       String?
+  error      String?
+  repoPath   String?
+  workerId   Int?      @unique
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  finishedAt DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  worker  Worker? @relation(fields: [workerId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([status])
 }
 
 // Append-only transcript of a Session — user_message / sdk_event / turn_* /

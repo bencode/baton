@@ -8,6 +8,7 @@ import { type ServicesClient, servicesClient } from './client/services.ts'
 import { type ExecutionClient, sessionExecutionClient } from './client/session-execution.ts'
 import { type SessionsClient, sessionsClient } from './client/sessions.ts'
 import { type TaskClient, taskClient } from './client/tasks.ts'
+import { type WorkerCreationsClient, workerCreationsClient } from './client/worker-creations.ts'
 import { type WorkersClient, workersClient } from './client/workers.ts'
 import { type WorkspaceClient, workspaceClient } from './client/workspaces.ts'
 
@@ -28,6 +29,7 @@ export type { WorkspaceInput } from './client/workspaces.ts'
 
 // Public HTTP client (UI / CLI / observability tools).
 export type ApiClient = {
+  workerCreations: WorkerCreationsClient
   artifacts: ArtifactsClient
   workspaces: WorkspaceClient
   projects: ProjectClient
@@ -57,6 +59,7 @@ export const createClient = (baseUrl: string, opts?: { bearer?: string }): ApiCl
 }
 
 const clientFromBase = (baseUrl: string): ApiClient => ({
+  workerCreations: workerCreationsClient(baseUrl),
   artifacts: artifactsClient(baseUrl),
   workspaces: workspaceClient(baseUrl),
   projects: projectClient(baseUrl),

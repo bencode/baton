@@ -53,6 +53,7 @@ const fakeApi = () =>
     tasks: { listByRequirement: vi.fn(async () => tasks) },
     services: { listByProject: vi.fn(async () => []) },
     sessions: { listByProject: vi.fn(async () => []) },
+    workerCreations: { templates: vi.fn(async () => []), listByProject: vi.fn(async () => []) },
     workers: { listByProject: vi.fn(async () => []) },
     channels: { listByWorkspace: vi.fn(async () => []) },
   }) as unknown as Api
@@ -99,6 +100,7 @@ test('rail session row: trash → inline confirm → removes session and closes 
     tasks: { listByRequirement: vi.fn(async () => []) },
     services: { listByProject: vi.fn(async () => []) },
     sessions: { listByProject: vi.fn(async () => [session]), remove },
+    workerCreations: { templates: vi.fn(async () => []), listByProject: vi.fn(async () => []) },
     workers: { listByProject: vi.fn(async () => [worker]) },
     channels: { listByWorkspace: vi.fn(async () => []) },
   } as unknown as Api
