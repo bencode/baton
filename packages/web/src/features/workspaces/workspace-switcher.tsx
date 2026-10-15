@@ -16,7 +16,7 @@ export const WorkspaceSwitcher = ({ activeWorkspaceId }: WorkspaceSwitcherProps)
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   if (!workspaces || workspaces.length === 0)
-    return <span className="text-sm text-gray-400">no workspace</span>
+    return <span className="text-[13px] text-ui-muted">no workspace</span>
   const active = workspaces.find(w => w.id === activeWorkspaceId)
   const rename = async (next: string) => {
     setEditing(false)
@@ -38,7 +38,7 @@ export const WorkspaceSwitcher = ({ activeWorkspaceId }: WorkspaceSwitcherProps)
         aria-label="Workspace"
         value={activeWorkspaceId ?? ''}
         onChange={e => navigate(workspacePath(Number(e.target.value)))}
-        className="ui-input min-w-0 flex-1"
+        className="ui-context-select min-w-0 flex-1"
       >
         {activeWorkspaceId === null && (
           <option value="" disabled>

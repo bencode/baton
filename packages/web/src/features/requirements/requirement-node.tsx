@@ -24,7 +24,7 @@ export const RequirementNode = ({
   return (
     <div
       className={`group flex w-full items-center gap-2 rounded-md px-1.5 py-1 transition-colors duration-150 ${
-        active ? 'bg-blue-50' : 'hover:bg-gray-100/70'
+        active ? 'bg-ui-selected' : 'hover:bg-ui-hover/70'
       }`}
     >
       <button
@@ -33,7 +33,7 @@ export const RequirementNode = ({
         aria-expanded={expanded}
         aria-controls={`${requirement.id}-tasks`}
         aria-label={`${expanded ? 'Collapse' : 'Expand'} ${requirement.title}`}
-        className="flex h-5 w-5 shrink-0 items-center justify-center text-gray-500 hover:text-gray-800"
+        className="ui-icon-button"
       >
         <svg
           viewBox="0 0 16 16"
@@ -54,11 +54,11 @@ export const RequirementNode = ({
       <button
         type="button"
         onClick={onOpen}
-        className={`flex min-w-0 flex-1 items-baseline gap-2 truncate text-left text-sm font-semibold tracking-tight ${
-          active ? 'text-blue-900' : 'text-gray-900'
+        className={`ui-focus flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded truncate text-left text-[13px] font-medium md:min-h-8 [@media(pointer:coarse)]:min-h-11 ${
+          active ? 'text-ui-selected-text' : 'text-ui-text'
         }`}
       >
-        <span className="shrink-0 font-mono text-xs font-normal text-gray-400">
+        <span className="shrink-0 font-mono text-xs font-normal text-ui-muted">
           {requirement.code}
         </span>
         <span className={`truncate ${cancelled ? 'line-through opacity-60' : ''}`}>

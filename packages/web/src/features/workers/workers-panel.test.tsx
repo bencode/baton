@@ -69,7 +69,7 @@ const fixture = (records: WorkerCreation[] = []) => {
   return { workerCreations, workers, sessions, open, tree }
 }
 const submit = async () => {
-  fireEvent.click(screen.getByRole('button', { name: '＋ Add worker' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add worker' }))
   await screen.findByRole('option', { name: 'Mini local' })
   fireEvent.change(screen.getByLabelText('Worker name'), { target: { value: 'app' } })
   fireEvent.click(screen.getByRole('button', { name: 'Create worker' }))
@@ -86,7 +86,7 @@ test('Add worker remains available before worker, session, and creation data has
   const f = fixture()
   f.workerCreations.listByProject.mockReturnValue(new Promise(() => undefined))
   render(f.tree(42, true))
-  fireEvent.click(screen.getByRole('button', { name: '＋ Add worker' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add worker' }))
   expect(screen.getByText('Add a worker')).toBeTruthy()
 })
 
@@ -101,16 +101,16 @@ test('closing before acceptance keeps the dialog closed and allows adding anothe
   fireEvent.click(submitting)
   expect(f.workerCreations.create).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByLabelText('close'))
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: '＋ Add worker' }))
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add worker' }))
   f.workerCreations.listByProject.mockResolvedValue([creation])
   await act(async () => response.resolve(creation))
   expect(screen.queryByText('Worker creation')).toBeNull()
   expect(screen.queryByRole('region', { name: 'Worker creation records' })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: '＋ Add worker' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add worker' }))
   expect(screen.getByText('Add a worker')).toBeTruthy()
   fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }))
   expect(screen.queryByText('Add a worker')).toBeNull()
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: '＋ Add worker' }))
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add worker' }))
 })
 
 test('sidebar does not display creation tasks regardless of their status', async () => {
@@ -123,7 +123,9 @@ test('sidebar does not display creation tasks regardless of their status', async
   render(f.tree(42))
   await act(async () => undefined)
   expect(screen.queryByRole('region', { name: 'Worker creation records' })).toBeNull()
-  expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['＋ Add worker'])
+  expect(screen.getAllByRole('button')).toEqual([
+    screen.getByRole('button', { name: 'Add worker' }),
+  ])
 })
 
 test.each([

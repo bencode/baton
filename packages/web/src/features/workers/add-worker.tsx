@@ -42,7 +42,7 @@ export const AddWorker = ({
     >
       <div className="flex flex-col gap-4">
         {setup.creations.error && (
-          <p role="alert" className="text-xs text-amber-700 break-words">
+          <p role="alert" className="text-xs text-ui-warning break-words">
             Creation records could not be refreshed. Displayed progress may be out of date.{' '}
             <button type="button" onClick={setup.refresh} className="underline">
               Refresh records
@@ -59,7 +59,7 @@ export const AddWorker = ({
                   aria-pressed={mode === value}
                   disabled={setup.creating}
                   onClick={() => setMode(value)}
-                  className={`rounded-md border px-3 py-1.5 text-xs disabled:opacity-50 ${mode === value ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                  className={`ui-button ${mode === value ? 'border-ui-accent-border bg-ui-selected text-ui-selected-text' : ''}`}
                 >
                   {value === 'template' ? 'From template' : 'Register existing'}
                 </button>
@@ -83,7 +83,7 @@ export const AddWorker = ({
             onStartConversation={onStartConversation}
           />
         ) : (
-          <div className="flex flex-col gap-3 text-xs text-gray-500">
+          <div className="flex flex-col gap-3 text-xs text-ui-muted">
             <p>
               {setup.creations.loading
                 ? 'Loading creation record…'

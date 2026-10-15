@@ -13,8 +13,8 @@ type ServiceDetailProps = {
 
 const DetailRow = ({ label, children }: { label: string; children: ReactNode }) => (
   <div className="grid gap-1 py-3 sm:grid-cols-[8rem_minmax(0,1fr)] sm:gap-4">
-    <dt className="text-sm text-gray-500">{label}</dt>
-    <dd className="min-w-0 text-sm text-gray-800">{children}</dd>
+    <dt className="text-sm text-ui-muted">{label}</dt>
+    <dd className="min-w-0 text-sm text-ui-text">{children}</dd>
   </div>
 )
 
@@ -28,18 +28,18 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const service = services?.find(item => item.workerId === workerId && item.name === name)
 
-  if (loading && services === null) return <div className="p-6 text-sm text-gray-500">loading…</div>
+  if (loading && services === null) return <div className="p-6 text-sm text-ui-muted">loading…</div>
   if (error && services === null)
     return (
-      <div role="alert" className="p-6 text-sm text-red-600">
+      <div role="alert" className="p-6 text-sm text-ui-danger">
         Unable to load service details.
       </div>
     )
   if (!service)
     return (
       <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
-        <p className="text-sm font-medium text-gray-700">Service is no longer running.</p>
-        <p className="text-xs text-gray-500">Its runtime metadata has expired or been removed.</p>
+        <p className="text-sm font-medium text-ui-text">Service is no longer running.</p>
+        <p className="text-xs text-ui-muted">Its runtime metadata has expired or been removed.</p>
       </div>
     )
 
@@ -75,10 +75,10 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
+    <div className="ui-page flex flex-col gap-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-ui-muted">
             Service ·{' '}
             <span className="font-mono">
               W-{workerId}/{name}
@@ -88,28 +88,28 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
             <span
               role="img"
               aria-label="running"
-              className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+              className="h-2 w-2 shrink-0 rounded-full bg-ui-success"
             />
-            <h2 className="truncate text-xl font-semibold tracking-tight text-gray-900">{name}</h2>
-            <span className="text-xs font-medium text-emerald-700">Running</span>
+            <h2 className="ui-page-title truncate">{name}</h2>
+            <span className="text-xs font-medium text-ui-success">Running</span>
           </div>
         </div>
         {confirming ? (
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-gray-600">{stopping ? 'Stopping…' : `Stop ${name}?`}</span>
+            <span className="text-ui-muted">{stopping ? 'Stopping…' : `Stop ${name}?`}</span>
             {!stopping && (
               <>
                 <button
                   type="button"
                   onClick={() => void stop()}
-                  className="rounded-md bg-red-600 px-2.5 py-1.5 font-medium text-white hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+                  className="ui-button ui-danger-primary"
                 >
                   Stop
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirming(false)}
-                  className="rounded-md px-2.5 py-1.5 text-gray-600 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                  className="ui-quiet-button"
                 >
                   Cancel
                 </button>
@@ -117,28 +117,24 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
             )}
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => setConfirming(true)}
-            className="rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
-          >
+          <button type="button" onClick={() => setConfirming(true)} className="ui-button ui-danger">
             Stop service
           </button>
         )}
       </header>
 
       {error && (
-        <p role="status" className="text-xs text-amber-700">
+        <p role="status" className="text-xs text-ui-warning">
           Service details may be out of date.
         </p>
       )}
       {stopError && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-ui-danger">
           Couldn’t stop {name}.
         </p>
       )}
 
-      <dl className="divide-y divide-gray-100 border-y border-gray-100">
+      <dl className="divide-y divide-ui-border border-y border-ui-border">
         <DetailRow label="Public URL">
           {service.publicUrl ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -146,19 +142,19 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
                 href={service.publicUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="break-all font-medium text-blue-700 underline decoration-blue-200 underline-offset-2 hover:decoration-blue-700"
+                className="break-all font-medium text-ui-accent underline decoration-ui-accent-border underline-offset-2 hover:decoration-ui-accent"
               >
                 {service.publicUrl}
               </a>
               <button
                 type="button"
                 onClick={() => void copyPublicUrl()}
-                className="text-xs font-medium text-gray-500 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                className="ui-quiet-button"
               >
                 {copyStatus === 'copied' ? 'Copied' : 'Copy'}
               </button>
               {copyStatus === 'error' && (
-                <span role="status" className="text-xs text-red-600">
+                <span role="status" className="text-xs text-ui-danger">
                   Copy failed
                 </span>
               )}
@@ -172,7 +168,7 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
         </DetailRow>
         <DetailRow label="Worker">
           <span className="font-medium">{worker?.name ?? `W-${workerId}`}</span>{' '}
-          <span className="font-mono text-xs text-gray-500">W-{workerId}</span>
+          <span className="font-mono text-xs text-ui-muted">W-{workerId}</span>
         </DetailRow>
         <DetailRow label="Working directory">
           <span className="break-all font-mono">{service.cwd}</span>

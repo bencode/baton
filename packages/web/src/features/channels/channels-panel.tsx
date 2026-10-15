@@ -2,6 +2,7 @@ import type { Id } from '@baton/shared'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
+import { PlusIcon } from '../../components/icons'
 import { bumpLists } from '../../hooks/use-list-revision'
 import { ChannelRow } from './channel-row'
 import { useChannels } from './use-channels'
@@ -63,14 +64,14 @@ export const ChannelsPanel = ({ workspaceId }: { workspaceId: Id }) => {
           aria-label="new channel"
           title="new channel"
           onClick={() => setAdding(v => !v)}
-          className="px-1 text-sm leading-none text-gray-400 hover:text-blue-700"
+          className="ui-icon-button"
         >
-          +
+          <PlusIcon />
         </button>
       </div>
-      {loading && <p className="px-2 text-sm text-gray-400">loading…</p>}
+      {loading && <p className="px-2 text-sm text-ui-muted">loading…</p>}
       {!loading && channels?.length === 0 && (
-        <p className="px-2 text-sm text-gray-400">No channels yet.</p>
+        <p className="px-2 text-sm text-ui-muted">No channels yet.</p>
       )}
       {channels?.map(ch => (
         <ChannelRow
@@ -98,7 +99,7 @@ export const ChannelsPanel = ({ workspaceId }: { workspaceId: Id }) => {
               if (e.key === 'Escape') setAdding(false)
             }}
             placeholder="New channel…"
-            className="w-full rounded-md border border-gray-200 bg-white px-2 py-1 text-sm outline-none focus:border-blue-400 disabled:opacity-40"
+            className="ui-input w-full"
           />
         </form>
       )}

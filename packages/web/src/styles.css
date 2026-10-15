@@ -66,46 +66,72 @@ body {
 
 @theme {
   --color-ui-surface: #ffffff;
-  --color-ui-panel: #f7f8fa;
-  --color-ui-hover: #eef1f3;
-  --color-ui-text: #17201c;
-  --color-ui-muted: #58625e;
-  --color-ui-border: #dde3df;
-  --color-ui-accent: #176647;
-  --color-ui-selected: #e8f3ee;
+  --color-ui-panel: oklch(97.5% 0.006 258);
+  --color-ui-text: oklch(28% 0.012 258);
+  --color-ui-muted: oklch(48% 0.016 258);
+  --color-ui-border: oklch(89% 0.012 258);
+  --color-ui-hover: oklch(95.5% 0.012 258);
+  --color-ui-accent: oklch(47% 0.105 258);
+  --color-ui-accent-hover: oklch(42% 0.105 258);
+  --color-ui-heading: oklch(32% 0.055 258);
+  --color-ui-selected: oklch(94% 0.022 258);
+  --color-ui-selected-text: oklch(39% 0.095 258);
+  --color-ui-selected-muted: oklch(46% 0.055 258);
+  --color-ui-accent-border: oklch(75% 0.055 258);
+  --color-ui-info-surface: oklch(97% 0.009 258);
+  --color-ui-info-text: oklch(43% 0.035 258);
+  --color-ui-success: oklch(43% 0.075 157);
+  --color-ui-success-surface: oklch(96% 0.014 157);
+  --color-ui-success-border: oklch(84% 0.035 157);
+  --color-ui-warning: oklch(45% 0.085 72);
+  --color-ui-warning-surface: oklch(97% 0.016 72);
+  --color-ui-warning-border: oklch(83% 0.045 72);
+  --color-ui-danger: oklch(47% 0.14 25);
+  --color-ui-danger-hover: oklch(42% 0.14 25);
+  --color-ui-danger-surface: oklch(97% 0.012 25);
+  --color-ui-danger-border: oklch(83% 0.045 25);
 }
 
 @layer components {
   .ui-focus:focus-visible,
   .ui-button:focus-visible,
+  .ui-quiet-button:focus-visible,
   .ui-icon-button:focus-visible,
   .ui-input:focus-visible,
+  .ui-context-select:focus-visible,
   .ui-nav-item:focus-visible {
     outline: 2px solid var(--color-ui-accent);
     outline-offset: 2px;
   }
 
-  .ui-button {
+  .ui-button,
+  .ui-quiet-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    min-height: 36px;
-    padding: 6px 12px;
+    min-height: 32px;
+    padding: 5px 10px;
     border: 1px solid var(--color-ui-border);
     border-radius: 6px;
     background: var(--color-ui-surface);
-    font-size: 14px;
+    font-size: 13px;
     line-height: 20px;
     font-weight: 500;
+    transition:
+      background-color 150ms ease-out,
+      border-color 150ms ease-out,
+      color 150ms ease-out;
   }
 
   .ui-button:hover:not(:disabled) {
     background: var(--color-ui-hover);
   }
   .ui-button:disabled,
+  .ui-quiet-button:disabled,
   .ui-icon-button:disabled,
-  .ui-input:disabled {
+  .ui-input:disabled,
+  .ui-context-select:disabled {
     opacity: 0.6;
     cursor: default;
   }
@@ -115,9 +141,19 @@ body {
     color: white;
   }
   .ui-primary:hover:not(:disabled) {
-    background: #12553b;
+    background: var(--color-ui-accent-hover);
+    border-color: var(--color-ui-accent-hover);
   }
 
+  .ui-quiet-button {
+    background: transparent;
+    border-color: transparent;
+    color: var(--color-ui-muted);
+  }
+  .ui-quiet-button:hover:not(:disabled) {
+    background: var(--color-ui-hover);
+    color: var(--color-ui-accent);
+  }
   .ui-icon-button {
     display: inline-flex;
     align-items: center;
@@ -125,22 +161,44 @@ body {
     flex-shrink: 0;
     width: 28px;
     height: 28px;
+    padding: 0;
     border-radius: 6px;
     color: var(--color-ui-muted);
+    transition:
+      background-color 150ms ease-out,
+      color 150ms ease-out;
   }
   .ui-icon-button:hover:not(:disabled) {
     background: var(--color-ui-hover);
-    color: var(--color-ui-text);
+    color: var(--color-ui-accent);
   }
 
-  .ui-input {
+  .ui-danger {
+    color: var(--color-ui-danger);
+  }
+  .ui-danger:hover:not(:disabled) {
+    background: var(--color-ui-danger-surface);
+    color: var(--color-ui-danger-hover);
+  }
+  .ui-danger-primary {
+    background: var(--color-ui-danger);
+    border-color: var(--color-ui-danger);
+    color: white;
+  }
+  .ui-danger-primary:hover:not(:disabled) {
+    background: var(--color-ui-danger-hover);
+    border-color: var(--color-ui-danger-hover);
+  }
+
+  .ui-input,
+  .ui-context-select {
     height: 36px;
     padding: 6px 8px;
     border: 1px solid var(--color-ui-border);
     border-radius: 6px;
     background: var(--color-ui-surface);
     color: var(--color-ui-text);
-    font-size: 16px;
+    font-size: 14px;
     line-height: 20px;
   }
   .ui-input::placeholder {
@@ -149,15 +207,26 @@ body {
   .ui-input:hover:not(:disabled) {
     border-color: var(--color-ui-muted);
   }
+  .ui-context-select {
+    height: 32px;
+    padding: 4px 8px;
+    border-color: transparent;
+    background: transparent;
+    font-size: 13px;
+  }
+  .ui-context-select:hover:not(:disabled) {
+    background: var(--color-ui-hover);
+  }
 
   .ui-nav-item {
     display: flex;
     align-items: center;
-    min-height: 36px;
+    gap: 9px;
+    min-height: 34px;
     width: 100%;
     border-radius: 6px;
     padding: 6px 10px;
-    font-size: 14px;
+    font-size: 13px;
     text-align: left;
   }
   .ui-nav-item:hover {
@@ -172,18 +241,64 @@ body {
     max-height: calc(100dvh - 2rem);
     overflow-y: auto;
     border: 1px solid var(--color-ui-border);
-    border-radius: 12px;
+    border-radius: 10px;
     background: var(--color-ui-surface);
-    padding: 20px;
+    padding: 24px;
     color: var(--color-ui-text);
   }
   .ui-dialog::backdrop {
-    background: rgb(23 32 28 / 30%);
+    background: rgb(20 28 42 / 28%);
   }
 
-  @media (min-width: 640px) {
-    .ui-input {
-      font-size: 14px;
+  .ui-page {
+    width: 100%;
+    max-width: 57rem;
+    margin-inline: auto;
+    padding: 32px 24px;
+    color: var(--color-ui-text);
+  }
+  .ui-page-title {
+    font-size: 21px;
+    line-height: 1.5;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: var(--color-ui-heading);
+    text-wrap: balance;
+  }
+  @media (min-width: 768px) {
+    .ui-page {
+      padding: 36px;
+    }
+  }
+  @media (max-width: 767px) {
+    .ui-input,
+    .ui-context-select {
+      font-size: 16px;
+    }
+    .ui-page {
+      padding: 28px 20px;
+    }
+  }
+  @media (max-width: 767px), (pointer: coarse) {
+    .ui-button,
+    .ui-quiet-button,
+    .ui-nav-item {
+      min-height: 44px;
+    }
+    .ui-icon-button {
+      width: 44px;
+      height: 44px;
+    }
+    .ui-input,
+    .ui-context-select {
+      height: 44px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ui-button,
+    .ui-quiet-button,
+    .ui-icon-button {
+      transition: none;
     }
   }
 }

@@ -2,6 +2,7 @@ import type { Id } from '@baton/shared'
 import { useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { sessionPath } from '../../app/route'
+import { SearchIcon } from '../../components/icons'
 import { useWorkers } from '../workers/use-workers'
 import { buildSessionGroups } from './session-list'
 import { SessionRow } from './session-row'
@@ -29,19 +30,22 @@ export const SessionsPanel = ({ projectId, activeId, open, close }: SessionsPane
   )
   return (
     <section aria-label="Conversations" className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2 px-1">
-        <input
-          aria-label="Search conversations"
-          placeholder="Search conversations…"
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          className="ui-input w-full"
-        />
+      <div className="flex flex-wrap items-center gap-1 px-1">
+        <label className="flex min-w-44 flex-1 items-center gap-1.5 rounded px-1 text-ui-muted focus-within:outline focus-within:outline-ui-accent">
+          <SearchIcon />
+          <input
+            aria-label="Search conversations"
+            placeholder="Search conversations…"
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            className="ui-context-select w-full px-0 placeholder:text-ui-muted focus-visible:outline-none"
+          />
+        </label>
         <select
           aria-label="Filter by worker"
           value={selectedWorker ?? ''}
           onChange={event => setWorkerId(event.target.value ? Number(event.target.value) : null)}
-          className="ui-input w-full"
+          className="ui-context-select max-w-32"
         >
           <option value="">All workers</option>
           {workers.data?.map(worker => (
@@ -51,7 +55,7 @@ export const SessionsPanel = ({ projectId, activeId, open, close }: SessionsPane
           ))}
         </select>
         {workers.error && (
-          <p role="status" className="text-xs text-ui-muted">
+          <p role="status" className="w-full text-xs text-ui-muted">
             Worker filters could not be refreshed.{' '}
             <button type="button" onClick={workers.refresh} className="underline">
               Retry
@@ -68,7 +72,7 @@ export const SessionsPanel = ({ projectId, activeId, open, close }: SessionsPane
         </div>
       )}
       {sessions.error && (
-        <p role="alert" className="px-2 text-xs text-red-700">
+        <p role="alert" className="px-2 text-xs text-ui-danger">
           {sessions.data ? 'Conversations may be out of date.' : 'Unable to load conversations.'}{' '}
           <button type="button" className="underline" onClick={sessions.refresh}>
             Retry

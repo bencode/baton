@@ -1,24 +1,24 @@
 import type { RequirementStatus, TaskStatus } from '@baton/shared'
 
-// Detail-view status label: ring-style pill with uppercase tracking — reads as
+// Detail-view status label: ring-style pill — reads as
 // "tag/label", not "highlighted text". For dense rows use <StatusDot> instead.
 // Sessions used to feed a SessionState string here in M2.5; in M2.6 they're
 // expressed as derived alive/busy booleans, so this component only takes the
 // product/task vocabulary now.
 const STYLES: Record<string, string> = {
-  active: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200/60',
-  done: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/60',
-  in_progress: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200/70',
-  blocked: 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200/70',
-  busy: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200/70',
-  streaming: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200/70',
-  failed: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200/60',
-  todo: 'bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-200',
-  cancelled: 'bg-gray-50 text-gray-400 ring-1 ring-inset ring-gray-200',
-  idle: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/60',
-  closed: 'bg-gray-100 text-gray-500 ring-1 ring-inset ring-gray-200',
-  offline: 'bg-gray-100 text-gray-500 ring-1 ring-inset ring-gray-200',
-  detached: 'bg-white text-gray-500 ring-1 ring-inset ring-gray-300',
+  active: 'bg-ui-selected text-ui-accent ring-1 ring-inset ring-ui-accent-border/60',
+  done: 'bg-ui-success-surface text-ui-success ring-1 ring-inset ring-ui-success-border/60',
+  in_progress: 'bg-ui-selected text-ui-selected-text ring-1 ring-inset ring-ui-accent-border',
+  blocked: 'bg-ui-warning-surface text-ui-warning ring-1 ring-inset ring-ui-warning-border',
+  busy: 'bg-ui-selected text-ui-selected-text ring-1 ring-inset ring-ui-accent-border',
+  streaming: 'bg-ui-selected text-ui-selected-text ring-1 ring-inset ring-ui-accent-border',
+  failed: 'bg-ui-danger-surface text-ui-danger ring-1 ring-inset ring-ui-danger-border/60',
+  todo: 'bg-ui-panel text-ui-muted ring-1 ring-inset ring-ui-border',
+  cancelled: 'bg-ui-panel text-ui-muted ring-1 ring-inset ring-ui-border',
+  idle: 'bg-ui-success-surface text-ui-success ring-1 ring-inset ring-ui-success-border/60',
+  closed: 'bg-ui-hover text-ui-muted ring-1 ring-inset ring-ui-border',
+  offline: 'bg-ui-hover text-ui-muted ring-1 ring-inset ring-ui-border',
+  detached: 'bg-ui-surface text-ui-muted ring-1 ring-inset ring-ui-border',
 }
 
 const LABELS: Record<string, string> = { in_progress: 'in progress' }
@@ -40,7 +40,7 @@ type StatusBadgeProps = {
 
 export const StatusBadge = ({ status }: StatusBadgeProps) => (
   <span
-    className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold tracking-wider uppercase ${STYLES[status] ?? 'bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-200'}`}
+    className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium ${STYLES[status] ?? 'bg-ui-panel text-ui-muted ring-1 ring-inset ring-ui-border'}`}
   >
     {LABELS[status] ?? status}
   </span>

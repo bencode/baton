@@ -42,7 +42,7 @@ test('lists a live service, opens its detail, and confirms before stopping it', 
 
   fireEvent.click(await screen.findByText('web'))
   expect(open).toHaveBeenCalledWith('/proj/1/service/20/web', 'W-20/web')
-  expect(screen.getByText('web').closest('.group')?.className).toContain('bg-blue-50')
+  expect(screen.getByRole('button', { current: 'page' }).textContent).toContain('web')
   expect(screen.getByText('glm · /project/7')).toBeTruthy()
   expect(screen.getByText('2m')).toBeTruthy()
 

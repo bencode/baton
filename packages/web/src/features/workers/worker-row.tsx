@@ -28,10 +28,10 @@ export const WorkerRow = ({ worker, sessionCount, onDelete }: WorkerRowProps) =>
         <span
           role="img"
           aria-label={worker.connected ? 'online' : 'offline'}
-          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${worker.connected ? 'bg-ui-accent' : 'border border-ui-muted'}`}
+          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${worker.connected ? 'bg-ui-success' : 'border border-ui-muted'}`}
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" title={worker.name}>
+          <p className="truncate text-[13px] font-medium" title={worker.name}>
             {worker.name}
           </p>
           <p className="mt-1 break-all text-xs text-ui-muted">
@@ -73,7 +73,7 @@ export const WorkerRow = ({ worker, sessionCount, onDelete }: WorkerRowProps) =>
               disabled={deleting}
               onClick={() => void remove()}
               aria-label="confirm delete worker"
-              className="ui-button text-red-700"
+              className="ui-button ui-danger"
             >
               {deleting ? 'Deleting…' : 'Delete worker'}
             </button>
@@ -81,7 +81,7 @@ export const WorkerRow = ({ worker, sessionCount, onDelete }: WorkerRowProps) =>
         </div>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-sm text-red-700">
+        <p role="alert" className="mt-2 text-sm text-ui-danger">
           {error}
         </p>
       )}

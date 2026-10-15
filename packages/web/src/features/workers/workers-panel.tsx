@@ -2,6 +2,7 @@ import type { Id, SessionView, WorkerView } from '@baton/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { sessionPath } from '../../app/route'
+import { PlusIcon } from '../../components/icons'
 import { createSessionOnWorker } from '../sessions/session-create'
 import { AddWorker, type WorkerDialogView } from './add-worker'
 import { useWorkerSetup } from './use-worker-setup'
@@ -86,7 +87,7 @@ export const WorkersPanel = ({
           ))
       )}
       {!view && setup.createError && (
-        <p role="alert" className="px-2 text-xs text-red-700">
+        <p role="alert" className="px-2 text-xs text-ui-danger">
           {createErrorText(setup.createError)}{' '}
           <button type="button" onClick={setup.refresh} className="underline">
             Refresh records
@@ -99,7 +100,7 @@ export const WorkersPanel = ({
         onClick={event => show({ kind: 'add' }, event.currentTarget)}
         className="ui-button ui-primary w-fit"
       >
-        ＋ Add worker
+        <PlusIcon /> Add worker
       </button>
       {view && (
         <AddWorker

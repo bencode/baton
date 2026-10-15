@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef } from 'react'
+import { CloseIcon } from './icons'
 
 type ModalProps = {
   title: string
@@ -41,11 +42,11 @@ export const Modal = ({ title, onClose, className = 'max-w-sm', children }: Moda
       className={`ui-dialog ${className}`}
     >
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 id={titleId} className="text-base font-semibold text-ui-text">
+        <h2 id={titleId} className="text-lg font-semibold tracking-tight text-ui-heading">
           {title}
         </h2>
         <button type="button" onClick={dismiss} aria-label="close" className="ui-icon-button">
-          ×
+          <CloseIcon />
         </button>
       </div>
       {children}

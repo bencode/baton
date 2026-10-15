@@ -22,8 +22,8 @@ const SessionDot = ({ session }: { session: SessionView }) => {
     !session.connected || (!session.attached && !session.busy)
       ? 'border border-ui-muted'
       : session.busy
-        ? 'bg-amber-600'
-        : 'bg-ui-accent'
+        ? 'animate-breathe bg-ui-accent'
+        : 'bg-ui-success'
   return (
     <span
       role="img"
@@ -62,7 +62,10 @@ export const SessionRow = ({ session, active, onOpen, onDelete }: SessionRowProp
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1">
-              <span className="truncate text-sm font-medium text-ui-text" title={session.name}>
+              <span
+                className={`truncate text-[13px] font-medium ${active ? 'text-ui-selected-text' : 'text-ui-text'}`}
+                title={session.name}
+              >
                 {session.name}
               </span>
               {session.activeLoops > 0 && (
@@ -71,7 +74,9 @@ export const SessionRow = ({ session, active, onOpen, onDelete }: SessionRowProp
                 </span>
               )}
             </span>
-            <span className="mt-0.5 flex items-center gap-2 text-xs text-ui-muted">
+            <span
+              className={`mt-0.5 flex items-center gap-2 text-xs md:text-[11px] ${active ? 'text-ui-selected-muted' : 'text-ui-muted'}`}
+            >
               <span
                 className="truncate"
                 title={`${session.worker.name} · ${session.worker.hostname}`}
@@ -112,14 +117,14 @@ export const SessionRow = ({ session, active, onOpen, onDelete }: SessionRowProp
             aria-label="confirm delete"
             disabled={deleting}
             onClick={() => void remove()}
-            className="ui-button text-red-700"
+            className="ui-button ui-danger"
           >
             {deleting ? 'Deleting…' : 'Delete'}
           </button>
         </div>
       )}
       {error && (
-        <p role="alert" className="px-2 pb-2 text-xs text-red-700">
+        <p role="alert" className="px-2 pb-2 text-xs text-ui-danger">
           {error}
         </p>
       )}

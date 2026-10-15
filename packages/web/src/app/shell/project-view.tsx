@@ -27,7 +27,7 @@ const WorkersView = ({
         Workers provide the agent and execution environment for your conversations.
       </p>
       {(workers.error || sessions.error) && (
-        <p role="alert" className="mb-4 text-sm text-red-700">
+        <p role="alert" className="mb-4 text-sm text-ui-danger">
           Some worker information could not be refreshed.{' '}
           <button
             type="button"
@@ -74,10 +74,10 @@ export const ProjectView = ({
   onSessionsDeleted,
   onProjectDeleted,
 }: ProjectViewProps) => (
-  <div className="h-full overflow-auto px-5 py-7 sm:px-8">
-    <div className="mx-auto max-w-4xl">
+  <div className="h-full overflow-auto">
+    <div className="ui-page">
       {view !== 'services' && (
-        <h1 className="mb-2 text-xl font-semibold text-ui-text">
+        <h1 className="ui-page-title mb-2">
           {view === 'workers' ? 'Workers' : 'Project settings'}
         </h1>
       )}

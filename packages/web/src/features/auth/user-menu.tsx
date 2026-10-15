@@ -1,14 +1,14 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
-import { ChevronDownIcon, LogoutIcon } from '../../components/icons'
+import { ChevronDownIcon, LogoutIcon, ServiceIcon, SettingsIcon } from '../../components/icons'
 import { useAsync } from '../../hooks/use-async'
 import { useDismiss } from '../../hooks/use-dismiss'
 import { AccountSettings } from './account-settings'
 
 // Header user menu: the signed-in username with a dropdown to log out. Fetches
 // /auth/me itself (one cheap row — no shared context). Renders nothing when auth
-// is off (no user) so the open/dev-mode header stays clean. The emerald avatar
+// is off (no user) so the open/dev-mode header stays clean. The blue avatar
 // echoes the logo mark; the menu stays in the header's restrained gray vocabulary.
 export const UserMenu = () => {
   const api = useApi()
@@ -37,14 +37,14 @@ export const UserMenu = () => {
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-1.5 rounded-md py-1 pr-1.5 pl-1 text-sm text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
+        className="ui-focus flex min-h-11 items-center gap-1.5 rounded-md pr-1.5 pl-1 text-[13px] text-ui-text transition-colors hover:bg-ui-hover md:min-h-8 [@media(pointer:coarse)]:min-h-11"
       >
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-[11px] font-semibold text-white">
+        <span className="grid h-7 w-7 place-items-center rounded-full border border-ui-border bg-ui-selected text-[11px] font-semibold text-ui-selected-text">
           {user.username.charAt(0).toUpperCase()}
         </span>
         <span className="hidden max-w-[10rem] truncate font-medium sm:inline">{user.username}</span>
         <span
-          className={`text-gray-400 transition-transform duration-150 motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
+          className={`text-ui-muted transition-transform duration-150 motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
         >
           <ChevronDownIcon />
         </span>
@@ -52,21 +52,21 @@ export const UserMenu = () => {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1.5 w-52 origin-top-right overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg shadow-gray-900/5 transition duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
+          className="absolute right-0 z-20 mt-1.5 w-52 origin-top-right overflow-hidden rounded-lg border border-ui-border bg-ui-surface py-1 transition duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
         >
           <div className="flex items-center justify-between gap-2 px-3 py-2">
-            <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+            <span className="min-w-0 truncate text-sm font-medium text-ui-text">
               {user.username}
             </span>
             {user.isAdmin ? (
-              <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+              <span className="shrink-0 rounded bg-ui-selected px-1.5 py-0.5 text-[10px] font-medium text-ui-selected-text">
                 管理员
               </span>
             ) : (
-              <span className="shrink-0 text-[11px] text-gray-400">成员</span>
+              <span className="shrink-0 text-[11px] text-ui-muted">成员</span>
             )}
           </div>
-          <div className="my-1 h-px bg-gray-100" />
+          <div className="my-1 h-px bg-ui-hover" />
           {user.isAdmin && (
             <button
               type="button"
@@ -75,9 +75,11 @@ export const UserMenu = () => {
                 setOpen(false)
                 navigate('/ops')
               }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+              className="ui-quiet-button w-full justify-start rounded-none px-3 text-ui-text"
             >
-              <span className="text-gray-400">📺</span>
+              <span className="text-ui-muted">
+                <ServiceIcon />
+              </span>
               运行大屏
             </button>
           )}
@@ -88,18 +90,20 @@ export const UserMenu = () => {
               setOpen(false)
               setSettingsOpen(true)
             }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+            className="ui-quiet-button w-full justify-start rounded-none px-3 text-ui-text"
           >
-            <span className="text-gray-400">⚙️</span>
+            <span className="text-ui-muted">
+              <SettingsIcon />
+            </span>
             账户设置
           </button>
           <button
             type="button"
             role="menuitem"
             onClick={() => void logout()}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+            className="ui-quiet-button w-full justify-start rounded-none px-3 text-ui-text"
           >
-            <span className="text-gray-400">
+            <span className="text-ui-muted">
               <LogoutIcon />
             </span>
             退出登录

@@ -16,7 +16,7 @@ export const DesktopSplit = ({
   isMobile: boolean
 }) => {
   const resourcePanel = usePanelRef()
-  const desktopWidth = useRef(288)
+  const desktopWidth = useRef(274)
   const previousMobile = useRef(isMobile)
   useLayoutEffect(() => {
     if (previousMobile.current === isMobile) return
@@ -41,7 +41,7 @@ export const DesktopSplit = ({
         onResize={size => {
           if (!isMobile && size.inPixels >= 240) desktopWidth.current = size.inPixels
         }}
-        defaultSize="288px"
+        defaultSize="274px"
         minSize={isMobile ? '0px' : '240px'}
         maxSize={isMobile ? '0px' : '400px'}
         groupResizeBehavior="preserve-pixel-size"

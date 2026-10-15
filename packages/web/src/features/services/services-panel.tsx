@@ -21,10 +21,10 @@ export const ServicesPanel = ({ projectId, workers, activeId, open }: ServicesPa
 
   return (
     <section className="flex flex-col gap-3">
-      <h1 className="mb-2 text-xl font-semibold text-ui-text">Services</h1>
-      {loading && services === null && <p className="px-2 text-sm text-gray-500">loading…</p>}
+      <h1 className="ui-page-title mb-2">Services</h1>
+      {loading && services === null && <p className="px-2 text-sm text-ui-muted">loading…</p>}
       {!loading && error && services === null && (
-        <p role="alert" className="px-2 text-sm text-red-600">
+        <p role="alert" className="px-2 text-sm text-ui-danger">
           Unable to load services.
         </p>
       )}
@@ -38,7 +38,7 @@ export const ServicesPanel = ({ projectId, workers, activeId, open }: ServicesPa
         </div>
       )}
       {error && services !== null && (
-        <p role="status" className="px-2 text-[11px] text-amber-700">
+        <p role="status" className="px-2 text-[11px] text-ui-warning">
           Services may be out of date.
         </p>
       )}

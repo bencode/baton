@@ -63,7 +63,7 @@ export const NewSessionDialog = ({
         </p>
       )}
       {workers.error && (
-        <p role="alert" className="mb-3 text-sm text-red-700">
+        <p role="alert" className="mb-3 text-sm text-ui-danger">
           Unable to refresh workers.{' '}
           <button type="button" onClick={workers.refresh} className="underline">
             Retry
@@ -120,7 +120,7 @@ export const NewSessionDialog = ({
         </fieldset>
       )}
       {error && (
-        <p role="alert" className="mt-3 text-sm text-red-700">
+        <p role="alert" className="mt-3 text-sm text-ui-danger">
           {error}
         </p>
       )}

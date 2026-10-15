@@ -1,5 +1,6 @@
 import type { Id } from '@baton/shared'
 import { Activity, useEffect, useState } from 'react'
+import { PencilIcon, ServiceIcon, SettingsIcon, WorkerIcon } from '../components/icons'
 import { ChannelsPanel } from '../features/channels/channels-panel'
 import { useRequirements } from '../features/requirements/use-requirements'
 import { SessionsPanel } from '../features/sessions/sessions-panel'
@@ -35,7 +36,7 @@ const RequirementsList = ({
         </p>
       )}
       {error && (
-        <p role="alert" className="px-2 text-sm text-red-700">
+        <p role="alert" className="px-2 text-sm text-ui-danger">
           Unable to load requirements.
         </p>
       )}
@@ -71,10 +72,10 @@ export const LeftPanel = ({
     if (route.kind === 'item') setSection('requirements')
     if (route.kind === 'session') setSection('sessions')
   }, [activeId])
-  const entries: { view: ProjectViewKind; label: string }[] = [
-    { view: 'workers', label: 'Workers' },
-    { view: 'services', label: 'Services' },
-    { view: 'settings', label: 'Project settings' },
+  const entries: { view: ProjectViewKind; label: string; icon: typeof WorkerIcon }[] = [
+    { view: 'workers', label: 'Workers', icon: WorkerIcon },
+    { view: 'services', label: 'Services', icon: ServiceIcon },
+    { view: 'settings', label: 'Project settings', icon: SettingsIcon },
   ]
   return (
     <aside
@@ -88,7 +89,7 @@ export const LeftPanel = ({
           onClick={onNewSession}
           className="ui-button ui-primary w-full justify-start px-3"
         >
-          ＋ New conversation
+          <PencilIcon /> New conversation
         </button>
       </div>
       {projectId === null ? (
@@ -96,14 +97,14 @@ export const LeftPanel = ({
       ) : (
         <>
           <fieldset
-            className="mx-3 mb-3 flex shrink-0 gap-1 rounded-md bg-ui-hover p-1"
+            className="mx-5 mb-3 flex shrink-0 gap-5 border-b border-ui-border"
             aria-label="Resource categories"
           >
             <button
               type="button"
               aria-pressed={section === 'sessions'}
               onClick={() => setSection('sessions')}
-              className={`ui-focus min-w-0 flex-1 rounded px-2 py-1.5 text-sm ${section === 'sessions' ? 'bg-ui-surface font-medium' : 'text-ui-muted'}`}
+              className={`ui-focus min-h-11 min-w-0 border-b-2 py-2 text-[13px] md:min-h-8 ${section === 'sessions' ? 'border-ui-accent font-medium text-ui-accent' : 'border-transparent text-ui-muted'}`}
             >
               Conversations
             </button>
@@ -113,7 +114,7 @@ export const LeftPanel = ({
               title="Requirements and tasks"
               aria-pressed={section === 'requirements'}
               onClick={() => setSection('requirements')}
-              className={`ui-focus min-w-0 flex-1 rounded px-2 py-1.5 text-sm ${section === 'requirements' ? 'bg-ui-surface font-medium' : 'text-ui-muted'}`}
+              className={`ui-focus min-h-11 min-w-0 border-b-2 py-2 text-[13px] md:min-h-8 ${section === 'requirements' ? 'border-ui-accent font-medium text-ui-accent' : 'border-transparent text-ui-muted'}`}
             >
               Work items
             </button>
@@ -128,7 +129,7 @@ export const LeftPanel = ({
           </div>
           <nav
             aria-label="Project management"
-            className="shrink-0 space-y-1 border-t border-ui-border px-3 py-3"
+            className="shrink-0 border-t border-ui-border px-3 py-3"
           >
             {entries.map(entry => {
               const path = projectViewPath(projectId, entry.view)
@@ -138,8 +139,9 @@ export const LeftPanel = ({
                   type="button"
                   onClick={() => open(path, entry.label)}
                   aria-current={activeId === path ? 'page' : undefined}
-                  className={`ui-nav-item ${activeId === path ? 'bg-ui-selected font-medium text-ui-accent' : ''}`}
+                  className={`ui-nav-item ${activeId === path ? 'bg-ui-selected font-medium text-ui-selected-text' : 'text-ui-muted'}`}
                 >
+                  <entry.icon />
                   {entry.label}
                 </button>
               )

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
 import { projectPath } from '../../app/route'
+import { PlusIcon } from '../../components/icons'
 import { InlineRename } from '../../components/inline-rename'
 import { bumpLists } from '../../hooks/use-list-revision'
 import { useProjects } from './use-projects'
@@ -42,7 +43,7 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
             value={activeProjectId ?? ''}
             disabled={workspaceId === null || loading}
             onChange={event => navigate(projectPath(Number(event.target.value)))}
-            className="ui-input min-w-0 flex-1 md:max-w-56"
+            className="ui-context-select min-w-0 flex-1 md:max-w-56"
           >
             {!projects?.length || activeProjectId === null ? (
               <option value="">
@@ -71,12 +72,12 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
             }}
             className="ui-icon-button"
           >
-            ＋
+            <PlusIcon />
           </button>
         )}
       </div>
       {error && (
-        <p role="alert" className="max-w-64 text-xs text-red-700">
+        <p role="alert" className="max-w-64 text-xs text-ui-danger">
           {error}
         </p>
       )}

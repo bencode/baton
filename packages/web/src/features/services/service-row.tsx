@@ -21,11 +21,13 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
       <span
         role="img"
         aria-label="running"
-        className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"
+        className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-ui-success"
       />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className={`truncate font-medium ${active ? 'text-blue-900' : 'text-ui-text'}`}>
+          <span
+            className={`truncate font-medium ${active ? 'text-ui-selected-text' : 'text-ui-text'}`}
+          >
             {service.name}
           </span>
           <span className="ml-auto shrink-0 text-xs text-ui-muted tabular-nums">
@@ -55,20 +57,21 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
   return (
     <div
       className={`group rounded-md px-1 py-0.5 transition-colors duration-150 ${
-        active ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-100/70'
+        active ? 'bg-ui-selected text-ui-selected-text' : 'hover:bg-ui-hover/70'
       }`}
     >
       <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={open}
-          className="flex min-w-0 flex-1 items-start gap-2 py-3 text-left"
+          aria-current={active ? 'page' : undefined}
+          className="ui-focus flex min-h-11 min-w-0 flex-1 items-start gap-2 rounded-md py-3 text-left text-[13px]"
         >
           {content}
         </button>
         {confirming ? (
           <span className="flex shrink-0 items-center gap-2 pl-1 text-[11px]">
-            <span className="text-gray-500">{stopping ? 'stopping…' : 'stop?'}</span>
+            <span className="text-ui-muted">{stopping ? 'stopping…' : 'stop?'}</span>
             {!stopping && (
               <>
                 <button
@@ -76,7 +79,7 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
                   aria-label={`confirm stop ${service.name}`}
                   title="stop service"
                   onClick={() => void confirmStop()}
-                  className="text-red-500 transition-colors hover:text-red-700"
+                  className="ui-icon-button ui-danger"
                 >
                   ✓
                 </button>
@@ -85,7 +88,7 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
                   aria-label={`cancel stop ${service.name}`}
                   title="cancel"
                   onClick={() => setConfirming(false)}
-                  className="text-gray-500 transition-colors hover:text-ui-text"
+                  className="ui-icon-button"
                 >
                   ✕
                 </button>
@@ -98,14 +101,14 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
             aria-label={`stop ${service.name}`}
             title="stop service"
             onClick={() => setConfirming(true)}
-            className="shrink-0 p-1 text-gray-400 opacity-100 transition-opacity sm:opacity-0 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+            className="ui-icon-button ui-danger [@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
           >
             <StopIcon />
           </button>
         )}
       </div>
       {error && (
-        <p role="alert" className="pb-1 pl-3 text-[11px] text-red-600">
+        <p role="alert" className="pb-1 pl-3 text-[11px] text-ui-danger">
           Couldn’t stop {service.name}.
         </p>
       )}

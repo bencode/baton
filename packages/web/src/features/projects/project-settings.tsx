@@ -86,7 +86,7 @@ const SettingsForm = ({
           {pending === 'save' ? 'Saving…' : 'Save changes'}
         </button>
         {saved && (
-          <p role="status" className="text-sm text-ui-accent">
+          <p role="status" className="text-sm text-ui-success">
             Changes saved.
           </p>
         )}
@@ -111,7 +111,7 @@ const SettingsForm = ({
               type="button"
               disabled={pending !== null}
               onClick={() => void remove()}
-              className="ui-button text-red-700"
+              className="ui-button ui-danger"
             >
               {pending === 'delete' ? 'Deleting…' : 'Confirm delete'}
             </button>
@@ -121,14 +121,14 @@ const SettingsForm = ({
             type="button"
             disabled={pending !== null}
             onClick={() => setConfirming(true)}
-            className="ui-button mt-3 text-red-700"
+            className="ui-button ui-danger mt-3"
           >
             Delete project
           </button>
         )}
       </section>
       {error && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-ui-danger">
           {error}
         </p>
       )}
@@ -147,7 +147,7 @@ export const ProjectSettings = ({ projectId, onDeleted }: ProjectSettingsProps) 
     )
   if (error || !data)
     return (
-      <p role="alert" className="text-sm text-red-700">
+      <p role="alert" className="text-sm text-ui-danger">
         Unable to load this project.
       </p>
     )

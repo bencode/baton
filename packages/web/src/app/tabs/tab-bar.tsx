@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { CloseIcon, MoreIcon } from '../../components/icons'
 import { activeProjectId } from '../route'
 import { ProjectTabLabel } from './project-tab-label'
 import type { Tab } from './tabs-model'
@@ -38,7 +39,7 @@ const TabContextMenu = ({
         run()
         dismiss()
       }}
-      className="ui-focus flex w-full px-3 py-2 text-left text-sm text-ui-text hover:bg-ui-hover disabled:text-ui-muted"
+      className="ui-focus flex min-h-11 w-full items-center px-3 py-2 text-left text-[13px] text-ui-text hover:bg-ui-hover disabled:text-ui-muted md:min-h-8"
     >
       {label}
     </button>
@@ -111,14 +112,15 @@ export const TabBar = (props: TabBarProps) => {
   return (
     <nav
       aria-label="Open pages"
-      className="flex h-[38px] shrink-0 items-stretch overflow-x-auto border-b border-ui-border bg-ui-panel"
+      className="flex h-11 shrink-0 items-stretch overflow-x-auto border-b border-ui-border bg-ui-info-surface md:h-[38px] [@media(pointer:coarse)]:h-11"
     >
       {tabs.map(tab => {
         const active = tab.id === activeId
         return (
           <div
             key={tab.id}
-            className={`group flex shrink-0 items-center border-r border-ui-border ${active ? 'bg-ui-surface' : 'hover:bg-ui-hover'}`}
+            data-active={active}
+            className={`group relative flex shrink-0 items-center border-r border-ui-border ${active ? 'bg-ui-surface after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-ui-accent' : 'hover:bg-ui-hover'}`}
           >
             <button
               ref={active ? activeButton : undefined}
@@ -132,7 +134,7 @@ export const TabBar = (props: TabBarProps) => {
                 trigger.current = event.currentTarget
                 setMenu({ tabId: tab.id, x: event.clientX, y: event.clientY })
               }}
-              className={`ui-focus h-full max-w-56 truncate px-3 text-sm ${active ? 'font-medium text-ui-accent' : 'text-ui-muted'}`}
+              className={`ui-focus h-full max-w-56 truncate px-3 text-[13px] ${active ? 'font-medium text-ui-selected-text' : 'text-ui-muted'}`}
             >
               <ProjectTabLabel tab={tab} activeProjectId={activeProjectId(activeId)} />
             </button>
@@ -146,17 +148,17 @@ export const TabBar = (props: TabBarProps) => {
                 trigger.current = event.currentTarget
                 setMenu({ tabId: tab.id, x: box.left, y: box.bottom })
               }}
-              className="ui-icon-button h-7 w-6"
+              className="ui-icon-button [@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 group-data-[active=true]:opacity-100"
             >
-              ⋯
+              <MoreIcon />
             </button>
             <button
               type="button"
               aria-label={`Close ${tab.title}`}
               onClick={() => onClose(tab.id)}
-              className="ui-icon-button mr-1 h-7 w-6"
+              className="ui-icon-button mr-1 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 group-data-[active=true]:opacity-100"
             >
-              ×
+              <CloseIcon />
             </button>
           </div>
         )

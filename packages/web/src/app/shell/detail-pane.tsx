@@ -52,7 +52,7 @@ const ProjectStart = ({
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
       <span aria-hidden className="mb-1 h-3 w-3 rotate-45 bg-ui-accent" />
-      <h1 className="text-xl font-semibold text-ui-text">
+      <h1 className="ui-page-title">
         {projectId === null ? 'Choose your project' : 'What would you like to work on?'}
       </h1>
       <p className="max-w-sm text-sm leading-relaxed text-ui-muted">

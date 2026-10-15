@@ -18,9 +18,9 @@ export const HealthBadge = () => {
     }
   }, [client])
   const dot =
-    health === 'ok' ? 'bg-green-500' : health === 'unreachable' ? 'bg-red-500' : 'bg-gray-400'
+    health === 'ok' ? 'bg-ui-success' : health === 'unreachable' ? 'bg-ui-danger' : 'bg-gray-400'
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+    <span className="inline-flex items-center gap-1.5 text-[11px] text-ui-muted">
       <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
       {`server: ${health}`}
     </span>

@@ -19,8 +19,8 @@ export const AppHeader = ({
   onOpenMenu,
   menuButtonRef,
 }: AppHeaderProps) => (
-  <header className="z-10 shrink-0 border-b border-ui-border bg-ui-surface px-3 md:flex md:h-[52px] md:items-center md:gap-4 md:px-4">
-    <div className="flex h-[52px] min-w-0 items-center gap-3 md:flex-1">
+  <header className="z-10 shrink-0 border-b border-ui-border bg-ui-surface px-3 md:flex md:h-12 md:items-center md:gap-4 md:px-4">
+    <div className="flex h-12 min-w-0 items-center gap-2 md:flex-1 md:gap-4">
       <button
         ref={menuButtonRef}
         type="button"
@@ -30,15 +30,20 @@ export const AppHeader = ({
       >
         <MenuIcon />
       </button>
-      <span className="flex shrink-0 items-center gap-2 text-[15px] font-semibold tracking-tight text-ui-text">
+      <span className="flex shrink-0 items-center gap-2 text-[16px] font-semibold tracking-tight text-ui-heading">
         <span className="h-2 w-2 rotate-45 bg-ui-accent" aria-hidden />
         baton
       </span>
-      <span className="hidden h-4 w-px shrink-0 bg-ui-border sm:block" aria-hidden />
-      <div className="min-w-0 max-w-56 flex-1">
+      <span className="hidden text-ui-accent-border md:block" aria-hidden>
+        /
+      </span>
+      <div className="min-w-0 max-w-56 flex-1 md:flex-initial">
         <WorkspaceSwitcher activeWorkspaceId={workspaceId} />
       </div>
-      <div className="hidden min-w-0 max-w-64 flex-1 md:block">
+      <span className="hidden text-ui-accent-border md:block" aria-hidden>
+        /
+      </span>
+      <div className="hidden min-w-0 max-w-64 md:block">
         <ProjectSwitcher key={workspaceId} workspaceId={workspaceId} activeProjectId={projectId} />
       </div>
       <div className="ml-auto md:hidden">

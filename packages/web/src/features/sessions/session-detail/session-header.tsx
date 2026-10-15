@@ -1,6 +1,7 @@
 import type { Id, Session } from '@baton/shared'
 import { useState } from 'react'
 import { standaloneSessionPath } from '../../../app/route'
+import { CopyIcon, InfoIcon } from '../../../components/icons'
 import { copyText } from '../../../utils/clipboard'
 import { LoopsControl } from '../../loops/loops-control'
 
@@ -38,7 +39,7 @@ const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) =
           setDraft(name)
           setEditing(true)
         }}
-        className="font-semibold tracking-tight text-gray-900 decoration-dotted hover:underline"
+        className="ui-focus min-h-11 max-w-64 truncate rounded text-[13px] font-semibold tracking-tight text-ui-text decoration-dotted hover:underline md:min-h-8 [@media(pointer:coarse)]:min-h-11"
       >
         {name}
       </button>
@@ -66,14 +67,9 @@ const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) =
           setEditing(false)
         }
       }}
-      className="w-40 rounded border border-gray-300 px-1 text-base font-semibold text-gray-900 focus:border-blue-400 focus:outline-none sm:w-48 sm:text-sm"
+      className="ui-input w-40 font-semibold md:w-48"
     />
   )
-}
-
-const truncateUuid = (id: string): string => {
-  if (id.length <= 12) return id
-  return `${id.slice(0, 8)}…${id.slice(-4)}`
 }
 
 const CopyButton = ({ text }: { text: string }) => {
@@ -87,10 +83,11 @@ const CopyButton = ({ text }: { text: string }) => {
     <button
       type="button"
       onClick={onCopy}
-      className="text-gray-400 transition-colors hover:text-gray-700"
-      aria-label={copied ? 'copied' : 'copy'}
+      className="ui-icon-button"
+      aria-label="copy agent session id"
+      title={copied ? 'copied' : 'copy agent session id'}
     >
-      {copied ? '✓' : '⌘'}
+      {copied ? '✓' : <CopyIcon />}
     </button>
   )
 }
@@ -106,12 +103,7 @@ const ShareButton = ({ shareToken }: { shareToken: string }) => {
     window.setTimeout(() => setCopied(false), 1500)
   }
   return (
-    <button
-      type="button"
-      aria-label="share"
-      onClick={onShare}
-      className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 sm:py-1"
-    >
+    <button type="button" aria-label="share" onClick={onShare} className="ui-quiet-button">
       {copied ? 'copied ✓' : 'share'}
     </button>
   )
@@ -136,49 +128,25 @@ export const SessionHeader = ({
       !session.agentSessionId.startsWith('pending:') &&
       session.cwd !== null)
   return (
-    <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-3 sm:px-6">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+    <div className="shrink-0 border-b border-ui-border bg-ui-surface px-3 py-2 md:px-6">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
         <SessionName name={session.name} onRename={onRename} />
-        {/* Diagnostics (agent kind + session id) duplicate the ⓘ panel below, so
-            hide them on phones to keep the row from overflowing. */}
-        <span aria-hidden className="hidden text-gray-300 sm:inline">
-          ·
-        </span>
-        <span className="hidden font-mono text-xs text-gray-500 sm:inline">
-          {session.agentKind}
-        </span>
-        <span aria-hidden className="hidden text-gray-300 sm:inline">
-          ·
-        </span>
-        <span className="hidden font-mono text-xs text-gray-500 sm:inline">
-          {session.agentSessionId ? truncateUuid(session.agentSessionId) : 'materializing…'}
-        </span>
-        <span className="hidden sm:inline-flex">
-          <CopyButton text={session.agentSessionId ?? ''} />
-        </span>
-        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
+        <span className="text-xs text-ui-muted">{session.agentKind}</span>
+        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-ui-muted">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-gray-300'}`}
+            className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-ui-success' : 'bg-ui-border'}`}
           />
           {active ? 'active' : 'inactive'}
         </span>
         {active && (
-          <button
-            type="button"
-            onClick={onStop}
-            className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-700 sm:py-1"
-          >
+          <button type="button" onClick={onStop} className="ui-quiet-button ui-danger">
             stop
           </button>
         )}
         {/* Hidden while a terminal is open: the terminal owns the session, so the
             server rejects a headless resume anyway (close it first). */}
         {!active && !terminalOpen && (
-          <button
-            type="button"
-            onClick={onResume}
-            className="rounded-md border border-emerald-400 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 sm:py-1"
-          >
+          <button type="button" onClick={onResume} className="ui-button ui-primary">
             resume
           </button>
         )}
@@ -189,40 +157,42 @@ export const SessionHeader = ({
           <button
             type="button"
             onClick={onCloseTerminal}
-            className="rounded-md border border-blue-400 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 sm:py-1"
+            className="ui-button border-ui-accent-border bg-ui-selected text-ui-selected-text"
           >
             close terminal
           </button>
         ) : (
           !active &&
           terminalReady && (
-            <button
-              type="button"
-              onClick={onOpenTerminal}
-              className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 sm:py-1"
-            >
+            <button type="button" onClick={onOpenTerminal} className="ui-quiet-button">
               terminal
             </button>
           )
         )}
         {session.shareToken && <ShareButton shareToken={session.shareToken} />}
         {/* Divider sets loops (recurring automation) apart from the lifecycle /
-            share actions; sm-only so phone wrapping never orphans it. */}
-        <span aria-hidden className="hidden h-4 w-px self-center bg-gray-200 sm:inline-block" />
+            share actions; desktop-only so phone wrapping never orphans it. */}
+        <span aria-hidden className="hidden h-4 w-px self-center bg-ui-border md:inline-block" />
         <LoopsControl sessionId={session.id} projectId={projectId} activeLoops={activeLoops} />
         <button
           type="button"
           onClick={() => setOpen(o => !o)}
-          className="text-xs text-gray-400 transition-colors hover:text-gray-700"
+          className="ui-icon-button"
+          aria-expanded={open}
           aria-label={open ? 'hide details' : 'show details'}
         >
-          {open ? '▾' : 'ⓘ'}
+          <InfoIcon />
         </button>
       </div>
       {open && (
-        <div className="mt-2 flex flex-col gap-0.5 font-mono text-xs text-gray-500">
+        <div className="mt-2 flex flex-col gap-1 break-all rounded-md bg-ui-panel p-3 font-mono text-xs text-ui-muted">
           <span>cwd: {session.cwd ?? '(pending materialize)'}</span>
-          <span>agent session: {session.agentSessionId ?? '(pending materialize)'}</span>
+          <div className="flex items-center gap-2">
+            <span>
+              agent session: <span>{session.agentSessionId ?? '(pending materialize)'}</span>
+            </span>
+            {session.agentSessionId !== null && <CopyButton text={session.agentSessionId} />}
+          </div>
         </div>
       )}
     </div>
