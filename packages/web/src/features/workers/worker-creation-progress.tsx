@@ -103,14 +103,14 @@ export const WorkerCreationProgress = ({
             ? 'Worker is connected.'
             : 'Worker is offline. Wait for it to reconnect before starting a conversation.'
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div>
-        <h3 className="text-sm font-medium break-words">{creation.name}</h3>
+        <h3 className="text-[13px] font-medium break-words">{creation.name}</h3>
         <p aria-live="polite" className="mt-1 text-xs text-ui-muted">
           {creationStatusText(creation)}
         </p>
       </div>
-      <ol className="flex flex-col gap-2 text-xs">
+      <ol className="flex flex-col gap-3 text-xs">
         {steps.map((step, index) => {
           const complete = creation.status === 'succeeded' || index < currentStep
           const current = creation.step === step.id

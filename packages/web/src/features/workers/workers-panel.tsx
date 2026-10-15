@@ -57,7 +57,7 @@ export const WorkersPanel = ({
     open(sessionPath(projectId, session.id), session.name)
   }
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {workers === null ? (
         <p className="text-sm text-ui-muted">Worker information is not available yet.</p>
       ) : workers.length === 0 ? (
@@ -65,26 +65,30 @@ export const WorkersPanel = ({
           No workers yet. Add a worker from a template or register an existing one.
         </p>
       ) : (
-        workers
-          .filter(worker => !deleted.includes(worker.id))
-          .map(worker => (
-            <WorkerRow
-              key={worker.id}
-              worker={worker}
-              sessionCount={
-                sessions ? sessions.filter(session => session.workerId === worker.id).length : null
-              }
-              onDelete={async () => {
-                await api.workers.remove(worker.id)
-                setDeleted(previous => [...previous, worker.id])
-                onSessionsDeleted(
-                  (sessions ?? [])
-                    .filter(session => session.workerId === worker.id)
-                    .map(session => session.id),
-                )
-              }}
-            />
-          ))
+        <div>
+          {workers
+            .filter(worker => !deleted.includes(worker.id))
+            .map(worker => (
+              <WorkerRow
+                key={worker.id}
+                worker={worker}
+                sessionCount={
+                  sessions
+                    ? sessions.filter(session => session.workerId === worker.id).length
+                    : null
+                }
+                onDelete={async () => {
+                  await api.workers.remove(worker.id)
+                  setDeleted(previous => [...previous, worker.id])
+                  onSessionsDeleted(
+                    (sessions ?? [])
+                      .filter(session => session.workerId === worker.id)
+                      .map(session => session.id),
+                  )
+                }}
+              />
+            ))}
+        </div>
       )}
       {!view && setup.createError && (
         <p role="alert" className="px-2 text-xs text-ui-danger">

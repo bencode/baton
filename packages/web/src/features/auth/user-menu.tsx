@@ -37,7 +37,7 @@ export const UserMenu = () => {
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="ui-focus flex min-h-11 items-center gap-1.5 rounded-md pr-1.5 pl-1 text-[13px] text-ui-text transition-colors hover:bg-ui-hover md:min-h-8 [@media(pointer:coarse)]:min-h-11"
+        className="ui-focus flex min-h-11 items-center gap-2 rounded-md px-1 text-xs text-ui-text transition-colors hover:bg-ui-hover md:min-h-8 [@media(pointer:coarse)]:min-h-11"
       >
         <span className="grid h-7 w-7 place-items-center rounded-full border border-ui-border bg-ui-selected text-[11px] font-semibold text-ui-selected-text">
           {user.username.charAt(0).toUpperCase()}
@@ -52,10 +52,10 @@ export const UserMenu = () => {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1.5 w-52 origin-top-right overflow-hidden rounded-lg border border-ui-border bg-ui-surface py-1 transition duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
+          className="absolute right-0 z-20 mt-2 w-52 origin-top-right overflow-hidden rounded-lg border border-ui-border bg-ui-surface py-1 transition duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
         >
           <div className="flex items-center justify-between gap-2 px-3 py-2">
-            <span className="min-w-0 truncate text-sm font-medium text-ui-text">
+            <span className="min-w-0 truncate text-[13px] font-medium text-ui-text">
               {user.username}
             </span>
             {user.isAdmin ? (

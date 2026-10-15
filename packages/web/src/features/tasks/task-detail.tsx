@@ -26,11 +26,11 @@ export const TaskDetail = ({ projectId, code }: TaskDetailProps) => {
         </span>
         <span className="font-mono normal-case tracking-normal text-ui-muted">{task.code}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <h2 className="ui-page-title">{task.title}</h2>
         <StatusBadge status={task.status} />
       </div>
-      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 rounded-md border border-ui-border bg-ui-panel/60 p-3 text-sm text-ui-text">
+      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 rounded-md border border-ui-border bg-ui-panel/60 p-4 text-[13px] text-ui-text">
         <dt className="text-ui-muted">ready</dt>
         <dd>{ready ? 'yes, deps met' : 'no'}</dd>
         <dt className="text-ui-muted">depends on</dt>

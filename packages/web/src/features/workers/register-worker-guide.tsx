@@ -13,8 +13,8 @@ const CommandBlock = ({ command }: { command: string }) => {
     window.setTimeout(() => setCopied(false), 1500)
   }
   return (
-    <div className="flex items-stretch gap-1.5">
-      <code className="flex-1 overflow-x-auto rounded-md bg-ui-panel px-2 py-1.5 text-[11px] whitespace-pre text-ui-text">
+    <div className="flex min-w-0 items-start gap-2">
+      <code className="min-h-8 min-w-0 flex-1 overflow-x-auto rounded-md bg-ui-panel px-2 py-1.5 text-[11px] whitespace-pre text-ui-text">
         {command}
       </code>
       <button type="button" onClick={copy} aria-label="copy command" className="ui-button shrink-0">
@@ -55,7 +55,7 @@ const TokenStep = () => {
   return (
     <div className="flex flex-col gap-1.5">
       {has && (
-        <p className="text-xs text-ui-muted">
+        <p className="text-xs leading-5 text-ui-muted">
           You already have a token — use the one you saved. Regenerating invalidates it (you'd
           re-set BATON_TOKEN everywhere it's used).
         </p>
@@ -84,8 +84,8 @@ const Step = ({ n, title, children }: { n: number; title: string; children: Reac
 export const RegisterWorkerGuide = ({ projectId }: { projectId: Id }) => {
   const serverUrl = `${window.location.origin}/api`
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-xs text-ui-muted">
+    <div className="flex flex-col gap-6">
+      <p className="text-xs leading-5 text-ui-muted">
         A worker is a machine that runs your agents. Set one up on any machine (your laptop, a
         server) — it connects back to this project.
       </p>
@@ -99,7 +99,7 @@ export const RegisterWorkerGuide = ({ projectId }: { projectId: Id }) => {
         <CommandBlock command={`baton worker register --url ${serverUrl} --project ${projectId}`} />
         <CommandBlock command="baton worker run" />
       </Step>
-      <p className="text-xs text-ui-muted">
+      <p className="text-xs leading-5 text-ui-muted">
         The worker appears on the left once it connects. The machine needs Claude available
         (claude-code logged in, or ANTHROPIC_API_KEY set).
       </p>

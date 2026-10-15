@@ -5,6 +5,7 @@ import { useApi } from '../../app/api-context'
 import { projectPath } from '../../app/route'
 import { PlusIcon } from '../../components/icons'
 import { InlineRename } from '../../components/inline-rename'
+import { SelectControl } from '../../components/select-control'
 import { bumpLists } from '../../hooks/use-list-revision'
 import { useProjects } from './use-projects'
 
@@ -28,7 +29,7 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
     }
   }
   return (
-    <div className="flex min-w-0 flex-col gap-1">
+    <div className="flex w-full min-w-0 flex-col gap-1">
       <div className="flex min-w-0 items-center gap-1">
         {creating ? (
           <InlineRename
@@ -38,12 +39,13 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
             onCancel={() => setCreating(false)}
           />
         ) : (
-          <select
+          <SelectControl
             aria-label="Project"
             value={activeProjectId ?? ''}
             disabled={workspaceId === null || loading}
             onChange={event => navigate(projectPath(Number(event.target.value)))}
-            className="ui-context-select min-w-0 flex-1 md:max-w-56"
+            tone="quiet"
+            className="min-w-0 flex-1 md:max-w-56"
           >
             {!projects?.length || activeProjectId === null ? (
               <option value="">
@@ -59,7 +61,7 @@ export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitche
                 {project.name}
               </option>
             ))}
-          </select>
+          </SelectControl>
         )}
         {workspaceId !== null && !creating && (
           <button

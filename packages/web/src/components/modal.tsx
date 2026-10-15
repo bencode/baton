@@ -41,8 +41,8 @@ export const Modal = ({ title, onClose, className = 'max-w-sm', children }: Moda
       }}
       className={`ui-dialog ${className}`}
     >
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 id={titleId} className="text-lg font-semibold tracking-tight text-ui-heading">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h2 id={titleId} className="text-lg leading-7 font-semibold tracking-tight text-ui-heading">
           {title}
         </h2>
         <button type="button" onClick={dismiss} aria-label="close" className="ui-icon-button">

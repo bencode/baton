@@ -38,9 +38,9 @@ export const AddWorker = ({
     <Modal
       title={view.kind === 'add' ? 'Add a worker' : 'Worker creation'}
       onClose={onClose}
-      className="max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto"
+      className="max-w-lg"
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         {setup.creations.error && (
           <p role="alert" className="text-xs text-ui-warning break-words">
             Creation records could not be refreshed. Displayed progress may be out of date.{' '}

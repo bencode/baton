@@ -19,8 +19,8 @@ export const AppHeader = ({
   onOpenMenu,
   menuButtonRef,
 }: AppHeaderProps) => (
-  <header className="z-10 shrink-0 border-b border-ui-border bg-ui-surface px-3 md:flex md:h-12 md:items-center md:gap-4 md:px-4">
-    <div className="flex h-12 min-w-0 items-center gap-2 md:flex-1 md:gap-4">
+  <header className="z-10 shrink-0 border-b border-ui-border bg-ui-surface px-3 md:flex md:h-12 md:items-center md:gap-3 md:px-4">
+    <div className="flex h-12 min-w-0 items-center gap-2 md:flex-1 md:gap-0">
       <button
         ref={menuButtonRef}
         type="button"
@@ -30,20 +30,14 @@ export const AppHeader = ({
       >
         <MenuIcon />
       </button>
-      <span className="flex shrink-0 items-center gap-2 text-[16px] font-semibold tracking-tight text-ui-heading">
+      <span className="flex shrink-0 items-center gap-2 text-[17px] font-semibold tracking-tight text-ui-heading md:mr-6">
         <span className="h-2 w-2 rotate-45 bg-ui-accent" aria-hidden />
         baton
-      </span>
-      <span className="hidden text-ui-accent-border md:block" aria-hidden>
-        /
       </span>
       <div className="min-w-0 max-w-56 flex-1 md:flex-initial">
         <WorkspaceSwitcher activeWorkspaceId={workspaceId} />
       </div>
-      <span className="hidden text-ui-accent-border md:block" aria-hidden>
-        /
-      </span>
-      <div className="hidden min-w-0 max-w-64 md:block">
+      <div className="hidden min-w-0 max-w-64 md:ml-3 md:block">
         <ProjectSwitcher key={workspaceId} workspaceId={workspaceId} activeProjectId={projectId} />
       </div>
       <div className="ml-auto md:hidden">
@@ -54,7 +48,7 @@ export const AppHeader = ({
       <HealthBadge />
       <UserMenu />
     </div>
-    <div className="pb-2 md:hidden">
+    <div className="flex h-12 items-center md:hidden">
       <ProjectSwitcher key={workspaceId} workspaceId={workspaceId} activeProjectId={projectId} />
     </div>
   </header>

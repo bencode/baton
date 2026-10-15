@@ -23,7 +23,7 @@ const WorkersView = ({
   const sessions = useSessions(projectId)
   return (
     <>
-      <p className="mb-6 text-sm text-ui-muted">
+      <p className="mb-6 text-[13px] leading-5 text-ui-muted">
         Workers provide the agent and execution environment for your conversations.
       </p>
       {(workers.error || sessions.error) && (

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { sessionPath } from '../../app/route'
 import { SearchIcon } from '../../components/icons'
+import { SelectControl } from '../../components/select-control'
 import { useWorkers } from '../workers/use-workers'
 import { buildSessionGroups } from './session-list'
 import { SessionRow } from './session-row'
@@ -29,23 +30,25 @@ export const SessionsPanel = ({ projectId, activeId, open, close }: SessionsPane
     Date.now(),
   )
   return (
-    <section aria-label="Conversations" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-1 px-1">
-        <label className="flex min-w-44 flex-1 items-center gap-1.5 rounded px-1 text-ui-muted focus-within:outline focus-within:outline-ui-accent">
-          <SearchIcon />
+    <section aria-label="Conversations" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2 py-1">
+        <label className="ui-search">
+          <span className="flex w-4 shrink-0 justify-center">
+            <SearchIcon />
+          </span>
           <input
             aria-label="Search conversations"
             placeholder="Search conversations…"
             value={query}
             onChange={event => setQuery(event.target.value)}
-            className="ui-context-select w-full px-0 placeholder:text-ui-muted focus-visible:outline-none"
           />
         </label>
-        <select
+        <SelectControl
           aria-label="Filter by worker"
           value={selectedWorker ?? ''}
           onChange={event => setWorkerId(event.target.value ? Number(event.target.value) : null)}
-          className="ui-context-select max-w-32"
+          tone="quiet"
+          className="w-32 shrink-0"
         >
           <option value="">All workers</option>
           {workers.data?.map(worker => (
@@ -53,7 +56,7 @@ export const SessionsPanel = ({ projectId, activeId, open, close }: SessionsPane
               {worker.name}
             </option>
           ))}
-        </select>
+        </SelectControl>
         {workers.error && (
           <p role="status" className="w-full text-xs text-ui-muted">
             Worker filters could not be refreshed.{' '}
@@ -88,7 +91,7 @@ export const SessionsPanel = ({ projectId, activeId, open, close }: SessionsPane
       )}
       {groups.map(group => (
         <div key={group.label}>
-          <h2 className="mb-1 px-2 text-xs font-medium text-ui-muted">{group.label}</h2>
+          <h2 className="mb-1 px-2 text-[11px] font-medium text-ui-muted">{group.label}</h2>
           {group.sessions.map(session => {
             const path = sessionPath(projectId, session.id)
             return (

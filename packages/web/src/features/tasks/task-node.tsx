@@ -15,17 +15,17 @@ export const TaskNode = ({ task, depth, active, onOpen }: TaskNodeProps) => {
     <button
       type="button"
       onClick={onOpen}
-      style={{ paddingLeft: `${28 + depth * 14}px` }}
+      style={{ paddingLeft: `${36 + depth * 14}px` }}
       className={`ui-focus flex min-h-11 w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-[13px] transition-colors duration-150 md:min-h-8 [@media(pointer:coarse)]:min-h-11 ${
         active ? 'bg-ui-selected text-ui-selected-text' : 'text-ui-muted hover:bg-ui-hover/70'
       }`}
     >
       {deps > 0 && (
-        <span className="font-mono text-xs text-ui-muted" aria-hidden="true">
+        <span className="font-mono text-xs md:text-[11px] text-ui-muted" aria-hidden="true">
           {deps > 1 ? `↳${deps}` : '↳'}
         </span>
       )}
-      <span className="shrink-0 font-mono text-xs text-ui-muted">{task.code}</span>
+      <span className="shrink-0 font-mono text-xs md:text-[11px] text-ui-muted">{task.code}</span>
       <span className={`truncate ${cancelled ? 'line-through opacity-60' : ''}`}>{task.title}</span>
       <span className="ml-auto">
         <TaskStateChip status={task.status} />

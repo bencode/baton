@@ -39,7 +39,7 @@ const TabContextMenu = ({
         run()
         dismiss()
       }}
-      className="ui-focus flex min-h-11 w-full items-center px-3 py-2 text-left text-[13px] text-ui-text hover:bg-ui-hover disabled:text-ui-muted md:min-h-8"
+      className="ui-focus flex min-h-11 w-full items-center px-3 py-2 text-left text-xs text-ui-text hover:bg-ui-hover disabled:text-ui-muted md:min-h-8"
     >
       {label}
     </button>
@@ -120,7 +120,7 @@ export const TabBar = (props: TabBarProps) => {
           <div
             key={tab.id}
             data-active={active}
-            className={`group relative flex shrink-0 items-center border-r border-ui-border ${active ? 'bg-ui-surface after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-ui-accent' : 'hover:bg-ui-hover'}`}
+            className={`group relative flex w-max min-w-40 max-w-60 shrink-0 items-center border-r border-ui-border/70 ${active ? 'bg-ui-surface after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-ui-accent' : 'hover:bg-ui-hover'}`}
           >
             <button
               ref={active ? activeButton : undefined}
@@ -134,7 +134,7 @@ export const TabBar = (props: TabBarProps) => {
                 trigger.current = event.currentTarget
                 setMenu({ tabId: tab.id, x: event.clientX, y: event.clientY })
               }}
-              className={`ui-focus h-full max-w-56 truncate px-3 text-[13px] ${active ? 'font-medium text-ui-selected-text' : 'text-ui-muted'}`}
+              className={`ui-focus h-full min-w-0 flex-1 truncate px-3 text-left text-xs ${active ? 'font-medium text-ui-selected-text' : 'text-ui-muted'}`}
             >
               <ProjectTabLabel tab={tab} activeProjectId={activeProjectId(activeId)} />
             </button>

@@ -50,18 +50,18 @@ export const SessionRow = ({ session, active, onOpen, onDelete }: SessionRowProp
   }
   return (
     <div className={`group rounded-md ${active ? 'bg-ui-selected' : 'hover:bg-ui-hover'}`}>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0">
         <button
           type="button"
           onClick={onOpen}
           aria-current={active ? 'page' : undefined}
           className="ui-focus flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-2 text-left"
         >
-          <span className="mt-1.5">
+          <span className="mt-1.5 flex w-4 shrink-0 justify-center">
             <SessionDot session={session} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-0">
               <span
                 className={`truncate text-[13px] font-medium ${active ? 'text-ui-selected-text' : 'text-ui-text'}`}
                 title={session.name}
@@ -94,7 +94,7 @@ export const SessionRow = ({ session, active, onOpen, onDelete }: SessionRowProp
             type="button"
             aria-label="delete session"
             onClick={() => setConfirming(true)}
-            className="ui-icon-button mr-1 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+            className="ui-icon-button mr-1 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
           >
             <TrashIcon />
           </button>

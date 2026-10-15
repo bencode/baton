@@ -63,21 +63,23 @@ const SettingsForm = ({
           event.preventDefault()
           void save()
         }}
-        className="space-y-3"
+        className="flex flex-col items-start gap-3"
       >
-        <label htmlFor={`project-name-${projectId}`} className="block text-sm font-medium">
-          Project name
-        </label>
-        <input
-          id={`project-name-${projectId}`}
-          value={draft}
-          disabled={pending !== null}
-          onChange={event => {
-            setDraft(event.target.value)
-            setSaved(false)
-          }}
-          className="ui-input w-full"
-        />
+        <div className="flex w-full flex-col gap-2">
+          <label htmlFor={`project-name-${projectId}`} className="block text-xs font-medium">
+            Project name
+          </label>
+          <input
+            id={`project-name-${projectId}`}
+            value={draft}
+            disabled={pending !== null}
+            onChange={event => {
+              setDraft(event.target.value)
+              setSaved(false)
+            }}
+            className="ui-input w-full"
+          />
+        </div>
         <button
           type="submit"
           disabled={pending !== null || !draft.trim()}

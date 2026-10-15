@@ -103,7 +103,7 @@ export const Composer = ({
   const insertLabel = (label: string) =>
     insertLabelToken(textareaRef.current, draft, setDraft, label)
   return (
-    <div className="shrink-0 border-t border-ui-border bg-ui-surface px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-5 md:pt-3 md:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="shrink-0 border-t border-ui-border bg-ui-surface px-3 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-6 md:pt-3 md:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div
         {...dropProps}
         className={`mx-auto min-w-0 max-w-5xl rounded-lg border px-3 py-2 transition-colors focus-within:border-ui-accent focus-within:ring-1 focus-within:ring-ui-accent ${dragging ? 'border-ui-accent ring-1 ring-ui-accent' : 'border-ui-border'} ${active ? 'bg-ui-surface' : 'bg-ui-panel'}`}
@@ -166,7 +166,7 @@ export const Composer = ({
           // zooms any input < 16px); md: restores the desktop 14px density.
           className="max-h-48 min-h-[3.25rem] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 text-base text-ui-text placeholder:text-ui-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed md:text-sm"
         />
-        <div className="mt-1.5 flex items-center">
+        <div className="mt-2 flex items-center">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}

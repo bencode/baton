@@ -23,7 +23,7 @@ export const WorkerRow = ({ worker, sessionCount, onDelete }: WorkerRowProps) =>
     }
   }
   return (
-    <div className="border-b border-ui-border py-4 last:border-0">
+    <div className="border-b border-ui-border py-3 last:border-0">
       <div className="flex items-start gap-3">
         <span
           role="img"
@@ -34,10 +34,10 @@ export const WorkerRow = ({ worker, sessionCount, onDelete }: WorkerRowProps) =>
           <p className="truncate text-[13px] font-medium" title={worker.name}>
             {worker.name}
           </p>
-          <p className="mt-1 break-all text-xs text-ui-muted">
+          <p className="mt-1 break-all text-xs md:text-[11px] leading-4 text-ui-muted">
             {worker.agentKind === 'codex' ? 'Codex' : 'Claude Code'} · {worker.hostname}
           </p>
-          <p className="mt-1 text-xs text-ui-muted">
+          <p className="mt-1 text-xs md:text-[11px] leading-4 text-ui-muted">
             W-{worker.id} · {worker.connected ? 'Online' : 'Offline'}
             {sessionCount !== null && ` · ${sessionCount} conversations`}
           </p>

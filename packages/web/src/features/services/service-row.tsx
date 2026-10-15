@@ -30,11 +30,14 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
           >
             {service.name}
           </span>
-          <span className="ml-auto shrink-0 text-xs text-ui-muted tabular-nums">
+          <span className="ml-auto shrink-0 text-xs md:text-[11px] leading-4 text-ui-muted tabular-nums">
             {formatServiceUptime(service.startedAt)}
           </span>
         </span>
-        <span className="block truncate text-xs text-ui-muted" title={service.cwd}>
+        <span
+          className="block truncate text-xs md:text-[11px] leading-4 text-ui-muted"
+          title={service.cwd}
+        >
           {workerName} · {service.cwd}
         </span>
       </span>
@@ -56,7 +59,7 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
 
   return (
     <div
-      className={`group rounded-md px-1 py-0.5 transition-colors duration-150 ${
+      className={`group rounded-md px-2 py-0 transition-colors duration-150 ${
         active ? 'bg-ui-selected text-ui-selected-text' : 'hover:bg-ui-hover/70'
       }`}
     >
@@ -70,7 +73,7 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
           {content}
         </button>
         {confirming ? (
-          <span className="flex shrink-0 items-center gap-2 pl-1 text-[11px]">
+          <span className="flex shrink-0 items-center gap-2 pl-1 text-xs md:text-[11px]">
             <span className="text-ui-muted">{stopping ? 'stopping…' : 'stop?'}</span>
             {!stopping && (
               <>
@@ -108,7 +111,7 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
         )}
       </div>
       {error && (
-        <p role="alert" className="pb-1 pl-3 text-[11px] text-ui-danger">
+        <p role="alert" className="pb-1 pl-3 text-xs md:text-[11px] text-ui-danger">
           Couldn’t stop {service.name}.
         </p>
       )}

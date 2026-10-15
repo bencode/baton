@@ -43,9 +43,7 @@ export const LoopsControl = ({ sessionId, projectId, activeLoops }: LoopsControl
         aria-expanded={open}
         aria-haspopup="dialog"
         title="scheduled tasks"
-        className={`ui-button ${
-          open ? 'border-ui-accent-border bg-ui-selected text-ui-selected-text' : ''
-        }`}
+        className={`ui-icon-button ${open ? 'bg-ui-selected text-ui-selected-text' : ''}`}
       >
         <span className="inline-flex items-center gap-1 align-middle">
           <ClockIcon />
@@ -54,7 +52,7 @@ export const LoopsControl = ({ sessionId, projectId, activeLoops }: LoopsControl
       </button>
       {open && isMobile && (
         <Modal title="Scheduled tasks" onClose={close} className="max-w-lg">
-          <div className="-mx-6 -mb-6 flex max-h-[70vh] min-h-0 flex-col border-t border-ui-border">
+          <div className="-mx-5 -mb-6 flex max-h-[70vh] min-h-0 flex-col border-t border-ui-border">
             {panel}
           </div>
         </Modal>
@@ -63,10 +61,10 @@ export const LoopsControl = ({ sessionId, projectId, activeLoops }: LoopsControl
         <div
           role="dialog"
           aria-label="scheduled tasks"
-          className="absolute right-0 z-20 mt-1.5 flex max-h-[70vh] w-[28rem] max-w-[calc(100vw-2rem)] origin-top-right flex-col overflow-hidden rounded-lg border border-ui-border bg-ui-surface transition duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
+          className="absolute right-0 z-20 mt-2 flex max-h-[70vh] w-[28rem] max-w-[calc(100vw-2rem)] origin-top-right flex-col overflow-hidden rounded-lg border border-ui-border bg-ui-surface transition duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
         >
-          <div className="flex shrink-0 items-center justify-between border-b border-ui-border px-4 py-3">
-            <h2 className="text-sm font-semibold text-ui-text">Scheduled tasks</h2>
+          <div className="flex shrink-0 items-center justify-between border-b border-ui-border px-4 py-4">
+            <h2 className="text-[13px] font-semibold text-ui-text">Scheduled tasks</h2>
             <span className="text-xs text-ui-muted tabular-nums">{activeLoops} active</span>
           </div>
           {panel}

@@ -128,61 +128,65 @@ export const SessionHeader = ({
       !session.agentSessionId.startsWith('pending:') &&
       session.cwd !== null)
   return (
-    <div className="shrink-0 border-b border-ui-border bg-ui-surface px-3 py-2 md:px-6">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
-        <SessionName name={session.name} onRename={onRename} />
-        <span className="text-xs text-ui-muted">{session.agentKind}</span>
-        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-ui-muted">
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-ui-success' : 'bg-ui-border'}`}
-          />
-          {active ? 'active' : 'inactive'}
-        </span>
-        {active && (
-          <button type="button" onClick={onStop} className="ui-quiet-button ui-danger">
-            stop
-          </button>
-        )}
-        {/* Hidden while a terminal is open: the terminal owns the session, so the
+    <div className="min-h-[42px] shrink-0 border-b border-ui-border bg-ui-surface px-3 py-2 md:px-6 md:py-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+        <div className="flex min-w-0 items-center gap-2">
+          <SessionName name={session.name} onRename={onRename} />
+          <span className="text-xs md:text-[11px] text-ui-muted">{session.agentKind}</span>
+        </div>
+        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1 text-xs">
+          <span className="mr-2 inline-flex items-center gap-1.5 text-xs md:text-[11px] text-ui-muted">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-ui-success' : 'bg-ui-border'}`}
+            />
+            {active ? 'active' : 'inactive'}
+          </span>
+          {active && (
+            <button type="button" onClick={onStop} className="ui-quiet-button ui-danger">
+              stop
+            </button>
+          )}
+          {/* Hidden while a terminal is open: the terminal owns the session, so the
             server rejects a headless resume anyway (close it first). */}
-        {!active && !terminalOpen && (
-          <button type="button" onClick={onResume} className="ui-button ui-primary">
-            resume
-          </button>
-        )}
-        {/* Interactive terminal — a hands-on alternative to the headless resume.
+          {!active && !terminalOpen && (
+            <button type="button" onClick={onResume} className="ui-button ui-primary text-xs">
+              resume
+            </button>
+          )}
+          {/* Interactive terminal — a hands-on alternative to the headless resume.
             Open only while idle (an active headless child would fight it over the
             session); once open it stays as a "close" toggle regardless. */}
-        {terminalOpen ? (
+          {terminalOpen ? (
+            <button
+              type="button"
+              onClick={onCloseTerminal}
+              className="ui-button border-ui-accent-border bg-ui-selected text-ui-selected-text"
+            >
+              close terminal
+            </button>
+          ) : (
+            !active &&
+            terminalReady && (
+              <button type="button" onClick={onOpenTerminal} className="ui-quiet-button">
+                terminal
+              </button>
+            )
+          )}
+          {session.shareToken && <ShareButton shareToken={session.shareToken} />}
+          {/* Divider sets loops (recurring automation) apart from the lifecycle /
+            share actions; desktop-only so phone wrapping never orphans it. */}
+          <span aria-hidden className="hidden h-4 w-px self-center bg-ui-border md:inline-block" />
+          <LoopsControl sessionId={session.id} projectId={projectId} activeLoops={activeLoops} />
           <button
             type="button"
-            onClick={onCloseTerminal}
-            className="ui-button border-ui-accent-border bg-ui-selected text-ui-selected-text"
+            onClick={() => setOpen(o => !o)}
+            className="ui-icon-button"
+            aria-expanded={open}
+            aria-label={open ? 'hide details' : 'show details'}
           >
-            close terminal
+            <InfoIcon />
           </button>
-        ) : (
-          !active &&
-          terminalReady && (
-            <button type="button" onClick={onOpenTerminal} className="ui-quiet-button">
-              terminal
-            </button>
-          )
-        )}
-        {session.shareToken && <ShareButton shareToken={session.shareToken} />}
-        {/* Divider sets loops (recurring automation) apart from the lifecycle /
-            share actions; desktop-only so phone wrapping never orphans it. */}
-        <span aria-hidden className="hidden h-4 w-px self-center bg-ui-border md:inline-block" />
-        <LoopsControl sessionId={session.id} projectId={projectId} activeLoops={activeLoops} />
-        <button
-          type="button"
-          onClick={() => setOpen(o => !o)}
-          className="ui-icon-button"
-          aria-expanded={open}
-          aria-label={open ? 'hide details' : 'show details'}
-        >
-          <InfoIcon />
-        </button>
+        </div>
       </div>
       {open && (
         <div className="mt-2 flex flex-col gap-1 break-all rounded-md bg-ui-panel p-3 font-mono text-xs text-ui-muted">

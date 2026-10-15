@@ -12,9 +12,9 @@ type ServiceDetailProps = {
 }
 
 const DetailRow = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div className="grid gap-1 py-3 sm:grid-cols-[8rem_minmax(0,1fr)] sm:gap-4">
-    <dt className="text-sm text-ui-muted">{label}</dt>
-    <dd className="min-w-0 text-sm text-ui-text">{children}</dd>
+  <div className="grid gap-1 py-3 md:grid-cols-[8rem_minmax(0,1fr)] md:gap-4">
+    <dt className="text-xs text-ui-muted">{label}</dt>
+    <dd className="min-w-0 text-[13px] leading-5 text-ui-text">{children}</dd>
   </div>
 )
 
@@ -28,7 +28,7 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const service = services?.find(item => item.workerId === workerId && item.name === name)
 
-  if (loading && services === null) return <div className="p-6 text-sm text-ui-muted">loading…</div>
+  if (loading && services === null) return <div className="p-6 text-xs text-ui-muted">loading…</div>
   if (error && services === null)
     return (
       <div role="alert" className="p-6 text-sm text-ui-danger">
@@ -95,7 +95,7 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
           </div>
         </div>
         {confirming ? (
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-[13px]">
             <span className="text-ui-muted">{stopping ? 'Stopping…' : `Stop ${name}?`}</span>
             {!stopping && (
               <>

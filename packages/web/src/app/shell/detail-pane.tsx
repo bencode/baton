@@ -50,12 +50,12 @@ const ProjectStart = ({
 }: Pick<DetailPaneProps, 'activeId' | 'onNewSession' | 'open'>) => {
   const projectId = activeProjectId(activeId)
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
       <span aria-hidden className="mb-1 h-3 w-3 rotate-45 bg-ui-accent" />
       <h1 className="ui-page-title">
         {projectId === null ? 'Choose your project' : 'What would you like to work on?'}
       </h1>
-      <p className="max-w-sm text-sm leading-relaxed text-ui-muted">
+      <p className="max-w-sm text-[13px] leading-relaxed text-ui-muted">
         {projectId === null
           ? 'Select or create a project above to get started.'
           : 'Start a conversation, or pick one from the sidebar to continue.'}

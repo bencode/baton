@@ -57,8 +57,8 @@ export const ChannelsPanel = ({ workspaceId }: { workspaceId: Id }) => {
 
   return (
     <section className="flex flex-col gap-1">
-      <div className="mb-1 flex items-center justify-between px-1">
-        <h2 className="text-xs font-medium text-ui-muted">Workspace channels</h2>
+      <div className="mb-1 flex items-center justify-between pl-2">
+        <h2 className="text-[11px] font-medium text-ui-muted">Workspace channels</h2>
         <button
           type="button"
           aria-label="new channel"
@@ -69,9 +69,9 @@ export const ChannelsPanel = ({ workspaceId }: { workspaceId: Id }) => {
           <PlusIcon />
         </button>
       </div>
-      {loading && <p className="px-2 text-sm text-ui-muted">loading…</p>}
+      {loading && <p className="px-2 text-xs text-ui-muted">loading…</p>}
       {!loading && channels?.length === 0 && (
-        <p className="px-2 text-sm text-ui-muted">No channels yet.</p>
+        <p className="px-2 text-xs text-ui-muted">No channels yet.</p>
       )}
       {channels?.map(ch => (
         <ChannelRow
@@ -87,7 +87,7 @@ export const ChannelsPanel = ({ workspaceId }: { workspaceId: Id }) => {
             e.preventDefault()
             void create()
           }}
-          className="mt-1 px-1"
+          className="mt-1"
         >
           <input
             // biome-ignore lint/a11y/noAutofocus: form opens on explicit user click

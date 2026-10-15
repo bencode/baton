@@ -88,7 +88,7 @@ export const NewSessionDialog = ({
                 className="accent-ui-accent"
               />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium" title={worker.name}>
+                <span className="block truncate text-[13px] font-medium" title={worker.name}>
                   {worker.name}
                 </span>
                 <span className="block truncate text-xs text-ui-muted" title={worker.hostname}>
@@ -124,12 +124,12 @@ export const NewSessionDialog = ({
           {error}
         </p>
       )}
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div className="mt-6 grid grid-cols-[auto_minmax(0,1fr)] gap-2 md:flex md:items-center">
         <button
           type="button"
           disabled={creating}
           onClick={onManageWorkers}
-          className="ui-button mr-auto"
+          className="ui-quiet-button col-span-2 mb-2 justify-self-start md:mr-auto md:mb-0"
         >
           Manage workers
         </button>
@@ -140,7 +140,7 @@ export const NewSessionDialog = ({
           type="button"
           disabled={!selected || creating}
           onClick={() => void create()}
-          className="ui-button ui-primary"
+          className="ui-button ui-primary min-w-0"
         >
           {creating ? 'Creating…' : 'Create conversation'}
         </button>

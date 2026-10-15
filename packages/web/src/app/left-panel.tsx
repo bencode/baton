@@ -97,14 +97,14 @@ export const LeftPanel = ({
       ) : (
         <>
           <fieldset
-            className="mx-5 mb-3 flex shrink-0 gap-5 border-b border-ui-border"
+            className="mx-3 mb-3 flex shrink-0 gap-4 border-b border-ui-border px-2"
             aria-label="Resource categories"
           >
             <button
               type="button"
               aria-pressed={section === 'sessions'}
               onClick={() => setSection('sessions')}
-              className={`ui-focus min-h-11 min-w-0 border-b-2 py-2 text-[13px] md:min-h-8 ${section === 'sessions' ? 'border-ui-accent font-medium text-ui-accent' : 'border-transparent text-ui-muted'}`}
+              className={`ui-focus min-h-11 min-w-0 border-b-2 py-2 text-xs md:min-h-8 [@media(pointer:coarse)]:min-h-11 ${section === 'sessions' ? 'border-ui-accent font-medium text-ui-accent' : 'border-transparent text-ui-muted'}`}
             >
               Conversations
             </button>
@@ -114,12 +114,12 @@ export const LeftPanel = ({
               title="Requirements and tasks"
               aria-pressed={section === 'requirements'}
               onClick={() => setSection('requirements')}
-              className={`ui-focus min-h-11 min-w-0 border-b-2 py-2 text-[13px] md:min-h-8 ${section === 'requirements' ? 'border-ui-accent font-medium text-ui-accent' : 'border-transparent text-ui-muted'}`}
+              className={`ui-focus min-h-11 min-w-0 border-b-2 py-2 text-xs md:min-h-8 [@media(pointer:coarse)]:min-h-11 ${section === 'requirements' ? 'border-ui-accent font-medium text-ui-accent' : 'border-transparent text-ui-muted'}`}
             >
               Work items
             </button>
           </fieldset>
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
             <Activity mode={section === 'sessions' ? 'visible' : 'hidden'}>
               <SessionsPanel projectId={projectId} activeId={activeId} open={open} close={close} />
             </Activity>
@@ -129,7 +129,7 @@ export const LeftPanel = ({
           </div>
           <nav
             aria-label="Project management"
-            className="shrink-0 border-t border-ui-border px-3 py-3"
+            className="mx-3 shrink-0 border-t border-ui-border py-3"
           >
             {entries.map(entry => {
               const path = projectViewPath(projectId, entry.view)
@@ -150,7 +150,7 @@ export const LeftPanel = ({
         </>
       )}
       {workspaceId !== null && (
-        <div className="max-h-[30%] shrink-0 overflow-y-auto border-t border-ui-border px-3 py-3">
+        <div className="mx-3 max-h-[30%] shrink-0 overflow-y-auto border-t border-ui-border py-3">
           <ChannelsPanel key={workspaceId} workspaceId={workspaceId} />
         </div>
       )}

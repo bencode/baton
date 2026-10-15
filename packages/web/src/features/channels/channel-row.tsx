@@ -18,13 +18,13 @@ export const ChannelRow = ({ channel, open, onDelete }: ChannelRowProps) => {
       <button
         type="button"
         onClick={open}
-        className="ui-focus flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left md:min-h-8 [@media(pointer:coarse)]:min-h-11"
+        className="ui-focus flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left md:min-h-8 [@media(pointer:coarse)]:min-h-11"
       >
-        <span className="text-ui-muted">#</span>
+        <span className="w-4 shrink-0 text-center text-ui-muted">#</span>
         <span className="truncate">{channel.title || channel.id.slice(0, 8)}</span>
       </button>
       {confirming ? (
-        <span className="flex shrink-0 items-center gap-3 px-1.5 text-xs">
+        <span className="flex shrink-0 items-center gap-1 text-xs">
           <button
             type="button"
             aria-label="confirm delete"

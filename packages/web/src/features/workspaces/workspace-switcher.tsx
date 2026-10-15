@@ -5,6 +5,7 @@ import { useApi } from '../../app/api-context'
 import { workspacePath } from '../../app/route'
 import { PencilIcon } from '../../components/icons'
 import { InlineRename } from '../../components/inline-rename'
+import { SelectControl } from '../../components/select-control'
 import { bumpLists } from '../../hooks/use-list-revision'
 import { useWorkspaces } from './use-workspaces'
 
@@ -34,11 +35,12 @@ export const WorkspaceSwitcher = ({ activeWorkspaceId }: WorkspaceSwitcherProps)
     )
   return (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1">
-      <select
+      <SelectControl
         aria-label="Workspace"
         value={activeWorkspaceId ?? ''}
         onChange={e => navigate(workspacePath(Number(e.target.value)))}
-        className="ui-context-select min-w-0 flex-1"
+        tone="quiet"
+        className="min-w-0 flex-1"
       >
         {activeWorkspaceId === null && (
           <option value="" disabled>
@@ -50,7 +52,7 @@ export const WorkspaceSwitcher = ({ activeWorkspaceId }: WorkspaceSwitcherProps)
             {w.name}
           </option>
         ))}
-      </select>
+      </SelectControl>
       {active && (
         <button
           type="button"
