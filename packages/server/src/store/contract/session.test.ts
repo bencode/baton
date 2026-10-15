@@ -11,7 +11,7 @@ describe('Store contract — sessions', () => {
     await ctx.cleanup()
   })
 
-  test('session create: metadata only; materialize fills agentSessionId/worktreePath', async () => {
+  test('session create: metadata only; materialize fills agentSessionId/cwd', async () => {
     const { project } = await seedReq(ctx)
     const workerId = await seedWorker(ctx, project)
     const s = await ctx.store.sessions.create({
@@ -25,15 +25,15 @@ describe('Store contract — sessions', () => {
     assert.equal(s.workerId, workerId)
     assert.equal(s.agentKind, 'claude-code')
     assert.equal(s.agentSessionId, null)
-    assert.equal(s.worktreePath, null)
+    assert.equal(s.cwd, null)
 
     const m = await ctx.store.sessions.materialize(s.id, {
       agentSessionId: '11111111-1111-1111-1111-111111111111',
-      worktreePath: '/tmp/wt',
+      cwd: '/tmp/wt',
     })
     assert.equal(m.agentSessionId, '11111111-1111-1111-1111-111111111111')
-    assert.equal(m.worktreePath, '/tmp/wt')
-    assert.equal((await ctx.store.sessions.get(s.id))?.worktreePath, '/tmp/wt')
+    assert.equal(m.cwd, '/tmp/wt')
+    assert.equal((await ctx.store.sessions.get(s.id))?.cwd, '/tmp/wt')
   })
 
   test('share token: create assigns one; getByShareToken resolves it; bad token → null', async () => {

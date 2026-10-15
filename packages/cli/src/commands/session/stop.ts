@@ -3,7 +3,7 @@ import { fmtSession, renderOne } from '../../output.ts'
 import { clientFor, common, resolveProjectId } from '../../util.ts'
 import { resolveSession } from './shared.ts'
 
-// Stop a session — the worker kills its child but keeps the row + worktree, so
+// Stop a session — the worker kills its child but keeps the row + directory, so
 // it can be resumed later. The session goes inactive.
 export const sessionStopCommand = defineCommand({
   meta: { name: 'stop', description: 'stop a session (keeps it; resume to restart)' },

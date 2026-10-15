@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import type { QueryFn } from './query.ts'
-import { generateTitleWithCodex } from './title-codex.ts'
 import { generateTitle, sanitizeTitle } from './title.ts'
+import { generateTitleWithCodex } from './title-codex.ts'
 
 // Fake claude that returns `out` as its result message.
 const fakeQuery =
@@ -42,7 +42,7 @@ describe('sanitizeTitle', () => {
 
 describe('generateTitle', () => {
   const base = {
-    worktreePath: '/tmp',
+    cwd: '/tmp',
     userText: 'curl the health endpoint and report status',
     assistantText: 'I will hit /health and report the status.',
   }
@@ -66,7 +66,7 @@ describe('generateTitle', () => {
     }
     assert.deepEqual(
       await generateTitle({
-        worktreePath: '/tmp',
+        cwd: '/tmp',
         userText: 'hi',
         assistantText: '',
         queryFn: spy,

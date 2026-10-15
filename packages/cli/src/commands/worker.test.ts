@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import type { ApiClient, WorkerRegisterOutput } from '../client.ts'
 import { parseWorkerHandle } from '../util.ts'
 import { readOrCreateMachineId } from '../worker/machine-id.ts'
-import { registerWorker, resolveBaseBranch } from './worker.ts'
+import { registerWorker } from './worker.ts'
 
 describe('worker helpers', () => {
   test('readOrCreateMachineId: writes a UUID on first call; round-trips on second', async () => {
@@ -60,7 +60,6 @@ describe('worker helpers', () => {
           hostname: 'bens-air.local',
           machineId: 'mid-abc',
           agentKind: 'codex',
-          baseBranch: 'feature/develop',
         },
         cfgPath,
       )
@@ -77,7 +76,6 @@ describe('worker helpers', () => {
       const saved = JSON.parse(readFileSync(configPath, 'utf8'))
       assert.equal(saved.server, 'http://localhost:3280')
       assert.equal(saved.project, 1)
-      assert.equal(saved.baseBranch, 'feature/develop')
       assert.equal(saved.worker.id, 42)
       assert.equal(saved.worker.machineId, 'mid-abc')
       assert.equal(saved.worker.name, 'ben-laptop')
@@ -87,36 +85,7 @@ describe('worker helpers', () => {
     }
   })
 
-  test('resolveBaseBranch uses flag, env, saved config, then current branch', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'baton-branch-'))
-    try {
-      execFileSync('git', ['-C', dir, 'init', '-q', '-b', 'repo-branch'])
-      assert.equal(
-        resolveBaseBranch({
-          flag: ' flag-branch ',
-          env: 'env-branch',
-          saved: 'saved-branch',
-          repo: dir,
-        }),
-        'flag-branch',
-      )
-      assert.equal(
-        resolveBaseBranch({ env: 'env-branch', saved: 'saved-branch', repo: dir }),
-        'env-branch',
-      )
-      assert.equal(resolveBaseBranch({ saved: 'saved-branch', repo: dir }), 'saved-branch')
-      assert.equal(resolveBaseBranch({ repo: dir }), 'repo-branch')
-      assert.equal(resolveBaseBranch({ repo: join(dir, 'missing') }), 'main')
-      assert.throws(
-        () => resolveBaseBranch({ flag: 'bad..branch', repo: dir }),
-        /invalid base branch/,
-      )
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  test('worker whoami --json includes the effective base branch', () => {
+  test('worker whoami --json reads an explicit configuration', () => {
     const dir = mkdtempSync(join(tmpdir(), 'baton-whoami-'))
     try {
       const cfgPath = join(dir, '.baton.json')
@@ -125,7 +94,6 @@ describe('worker helpers', () => {
         JSON.stringify({
           server: 'http://localhost:3280',
           project: 1,
-          baseBranch: 'feature/develop',
           worker: {
             id: 42,
             name: 'test-worker',
@@ -141,7 +109,7 @@ describe('worker helpers', () => {
         { cwd: dir, encoding: 'utf8' },
       )
       const identity = JSON.parse(output)
-      assert.equal(identity.baseBranch, 'feature/develop')
+      assert.equal(identity.id, 42)
       assert.equal(identity.projectId, 1)
     } finally {
       rmSync(dir, { recursive: true, force: true })

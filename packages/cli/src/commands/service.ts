@@ -1,8 +1,8 @@
+import { resolve } from 'node:path'
 import { type Id, isServiceNote, isServicePublicUrl, type ServicePresence } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { toJson } from '../output.ts'
-import { loadProjectConfig, projectConfigPath } from '../project-config.ts'
-import { clientFor, common, resolveProjectId } from '../util.ts'
+import { clientFor, common, resolveProjectId, resolveWorkerId } from '../util.ts'
 import { serviceChildCommand } from '../worker/service-child.ts'
 
 const serviceHandle = (service: ServicePresence): string => `W-${service.workerId}/${service.name}`
@@ -15,30 +15,18 @@ const formatUptime = (startedAt: number, now = Date.now()): string => {
   return `${seconds}s`
 }
 
-const currentContext = (): { workerId: Id; sessionId: Id } => {
-  const config = loadProjectConfig(projectConfigPath())
-  if (!config.worker || !config.session)
-    throw new Error('service run requires a Baton session worktree')
-  return { workerId: config.worker.id, sessionId: config.session }
-}
-
-const currentWorker = (): Id => {
-  const worker = loadProjectConfig(projectConfigPath()).worker
-  if (!worker) throw new Error('no worker in scope')
-  return worker.id
-}
-
 const parseTarget = (target: string): { workerId: Id; name: string } => {
   const explicit = target.match(/^W-(\d+)\/(.+)$/i)
   return explicit
     ? { workerId: Number(explicit[1]), name: explicit[2] ?? '' }
-    : { workerId: currentWorker(), name: target }
+    : { workerId: resolveWorkerId(), name: target }
 }
 
 const runCommand = defineCommand({
   meta: { name: 'run', description: 'run a service on the current worker' },
   args: {
     name: { type: 'positional', required: true, description: 'service name' },
+    cwd: { type: 'string', required: true, description: 'service working directory on the Worker' },
     'public-url': { type: 'string', description: 'public HTTP(S) URL for this service' },
     note: { type: 'string', description: 'short note describing this service' },
     ...common,
@@ -53,9 +41,9 @@ const runCommand = defineCommand({
       throw new Error('--public-url must be an absolute HTTP(S) URL')
     if (note && !isServiceNote(note))
       throw new Error('service note must be 500 characters or fewer')
-    const context = currentContext()
-    const result = await clientFor(args).services.run(context.workerId, {
-      sessionId: context.sessionId,
+    const workerId = resolveWorkerId()
+    const result = await clientFor(args).services.run(workerId, {
+      cwd: resolve(args.cwd),
       name: args.name,
       argv,
       ...(publicUrl ? { publicUrl } : {}),
@@ -63,7 +51,7 @@ const runCommand = defineCommand({
     })
     if (!result.ok) throw new Error(result.error)
     if (args.json) return console.log(toJson(result))
-    console.log(`running W-${context.workerId}/${args.name}`)
+    console.log(`running W-${workerId}/${args.name}`)
     if (publicUrl) console.log(`public: ${publicUrl}`)
     if (result.logPath) console.log(`logs: ${result.logPath}`)
   },
@@ -84,7 +72,7 @@ const lsCommand = defineCommand({
       .sort((a, b) => a.workerId - b.workerId || a.name.localeCompare(b.name))
       .map(
         item =>
-          `${serviceHandle(item)}  ${names.get(item.workerId) ?? 'unknown'}  session=${item.sessionId}  uptime=${formatUptime(item.startedAt)}`,
+          `${serviceHandle(item)}  ${names.get(item.workerId) ?? 'unknown'}  cwd=${item.cwd}  uptime=${formatUptime(item.startedAt)}`,
       )
       .forEach(line => {
         console.log(line)

@@ -14,15 +14,19 @@ export class UnsettledExecution extends Error {}
 const materializeImages = async (config: SessionConfig, execution: ClaimedExecution) => {
   const images = execution.message.payload.images ?? []
   if (!images.length) return []
-  const directory = join(config.worktreePath, 'attachments')
+  const directory = join(
+    config.runtimeDir,
+    'attachments',
+    `message-${execution.message.id}`,
+    'pasted',
+  )
   await mkdir(directory, { recursive: true })
-  await writeFile(join(directory, '.gitignore'), '*\n')
   return Promise.all(
     images.map(async (image, index) => {
       const match = /^data:image\/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image)
       if (!match) throw new Error('unsupported pasted image')
-      const path = `attachments/pasted-${execution.message.id}-${index + 1}.${match[1]}`
-      await writeFile(join(config.worktreePath, path), Buffer.from(match[2] ?? '', 'base64'))
+      const path = join(directory, `pasted-${index + 1}.${match[1]}`)
+      await writeFile(path, Buffer.from(match[2] ?? '', 'base64'))
       return path
     }),
   )
@@ -36,7 +40,12 @@ const buildPrompt = async (
   const { text: rawText, attachments = [] } = execution.message.payload
   const paths = attachments.length
     ? await materializeAttachments({
-        worktreePath: config.worktreePath,
+        directory: join(
+          config.runtimeDir,
+          'attachments',
+          `message-${execution.message.id}`,
+          'files',
+        ),
         serverBase: config.server,
         attachments,
         fetchImpl,
@@ -54,7 +63,7 @@ const buildPrompt = async (
   ]
   const images = imagePaths.map(path => ({
     type: 'local_image' as const,
-    path: join(config.worktreePath, path),
+    path,
   }))
   return { text, input: images.length ? [{ type: 'text', text }, ...images] : text }
 }

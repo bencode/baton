@@ -117,7 +117,6 @@ test(
     const cfg = JSON.parse(cfgText)
     assert.equal(cfg.worker.machineId, f.creation.machineId)
     assert.equal(cfg.worker.apiToken, 'worker-secret')
-    assert.equal(cfg.baseBranch, 'main')
     assert.equal(cfgText.includes(f.config.token), false)
     assert.equal((await stat(join(f.repo, '.baton.json'))).mode & 0o777, 0o600)
     assert.equal((await stat(f.plist)).mode & 0o777, 0o600)

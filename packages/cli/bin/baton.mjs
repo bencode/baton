@@ -1,18 +1,17 @@
 #!/usr/bin/env node
-// Dev shim: invoke tsx (resolved from this package's own node_modules) on
-// src/index.ts. Caller's cwd is preserved so the .baton.json walk-up
-// resolves against where the user is, not where this shim lives.
+// Load TypeScript directly in the child so IPC disconnect reaches the runner
+// or service wrapper without an intermediate tsx CLI process.
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const entry = join(here, '..', 'src', 'index.ts')
 const require = createRequire(import.meta.url)
-const tsxBin = require.resolve('tsx/cli')
+const loader = pathToFileURL(require.resolve('tsx')).href
 const stdio = process.connected ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit'
-const child = spawn(process.execPath, [tsxBin, entry, ...process.argv.slice(2)], {
+const child = spawn(process.execPath, ['--import', loader, entry, ...process.argv.slice(2)], {
   stdio,
   cwd: process.cwd(),
 })

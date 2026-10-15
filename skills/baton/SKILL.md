@@ -18,16 +18,19 @@ description: >-
 baton is the single source of truth for the collaboration dimension: Requirement (product intent)
 → Task (execution unit) → Comment (collaboration log). Product content (spec/doc/design) lives in
 the git repo; baton stores references only — **pull, not push**: given a reference, go read the
-real file in the worktree instead of waiting for someone to paste the full text. baton is also the
+real file in the working directory instead of waiting for someone to paste the full text. baton is also the
 **cross-session memory**: "remember this for later / next week" requests land here, because the
 next session (or another worker, or a human) finds them — nothing session-local does that.
 
 ## Context (read first)
 
-- `.baton.json` in cwd holds server / project / worker — write commands **bare**; no
-  `--project` / `--url` needed (baton injects the file when provisioning the worktree).
-- Worker attribution: `jq .worker.id .baton.json` for your own worker id; pass `--worker <id>` when commenting.
-- Fallback: if `.baton.json` is missing, use `--project $BATON_PROJECT_ID --url $BATON_URL`.
+- Worker agents inherit `BATON_SERVER`, `BATON_PROJECT_ID`, `BATON_WORKER_ID`, and
+  `BATON_WORKER_TOKEN`; write Baton commands bare, including from subdirectories.
+- Manual CLI calls can resolve server / project / worker from `.baton.json` in cwd.
+  Session startup does not create or rewrite this file.
+- Worker attribution: use `$BATON_WORKER_ID`, or read `.worker.id` from the local
+  `.baton.json` when running manually; pass `--worker <id>` when commenting.
+- Server resolution: explicit URL > `BATON_SERVER` > `.baton.json.server` > `BATON_URL` > localhost.
 - Add `--json` whenever output needs parsing.
 
 ## Model & state machines
@@ -115,9 +118,9 @@ a GitHub issue gets closed (completed) with the verify output + `state:needs-ver
       (baton task get T-N --json)              ; title/body = the spec (Goal/Verification/Refs)
       (baton task comment ls T-N --json)       ; cold-start memory: read what predecessors/you left behind
       (baton requirement get R-N --json)       ; background + resources
-      (read-real-spec :from worktree :via resources) ; references point into git → read the files
+      (read-real-spec :from working-directory :via resources) ; references point into git → read the files
       (baton task set-status T-N in_progress)
-      (implement)                              ; write code / change files / commit on the current worktree branch
+      (implement)                              ; write code / change files / commit on the current working directory
       (if success
         (item.mjs close T-N)                   ; the only exit to done: lint → verify → close + report
         (do (baton task comment add T-N why --worker id)

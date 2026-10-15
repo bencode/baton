@@ -1,6 +1,6 @@
 # baton worker — runs a claude-code agent inside a Linux container (colima on a
 # Mac). The published @lesscap/baton-cli daemon (`baton worker run`) drives
-# remote baton sessions; each turn spawns `claude` in a git worktree off /repo.
+# remote baton sessions; each turn spawns `claude` in /repo.
 # The container is the security boundary: claude runs --dangerously-skip-
 # permissions, but can only touch the mounted repo + volumes.
 #
@@ -67,7 +67,7 @@ RUN curl -fsSL https://raw.githubusercontent.com/erda-project/erda/master/tools/
         || echo "WARN: erda-cli unavailable for $(uname -m) — MR-create runs off-worker") \
     && rm -f /tmp/erda-install.sh
 
-# git identity for commits made inside spawned worktrees (else first commit
+# git identity for commits made in the working directory (else first commit
 # errors "Author identity unknown"). Push creds (only if the agent pushes) via
 # credential.helper store; the deploy host mounts /home/baton/.gitcfg/ as a
 # directory holding a `credentials` file (one line: https://USER:TOKEN@host).

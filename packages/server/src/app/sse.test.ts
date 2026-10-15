@@ -68,7 +68,7 @@ describe('server HTTP — SSE chat stream', () => {
       )
       await ctx.store.sessions.materialize(s.id, {
         agentSessionId: 'uuid',
-        worktreePath: '/tmp/sse-test',
+        cwd: '/tmp/sse-test',
       })
       // Queue invalidations are durable; submission does not fabricate a message.
       await post(`/sessions/${s.id}/messages`, { text: 'pre' })

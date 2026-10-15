@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'node:test'
@@ -15,7 +15,8 @@ const cfg: SessionConfig = {
   name: 'x',
   agentKind: 'claude-code',
   agentSessionId: 'uuid',
-  worktreePath: '/tmp/wt',
+  cwd: '/tmp/wt',
+  runtimeDir: '/tmp/baton-test-runtime',
 }
 const execution = (): ClaimedExecution => ({
   kind: 'execute',
@@ -196,41 +197,60 @@ test('snapshot settings, fresh/resume identity and noninteractive policy reach S
   assert.equal(options?.resume, cfg.agentSessionId)
 })
 
-test('attachments are materialized and cited before the SDK is invoked', async () => {
-  const worktreePath = await mkdtemp(join(tmpdir(), 'baton-turn-'))
-  const item = execution()
-  item.message.payload.images = [
-    `data:image/png;base64,${Buffer.from('PASTED').toString('base64')}`,
-  ]
-  item.message.payload.attachments = [
-    {
-      id: 'a',
-      sessionId: 1,
-      filename: 'shot.png',
-      contentType: 'image/png',
-      size: 7,
-      url: '/sessions/1/attachments/a',
-      createdAt: 0,
-    },
-  ]
+test('attachments and pasted images stay outside cwd and remain distinct across messages and sessions', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'baton-turn-'))
+  const cwd = join(root, 'project')
+  await mkdir(cwd)
   try {
-    const query: QueryFn = params => {
-      assert.match(params.prompt, /attachments\/shot\.png/)
-      return fakeQuery([success])(params)
+    const cases = [
+      [1, 1, 'first'],
+      [1, 2, 'second'],
+      [2, 1, 'other'],
+    ] as const
+    for (const [sessionId, messageId, bytes] of cases) {
+      const runtimeDir = join(root, 'state', String(sessionId))
+      const files = join(runtimeDir, 'attachments', `message-${messageId}`)
+      const item = execution()
+      item.message.id = messageId
+      item.message.payload.images = [
+        `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`,
+      ]
+      item.message.payload.attachments = [
+        {
+          id: 'a',
+          sessionId,
+          filename: 'shot.png',
+          contentType: 'image/png',
+          size: 7,
+          url: '/attachment',
+          createdAt: 0,
+        },
+      ]
+      const query: QueryFn = params => {
+        assert.ok(params.prompt.includes(join(files, 'files/shot.png')))
+        assert.ok(params.prompt.includes(join(files, 'pasted/pasted-1.png')))
+        assert.deepEqual(params.options?.additionalDirectories, [join(runtimeDir, 'attachments')])
+        return fakeQuery([success])(params)
+      }
+      const code = await runTurn(
+        { ...cfg, sessionId, cwd, runtimeDir },
+        collector().worker,
+        item,
+        false,
+        query,
+        log,
+        undefined,
+        async () => new Response(bytes),
+      )
+      assert.equal(code, 0)
     }
-    await runTurn(
-      { ...cfg, worktreePath },
-      collector().worker,
-      item,
-      false,
-      query,
-      log,
-      undefined,
-      async () => new Response('PNGDATA'),
-    )
-    assert.equal(await readFile(join(worktreePath, 'attachments/shot.png'), 'utf8'), 'PNGDATA')
-    assert.equal(await readFile(join(worktreePath, 'attachments/pasted-1-1.png'), 'utf8'), 'PASTED')
+    for (const [sessionId, messageId, bytes] of cases) {
+      const files = join(root, 'state', String(sessionId), 'attachments', `message-${messageId}`)
+      assert.equal(await readFile(join(files, 'files/shot.png'), 'utf8'), bytes)
+      assert.equal(await readFile(join(files, 'pasted/pasted-1.png'), 'utf8'), bytes)
+    }
+    await assert.rejects(access(join(cwd, 'attachments')), { code: 'ENOENT' })
   } finally {
-    await rm(worktreePath, { recursive: true, force: true })
+    await rm(root, { recursive: true, force: true })
   }
 })

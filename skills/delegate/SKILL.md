@@ -15,7 +15,9 @@ You are one session on one worker. Other workers in the same project may be
 stronger (different model/auth), or sit on different machines with different
 repos. Delegation = create a session **on that worker** and send it a brief.
 Everything goes through the `baton` CLI (already on PATH); auth is automatic —
-bare commands pick up the worker apiToken from the cwd `.baton.json`.
+Worker agents inherit server/project/Worker identity and authentication through
+`BATON_SERVER`, `BATON_PROJECT_ID`, `BATON_WORKER_ID`, and `BATON_WORKER_TOKEN`.
+Manual calls can fall back to `.baton.json` in cwd.
 
 Workers wear a **global W-N handle** (unlike R-N/T-N, which restart per
 project): W-7 means the same worker from anywhere, so a number alone is a
@@ -35,7 +37,8 @@ model.
   ;; own project's workspace, then sweep its projects. Only go site-wide
   ;; (workspace ls → every workspace) when the user explicitly says
   ;; "所有/全部 workspace" / "all workspaces".
-  (def my-project (-> (slurp ".baton.json") :project))
+  (def my-project (or (some-> (System/getenv "BATON_PROJECT_ID") parse-long)
+                     (-> (slurp ".baton.json") :project)))
   (def wid (-> (baton project get <my-project> --json) :workspaceId))
   (doseq [p (baton project ls --workspace <wid> --json)]
     (baton worker ls --project (:id p) --json))

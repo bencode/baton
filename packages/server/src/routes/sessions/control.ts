@@ -138,7 +138,7 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
       return c.json({ error: "worker offline — can't open a terminal" }, 409)
     if (
       !s.agentSessionId ||
-      !s.worktreePath ||
+      !s.cwd ||
       (s.agentKind === 'codex' && s.agentSessionId.startsWith('pending:'))
     )
       return c.json({ error: 'session not materialized — resume it once first' }, 409)
@@ -147,7 +147,7 @@ export const registerSessionControl: RegisterSessionGroup = (app, ctx) => {
       sessionId: s.id,
       action: 'open',
       agentSessionId: s.agentSessionId,
-      worktreePath: s.worktreePath,
+      cwd: s.cwd,
     })
     return c.json(await toView(s))
   })

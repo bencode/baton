@@ -28,7 +28,7 @@ export type SessionsApi = {
   // the detail view then connects its xterm over /sessions/:id/terminal/ws.
   openTerminal(id: Id): Promise<SessionView>
   closeTerminal(id: Id): Promise<SessionView>
-  // Reset the conversation context (fresh agentSessionId) — keeps session/worktree/url.
+  // Reset the conversation context (fresh agentSessionId) — keeps session/directory/url.
   clear(id: Id): Promise<SessionView>
   // Interrupt the in-flight turn (like Esc) — keeps the session + conversation.
   abort(id: Id): Promise<SessionView>
@@ -41,7 +41,7 @@ export type SessionsApi = {
   setModel(id: Id, model: string | null, effort: AgentEffort | null): Promise<SessionView>
   // Explicit auto-title retry; completed turns normally trigger this server-side.
   autotitle(id: Id): Promise<SessionView>
-  // Delete the session (worker tears down its child + worktree; row dropped).
+  // Delete the session (worker tears down its child + Session runtime files; row dropped).
   remove(id: Id): Promise<void>
   sendMessage(id: Id, text: string, attachments?: Attachment[]): Promise<SubmitInputResult>
   listQueue(id: Id): Promise<SessionQueueSnapshot>

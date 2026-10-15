@@ -32,10 +32,14 @@ What this skill adds is the part the wire protocol can't carry: the agent-side
 N-party room.
 
 ## Resolve $BASE
-Same priority as the CLI: explicit url > `.baton.json` `server` > `$BATON_URL` >
+Same priority as the CLI: explicit url > `$BATON_SERVER` > `.baton.json` `server` > `$BATON_URL` >
 localhost. Run once and reuse:
 ```bash
-BASE=$(jq -r '.server // empty' .baton.json 2>/dev/null); BASE=${BASE:-${BATON_URL:-http://localhost:3280}}
+BASE=${BATON_SERVER:-}
+if [ -z "$BASE" ] && [ -f .baton.json ]; then
+  BASE=$(jq -r '.server // empty' .baton.json) || exit 1
+fi
+BASE=${BASE:-${BATON_URL:-http://localhost:3280}}
 ```
 An invite carrying a different url overrides this — use the url it gives.
 

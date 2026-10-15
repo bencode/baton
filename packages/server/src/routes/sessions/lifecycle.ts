@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path'
 import type { AgentKind, Id, SessionMode } from '@baton/shared'
 import { assertProjectAccess, loadScopedSession } from '../../middleware/domain-scope.ts'
 import { ExecutionConflict } from '../../store/types.ts'
@@ -7,7 +8,7 @@ import { controlExecution } from './turns.ts'
 
 // Session lifecycle: create the collaboration row + spawn command, read it, the
 // worker-bearer materialize / auto-title PATCH, resume / stop control, human
-// rename, and DELETE (tear down child + worktree, then drop the row).
+// rename, and DELETE (tear down child + Session runtime files, then drop the row).
 export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
   const {
     store,
@@ -23,8 +24,8 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
   } = ctx
 
   // Create a session row (collaboration metadata only) and push a session.start
-  // command to the owning worker, which materializes (worktree + agentSessionId)
-  // and spawns the session child process. No agentSessionId/worktreePath here —
+  // command to the owning worker, which materializes (directory + agentSessionId)
+  // and spawns the session child process. No agentSessionId/cwd here —
   // those are worker-assigned. Remote-friendly: the caller needs no local machine.
   app.post('/sessions', async c => {
     const body = (await c.req.json()) as {
@@ -66,21 +67,26 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
     return c.json(await toView(s))
   })
 
-  // Worker-bearer PATCH: materialize (agentSessionId+worktreePath, at spawn) OR
+  // Worker-bearer PATCH: materialize (agentSessionId+cwd, at spawn) OR
   // rename (name, e.g. the auto-title after the first turn). Never both at once.
   app.patch('/sessions/:id', auth, async c => {
     const owned = await ownedByWorker(c)
     if ('error' in owned) return owned.error
     const body = (await c.req.json()) as {
       agentSessionId?: string
-      worktreePath?: string
+      cwd?: string
       name?: string
     }
-    if (body.agentSessionId && body.worktreePath) {
+    if (
+      body.agentSessionId &&
+      typeof body.cwd === 'string' &&
+      isAbsolute(body.cwd) &&
+      !body.cwd.includes('\0')
+    ) {
       const updated = await store.sessions
         .materialize(owned.id, {
           agentSessionId: body.agentSessionId,
-          worktreePath: body.worktreePath,
+          cwd: body.cwd,
         })
         .catch(error => {
           if (error instanceof ExecutionConflict) return null
@@ -97,11 +103,11 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
       if (updated) bump(owned.session.projectId)
       return c.json(await toView(updated ?? owned.session))
     }
-    return c.json({ error: 'agentSessionId+worktreePath, or name, required' }, 400)
+    return c.json({ error: 'agentSessionId+cwd, or name, required' }, 400)
   })
 
   // Resume (start) / stop a session — control ops. resume re-spawns the child for
-  // an existing session; stop kills it but keeps the row + worktree (→ inactive).
+  // an existing session; stop kills it but keeps the row + directory (→ inactive).
   app.post('/sessions/:id/resume', async c => {
     const s = await loadScopedSession(c, store, intParam(c.req.param('id')))
     if (s instanceof Response) return s
@@ -136,7 +142,7 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
   })
 
   // Session DELETE (no auth, v0). Tell the owning worker to tear down its child +
-  // worktree, then drop the row (its persisted transcript events go with it).
+  // Session runtime files, then drop the row (its persisted transcript events go with it).
   app.delete('/sessions/:id', async c => {
     const id = intParam(c.req.param('id'))
     const s = await loadScopedSession(c, store, id)
@@ -144,7 +150,6 @@ export const registerSessionLifecycle: RegisterSessionGroup = (app, ctx) => {
     commands.publish(s.workerId, {
       cmd: 'session.delete',
       sessionId: id,
-      worktreePath: s.worktreePath,
     })
     await store.sessions.destroy(id)
     runtime.forget(id)

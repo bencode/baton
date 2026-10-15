@@ -81,7 +81,7 @@ export const seedWorker = async (
   return { projectId: p.id, workerId: reg.worker.id, workerToken: reg.apiToken }
 }
 
-// Create a session (metadata only — agentSessionId/worktreePath stay null until
+// Create a session (metadata only — agentSessionId/cwd stay null until
 // a worker materializes via PATCH).
 export const seedSession = async (app: ReturnType<typeof createApp>) => {
   const { projectId, workerId, workerToken } = await seedWorker(app)

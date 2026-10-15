@@ -3,7 +3,6 @@ import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -15,7 +14,7 @@ type StubServer = {
   active: Promise<void>
 }
 
-const startStubServer = async (worktreePath: string): Promise<StubServer> => {
+const startStubServer = async (cwd: string): Promise<StubServer> => {
   let markActive: () => void = () => {}
   const active = new Promise<void>(resolve => {
     markActive = resolve
@@ -29,10 +28,11 @@ const startStubServer = async (worktreePath: string): Promise<StubServer> => {
     if (request.method === 'GET' && url.pathname === '/sessions/1') {
       json({
         id: 1,
+        workerId: 9,
         name: 'ipc-exit-test',
         agentKind: 'codex',
         agentSessionId: 'thread-id',
-        worktreePath,
+        cwd,
       })
       return
     }
@@ -89,16 +89,15 @@ const waitForExit = async (
 test('session child releases supervisor IPC after the daemon stops', {
   timeout: 10_000,
 }, async () => {
-  const worktreePath = await mkdtemp(join(tmpdir(), 'baton-session-run-test-'))
-  const stub = await startStubServer(worktreePath)
+  const cwd = await mkdtemp(join(tmpdir(), 'baton-session-run-test-'))
+  const stub = await startStubServer(cwd)
   const here = dirname(fileURLToPath(import.meta.url))
-  const entry = join(here, '..', '..', 'index.ts')
-  const tsx = createRequire(import.meta.url).resolve('tsx/cli')
+  const entry = join(here, '..', '..', '..', 'bin', 'baton.mjs')
   const child = spawn(
     process.execPath,
-    [tsx, entry, 'session', 'run', '1', '--runner-token', 'runner-token'],
+    [entry, 'session', 'run', '1', '--runner-token', 'runner-token'],
     {
-      cwd: worktreePath,
+      cwd: cwd,
       env: {
         ...process.env,
         BATON_SERVER: stub.url,
@@ -120,7 +119,7 @@ test('session child releases supervisor IPC after the daemon stops', {
     assert.deepEqual(ready, { type: 'ready' })
     child.send({ type: 'execute' })
     await stub.active
-    child.kill('SIGTERM')
+    child.disconnect()
     const [code, signal] = await waitForExit(exited, () => stderr)
     assert.equal(signal, null)
     assert.equal(code, 0, stderr)
@@ -133,6 +132,6 @@ test('session child releases supervisor IPC after the daemon stops', {
     await new Promise<void>((resolve, reject) => {
       stub.server.close(error => (error ? reject(error) : resolve()))
     })
-    await rm(worktreePath, { recursive: true, force: true })
+    await rm(cwd, { recursive: true, force: true })
   }
 })

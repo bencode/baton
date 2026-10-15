@@ -82,12 +82,12 @@ export const buildTitlePrompt = (userText: string, assistantText: string): strin
 // of the conversation). Never throws; failures come back as `error` outcomes
 // carrying the SDK error / result subtype / a stderr tail.
 export const generateTitle = async (input: {
-  worktreePath: string
+  cwd: string
   userText: string
   assistantText: string
   queryFn: QueryFn
 }): Promise<TitleOutcome> => {
-  const { worktreePath, userText, assistantText, queryFn } = input
+  const { cwd, userText, assistantText, queryFn } = input
   // Nothing meaningful to summarize → decline without calling claude.
   if (`${userText}${assistantText}`.trim().length < 4) return { kind: 'declined' }
   const exe = claudeExecutable()
@@ -101,7 +101,7 @@ export const generateTitle = async (input: {
     const messages = queryFn({
       prompt: buildTitlePrompt(userText, assistantText),
       options: {
-        cwd: worktreePath,
+        cwd,
         // A one-shot summarizer, not an agent: replace the ~18k-token Claude
         // Code preset system prompt. Inside the agent harness the model
         // routinely answers NONE to this ask (verified against reclaude);

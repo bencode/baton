@@ -20,7 +20,7 @@ colima start --cpu 4 --memory 8 --mount-type virtiofs --mount-writable
 ```sh
 # Put these files somewhere on the host, e.g. ~/trantor-daily/.worker/
 cp .env.example .env
-# Edit .env: BATON_REPO_DIR + optional BATON_BASE_BRANCH + agent authentication
+# Edit .env: BATON_REPO_DIR + agent authentication
 ```
 
 ## Smoke-test claude auth first
@@ -51,9 +51,10 @@ project's workers on https://baton.fmap.dev .
   container and drop the `ANTHROPIC_*` env — a future variant.
 - **git push**: uncomment the `.gitcfg` mount in `worker-compose.yml` and drop a
   `credentials` file there (`https://USER:TOKEN@host`).
-- **base branch freshness**: set `BATON_BASE_BRANCH` when the worker should not
-  follow the repo's checked-out branch. Registration persists it, and every new
-  session fetches the matching remote branch before its worktree is created.
+- **session directories**: sessions share `/repo`; Agent conversations remain
+  independent. Session startup does not fetch branches or create worktrees.
+- **services**: `baton service run NAME --cwd /repo -- COMMAND` starts a service
+  owned by the worker. Session deletion leaves it running; Worker exit stops it.
 - **skills**: drop Claude Code skills into `./skills/` (mounted to
   `~/.claude/skills`, read-only). They become user-level skills, available in
   every session — install/edit on the host, no rebuild. Skills that shell out to
@@ -67,8 +68,8 @@ project's workers on https://baton.fmap.dev .
   the `baton_state` volume, e.g. `/home/baton/.local/share/baton/config.json`,
   instead of `/repo/.baton.json`). Without it the two daemons would fight over
   `/repo/.baton.json`. The `--config` flag does not propagate to child processes,
-  so the session children and the agent's bare `baton` calls still resolve their
-  worktree's own `.baton.json`.
+  the worker injects server/project/worker context through environment variables
+  into session children and interactive terminals.
 - **claude via reclaude (baked into the image)**: reclaude is a `claude` wrapper
   that authenticates through the reclaude.ai gateway (subscription-style access).
   Routing the stock claude through reclaude's *proxy* does NOT work — the gateway
@@ -93,4 +94,4 @@ project's workers on https://baton.fmap.dev .
   passes them as the SDK's `--add-dir`, so the agent treats them as searchable
   workspace roots — `permissions.additionalDirectories` in `settings.json` is
   NOT honored under `bypassPermissions`. The agent works in its `/repo`
-  worktree; the add-dirs are read-only context it can grep/read.
+  working directory; the add-dirs are read-only context it can grep/read.

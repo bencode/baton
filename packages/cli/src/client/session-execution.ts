@@ -14,7 +14,7 @@ export type AttemptClient = {
   emitEvent(type: 'agent_event' | 'sdk_event', payload: unknown): Promise<SessionEvent>
   heartbeat(stopReason?: 'timeout'): Promise<HeartbeatResult>
   finish(input: Omit<FinishInput, 'runnerToken'>): Promise<AttemptResult>
-  materialize(input: { agentSessionId: string; worktreePath: string }): Promise<unknown>
+  materialize(input: { agentSessionId: string }): Promise<unknown>
 }
 export type ExecutionClient = {
   claim(input: ClaimInput): Promise<ClaimResult>

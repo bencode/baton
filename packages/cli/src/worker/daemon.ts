@@ -1,8 +1,9 @@
 import type { WorkerCommand } from '@baton/shared'
 import { EventSource } from 'eventsource'
 import type { ApiClient } from '../client.ts'
-import type { WorkerConfig } from '../project-config.ts'
+import { PROJECT_CONFIG_NAME, type WorkerConfig } from '../project-config.ts'
 import { syncBundledArtifactSkill } from './bundled-skills.ts'
+import { ensureExcluded } from './git-exclude.ts'
 import { createLiveness } from './liveness.ts'
 import { createServiceSupervisor } from './service-supervisor.ts'
 import { createSessionSupervisor } from './session-supervisor.ts'
@@ -21,7 +22,9 @@ export const runWorkerDaemon = async (
   client: ApiClient,
   signal: AbortSignal,
 ): Promise<void> => {
-  const repo = process.cwd()
+  const cwd = process.cwd()
+  ensureExcluded(cwd, PROJECT_CONFIG_NAME)
+  syncBundledArtifactSkill(cwd)
   const log = (m: string): void => console.log(`[worker #${cfg.workerId} ${cfg.name}] ${m}`)
 
   // Cross-wired by lazy callbacks: the supervisor skips a headless start while a
@@ -31,7 +34,7 @@ export const runWorkerDaemon = async (
   const supervisor = createSessionSupervisor({
     client,
     cfg,
-    repo,
+    cwd,
     log,
     hasTerminal: id => terminals.has(id),
     closeTerminal: id => terminals.close(id),
@@ -40,10 +43,8 @@ export const runWorkerDaemon = async (
     cfg,
     log,
     hasChild: id => supervisor.has(id),
-    prepareWorktree: worktreePath => syncBundledArtifactSkill(repo, worktreePath),
   })
   const services = createServiceSupervisor({
-    getSession: sessionId => client.sessions.get(sessionId),
     sendReport: report => client.services.report(report),
     cfg,
     log,
@@ -94,21 +95,19 @@ export const runWorkerDaemon = async (
           .reconcile(cmd.sessionId)
           .catch(error => log(`reconcile failed: ${String(error)}`))
       else if (cmd.cmd === 'session.delete')
-        void services
-          .stopSession(cmd.sessionId)
-          .then(() => supervisor.remove(cmd.sessionId, cmd.worktreePath))
-          .catch(err => log(`service cleanup failed: ${String(err)}`))
+        void supervisor
+          .remove(cmd.sessionId)
+          .catch(err => log(`session cleanup failed: ${String(err)}`))
       else if (cmd.cmd === 'session.title')
         void supervisor
-          .title(cmd.sessionId, cmd.agentSessionId, cmd.worktreePath)
+          .title(cmd.sessionId, cmd.agentSessionId, cmd.cwd)
           .catch(err => log(`title failed: ${String(err)}`))
       else if (cmd.cmd === 'session.terminal') {
-        if (cmd.action === 'open')
-          terminals.open(cmd.sessionId, cmd.agentSessionId, cmd.worktreePath)
+        if (cmd.action === 'open') terminals.open(cmd.sessionId, cmd.agentSessionId, cmd.cwd)
         else terminals.close(cmd.sessionId)
       } else if (cmd.cmd === 'service.run')
         void services
-          .run(cmd.requestId, cmd.sessionId, cmd.name, cmd.argv, cmd.publicUrl, cmd.note)
+          .run(cmd.requestId, cmd.cwd, cmd.name, cmd.argv, cmd.publicUrl, cmd.note)
           .catch(err => log(`service run failed: ${String(err)}`))
       else if (cmd.cmd === 'service.stop')
         void services
@@ -119,7 +118,7 @@ export const runWorkerDaemon = async (
     }
   }
   es.onerror = () => log('command stream error (eventsource will retry)')
-  log(`listening for commands (server ${cfg.server}, repo ${repo})`)
+  log(`listening for commands (server ${cfg.server}, cwd ${cwd})`)
 
   liveness.start()
 

@@ -21,7 +21,7 @@ describe('Session execution contract', () => {
     sessionId = session.id
     await ctx.store.sessions.materialize(sessionId, {
       agentSessionId: 'pending:test',
-      worktreePath: '/tmp/test',
+      cwd: '/tmp/test',
     })
   })
   afterEach(async () => {
@@ -212,7 +212,7 @@ describe('Session clear and timeout boundaries', () => {
       })
       await ctx.store.sessions.materialize(session.id, {
         agentSessionId: 'old-thread',
-        worktreePath: '/tmp/clear',
+        cwd: '/tmp/clear',
       })
       await ctx.store.inputs.submit(session.id, { text: 'current' })
       const first = await ctx.store.turns.claim(session.id, { claimId: 'clear', runnerToken: 'r' })

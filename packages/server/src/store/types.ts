@@ -108,7 +108,7 @@ export type ChannelMessageCreate = {
 export type RequirementWithTasks = { requirement: Requirement; tasks: Task[] }
 
 // Session creation: just the collaboration-dimension metadata. workerId is
-// required (Session → Worker FK, onDelete Cascade). agentSessionId + worktreePath
+// required (Session → Worker FK, onDelete Cascade). agentSessionId + cwd
 // are filled later by the owning Worker via `materialize`.
 export type SessionCreate = {
   projectId: Id
@@ -117,11 +117,10 @@ export type SessionCreate = {
   name: string
   agentKind: AgentKind
 }
-// Worker-supplied materialization: the agent session id it minted + the git
-// worktree it created for this session's cwd.
+// Worker-supplied materialization: the Agent session id and its working directory.
 export type SessionMaterialize = {
   agentSessionId: string
-  worktreePath: string
+  cwd: string
 }
 
 // Loop = a recurring scheduled wake-up on a Session. nextRunAt is epoch-ms (the

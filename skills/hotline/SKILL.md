@@ -33,11 +33,15 @@ a one-shot `curl` POST.
 
 ## Resolve `$BASE` first
 
-Same priority as the CLI: explicit url > `.baton.json` `server` field >
+Same priority as the CLI: explicit url > `$BATON_SERVER` > `.baton.json` `server` field >
 `$BATON_URL` > localhost. Run this once and reuse `$BASE`:
 
 ```bash
-BASE=$(jq -r '.server // empty' .baton.json 2>/dev/null); BASE=${BASE:-${BATON_URL:-http://localhost:3280}}
+BASE=${BATON_SERVER:-}
+if [ -z "$BASE" ] && [ -f .baton.json ]; then
+  BASE=$(jq -r '.server // empty' .baton.json) || exit 1
+fi
+BASE=${BASE:-${BATON_URL:-http://localhost:3280}}
 ```
 
 On a worker that already resolves to `https://baton.fmap.dev/api`. Override by

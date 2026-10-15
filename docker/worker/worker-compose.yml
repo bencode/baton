@@ -17,9 +17,9 @@ services:
     # All runtime config (baton wiring + agent auth) comes from .env.
     env_file: .env
     volumes:
-      # The repo the agent works in. cwd=/repo; worktrees branch off /repo/.git.
+      # The repo the agent works in. cwd=/repo; sessions share this directory.
       - ${BATON_REPO_DIR:?set BATON_REPO_DIR in .env}:/repo
-      # machineId (idempotent register) + worktrees.
+      # machineId (idempotent register) + Baton runtime files.
       - baton_state:/home/baton/.local/share/baton
       # claude session state / settings (resume needs this to persist).
       - claude_home:/home/baton/.claude

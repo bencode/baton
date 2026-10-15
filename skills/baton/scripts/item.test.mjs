@@ -1,6 +1,11 @@
 // Run with: node --test skills/baton/scripts/
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 import { classifyRef, extractVerification, lintBody } from './item.mjs'
 
 const GOOD = `## Goal
@@ -71,4 +76,37 @@ describe('classifyRef', () => {
     assert.throws(() => classifyRef('S-1'))
     assert.throws(() => classifyRef('https://github.com/o/r/pull/12'))
   })
+})
+
+test('task closing attributes comments to the inherited Worker without a local config', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'baton-item-context-'))
+  try {
+    const calls = join(root, 'calls.jsonl')
+    const stub = join(root, 'baton-stub.mjs')
+    const body = GOOD.replace('test -f x.txt\ngrep -q done x.txt', 'printf verified')
+    writeFileSync(
+      stub,
+      `import {appendFileSync} from 'node:fs';
+      const args = process.argv.slice(2);
+      if (args[1] === 'get') console.log(JSON.stringify({body: ${JSON.stringify(body)}}));
+      else appendFileSync(${JSON.stringify(calls)}, JSON.stringify(args) + '\\n');`,
+    )
+    execFileSync(
+      process.execPath,
+      [fileURLToPath(new URL('./item.mjs', import.meta.url)), 'close', 'T-3'],
+      {
+        cwd: root,
+        env: { ...process.env, BATON_WORKER_ID: '23', BATON_BIN: `${process.execPath} ${stub}` },
+      },
+    )
+    const commands = readFileSync(calls, 'utf8')
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line))
+    const comment = commands.find(args => args[1] === 'comment')
+    assert.deepEqual(comment.slice(-2), ['--worker', '23'])
+    assert.deepEqual(commands.at(-1), ['task', 'set-status', 'T-3', 'done'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

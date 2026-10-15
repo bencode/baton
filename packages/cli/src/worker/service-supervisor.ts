@@ -1,8 +1,8 @@
 import type { ChildProcess } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
-  Id,
   ServiceActionResult,
   ServicePresence,
   ServiceReport,
@@ -10,12 +10,13 @@ import type {
 } from '@baton/shared'
 import type { WorkerConfig } from '../project-config.ts'
 import { killPidGroup } from './proc.ts'
+import { workerRuntimeDir } from './runtime-paths.ts'
 import { startServiceProcess } from './service-process.ts'
 
 type Entry = {
   wrapper: ChildProcess
   appPid?: number
-  sessionId: Id
+  cwd: string
   name: string
   startedAt: number
   publicUrl?: string
@@ -30,33 +31,31 @@ const waitForExit = (child: ChildProcess): Promise<void> =>
 export type ServiceSupervisor = {
   run(
     requestId: string,
-    sessionId: Id,
+    cwd: string,
     name: string,
     argv: string[],
     publicUrl?: string,
     note?: string,
   ): Promise<void>
   stop(requestId: string, name: string): Promise<void>
-  stopSession(sessionId: Id): Promise<void>
   report(result?: ServiceActionResult): Promise<void>
   killAll(): void
 }
 
 export const createServiceSupervisor = (deps: {
-  getSession: (sessionId: Id) => Promise<{ workerId: Id; worktreePath: string | null }>
   sendReport: (report: ServiceReport) => Promise<unknown>
   cfg: WorkerConfig
   log: (message: string) => void
 }): ServiceSupervisor => {
-  const { getSession, sendReport, cfg, log } = deps
+  const { sendReport, cfg, log } = deps
   const entries = new Map<string, Entry>()
   let reportQueue = Promise.resolve()
 
   const snapshot = (): ServiceSnapshot[] =>
     [...entries.values()]
       .filter(entry => entry.appPid !== undefined)
-      .map(({ sessionId, name, startedAt, publicUrl, note }) => ({
-        sessionId,
+      .map(({ cwd, name, startedAt, publicUrl, note }) => ({
+        cwd,
         name,
         startedAt,
         ...(publicUrl ? { publicUrl } : {}),
@@ -66,14 +65,14 @@ export const createServiceSupervisor = (deps: {
   const report = (result?: ServiceActionResult): Promise<void> => {
     const body = { services: snapshot(), ...(result ? { result } : {}) }
     const request = reportQueue.then(() => sendReport(body)).then(() => {})
-    reportQueue = request.catch(() => {})
+    reportQueue = request.catch(error => log(`service report failed: ${String(error)}`))
     return request
   }
 
   const remove = (entry: Entry): void => {
     if (entries.get(entry.name) !== entry) return
     entries.delete(entry.name)
-    void report().catch(() => {})
+    void report().catch(error => log(`service removal report failed: ${String(error)}`))
   }
 
   const stopEntry = (entry: Entry): void => {
@@ -86,12 +85,23 @@ export const createServiceSupervisor = (deps: {
 
   const runOne = async (
     requestId: string,
-    sessionId: Id,
+    cwd: string,
     name: string,
     argv: string[],
     publicUrl?: string,
     note?: string,
   ): Promise<void> => {
+    try {
+      if (!(await stat(cwd)).isDirectory())
+        return report({ requestId, ok: false, error: `not a directory: ${cwd}`, status: 400 })
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error
+      return report({ requestId, ok: false, error: `directory not found: ${cwd}`, status: 400 })
+    }
+    const logDir = join(workerRuntimeDir(cfg), 'services')
+    const logPath = join(logDir, `${name}.log`)
+    mkdirSync(logDir, { recursive: true, mode: 0o700 })
     if (entries.has(name))
       return report({
         requestId,
@@ -99,22 +109,10 @@ export const createServiceSupervisor = (deps: {
         error: `service "${name}" is already running`,
         status: 409,
       })
-    const session = await getSession(sessionId)
-    if (session.workerId !== cfg.workerId || !session.worktreePath)
-      return report({
-        requestId,
-        ok: false,
-        error: 'session is not materialized on this worker',
-        status: 400,
-      })
-
-    const logDir = join(session.worktreePath, '.baton-services')
-    const logPath = join(logDir, `${name}.log`)
-    mkdirSync(logDir, { recursive: true })
-    const { wrapper, started } = startServiceProcess({ argv, cwd: session.worktreePath, logPath })
+    const { wrapper, started } = startServiceProcess({ argv, cwd, logPath })
     const entry: Entry = {
       wrapper,
-      sessionId,
+      cwd,
       name,
       startedAt: Date.now(),
       publicUrl,
@@ -134,27 +132,28 @@ export const createServiceSupervisor = (deps: {
     }
     const service: ServicePresence = {
       workerId: cfg.workerId,
-      sessionId,
+      cwd,
       name,
       startedAt: entry.startedAt,
       ...(publicUrl ? { publicUrl } : {}),
       ...(note ? { note } : {}),
     }
-    log(`service ${name} started in ${session.worktreePath}`)
+    log(`service ${name} started in ${cwd}`)
     await report({ requestId, ok: true, service, logPath })
   }
 
   const run = async (
     requestId: string,
-    sessionId: Id,
+    cwd: string,
     name: string,
     argv: string[],
     publicUrl?: string,
     note?: string,
   ): Promise<void> => {
     try {
-      await runOne(requestId, sessionId, name, argv, publicUrl, note)
+      await runOne(requestId, cwd, name, argv, publicUrl, note)
     } catch (error) {
+      log(`service ${name} failed: ${String(error)}`)
       await report({ requestId, ok: false, error: String(error), status: 500 })
     }
   }
@@ -169,14 +168,7 @@ export const createServiceSupervisor = (deps: {
     await report({ requestId, ok: true })
   }
 
-  const stopSession = async (sessionId: Id): Promise<void> => {
-    const matches = [...entries.values()].filter(entry => entry.sessionId === sessionId)
-    matches.forEach(stopEntry)
-    await Promise.all(matches.map(entry => waitForExit(entry.wrapper)))
-    matches.forEach(remove)
-  }
-
   const killAll = (): void => entries.forEach(stopEntry)
 
-  return { run, stop, stopSession, report, killAll }
+  return { run, stop, report, killAll }
 }

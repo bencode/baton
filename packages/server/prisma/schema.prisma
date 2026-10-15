@@ -177,8 +177,8 @@ model TaskComment {
 // dropped: Session isn't chat-referenced like R-/T- are, so int id + name is
 // enough.
 // Sessions are created remotely (projectId/workerId/name only); the owning
-// Worker materializes them — minting agentSessionId + git worktree — and PATCHes
-// those in. So agentSessionId/worktreePath are nullable until materialized. No
+// Worker materializes them — minting agentSessionId + working directory — and PATCHes
+// those in. So agentSessionId/cwd are nullable until materialized. No
 // per-session apiToken anymore: the Worker authenticates all session writes with
 // its own token (it created every session).
 model Session {
@@ -190,7 +190,7 @@ model Session {
   nameLocked            Boolean               @default(false) // true once a human names it; suppresses auto-title. Server-internal (not in SessionView).
   agentKind             String /// 'claude-code' (v0). Future: 'codex' | …
   agentSessionId        String? // claude-code: UUID; null until the Worker materializes.
-  worktreePath          String? // local cwd on the worker; null until the Worker materializes.
+  cwd                   String? // local cwd on the worker; null until the Worker materializes.
   shareToken            String? // unguessable key for the standalone /s/:token page; null on legacy rows (32-byte random ⇒ effectively unique)
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt

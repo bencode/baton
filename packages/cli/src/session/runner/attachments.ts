@@ -1,15 +1,9 @@
 import { createWriteStream } from 'node:fs'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { Attachment } from '@baton/shared'
-
-// Fixed, conventional dir (relative to the worktree) where the Worker drops
-// downloaded attachments. Referenced by name from the prompt so Claude reads
-// them with the Read tool. Kept out of git via a generated .gitignore so the
-// agent can't accidentally commit downloads.
-export const ATTACH_DIR = 'attachments'
 
 export type FetchImpl = typeof fetch
 
@@ -32,45 +26,37 @@ const dedupe = (name: string, taken: Set<string>): string => {
   return candidate
 }
 
-// Download every attachment into <worktree>/attachments/, streaming each to
-// disk. Returns the relative paths (e.g. "attachments/foo.png") to cite in
-// the prompt. All-or-nothing: any failed download throws, and the caller
-// (runTurn) converts that into a turn_error so the user sees the failure
-// instead of claude running with a partial file set.
+// A failed download aborts the turn before invoking the Agent.
 export const materializeAttachments = async (opts: {
-  worktreePath: string
+  directory: string
   serverBase: string
   attachments: Attachment[]
   fetchImpl?: FetchImpl
 }): Promise<string[]> => {
   const fetchImpl = opts.fetchImpl ?? fetch
-  const dir = join(opts.worktreePath, ATTACH_DIR)
+  const dir = opts.directory
   await mkdir(dir, { recursive: true })
-  // '*' ignores everything in this dir (including the .gitignore itself), so a
-  // worktree's `git status` stays clean and Claude won't commit downloads.
-  await writeFile(join(dir, '.gitignore'), '*\n', 'utf8')
-
-  const taken = new Set<string>(['.gitignore'])
-  const relPaths: string[] = []
+  const taken = new Set<string>()
+  const paths: string[] = []
   for (const att of opts.attachments) {
     const name = dedupe(att.filename, taken)
     const res = await fetchImpl(`${opts.serverBase}${att.url}`)
     if (!res.ok || !res.body) throw new Error(`attachment ${att.id} → ${res.status}`)
     await pipeline(Readable.fromWeb(res.body), createWriteStream(join(dir, name)))
-    relPaths.push(`${ATTACH_DIR}/${name}`)
+    paths.push(join(dir, name))
   }
-  return relPaths
+  return paths
 }
 
 // Prepend a short header naming the downloaded files so Claude knows they're
 // already on disk and where. Each line carries the same {label} the user sees in
-// the composer (labels[i] aligns with relPaths[i]), so a "{image-1}" mention in
+// the composer (labels[i] aligns with paths[i]), so a "{image-1}" mention in
 // the text resolves to a concrete path. Original text follows untouched.
-export const augmentPrompt = (text: string, relPaths: string[], labels: string[]): string => {
-  if (relPaths.length === 0) return text
+export const augmentPrompt = (text: string, paths: string[], labels: string[]): string => {
+  if (paths.length === 0) return text
   const header = [
-    '[Attached files — already saved in the working directory. Reference them by label:]',
-    ...relPaths.map((p, i) => `- {${labels[i]}} ${p}`),
+    '[Attached files — already saved locally. Reference them by label:]',
+    ...paths.map((p, i) => `- {${labels[i]}} ${p}`),
   ].join('\n')
   return text.length > 0 ? `${header}\n\n${text}` : header
 }

@@ -18,7 +18,7 @@ test('Queue HTTP contract: delete, one interrupt drains both pending inputs, own
   try {
     await ctx.store.sessions.materialize(session.id, {
       agentSessionId: 'uuid',
-      worktreePath: '/tmp/s',
+      cwd: '/tmp/s',
     })
     const submit = async (text: string) => {
       const response = await postJson(app, `${base}/messages`, { text, replyExpected: true })
@@ -110,7 +110,7 @@ test('Queue HTTP contract: delete, one interrupt drains both pending inputs, own
     const materialize = await app.request(base, {
       method: 'PATCH',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ agentSessionId: 'stale', worktreePath: '/tmp/s' }),
+      body: JSON.stringify({ agentSessionId: 'stale', cwd: '/tmp/s' }),
     })
     assert.equal(materialize.status, 409)
     assert.equal(((await (await app.request(base)).json()) as { busy: boolean }).busy, true)

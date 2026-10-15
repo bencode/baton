@@ -32,25 +32,27 @@ describe('materializeAttachments', () => {
     rmSync(wt, { recursive: true, force: true })
   })
 
-  test('downloads into attachments/, writes .gitignore, dedupes name clashes', async () => {
+  test('downloads to the supplied directory and dedupes name clashes', async () => {
     const rel = await materializeAttachments({
-      worktreePath: wt,
+      directory: join(wt, 'attachments'),
       serverBase: 'http://srv',
       attachments: [att('a', 'foo.png'), att('b', 'foo.png'), att('c', 'bar.txt')],
       fetchImpl: fakeFetch,
     })
-    assert.deepEqual(rel, ['attachments/foo.png', 'attachments/foo-1.png', 'attachments/bar.txt'])
+    assert.deepEqual(
+      rel,
+      ['foo.png', 'foo-1.png', 'bar.txt'].map(name => join(wt, 'attachments', name)),
+    )
     assert.equal(readFileSync(join(wt, 'attachments/foo.png'), 'utf8'), 'bytes-a')
     assert.equal(readFileSync(join(wt, 'attachments/foo-1.png'), 'utf8'), 'bytes-b')
     assert.equal(readFileSync(join(wt, 'attachments/bar.txt'), 'utf8'), 'bytes-c')
-    assert.equal(readFileSync(join(wt, 'attachments/.gitignore'), 'utf8'), '*\n')
   })
 
   test('throws on a failed download', async () => {
     const failing = (async () => new Response('nope', { status: 500 })) as unknown as typeof fetch
     await assert.rejects(
       materializeAttachments({
-        worktreePath: wt,
+        directory: join(wt, 'attachments'),
         serverBase: 'http://srv',
         attachments: [att('a', 'foo.png')],
         fetchImpl: failing,
@@ -66,7 +68,7 @@ describe('augmentPrompt', () => {
       ['attachments/a.png', 'attachments/b.pdf'],
       ['image-1', 'file-1'],
     )
-    assert.match(out, /already saved in the working directory/)
+    assert.match(out, /already saved locally/)
     assert.match(out, /- \{image-1\} attachments\/a\.png/)
     assert.match(out, /- \{file-1\} attachments\/b\.pdf/)
     assert.ok(out.trimEnd().endsWith('describe these'))

@@ -6,20 +6,12 @@ import { formatServiceUptime } from './format'
 type ServiceRowProps = {
   service: ServicePresence
   workerName: string
-  sessionName: string
   active: boolean
   open: () => void
   stop: () => Promise<void>
 }
 
-export const ServiceRow = ({
-  service,
-  workerName,
-  sessionName,
-  active,
-  open,
-  stop,
-}: ServiceRowProps) => {
+export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceRowProps) => {
   const [confirming, setConfirming] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [error, setError] = useState(false)
@@ -40,8 +32,8 @@ export const ServiceRow = ({
             {formatServiceUptime(service.startedAt)}
           </span>
         </span>
-        <span className="block truncate text-[11px] text-gray-500">
-          {workerName} · {sessionName}
+        <span className="block truncate text-[11px] text-gray-500" title={service.cwd}>
+          {workerName} · {service.cwd}
         </span>
       </span>
     </>

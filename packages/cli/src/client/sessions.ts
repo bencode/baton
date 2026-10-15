@@ -12,7 +12,7 @@ import type {
 import { request } from './request.ts'
 import { sessionExecutionClient } from './session-execution.ts'
 
-// Create a session (collaboration metadata only). agentSessionId/worktreePath
+// Create a session (collaboration metadata only). agentSessionId/cwd
 // are filled later by the owning worker via `materialize`. Returns the session
 // view (no token — the worker authenticates with its own apiToken).
 export type SessionCreateInput = {
@@ -29,7 +29,7 @@ export type SessionsClient = {
   create(input: SessionCreateInput): Promise<SessionView>
   materialize(
     id: Id,
-    input: { agentSessionId: string; worktreePath: string },
+    input: { agentSessionId: string; cwd: string },
     workerToken: string,
   ): Promise<Session>
   // Worker reports its child up/down (worker-bearer). Drives `attached`.
@@ -43,7 +43,7 @@ export type SessionsClient = {
   openTerminal(id: Id): Promise<SessionView>
   closeTerminal(id: Id): Promise<SessionView>
   // Reset the claude conversation (fresh agentSessionId) but keep the session +
-  // worktree; the running child is restarted to pick up the new context.
+  // directory; the running child is restarted to pick up the new context.
   clear(id: Id): Promise<SessionView>
   // Interrupt the in-flight turn (like Esc) — keeps the session + conversation.
   abort(id: Id): Promise<SessionView>

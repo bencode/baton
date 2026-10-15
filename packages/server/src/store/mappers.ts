@@ -151,7 +151,7 @@ export const toTaskComment = (r: DbTaskComment): TaskComment => ({
   createdAt: r.createdAt.getTime(),
 })
 
-// agentSessionId/worktreePath are null until the owning Worker materializes
+// agentSessionId/cwd are null until the owning Worker materializes
 // the session. apiToken lives only on Worker now (not Session).
 export const toSession = (r: DbSession): Session => ({
   id: r.id,
@@ -161,7 +161,7 @@ export const toSession = (r: DbSession): Session => ({
   name: r.name,
   agentKind: r.agentKind as AgentKind,
   agentSessionId: r.agentSessionId,
-  worktreePath: r.worktreePath,
+  cwd: r.cwd,
   shareToken: r.shareToken,
   createdAt: r.createdAt.getTime(),
   updatedAt: r.updatedAt.getTime(),

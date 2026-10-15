@@ -1,4 +1,4 @@
-import { type Id, type Session, isPlaceholderSessionName } from '@baton/shared'
+import { type Id, isPlaceholderSessionName, type Session } from '@baton/shared'
 import type { Context, Hono } from 'hono'
 import type { AttachmentStore } from '../../attachments.ts'
 import type { BusyTracker } from '../../busy.ts'
@@ -46,13 +46,12 @@ export const createSessionCtx = (deps: SessionRouteDeps) => {
   // whether this materialized session still needs one; the guarded PATCH keeps a
   // late result from replacing a human-locked name.
   const publishTitle = (session: Session): void => {
-    if (!isPlaceholderSessionName(session.name) || !session.agentSessionId || !session.worktreePath)
-      return
+    if (!isPlaceholderSessionName(session.name) || !session.agentSessionId || !session.cwd) return
     commands.publish(session.workerId, {
       cmd: 'session.title',
       sessionId: session.id,
       agentSessionId: session.agentSessionId,
-      worktreePath: session.worktreePath,
+      cwd: session.cwd,
     })
   }
   // Load a session, 404 if missing, 403 if the bearer worker doesn't own it.

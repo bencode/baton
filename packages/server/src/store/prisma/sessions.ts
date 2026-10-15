@@ -33,7 +33,7 @@ export const prismaSessions = (prisma: PrismaClient): Store['sessions'] => ({
         throw new ExecutionConflict('use attempt-scoped materialization during execution')
       const s = await tx.session.update({
         where: { id },
-        data: { agentSessionId: input.agentSessionId, worktreePath: input.worktreePath },
+        data: { agentSessionId: input.agentSessionId, cwd: input.cwd },
       })
       return toSession(s)
     }),

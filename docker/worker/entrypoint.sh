@@ -1,7 +1,7 @@
 #!/bin/sh
 # Register this machine as a baton worker (idempotent — keyed by the machineId
 # persisted on the baton_state volume), then run the worker daemon. The daemon
-# spawns the configured agent per turn in a git worktree off /repo (cwd).
+# spawns the configured agent per turn in /repo (cwd).
 set -e
 
 : "${BATON_URL:?set BATON_URL in .env}"
@@ -14,8 +14,7 @@ set -e
 cfg="${BATON_WORKER_CONFIG:-.baton.json}"
 name="${WORKER_NAME:-$(hostname)}"
 agent_kind="${BATON_AGENT_KIND:-claude-code}"
-base_branch="${BATON_BASE_BRANCH:-current branch}"
-echo "[baton] registering worker (project ${BATON_PROJECT_ID}, name ${name}, agent ${agent_kind}, base ${base_branch}) against ${BATON_URL}..."
+echo "[baton] registering worker (project ${BATON_PROJECT_ID}, name ${name}, agent ${agent_kind}) against ${BATON_URL}..."
 baton worker register \
   --config "$cfg" \
   --url "$BATON_URL" \

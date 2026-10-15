@@ -1,4 +1,4 @@
-import type { Id, SessionView, WorkerView } from '@baton/shared'
+import type { Id, WorkerView } from '@baton/shared'
 import { useApi } from '../../app/api-context'
 import { servicePath } from '../../app/route'
 import { ServiceRow } from './service-row'
@@ -7,22 +7,14 @@ import { useServices } from './use-services'
 type ServicesPanelProps = {
   projectId: Id
   workers: WorkerView[] | null
-  sessions: SessionView[] | null
   activeId: string
   open: (id: string, title: string) => void
 }
 
-export const ServicesPanel = ({
-  projectId,
-  workers,
-  sessions,
-  activeId,
-  open,
-}: ServicesPanelProps) => {
+export const ServicesPanel = ({ projectId, workers, activeId, open }: ServicesPanelProps) => {
   const api = useApi()
   const { data: services, loading, error, refresh } = useServices(projectId)
   const workerNames = new Map(workers?.map(worker => [worker.id, worker.name]))
-  const sessionNames = new Map(sessions?.map(session => [session.id, session.name]))
   const ordered = [...(services ?? [])].sort(
     (a, b) => a.workerId - b.workerId || a.name.localeCompare(b.name),
   )
@@ -42,7 +34,8 @@ export const ServicesPanel = ({
         <div className="px-2 text-xs text-gray-500">
           <p>No services running.</p>
           <p className="mt-0.5">
-            Start one from a session with <code className="font-mono">baton service run</code>.
+            Start one with{' '}
+            <code className="font-mono">baton service run NAME --cwd DIR -- COMMAND</code>.
           </p>
         </div>
       )}
@@ -52,14 +45,12 @@ export const ServicesPanel = ({
         </p>
       )}
       {ordered.map(service => {
-        const sessionName = sessionNames.get(service.sessionId)
         const path = servicePath(projectId, service.workerId, service.name)
         return (
           <ServiceRow
             key={`${service.workerId}/${service.name}`}
             service={service}
             workerName={workerNames.get(service.workerId) ?? `W-${service.workerId}`}
-            sessionName={sessionName ?? `session #${service.sessionId}`}
             active={activeId === path}
             open={() => open(path, `W-${service.workerId}/${service.name}`)}
             stop={async () => {

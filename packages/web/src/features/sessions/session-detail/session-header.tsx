@@ -134,7 +134,7 @@ export const SessionHeader = ({
     session.agentKind !== 'codex' ||
     (session.agentSessionId !== null &&
       !session.agentSessionId.startsWith('pending:') &&
-      session.worktreePath !== null)
+      session.cwd !== null)
   return (
     <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-3 sm:px-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -221,7 +221,7 @@ export const SessionHeader = ({
       </div>
       {open && (
         <div className="mt-2 flex flex-col gap-0.5 font-mono text-xs text-gray-500">
-          <span>cwd: {session.worktreePath ?? '(pending materialize)'}</span>
+          <span>cwd: {session.cwd ?? '(pending materialize)'}</span>
           <span>agent session: {session.agentSessionId ?? '(pending materialize)'}</span>
         </div>
       )}

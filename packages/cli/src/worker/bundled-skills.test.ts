@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { afterEach, describe, test } from 'node:test'
 import { syncBundledArtifactSkill } from './bundled-skills.ts'
 
@@ -19,7 +19,7 @@ describe('syncBundledArtifactSkill', () => {
     roots.push(repo)
     assert.equal(spawnSync('git', ['init', repo], { stdio: 'pipe' }).status, 0)
 
-    syncBundledArtifactSkill(repo, repo)
+    syncBundledArtifactSkill(repo)
 
     const relativePaths = [
       '.claude/skills/baton-publish-artifact/SKILL.md',
@@ -50,7 +50,7 @@ describe('syncBundledArtifactSkill', () => {
       0,
     )
 
-    syncBundledArtifactSkill(repo, repo)
+    syncBundledArtifactSkill(repo)
 
     assert.equal(readFileSync(skillPath, 'utf8'), 'repository version\n')
   })

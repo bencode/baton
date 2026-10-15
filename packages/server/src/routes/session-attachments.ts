@@ -32,7 +32,7 @@ export const registerSessionAttachmentRoutes = (
 
   // Download a stored attachment (no auth in v0). Streamed from disk so large
   // files don't get buffered. Used by the Worker to fetch files into its
-  // worktree, and later by the web UI for preview.
+  // directory, and later by the web UI for preview.
   app.get('/sessions/:id/attachments/:attId', async c => {
     const sessionId = intParam(c.req.param('id'))
     const scoped = await loadScopedSession(c, store, sessionId)
