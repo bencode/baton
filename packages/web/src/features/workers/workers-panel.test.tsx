@@ -89,7 +89,7 @@ test('Add worker remains available before worker, session, and creation data has
   expect(screen.getByText('Add a worker')).toBeTruthy()
 })
 
-test('closing before acceptance keeps the dialog closed, prevents repeat submission, and allows reopening from the sidebar', async () => {
+test('closing before acceptance keeps the dialog closed and allows adding another worker', async () => {
   const f = fixture()
   const response = deferred<WorkerCreation>()
   f.workerCreations.create.mockReturnValueOnce(response.promise)
@@ -104,32 +104,25 @@ test('closing before acceptance keeps the dialog closed, prevents repeat submiss
   f.workerCreations.listByProject.mockResolvedValue([creation])
   await act(async () => response.resolve(creation))
   expect(screen.queryByText('Worker creation')).toBeNull()
-  fireEvent.click(await screen.findByRole('button', { name: 'app: Waiting for mini' }))
-  expect(screen.getByText('Worker creation')).toBeTruthy()
+  expect(screen.queryByRole('region', { name: 'Worker creation records' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '＋ Add worker' }))
+  expect(screen.getByText('Add a worker')).toBeTruthy()
   fireEvent.keyDown(document, { key: 'Escape' })
-  expect(screen.queryByText('Worker creation')).toBeNull()
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'app: Waiting for mini' }))
+  expect(screen.queryByText('Add a worker')).toBeNull()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: '＋ Add worker' }))
 })
 
-test('sidebar shows all active creations and only the most recently finished result', async () => {
+test('sidebar does not display creation tasks regardless of their status', async () => {
   const f = fixture([
-    { ...creation, id: 5, name: 'active-two', status: 'running', step: 'git' },
-    { ...creation, id: 2, name: 'active-one' },
-    { ...creation, id: 6, name: 'old-success', status: 'succeeded', finishedAt: 100 },
-    { ...creation, id: 7, name: 'older-tie', status: 'succeeded', finishedAt: 200 },
-    { ...creation, id: 8, name: 'latest-failure', status: 'failed', finishedAt: 200 },
+    { ...creation, id: 2, name: 'pending-worker' },
+    { ...creation, id: 5, name: 'running-worker', status: 'running', step: 'git' },
+    { ...creation, id: 6, name: 'created-worker', status: 'succeeded', finishedAt: 100 },
+    { ...creation, id: 8, name: 'failed-worker', status: 'failed', finishedAt: 200 },
   ])
   render(f.tree(42))
-  await screen.findByRole('button', { name: 'latest-failure: Creation failed' })
-  expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([
-    'active-oneWaiting for mini',
-    'active-twoInitialize Git repository',
-    'latest-failureCreation failed',
-    '＋ Add worker',
-  ])
-  expect(screen.queryByText('old-success')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'latest-failure: Creation failed' }))
-  expect(screen.getByRole('alert').textContent).toContain('Resources are retained')
+  await act(async () => undefined)
+  expect(screen.queryByRole('region', { name: 'Worker creation records' })).toBeNull()
+  expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['＋ Add worker'])
 })
 
 test.each([
@@ -151,9 +144,11 @@ test.each([
 
 test('start checks current connection again; offline workers never create a session', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
-  const f = fixture([{ ...creation, status: 'succeeded', finishedAt: 1, workerId: 8 }])
+  const completed = { ...creation, status: 'succeeded' as const, finishedAt: 1, workerId: 8 }
+  const f = fixture([completed])
+  f.workerCreations.create.mockResolvedValueOnce(completed)
   render(f.tree(42))
-  fireEvent.click(await screen.findByRole('button', { name: 'app: Created' }))
+  await submit()
   await screen.findByText(/Worker is connected/)
   f.workers.get.mockResolvedValueOnce({ id: 8, projectId: 42, connected: false } as WorkerView)
   fireEvent.click(screen.getByRole('button', { name: 'Start conversation' }))
@@ -166,10 +161,12 @@ test('start checks current connection again; offline workers never create a sess
 
 test('session errors remain visible and a subsequent start can succeed', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
-  const f = fixture([{ ...creation, status: 'succeeded', finishedAt: 1, workerId: 8 }])
+  const completed = { ...creation, status: 'succeeded' as const, finishedAt: 1, workerId: 8 }
+  const f = fixture([completed])
+  f.workerCreations.create.mockResolvedValueOnce(completed)
   f.sessions.create.mockRejectedValueOnce(new Error('Session creation failed'))
   render(f.tree(42))
-  fireEvent.click(await screen.findByRole('button', { name: 'app: Created' }))
+  await submit()
   await screen.findByText(/Worker is connected/)
   fireEvent.click(screen.getByRole('button', { name: 'Start conversation' }))
   expect((await screen.findByRole('alert')).textContent).toBe('Session creation failed')
@@ -180,11 +177,13 @@ test('session errors remain visible and a subsequent start can succeed', async (
 })
 
 test('switching projects before session creation returns cannot navigate to the old project', async () => {
-  const f = fixture([{ ...creation, status: 'succeeded', finishedAt: 1, workerId: 8 }])
+  const completed = { ...creation, status: 'succeeded' as const, finishedAt: 1, workerId: 8 }
+  const f = fixture([completed])
+  f.workerCreations.create.mockResolvedValueOnce(completed)
   const session = deferred<SessionView>()
   f.sessions.create.mockReturnValueOnce(session.promise)
   const { rerender } = render(f.tree(42))
-  fireEvent.click(await screen.findByRole('button', { name: 'app: Created' }))
+  await submit()
   await screen.findByText(/Worker is connected/)
   fireEvent.click(screen.getByRole('button', { name: 'Start conversation' }))
   await vi.waitFor(() => expect(f.sessions.create).toHaveBeenCalled())

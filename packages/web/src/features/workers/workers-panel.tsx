@@ -4,7 +4,6 @@ import { useApi } from '../../app/api-context'
 import { sessionPath } from '../../app/route'
 import { AddWorker, type WorkerDialogView } from './add-worker'
 import { useWorkerSetup } from './use-worker-setup'
-import { creationStatusText } from './worker-creation-progress'
 import { createErrorText } from './worker-template-form'
 import { groupByWorker } from './workers-panel/grouping'
 import { WorkerGroup } from './workers-panel/worker-group'
@@ -62,14 +61,6 @@ export const WorkersPanel = ({
     dismiss()
     open(sessionPath(projectId, session.id), session.name)
   }
-  const creations = setup.creations.data ?? []
-  const active = creations
-    .filter(item => item.status === 'pending' || item.status === 'running')
-    .sort((a, b) => a.id - b.id)
-  const latest = creations
-    .filter(item => item.status === 'succeeded' || item.status === 'failed')
-    .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0) || b.id - a.id)[0]
-  const summaries = [...active, ...(latest ? [latest] : [])]
   const groups = workers && sessions ? groupByWorker(workers, sessions) : null
   return (
     <div className="flex flex-col gap-3">
@@ -89,37 +80,6 @@ export const WorkersPanel = ({
             close={close}
           />
         ))
-      )}
-      {summaries.length > 0 && (
-        <section className="flex flex-col gap-1" aria-label="Worker creation records">
-          {summaries.map(creation => (
-            <button
-              type="button"
-              key={creation.id}
-              aria-label={`${creation.name}: ${creationStatusText(creation)}`}
-              onClick={event =>
-                show({ kind: 'creation', creationId: creation.id }, event.currentTarget)
-              }
-              className="rounded-md px-2 py-1.5 text-left text-xs hover:bg-gray-100"
-            >
-              <span className="block truncate text-gray-700">{creation.name}</span>
-              <span
-                className={`block ${creation.status === 'failed' ? 'text-red-700' : 'text-gray-400'}`}
-              >
-                {creationStatusText(creation)}
-              </span>
-            </button>
-          ))}
-        </section>
-      )}
-      {!view && setup.creations.error && (
-        <p role="alert" className="px-2 text-xs text-amber-700">
-          Creation records could not be refreshed.{' '}
-          {setup.creations.data ? 'Progress may be out of date.' : ''}{' '}
-          <button type="button" onClick={setup.refresh} className="underline">
-            Refresh records
-          </button>
-        </p>
       )}
       {!view && setup.createError && (
         <p role="alert" className="px-2 text-xs text-red-700">
