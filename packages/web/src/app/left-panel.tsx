@@ -1,7 +1,6 @@
 import type { Id } from '@baton/shared'
 import { Activity, useEffect, useState } from 'react'
 import { PencilIcon, ServiceIcon, SettingsIcon, WorkerIcon } from '../components/icons'
-import { ChannelsPanel } from '../features/channels/channels-panel'
 import { useRequirements } from '../features/requirements/use-requirements'
 import { SessionsPanel } from '../features/sessions/sessions-panel'
 import { usePersistedSet } from '../hooks/use-persisted-set'
@@ -58,14 +57,7 @@ const RequirementsList = ({
   )
 }
 
-export const LeftPanel = ({
-  workspaceId,
-  projectId,
-  activeId,
-  open,
-  close,
-  onNewSession,
-}: LeftPanelProps) => {
+export const LeftPanel = ({ projectId, activeId, open, close, onNewSession }: LeftPanelProps) => {
   const [section, setSection] = useState<'sessions' | 'requirements'>('sessions')
   useEffect(() => {
     const route = parseRoute(activeId)
@@ -148,11 +140,6 @@ export const LeftPanel = ({
             })}
           </nav>
         </>
-      )}
-      {workspaceId !== null && (
-        <div className="mx-3 max-h-[30%] shrink-0 overflow-y-auto border-t border-ui-border py-3">
-          <ChannelsPanel key={workspaceId} workspaceId={workspaceId} />
-        </div>
       )}
     </aside>
   )
