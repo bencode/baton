@@ -34,16 +34,16 @@ export const useShellRouting = ({ activeId, tabs, retitle }: ShellRoutingArgs): 
     if (!sessions) return
     for (const tab of tabs) {
       const r = parseRoute(tab.id)
-      if (r.kind !== 'session') continue
-      const s = sessions.find(x => x.id === r.sessionId)
+      if (r.kind !== 'session' || r.projectId !== routeProjectId) continue
+      const s = sessions.find(x => x.id === r.sessionId && x.projectId === routeProjectId)
       if (s && s.name !== tab.title) retitle(tab.id, s.name)
     }
-  }, [sessions, tabs, retitle])
+  }, [sessions, tabs, retitle, routeProjectId])
   const routeWorkspaceId = route.kind === 'workspace' ? route.workspaceId : null
   const { data: project } = useProject(routeProjectId)
   const { data: workspaces } = useWorkspaces()
   const { data: wsProjects } = useProjects(routeWorkspaceId)
-  const workspaceId = project?.workspaceId ?? routeWorkspaceId
+  const workspaceId = project?.id === routeProjectId ? project.workspaceId : routeWorkspaceId
 
   // Remember the last meaningful location so a later landing at `/` restores it.
   useEffect(() => {
@@ -59,8 +59,9 @@ export const useShellRouting = ({ activeId, tabs, retitle }: ShellRoutingArgs): 
   // A bare workspace → its first project.
   useEffect(() => {
     const first = wsProjects?.[0]
-    if (route.kind === 'workspace' && first) navigate(projectPath(first.id), { replace: true })
-  }, [route.kind, wsProjects, navigate])
+    if (route.kind === 'workspace' && first?.workspaceId === routeWorkspaceId)
+      navigate(projectPath(first.id), { replace: true })
+  }, [route.kind, routeWorkspaceId, wsProjects, navigate])
 
   return { routeProjectId, workspaceId }
 }

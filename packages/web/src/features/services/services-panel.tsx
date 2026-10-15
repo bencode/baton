@@ -20,10 +20,8 @@ export const ServicesPanel = ({ projectId, workers, activeId, open }: ServicesPa
   )
 
   return (
-    <section className="flex flex-col gap-1">
-      <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-        Services
-      </h2>
+    <section className="flex flex-col gap-3">
+      <h1 className="mb-2 text-xl font-semibold text-ui-text">Services</h1>
       {loading && services === null && <p className="px-2 text-sm text-gray-500">loading…</p>}
       {!loading && error && services === null && (
         <p role="alert" className="px-2 text-sm text-red-600">
@@ -31,7 +29,7 @@ export const ServicesPanel = ({ projectId, workers, activeId, open }: ServicesPa
         </p>
       )}
       {!loading && !error && ordered.length === 0 && (
-        <div className="px-2 text-xs text-gray-500">
+        <div className="rounded-md bg-ui-panel p-4 text-sm text-ui-muted">
           <p>No services running.</p>
           <p className="mt-0.5">
             Start one with{' '}

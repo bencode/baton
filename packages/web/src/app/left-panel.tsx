@@ -1,80 +1,157 @@
 import type { Id } from '@baton/shared'
+import { Activity, useEffect, useState } from 'react'
 import { ChannelsPanel } from '../features/channels/channels-panel'
-import { ProjectSwitcher } from '../features/projects/project-switcher'
 import { useRequirements } from '../features/requirements/use-requirements'
-import { ServicesPanel } from '../features/services/services-panel'
-import { useSessions } from '../features/sessions/use-sessions'
-import { useWorkers } from '../features/workers/use-workers'
-import { WorkersPanel } from '../features/workers/workers-panel'
+import { SessionsPanel } from '../features/sessions/sessions-panel'
 import { usePersistedSet } from '../hooks/use-persisted-set'
 import { RequirementTree } from './requirement-tree'
+import { type ProjectViewKind, parseRoute, projectViewPath } from './route'
 
 type LeftPanelProps = {
   workspaceId: Id | null
   projectId: Id | null
   activeId: string
-  open: (id: string, title: string) => void
-  close: (id: string) => void
+  open(path: string, title: string): void
+  close(path: string): void
+  onNewSession(): void
 }
 
-export const LeftPanel = ({ workspaceId, projectId, activeId, open, close }: LeftPanelProps) => {
-  const { data: requirements, loading } = useRequirements(projectId)
-  const { data: workers } = useWorkers(projectId)
-  const { data: sessions } = useSessions(projectId)
+const RequirementsList = ({
+  projectId,
+  activeId,
+  open,
+}: {
+  projectId: Id
+  activeId: string
+  open(path: string, title: string): void
+}) => {
+  const { data: requirements, loading, error } = useRequirements(projectId)
   const collapsed = usePersistedSet('baton.req.collapsed')
   return (
-    <div className="flex h-full flex-col gap-5 overflow-auto bg-gray-50/60 p-3">
-      <ProjectSwitcher workspaceId={workspaceId} activeProjectId={projectId} />
-      {projectId === null ? (
-        <p className="px-2 text-sm text-gray-400">Select a project.</p>
-      ) : (
-        <section className="flex flex-col gap-1">
-          <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-            Requirements
-          </h2>
-          {loading && <p className="px-2 text-sm text-gray-400">loading…</p>}
-          {!loading && requirements?.length === 0 && (
-            <p className="px-2 text-sm text-gray-400">No requirements yet.</p>
-          )}
-          {requirements?.map(req => (
-            <RequirementTree
-              key={req.id}
-              requirement={req}
-              projectId={projectId}
-              activeId={activeId}
-              expanded={!collapsed.has(String(req.id))}
-              onToggle={() => collapsed.toggle(String(req.id))}
-              open={open}
-            />
-          ))}
-        </section>
+    <>
+      {loading && !requirements && (
+        <p role="status" className="px-2 text-sm text-ui-muted">
+          Loading requirements…
+        </p>
       )}
-      {projectId !== null && (
-        <section className="flex flex-col gap-1">
-          <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-            Workers
-          </h2>
-          <WorkersPanel
-            key={projectId}
-            projectId={projectId}
-            workers={workers}
-            sessions={sessions}
-            activeId={activeId}
-            open={open}
-            close={close}
-          />
-        </section>
+      {error && (
+        <p role="alert" className="px-2 text-sm text-red-700">
+          Unable to load requirements.
+        </p>
       )}
-      {projectId !== null && (
-        <ServicesPanel
-          key={projectId}
+      {!loading && !error && requirements?.length === 0 && (
+        <p className="px-2 text-sm text-ui-muted">No requirements yet.</p>
+      )}
+      {requirements?.map(requirement => (
+        <RequirementTree
+          key={requirement.id}
+          requirement={requirement}
           projectId={projectId}
-          workers={workers}
           activeId={activeId}
+          expanded={!collapsed.has(String(requirement.id))}
+          onToggle={() => collapsed.toggle(String(requirement.id))}
           open={open}
         />
+      ))}
+    </>
+  )
+}
+
+export const LeftPanel = ({
+  workspaceId,
+  projectId,
+  activeId,
+  open,
+  close,
+  onNewSession,
+}: LeftPanelProps) => {
+  const [section, setSection] = useState<'sessions' | 'requirements'>('sessions')
+  useEffect(() => {
+    const route = parseRoute(activeId)
+    if (route.kind === 'item') setSection('requirements')
+    if (route.kind === 'session') setSection('sessions')
+  }, [activeId])
+  const entries: { view: ProjectViewKind; label: string }[] = [
+    { view: 'workers', label: 'Workers' },
+    { view: 'services', label: 'Services' },
+    { view: 'settings', label: 'Project settings' },
+  ]
+  return (
+    <aside
+      aria-label="Project navigation"
+      className="flex h-full min-h-0 flex-col bg-ui-panel text-ui-text"
+    >
+      <div className="shrink-0 px-3 pt-4 pb-3">
+        <button
+          type="button"
+          disabled={projectId === null}
+          onClick={onNewSession}
+          className="ui-button ui-primary w-full justify-start px-3"
+        >
+          ＋ New conversation
+        </button>
+      </div>
+      {projectId === null ? (
+        <p className="min-h-0 flex-1 px-5 text-sm text-ui-muted">Select a project.</p>
+      ) : (
+        <>
+          <fieldset
+            className="mx-3 mb-3 flex shrink-0 gap-1 rounded-md bg-ui-hover p-1"
+            aria-label="Resource categories"
+          >
+            <button
+              type="button"
+              aria-pressed={section === 'sessions'}
+              onClick={() => setSection('sessions')}
+              className={`ui-focus min-w-0 flex-1 rounded px-2 py-1.5 text-sm ${section === 'sessions' ? 'bg-ui-surface font-medium' : 'text-ui-muted'}`}
+            >
+              Conversations
+            </button>
+            <button
+              type="button"
+              aria-label="Requirements / tasks"
+              title="Requirements and tasks"
+              aria-pressed={section === 'requirements'}
+              onClick={() => setSection('requirements')}
+              className={`ui-focus min-w-0 flex-1 rounded px-2 py-1.5 text-sm ${section === 'requirements' ? 'bg-ui-surface font-medium' : 'text-ui-muted'}`}
+            >
+              Work items
+            </button>
+          </fieldset>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+            <Activity mode={section === 'sessions' ? 'visible' : 'hidden'}>
+              <SessionsPanel projectId={projectId} activeId={activeId} open={open} close={close} />
+            </Activity>
+            <Activity mode={section === 'requirements' ? 'visible' : 'hidden'}>
+              <RequirementsList projectId={projectId} activeId={activeId} open={open} />
+            </Activity>
+          </div>
+          <nav
+            aria-label="Project management"
+            className="shrink-0 space-y-1 border-t border-ui-border px-3 py-3"
+          >
+            {entries.map(entry => {
+              const path = projectViewPath(projectId, entry.view)
+              return (
+                <button
+                  key={entry.view}
+                  type="button"
+                  onClick={() => open(path, entry.label)}
+                  aria-current={activeId === path ? 'page' : undefined}
+                  className={`ui-nav-item ${activeId === path ? 'bg-ui-selected font-medium text-ui-accent' : ''}`}
+                >
+                  {entry.label}
+                </button>
+              )
+            })}
+          </nav>
+        </>
       )}
-      {workspaceId !== null && <ChannelsPanel workspaceId={workspaceId} />}
-    </div>
+      {workspaceId !== null && (
+        <div className="max-h-[30%] shrink-0 overflow-y-auto border-t border-ui-border px-3 py-3">
+          <ChannelsPanel key={workspaceId} workspaceId={workspaceId} />
+        </div>
+      )}
+    </aside>
   )
 }

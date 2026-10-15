@@ -55,3 +55,25 @@ test('mousedown outside the menu dismisses it', () => {
   fireEvent.mouseDown(document.body)
   expect(screen.queryByRole('menu')).toBeNull()
 })
+
+test('tab actions are reachable without a context click and support keyboard focus', () => {
+  const onClose = vi.fn()
+  render(
+    <TabBar
+      tabs={tabs}
+      activeId="/t/a"
+      onSelect={noop}
+      onClose={onClose}
+      onCloseOthers={noop}
+      onCloseRight={noop}
+      onCloseAll={noop}
+    />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Actions for b' }))
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Close' }))
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Close others' }))
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(screen.queryByRole('menu')).toBeNull()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actions for b' }))
+})

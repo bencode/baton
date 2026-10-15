@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { createApi } from '../api'
 import { OpsPage } from '../features/admin/ops-page'
@@ -6,10 +6,12 @@ import { LoginPage } from '../features/auth/login-page'
 import { RequireAuth } from '../features/auth/require-auth'
 import { ChannelPage } from '../features/channels/channel-page'
 import { DingtalkHelpPage } from '../features/help/dingtalk-help-page'
+import { NewSessionDialog } from '../features/sessions/new-session-dialog'
 import { SessionPage } from '../features/sessions/session-page'
 import { useIsMobile } from '../hooks/use-media-query'
 import { ApiContext } from './api-context'
 import { LeftPanel } from './left-panel'
+import { parseRoute, projectViewPath, sessionPath } from './route'
 import { AppHeader } from './shell/app-header'
 import { DetailPane } from './shell/detail-pane'
 import { DesktopSplit, MobileMain } from './shell/layout'
@@ -19,10 +21,29 @@ import { useTabs } from './tabs/use-tabs'
 const api = createApi()
 
 export const Shell = () => {
-  const { tabs, activeId, open, close, closeOthers, closeRight, closeAll, retitle } = useTabs()
+  const { tabs, activeId, open, close, closeOthers, closeRight, closeAll, closeMatching, retitle } =
+    useTabs()
   const { routeProjectId, workspaceId } = useShellRouting({ activeId, tabs, retitle })
   const isMobile = useIsMobile()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [newSessionProject, setNewSessionProject] = useState<number | null>(null)
+  const menuButton = useRef<HTMLButtonElement>(null)
+  const newSessionTrigger = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    setNewSessionProject(current => (current === routeProjectId ? current : null))
+  }, [routeProjectId])
+  const startSession = () => {
+    if (routeProjectId === null) return
+    newSessionTrigger.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setDrawerOpen(false)
+    setNewSessionProject(routeProjectId)
+  }
+  const dismissSession = () => {
+    setNewSessionProject(null)
+    if (newSessionTrigger.current?.isConnected) newSessionTrigger.current.focus()
+    else menuButton.current?.focus()
+  }
   // Opening a rail item navigates and (on mobile) dismisses the drawer; a no-op
   // close on desktop where the drawer is never shown.
   const openItem = (id: string, title: string) => {
@@ -31,6 +52,8 @@ export const Shell = () => {
   }
   const left = (
     <LeftPanel
+      key={routeProjectId}
+      onNewSession={startSession}
       workspaceId={workspaceId}
       projectId={routeProjectId}
       activeId={activeId}
@@ -41,6 +64,16 @@ export const Shell = () => {
   const detail = (
     <DetailPane
       tabs={tabs}
+      onNewSession={startSession}
+      onSessionsDeleted={(projectId, ids) =>
+        closeMatching(tab => ids.some(id => tab.id === sessionPath(projectId, id)))
+      }
+      onProjectDeleted={(projectId, fallbackPath) =>
+        closeMatching(tab => {
+          const route = parseRoute(tab.id)
+          return 'projectId' in route && route.projectId === projectId
+        }, fallbackPath)
+      }
       activeId={activeId}
       open={open}
       close={close}
@@ -50,17 +83,35 @@ export const Shell = () => {
     />
   )
   return (
-    <div className="flex h-dvh flex-col bg-gray-50 text-gray-900">
-      <AppHeader workspaceId={workspaceId} onOpenMenu={() => setDrawerOpen(true)} />
-      {isMobile ? (
+    <div className="flex h-dvh min-w-0 flex-col bg-ui-panel text-ui-text">
+      <AppHeader
+        workspaceId={workspaceId}
+        projectId={routeProjectId}
+        menuButtonRef={menuButton}
+        onOpenMenu={() => setDrawerOpen(true)}
+      />
+      {newSessionProject !== null && newSessionProject === routeProjectId && (
+        <NewSessionDialog
+          key={newSessionProject}
+          projectId={newSessionProject}
+          onClose={dismissSession}
+          onCreated={session => {
+            setNewSessionProject(null)
+            openItem(sessionPath(newSessionProject, session.id), session.name)
+          }}
+          onManageWorkers={() => {
+            setNewSessionProject(null)
+            openItem(projectViewPath(newSessionProject, 'workers'), 'Workers')
+          }}
+        />
+      )}
+      <DesktopSplit left={isMobile ? null : left} detail={detail} isMobile={isMobile} />
+      {isMobile && (
         <MobileMain
           left={left}
-          detail={detail}
           drawerOpen={drawerOpen}
           onCloseDrawer={() => setDrawerOpen(false)}
         />
-      ) : (
-        <DesktopSplit left={left} detail={detail} />
       )}
     </div>
   )

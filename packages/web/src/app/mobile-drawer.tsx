@@ -34,7 +34,7 @@ export const MobileDrawer = ({ open, onClose, children }: MobileDrawerProps) => 
       />
       <div
         ref={panelRef}
-        className="absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col bg-gray-50 pt-[env(safe-area-inset-top)] shadow-xl transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none starting:-translate-x-full"
+        className="absolute inset-y-0 left-0 flex w-[calc(100%-3rem)] max-w-80 flex-col bg-ui-panel pt-[env(safe-area-inset-top)] shadow-xl transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none starting:-translate-x-full"
       >
         {children}
       </div>

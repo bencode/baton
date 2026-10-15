@@ -1,6 +1,6 @@
 import type { SessionView, WorkerCreation, WorkerView } from '@baton/shared'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { type Api, ApiError } from '../../api'
 import { ApiContext } from '../../app/api-context'
 import { WorkersPanel } from './workers-panel'
@@ -61,9 +61,8 @@ const fixture = (records: WorkerCreation[] = []) => {
         projectId={projectId}
         workers={loading ? null : []}
         sessions={loading ? null : []}
-        activeId=""
         open={open}
-        close={vi.fn()}
+        onSessionsDeleted={vi.fn()}
       />
     </ApiContext.Provider>
   )
@@ -75,6 +74,8 @@ const submit = async () => {
   fireEvent.change(screen.getByLabelText('Worker name'), { target: { value: 'app' } })
   fireEvent.click(screen.getByRole('button', { name: 'Create worker' }))
 }
+
+beforeEach(() => localStorage.clear())
 
 afterEach(() => {
   cleanup()
@@ -107,7 +108,7 @@ test('closing before acceptance keeps the dialog closed and allows adding anothe
   expect(screen.queryByRole('region', { name: 'Worker creation records' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '＋ Add worker' }))
   expect(screen.getByText('Add a worker')).toBeTruthy()
-  fireEvent.keyDown(document, { key: 'Escape' })
+  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }))
   expect(screen.queryByText('Add a worker')).toBeNull()
   expect(document.activeElement).toBe(screen.getByRole('button', { name: '＋ Add worker' }))
 })
@@ -192,4 +193,20 @@ test('switching projects before session creation returns cannot navigate to the 
   await act(async () => session.resolve({ id: 9, name: 'old chat' } as SessionView))
   expect(f.open).not.toHaveBeenCalled()
   expect(screen.queryByText('Worker creation')).toBeNull()
+})
+
+test('closing worker creation progress during session start cannot navigate after it returns', async () => {
+  const completed = { ...creation, status: 'succeeded' as const, finishedAt: 1, workerId: 8 }
+  const f = fixture([completed])
+  f.workerCreations.create.mockResolvedValueOnce(completed)
+  const session = deferred<SessionView>()
+  f.sessions.create.mockReturnValueOnce(session.promise)
+  render(f.tree(42))
+  await submit()
+  await screen.findByText(/Worker is connected/)
+  fireEvent.click(screen.getByRole('button', { name: 'Start conversation' }))
+  await vi.waitFor(() => expect(f.sessions.create).toHaveBeenCalled())
+  fireEvent.click(screen.getByLabelText('close'))
+  await act(async () => session.resolve({ id: 9, name: 'chat' } as SessionView))
+  expect(f.open).not.toHaveBeenCalled()
 })

@@ -57,7 +57,7 @@ export const ChannelsPanel = ({ workspaceId }: { workspaceId: Id }) => {
   return (
     <section className="flex flex-col gap-1">
       <div className="mb-1 flex items-center justify-between px-1">
-        <h2 className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Channels</h2>
+        <h2 className="text-xs font-medium text-ui-muted">Workspace channels</h2>
         <button
           type="button"
           aria-label="new channel"

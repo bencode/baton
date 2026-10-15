@@ -6,6 +6,7 @@ import {
   itemPath,
   parseRoute,
   projectPath,
+  projectViewPath,
   servicePath,
   sessionPath,
   workspacePath,
@@ -98,4 +99,16 @@ test('emptyTabsPath keeps the current project context, else home', () => {
   expect(emptyTabsPath('/proj/2')).toBe('/proj/2')
   expect(emptyTabsPath('/ws/1')).toBe('/')
   expect(emptyTabsPath('/')).toBe('/')
+})
+
+test.each([
+  'workers',
+  'services',
+  'settings',
+] as const)('management route %s opens a project tab', view => {
+  const path = projectViewPath(2, view)
+  expect(parseRoute(path)).toEqual({ kind: 'project-view', projectId: 2, view })
+  expect(isItemRoute(path)).toBe(true)
+  expect(activeProjectId(path)).toBe(2)
+  expect(emptyTabsPath(path)).toBe('/proj/2')
 })

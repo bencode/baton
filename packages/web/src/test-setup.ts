@@ -23,3 +23,11 @@ if (!globalThis.matchMedia) {
     dispatchEvent: () => false,
   })) as unknown as typeof globalThis.matchMedia
 }
+
+// jsdom does not implement dialog. Native focus trapping is checked in-browser.
+HTMLDialogElement.prototype.showModal = function () {
+  this.setAttribute('open', '')
+}
+HTMLDialogElement.prototype.close = function () {
+  this.removeAttribute('open')
+}

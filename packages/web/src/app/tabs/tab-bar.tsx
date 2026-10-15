@@ -1,21 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { activeProjectId } from '../route'
+import { ProjectTabLabel } from './project-tab-label'
 import type { Tab } from './tabs-model'
 
 type TabBarProps = {
   tabs: Tab[]
   activeId: string
-  onSelect: (id: string) => void
-  onClose: (id: string) => void
-  onCloseOthers: (id: string) => void
-  onCloseRight: (id: string) => void
-  onCloseAll: () => void
+  onSelect(id: string): void
+  onClose(id: string): void
+  onCloseOthers(id: string): void
+  onCloseRight(id: string): void
+  onCloseAll(): void
 }
 
 type Menu = { tabId: string; x: number; y: number }
 
-// Edge-style right-click menu on a tab. Anchored at the cursor; dismissed by an
-// outside click or Escape. Items are disabled when they'd be no-ops (one tab,
-// or the rightmost tab for "close to the right").
 const TabContextMenu = ({
   menu,
   tabs,
@@ -24,67 +24,81 @@ const TabContextMenu = ({
   onCloseRight,
   onCloseAll,
   dismiss,
-}: {
-  menu: Menu
-  tabs: Tab[]
-  onClose: (id: string) => void
-  onCloseOthers: (id: string) => void
-  onCloseRight: (id: string) => void
-  onCloseAll: () => void
-  dismiss: () => void
-}) => {
-  const idx = tabs.findIndex(t => t.id === menu.tabId)
-  const isLast = idx === tabs.length - 1
-  const alone = tabs.length <= 1
-  const run = (fn: () => void) => () => {
-    fn()
-    dismiss()
-  }
-  const item = (label: string, onClick: () => void, disabled = false) => (
+}: Omit<TabBarProps, 'activeId' | 'onSelect'> & { menu: Menu; dismiss(): void }) => {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    ref.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
+  }, [])
+  const item = (label: string, run: () => void, disabled = false) => (
     <button
       type="button"
       role="menuitem"
       disabled={disabled}
-      onClick={run(onClick)}
-      className="flex w-full items-center px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-default disabled:text-gray-300 disabled:hover:bg-transparent"
+      onClick={() => {
+        run()
+        dismiss()
+      }}
+      className="ui-focus flex w-full px-3 py-2 text-left text-sm text-ui-text hover:bg-ui-hover disabled:text-ui-muted"
     >
       {label}
     </button>
   )
-  return (
+  return createPortal(
     <div
+      ref={ref}
       role="menu"
-      style={{ left: menu.x, top: menu.y }}
-      // The dismiss listener fires on document `mousedown`; stop menu-internal
-      // mousedowns here so it doesn't unmount the menu before an item's onClick.
-      onMouseDown={e => e.stopPropagation()}
-      className="fixed z-30 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg shadow-gray-900/10"
+      aria-label="Tab actions"
+      style={{
+        left: Math.max(8, Math.min(menu.x, window.innerWidth - 200)),
+        top: Math.max(8, Math.min(menu.y, window.innerHeight - 180)),
+      }}
+      onMouseDown={event => event.stopPropagation()}
+      onKeyDown={event => {
+        const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End']
+        if (!keys.includes(event.key)) return
+        event.preventDefault()
+        const items = Array.from(
+          event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
+        )
+        const index =
+          document.activeElement instanceof HTMLButtonElement
+            ? items.indexOf(document.activeElement)
+            : -1
+        const next =
+          event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? items.length - 1
+              : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+        items[next]?.focus()
+      }}
+      className="fixed z-50 w-48 rounded-md border border-ui-border bg-ui-surface py-1"
     >
       {item('Close', () => onClose(menu.tabId))}
-      {item('Close others', () => onCloseOthers(menu.tabId), alone)}
-      {item('Close to the right', () => onCloseRight(menu.tabId), isLast)}
+      {item('Close others', () => onCloseOthers(menu.tabId), tabs.length < 2)}
+      {item('Close to the right', () => onCloseRight(menu.tabId), tabs.at(-1)?.id === menu.tabId)}
       {item('Close all', onCloseAll)}
-    </div>
+    </div>,
+    document.body,
   )
 }
 
-export const TabBar = ({
-  tabs,
-  activeId,
-  onSelect,
-  onClose,
-  onCloseOthers,
-  onCloseRight,
-  onCloseAll,
-}: TabBarProps) => {
+export const TabBar = (props: TabBarProps) => {
+  const { tabs, activeId, onSelect, onClose } = props
   const [menu, setMenu] = useState<Menu | null>(null)
-
-  // Dismiss the context menu on any outside click or Escape (mirrors UserMenu).
+  const trigger = useRef<HTMLElement | null>(null)
+  const activeButton = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    if (activeButton.current?.dataset.tabId === activeId)
+      activeButton.current.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [activeId])
   useEffect(() => {
     if (!menu) return
     const onDown = () => setMenu(null)
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenu(null)
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setMenu(null)
+      trigger.current?.focus()
     }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
@@ -93,44 +107,54 @@ export const TabBar = ({
       document.removeEventListener('keydown', onKey)
     }
   }, [menu])
-
   if (tabs.length === 0) return null
   return (
-    <div className="flex h-8 shrink-0 items-center overflow-x-auto border-b border-gray-200 bg-gray-50">
+    <nav
+      aria-label="Open pages"
+      className="flex h-[38px] shrink-0 items-stretch overflow-x-auto border-b border-ui-border bg-ui-panel"
+    >
       {tabs.map(tab => {
-        const isActive = tab.id === activeId
+        const active = tab.id === activeId
         return (
           <div
             key={tab.id}
-            className={`group relative flex h-full items-center border-r border-gray-200 transition-colors duration-150 ${
-              isActive ? 'bg-white' : 'hover:bg-white/70'
-            }`}
+            className={`group flex shrink-0 items-center border-r border-ui-border ${active ? 'bg-ui-surface' : 'hover:bg-ui-hover'}`}
           >
-            {isActive && (
-              <span className="absolute inset-x-0 top-0 h-[2px] bg-blue-500" aria-hidden />
-            )}
             <button
+              ref={active ? activeButton : undefined}
+              data-tab-id={tab.id}
               type="button"
               onClick={() => onSelect(tab.id)}
-              // Right-click anywhere on the tab label opens the batch-close menu.
-              onContextMenu={e => {
-                e.preventDefault()
-                setMenu({ tabId: tab.id, x: e.clientX, y: e.clientY })
-              }}
+              aria-current={active ? 'page' : undefined}
               title={tab.title}
-              className={`max-w-[140px] truncate pl-3.5 text-sm sm:max-w-[220px] ${
-                isActive ? 'text-gray-900' : 'text-gray-600'
-              }`}
+              onContextMenu={event => {
+                event.preventDefault()
+                trigger.current = event.currentTarget
+                setMenu({ tabId: tab.id, x: event.clientX, y: event.clientY })
+              }}
+              className={`ui-focus h-full max-w-56 truncate px-3 text-sm ${active ? 'font-medium text-ui-accent' : 'text-ui-muted'}`}
             >
-              {tab.title}
+              <ProjectTabLabel tab={tab} activeProjectId={activeProjectId(activeId)} />
+            </button>
+            <button
+              type="button"
+              aria-label={`Actions for ${tab.title}`}
+              aria-haspopup="menu"
+              aria-expanded={menu?.tabId === tab.id}
+              onClick={event => {
+                const box = event.currentTarget.getBoundingClientRect()
+                trigger.current = event.currentTarget
+                setMenu({ tabId: tab.id, x: box.left, y: box.bottom })
+              }}
+              className="ui-icon-button h-7 w-6"
+            >
+              ⋯
             </button>
             <button
               type="button"
               aria-label={`Close ${tab.title}`}
               onClick={() => onClose(tab.id)}
-              className={`mr-2 ml-2 rounded px-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 ${
-                isActive ? 'opacity-70' : 'opacity-70 sm:opacity-0 sm:group-hover:opacity-70'
-              }`}
+              className="ui-icon-button mr-1 h-7 w-6"
             >
               ×
             </button>
@@ -139,15 +163,15 @@ export const TabBar = ({
       })}
       {menu && (
         <TabContextMenu
+          {...props}
           menu={menu}
-          tabs={tabs}
-          onClose={onClose}
-          onCloseOthers={onCloseOthers}
-          onCloseRight={onCloseRight}
-          onCloseAll={onCloseAll}
-          dismiss={() => setMenu(null)}
+          dismiss={() => {
+            setMenu(null)
+            if (trigger.current?.isConnected) trigger.current.focus()
+            else activeButton.current?.focus()
+          }}
         />
       )}
-    </div>
+    </nav>
   )
 }

@@ -6,40 +6,43 @@ import type { Api } from '../../api'
 import { ApiContext } from '../../app/api-context'
 import { ProjectSwitcher } from './project-switcher'
 
-afterEach(cleanup)
-
 const projects: Project[] = [
   { id: 1, workspaceId: 1, name: 'alpha', createdAt: 0 },
   { id: 2, workspaceId: 1, name: 'beta', createdAt: 0 },
 ]
+const Location = () => <output aria-label="Path">{useLocation().pathname}</output>
+afterEach(cleanup)
 
-const Loc = () => <span data-testid="loc">{useLocation().pathname}</span>
-
-const renderSwitcher = () => {
-  const remove = vi.fn(async () => undefined)
-  const api = {
-    projects: { listByWorkspace: vi.fn(async () => projects), remove },
-  } as unknown as Api
+test('project selection changes the route and management actions are no longer in the switcher', async () => {
+  const api = { projects: { listByWorkspace: vi.fn(async () => projects) } } as unknown as Api
   render(
     <ApiContext.Provider value={api}>
       <MemoryRouter initialEntries={['/proj/1']}>
         <ProjectSwitcher workspaceId={1} activeProjectId={1} />
-        <Loc />
+        <Location />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
-  return { remove }
-}
+  await screen.findByRole('option', { name: 'beta' })
+  fireEvent.change(screen.getByLabelText('Project'), { target: { value: '2' } })
+  expect(screen.getByLabelText('Path').textContent).toBe('/proj/2')
+  expect(screen.queryByLabelText('project actions')).toBeNull()
+})
 
-test('project delete needs a confirm, then removes + lands on another project', async () => {
-  const { remove } = renderSwitcher()
-  // Open the ⋯ menu and click "Delete project" — the menu flips to a confirm view;
-  // nothing is deleted yet (the safety boundary: delete must be confirmed).
-  fireEvent.click(await screen.findByLabelText('project actions'))
-  fireEvent.click(screen.getByText('Delete project'))
-  expect(remove).not.toHaveBeenCalled()
-  // Confirming deletes the active project (#1) and navigates to the other one (#2).
-  fireEvent.click(screen.getByText('Delete'))
-  expect(remove).toHaveBeenCalledWith(1)
-  await waitFor(() => expect(screen.getByTestId('loc').textContent).toBe('/proj/2'))
+test('creating the first project keeps the existing minimal name-only contract', async () => {
+  const create = vi.fn(async () => projects[0])
+  const api = { projects: { listByWorkspace: vi.fn(async () => []), create } } as unknown as Api
+  render(
+    <ApiContext.Provider value={api}>
+      <MemoryRouter>
+        <ProjectSwitcher workspaceId={1} activeProjectId={null} />
+        <Location />
+      </MemoryRouter>
+    </ApiContext.Provider>,
+  )
+  fireEvent.click(screen.getByLabelText('new project'))
+  fireEvent.change(screen.getByLabelText('new project name'), { target: { value: 'alpha' } })
+  fireEvent.keyDown(screen.getByLabelText('new project name'), { key: 'Enter' })
+  await waitFor(() => expect(screen.getByLabelText('Path').textContent).toBe('/proj/1'))
+  expect(create).toHaveBeenCalledWith({ workspaceId: 1, name: 'alpha' })
 })

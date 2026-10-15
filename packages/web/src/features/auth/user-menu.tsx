@@ -42,7 +42,7 @@ export const UserMenu = () => {
         <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-[11px] font-semibold text-white">
           {user.username.charAt(0).toUpperCase()}
         </span>
-        <span className="max-w-[10rem] truncate font-medium">{user.username}</span>
+        <span className="hidden max-w-[10rem] truncate font-medium sm:inline">{user.username}</span>
         <span
           className={`text-gray-400 transition-transform duration-150 motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
         >

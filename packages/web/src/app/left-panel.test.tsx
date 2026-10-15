@@ -63,10 +63,18 @@ test('LeftPanel renders the requirement tree (deps + ready) and opens a task on 
   render(
     <ApiContext.Provider value={fakeApi()}>
       <MemoryRouter>
-        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={open} close={vi.fn()} />
+        <LeftPanel
+          onNewSession={vi.fn()}
+          workspaceId={1}
+          projectId={1}
+          activeId="/proj/1"
+          open={open}
+          close={vi.fn()}
+        />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
+  fireEvent.click(screen.getByRole('button', { name: 'Requirements / tasks' }))
   expect(await screen.findByText('User login')).toBeTruthy()
   expect(await screen.findByText('Design')).toBeTruthy()
   const impl = await screen.findByText('Implement')
@@ -93,6 +101,9 @@ test('rail session row: trash → inline confirm → removes session and closes 
     name: 'dogfood',
     busy: false,
     attached: false,
+    connected: true,
+    lastActiveAt: Date.now(),
+    worker: { name: 'w', hostname: 'h' },
   }
   const api = {
     projects: { listByWorkspace: vi.fn(async () => [project]), get: vi.fn(async () => project) },
@@ -107,7 +118,14 @@ test('rail session row: trash → inline confirm → removes session and closes 
   render(
     <ApiContext.Provider value={api}>
       <MemoryRouter>
-        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={vi.fn()} close={close} />
+        <LeftPanel
+          onNewSession={vi.fn()}
+          workspaceId={1}
+          projectId={1}
+          activeId="/proj/1"
+          open={vi.fn()}
+          close={close}
+        />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
@@ -125,6 +143,7 @@ test('chevron toggles aria-expanded and the tasks region aria-hidden', async () 
     <ApiContext.Provider value={fakeApi()}>
       <MemoryRouter>
         <LeftPanel
+          onNewSession={vi.fn()}
           workspaceId={1}
           projectId={1}
           activeId="/proj/1"
@@ -134,6 +153,7 @@ test('chevron toggles aria-expanded and the tasks region aria-hidden', async () 
       </MemoryRouter>
     </ApiContext.Provider>,
   )
+  fireEvent.click(screen.getByRole('button', { name: 'Requirements / tasks' }))
   await screen.findByText('User login')
   const chevron = container.querySelector('[aria-controls="1-tasks"]')
   const region = container.querySelector('#\\31 -tasks')

@@ -25,14 +25,14 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
       />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className={`truncate font-medium ${active ? 'text-blue-900' : 'text-gray-700'}`}>
+          <span className={`truncate font-medium ${active ? 'text-blue-900' : 'text-ui-text'}`}>
             {service.name}
           </span>
-          <span className="ml-auto shrink-0 text-[10px] text-gray-500 tabular-nums">
+          <span className="ml-auto shrink-0 text-xs text-ui-muted tabular-nums">
             {formatServiceUptime(service.startedAt)}
           </span>
         </span>
-        <span className="block truncate text-[11px] text-gray-500" title={service.cwd}>
+        <span className="block truncate text-xs text-ui-muted" title={service.cwd}>
           {workerName} · {service.cwd}
         </span>
       </span>
@@ -62,7 +62,7 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
         <button
           type="button"
           onClick={open}
-          className="flex min-w-0 flex-1 items-start gap-2 py-1 text-left"
+          className="flex min-w-0 flex-1 items-start gap-2 py-3 text-left"
         >
           {content}
         </button>
@@ -85,7 +85,7 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
                   aria-label={`cancel stop ${service.name}`}
                   title="cancel"
                   onClick={() => setConfirming(false)}
-                  className="text-gray-500 transition-colors hover:text-gray-700"
+                  className="text-gray-500 transition-colors hover:text-ui-text"
                 >
                   ✕
                 </button>
@@ -98,7 +98,7 @@ export const ServiceRow = ({ service, workerName, active, open, stop }: ServiceR
             aria-label={`stop ${service.name}`}
             title="stop service"
             onClick={() => setConfirming(true)}
-            className="shrink-0 p-1 text-gray-400 opacity-0 transition-opacity hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+            className="shrink-0 p-1 text-gray-400 opacity-100 transition-opacity sm:opacity-0 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
           >
             <StopIcon />
           </button>

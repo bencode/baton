@@ -2,30 +2,29 @@ import type { Id, SessionView, WorkerView } from '@baton/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { sessionPath } from '../../app/route'
+import { createSessionOnWorker } from '../sessions/session-create'
 import { AddWorker, type WorkerDialogView } from './add-worker'
 import { useWorkerSetup } from './use-worker-setup'
+import { WorkerRow } from './worker-row'
 import { createErrorText } from './worker-template-form'
-import { groupByWorker } from './workers-panel/grouping'
-import { WorkerGroup } from './workers-panel/worker-group'
 
 type WorkersPanelProps = {
   projectId: Id
   workers: WorkerView[] | null
   sessions: SessionView[] | null
-  activeId: string
   open: (id: string, title: string) => void
-  close: (id: string) => void
+  onSessionsDeleted(sessionIds: readonly Id[]): void
 }
 
 export const WorkersPanel = ({
   projectId,
   workers,
   sessions,
-  activeId,
   open,
-  close,
+  onSessionsDeleted,
 }: WorkersPanelProps) => {
   const api = useApi()
+  const [deleted, setDeleted] = useState<Id[]>([])
   const setup = useWorkerSetup(projectId)
   const [view, setView] = useState<WorkerDialogView | null>(null)
   const viewRef = useRef(view)
@@ -50,36 +49,41 @@ export const WorkersPanel = ({
     target?.focus()
   }
   const startConversation = async (workerId: Id) => {
-    const worker = await api.workers.get(workerId)
-    if (!alive.current) return
-    if (worker.projectId !== projectId || !worker.connected)
-      throw new Error(
-        'This worker is unavailable. Wait for it to reconnect before starting a conversation.',
-      )
-    const session = await api.sessions.create({ projectId, workerId })
-    if (!alive.current) return
+    const requestedView = viewRef.current
+    const session = await createSessionOnWorker(api, projectId, workerId)
+    if (!alive.current || viewRef.current !== requestedView) return
     dismiss()
     open(sessionPath(projectId, session.id), session.name)
   }
-  const groups = workers && sessions ? groupByWorker(workers, sessions) : null
   return (
     <div className="flex flex-col gap-3">
-      {!groups ? (
-        <p className="px-2 text-sm text-gray-400">loading…</p>
-      ) : workers?.length === 0 ? (
-        <p className="px-2 text-sm text-gray-400">No workers yet.</p>
+      {workers === null ? (
+        <p className="text-sm text-ui-muted">Worker information is not available yet.</p>
+      ) : workers.length === 0 ? (
+        <p className="rounded-md bg-ui-panel p-4 text-sm text-ui-muted">
+          No workers yet. Add a worker from a template or register an existing one.
+        </p>
       ) : (
-        groups.map(g => (
-          <WorkerGroup
-            key={g.worker.id}
-            worker={g.worker}
-            sessions={g.sessions}
-            projectId={projectId}
-            activeId={activeId}
-            open={open}
-            close={close}
-          />
-        ))
+        workers
+          .filter(worker => !deleted.includes(worker.id))
+          .map(worker => (
+            <WorkerRow
+              key={worker.id}
+              worker={worker}
+              sessionCount={
+                sessions ? sessions.filter(session => session.workerId === worker.id).length : null
+              }
+              onDelete={async () => {
+                await api.workers.remove(worker.id)
+                setDeleted(previous => [...previous, worker.id])
+                onSessionsDeleted(
+                  (sessions ?? [])
+                    .filter(session => session.workerId === worker.id)
+                    .map(session => session.id),
+                )
+              }}
+            />
+          ))
       )}
       {!view && setup.createError && (
         <p role="alert" className="px-2 text-xs text-red-700">
@@ -93,7 +97,7 @@ export const WorkersPanel = ({
         ref={addButton}
         type="button"
         onClick={event => show({ kind: 'add' }, event.currentTarget)}
-        className="flex w-fit items-center gap-1 px-1 text-xs text-gray-400 transition-colors hover:text-blue-700"
+        className="ui-button ui-primary w-fit"
       >
         ＋ Add worker
       </button>

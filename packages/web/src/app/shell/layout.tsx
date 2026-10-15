@@ -1,14 +1,30 @@
-import type { ReactNode } from 'react'
-import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
+import { type ReactNode, useLayoutEffect, useRef } from 'react'
+import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from 'react-resizable-panels'
 import { MobileDrawer } from '../mobile-drawer'
 
 const PANEL_IDS = ['resources', 'detail']
 
-// Desktop: the resizable two-pane split. useDefaultLayout lives here so its
-// stored layout is only read when this pane is actually mounted — phones skip it.
-export const DesktopSplit = ({ left, detail }: { left: ReactNode; detail: ReactNode }) => {
+// The content panel stays mounted at every breakpoint. On phones the resource panel
+// has zero width and the same navigation is rendered inside the drawer.
+export const DesktopSplit = ({
+  left,
+  detail,
+  isMobile,
+}: {
+  left: ReactNode
+  detail: ReactNode
+  isMobile: boolean
+}) => {
+  const resourcePanel = usePanelRef()
+  const desktopWidth = useRef(288)
+  const previousMobile = useRef(isMobile)
+  useLayoutEffect(() => {
+    if (previousMobile.current === isMobile) return
+    previousMobile.current = isMobile
+    resourcePanel.current?.resize(isMobile ? '0px' : `${desktopWidth.current}px`)
+  }, [isMobile, resourcePanel])
   const layout = useDefaultLayout({
-    id: 'baton-main-split',
+    id: 'baton-workbench-split-v1',
     panelIds: PANEL_IDS,
     storage: localStorage,
   })
@@ -17,35 +33,43 @@ export const DesktopSplit = ({ left, detail }: { left: ReactNode; detail: ReactN
       orientation="horizontal"
       className="min-h-0 flex-1"
       defaultLayout={layout.defaultLayout}
-      onLayoutChanged={layout.onLayoutChanged}
+      onLayoutChanged={isMobile ? undefined : layout.onLayoutChanged}
     >
-      <Panel id="resources" defaultSize="22%" minSize="1%" maxSize="50%">
+      <Panel
+        id="resources"
+        panelRef={resourcePanel}
+        onResize={size => {
+          if (!isMobile && size.inPixels >= 240) desktopWidth.current = size.inPixels
+        }}
+        defaultSize="288px"
+        minSize={isMobile ? '0px' : '240px'}
+        maxSize={isMobile ? '0px' : '400px'}
+        groupResizeBehavior="preserve-pixel-size"
+      >
         {left}
       </Panel>
-      <Separator className="w-px bg-gray-200 transition-colors hover:bg-gray-300" />
-      <Panel id="detail" minSize="1%">
+      {!isMobile && (
+        <Separator className="w-px bg-ui-border transition-colors hover:bg-ui-accent" />
+      )}
+      <Panel id="detail" minSize={isMobile ? '0px' : '320px'}>
         {detail}
       </Panel>
     </Group>
   )
 }
 
-// Phone: single column with the rail tucked behind a slide-in drawer.
+// Keep the detail pane in DesktopSplit at every viewport width so a breakpoint
+// change cannot unmount open conversations or discard their drafts.
 export const MobileMain = ({
   left,
-  detail,
   drawerOpen,
   onCloseDrawer,
 }: {
   left: ReactNode
-  detail: ReactNode
   drawerOpen: boolean
   onCloseDrawer: () => void
 }) => (
-  <div className="relative min-h-0 flex-1">
-    {detail}
-    <MobileDrawer open={drawerOpen} onClose={onCloseDrawer}>
-      {left}
-    </MobileDrawer>
-  </div>
+  <MobileDrawer open={drawerOpen} onClose={onCloseDrawer}>
+    {left}
+  </MobileDrawer>
 )

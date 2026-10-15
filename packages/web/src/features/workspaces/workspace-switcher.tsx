@@ -33,12 +33,12 @@ export const WorkspaceSwitcher = ({ activeWorkspaceId }: WorkspaceSwitcherProps)
       />
     )
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1">
       <select
         aria-label="Workspace"
         value={activeWorkspaceId ?? ''}
         onChange={e => navigate(workspacePath(Number(e.target.value)))}
-        className="rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 transition-colors hover:border-gray-300 focus:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-600/20"
+        className="ui-input min-w-0 flex-1"
       >
         {activeWorkspaceId === null && (
           <option value="" disabled>
@@ -57,7 +57,7 @@ export const WorkspaceSwitcher = ({ activeWorkspaceId }: WorkspaceSwitcherProps)
           title="rename workspace"
           aria-label="rename workspace"
           onClick={() => setEditing(true)}
-          className="text-gray-400 transition-colors hover:text-gray-700"
+          className="ui-icon-button shrink-0"
         >
           <PencilIcon />
         </button>
