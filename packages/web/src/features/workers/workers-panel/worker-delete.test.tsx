@@ -29,6 +29,7 @@ const renderPanel = () => {
   const remove = vi.fn(async () => undefined)
   const close = vi.fn()
   const api = {
+    workerCreations: { templates: vi.fn(async () => []), listByProject: vi.fn(async () => []) },
     workers: { listByProject: vi.fn(async () => [worker]), remove },
     sessions: { listByProject: vi.fn(async () => [session(7), session(8)]) },
   } as unknown as Api

@@ -7,7 +7,17 @@ export const API_BASE = '/api'
 // Browser-resolvable src for an attachment's bytes (img preview / download link).
 export const attachmentSrc = (a: Attachment): string => `${API_BASE}${a.url}`
 
-export type ReqInit = { method: string; body?: unknown }
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+export type ReqInit = { method: string; body?: unknown; signal?: AbortSignal }
 
 // The browser fetch wrapper shared by every per-resource client. Same-origin so
 // the session cookie rides along — this authenticates every back-office call
@@ -16,11 +26,13 @@ export const request = async <T>(url: string, init: ReqInit): Promise<T> => {
   const res = await fetch(url, {
     method: init.method,
     credentials: 'same-origin',
+    ...(init.signal ? { signal: init.signal } : {}),
     ...(init.body !== undefined
       ? { body: JSON.stringify(init.body), headers: { 'content-type': 'application/json' } }
       : {}),
   })
-  if (!res.ok) throw new Error(`${init.method} ${url} → ${res.status}: ${await res.text()}`)
+  if (!res.ok)
+    throw new ApiError(`${init.method} ${url} → ${res.status}: ${await res.text()}`, res.status)
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }

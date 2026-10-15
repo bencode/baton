@@ -16,6 +16,7 @@ import { registerAuthRoutes } from './routes/auth.ts'
 import { registerChannelRoutes } from './routes/channels.ts'
 import { registerLoopRoutes } from './routes/loops.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
+import { registerProvisionerRoutes } from './routes/provisioner.ts'
 import { registerRelayRoutes } from './routes/relay.ts'
 import { registerRequirementRoutes } from './routes/requirements.ts'
 import { registerServiceRoutes } from './routes/services.ts'
@@ -23,6 +24,7 @@ import { registerSessionAttachmentRoutes } from './routes/session-attachments.ts
 import { registerSessionRoutes } from './routes/sessions.ts'
 import { registerTaskRoutes } from './routes/tasks.ts'
 import { registerTerminalWsRoutes } from './routes/terminal-ws.ts'
+import { registerWorkerCreationRoutes } from './routes/worker-creations.ts'
 import { registerWorkerRoutes } from './routes/workers.ts'
 import { registerWorkspaceRoutes } from './routes/workspaces.ts'
 import { createServiceRuntime, type ServiceRuntime } from './service-runtime.ts'
@@ -30,6 +32,7 @@ import { createSessionRuntime, type SessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
 import { createTerminalBridge, type TerminalBridge } from './terminal-bridge.ts'
 import type { AppEnv } from './views.ts'
+import { createProvisionerBus, type ProvisionerBus } from './worker-provisioning/bus.ts'
 
 export type { AppEnv } from './views.ts'
 
@@ -44,6 +47,8 @@ export type { AppEnv } from './views.ts'
 //                    turn_start (true) / turn_complete / turn_error (false).
 //   commands       — server→worker command bus (session.start/stop/delete).
 type AppOptions = {
+  provisionerBus?: ProvisionerBus
+  provisionerToken?: string
   bus?: EventBus
   runtime?: SessionRuntime
   busyTracker?: BusyTracker
@@ -80,8 +85,12 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
     onInjectWs,
     services = createServiceRuntime(),
     artifactFiles = createArtifactFileStore(defaultArtifactDir()),
+    provisionerBus = createProvisionerBus(),
+    provisionerToken = process.env.BATON_PROVISIONER_TOKEN,
   } = options
   const app = new Hono<AppEnv>()
+  const provisioning = { store, bus: provisionerBus, commands, projects }
+  const token = provisionerToken?.trim() || undefined
   const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app })
   onInjectWs?.(injectWebSocket)
   app.get('/health', c => c.json({ ok: true }))
@@ -94,7 +103,9 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
   registerRelayRoutes(app, relay)
   registerChannelRoutes(app, store, channelBus, presence, attachments)
   registerArtifactPublicRoutes(app, store, artifactFiles)
+  registerProvisionerRoutes(app, provisioning, token)
   app.use('*', cookieAuth(store))
+  registerWorkerCreationRoutes(app, provisioning, token)
   registerWorkspaceRoutes(app, store, artifactFiles)
   registerProjectRoutes(
     app,

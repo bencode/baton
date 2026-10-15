@@ -10,6 +10,7 @@ import type {
   ClaimInput,
   ClaimResult,
   Code,
+  CreateWorkerInput,
   ExecutionState,
   FinishInput,
   HeartbeatResult,
@@ -33,6 +34,7 @@ import type {
   TaskStatus,
   User,
   Worker,
+  WorkerCreation,
   Workspace,
 } from '@baton/shared'
 
@@ -159,10 +161,21 @@ export type WorkerRegisterOutcome =
   | { kind: 'claimed-legacy'; worker: Worker; apiToken: string } //     rule 2b: filled machineId
   | { kind: 'name-collision'; existing: Worker } //                     rule 2c: name in use
 
+export type WorkerCreationPatch = Partial<
+  Pick<WorkerCreation, 'status' | 'step' | 'error' | 'repoPath' | 'workerId' | 'finishedAt'>
+>
+
 // Persistence port: fully async, leaving room to swap to a networked DB later. First impl: PrismaStore.
 export type Mutation<T> = { value: T; events: SessionEvent[] }
 export type EnqueueInput = SubmitInput & { loopId?: Id }
 export type Store = {
+  workerCreations: {
+    create(input: CreateWorkerInput & { projectId: Id }): Promise<WorkerCreation>
+    get(id: Id): Promise<WorkerCreation | null>
+    listByProject(projectId: Id): Promise<WorkerCreation[]>
+    worklist(): Promise<WorkerCreation[]>
+    update(id: Id, patch: WorkerCreationPatch): Promise<WorkerCreation>
+  }
   inputs: {
     list(sessionId: Id): Promise<SessionQueueSnapshot>
     submit(sessionId: Id, input: EnqueueInput): Promise<Mutation<SubmitInputResult>>

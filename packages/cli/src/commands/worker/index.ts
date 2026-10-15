@@ -16,6 +16,7 @@ import { repoHeadBranch, validateBaseBranch } from '../../session/worktree.ts'
 import { clientFor, common, parseWorkerHandle, resolveAuth, resolveProjectId } from '../../util.ts'
 import { runWorkerDaemon } from '../../worker/daemon.ts'
 import { machineIdPath, readOrCreateMachineId } from '../../worker/machine-id.ts'
+import { workerCreateCommand, workerCreationCommand, workerTemplatesCommand } from './provision.ts'
 
 // Resolve a worker positional arg: global id ("7" / "W-7") first, then a
 // project-scoped name lookup.
@@ -107,6 +108,9 @@ export const registerWorker = async (
 export const worker = defineCommand({
   meta: { name: 'worker', description: 'register / inspect / close workers for a project' },
   subCommands: {
+    create: workerCreateCommand,
+    creation: workerCreationCommand,
+    templates: workerTemplatesCommand,
     register: defineCommand({
       meta: {
         name: 'register',

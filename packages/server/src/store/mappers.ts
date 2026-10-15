@@ -23,6 +23,7 @@ import type {
   TaskStatus,
   Turn,
   Worker,
+  WorkerCreation,
   Workspace,
 } from '@baton/shared'
 import { isAgentEffort } from '@baton/shared'
@@ -39,6 +40,7 @@ import type {
   TaskComment as DbTaskComment,
   User as DbUser,
   Worker as DbWorker,
+  WorkerCreation as DbWorkerCreation,
   Workspace as DbWorkspace,
   SessionPendingInput,
   SessionTurn,
@@ -47,6 +49,17 @@ import type {
 import type { StoredArtifact, UserRecord } from './types.ts'
 
 const parseJson = <T>(s: string): T => JSON.parse(s) as T
+
+export const toWorkerCreation = (r: DbWorkerCreation): WorkerCreation => ({
+  ...r,
+  templateId: r.templateId as WorkerCreation['templateId'],
+  agentKind: r.agentKind as AgentKind,
+  status: r.status as WorkerCreation['status'],
+  step: r.step as WorkerCreation['step'],
+  createdAt: r.createdAt.getTime(),
+  updatedAt: r.updatedAt.getTime(),
+  finishedAt: r.finishedAt?.getTime() ?? null,
+})
 
 export const toPendingInput = (r: SessionPendingInput): PendingInput => ({
   id: r.id,

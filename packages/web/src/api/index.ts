@@ -9,6 +9,7 @@ import { type RequirementsApi, requirementsApi } from './requirements'
 import { type ServicesApi, servicesApi } from './services'
 import { type SessionsApi, sessionsApi } from './sessions'
 import { type TasksApi, tasksApi } from './tasks'
+import { type WorkerCreationsApi, workerCreationsApi } from './worker-creations'
 import { type WorkersApi, workersApi } from './workers'
 import { type WorkspacesApi, workspacesApi } from './workspaces'
 
@@ -16,7 +17,7 @@ export type { LoopInput, LoopPatch } from './loops'
 export type { ProjectInput } from './projects'
 // Re-export the public surface so existing `from '../api'` imports keep resolving
 // (this index replaces the former single api.ts).
-export { API_BASE, attachmentSrc } from './request'
+export { API_BASE, ApiError, attachmentSrc } from './request'
 export type { RequirementInput } from './requirements'
 export type { EventQuery } from './sessions'
 export type { TaskInput } from './tasks'
@@ -36,6 +37,7 @@ export type Api = {
   services: ServicesApi
   sessions: SessionsApi
   loops: LoopsApi
+  workerCreations: WorkerCreationsApi
   workers: WorkersApi
   admin: AdminApi
   // SSE URL for a session's transcript (EventSource sends the cookie same-origin).
@@ -57,6 +59,7 @@ export const createApi = (base: string = API_BASE): Api => {
     services: servicesApi(u),
     sessions: sessionsApi(u),
     loops: loopsApi(u),
+    workerCreations: workerCreationsApi(u),
     workers: workersApi(u),
     admin: adminApi(u),
     sessionStreamUrl: id => u(`/sessions/${id}/stream?live=1`),
