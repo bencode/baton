@@ -4,13 +4,13 @@
 # host (a host worker agent there has local launchctl + fs + reclaude).
 #
 # Each provisioned worker gets its OWN XDG_DATA_HOME → its own machineId +
-# worktrees, so it's a distinct worker regardless of project.
+# runtime state, so it's a distinct worker regardless of project.
 #
 # Provision-only. Teardown is manual (see SKILL.md): launchctl bootout + rm
 # plist + `baton worker destroy <W-N> --confirm`.
 set -euo pipefail
 
-NAME="" REPO="" PROJECT="" NEW_PROJECT="" WORKSPACE="" DIR="" BASE_BRANCH=""
+NAME="" REPO="" PROJECT="" NEW_PROJECT="" WORKSPACE="" DIR=""
 CLAUDE_BIN="/Users/$(id -un)/.local/bin/reclaude"
 SERVER="https://baton.fmap.dev/api"
 
@@ -28,7 +28,6 @@ while [ $# -gt 0 ]; do
     --claude-bin) CLAUDE_BIN="$2"; shift 2;;
     --dir) DIR="$2"; shift 2;;
     --server) SERVER="$2"; shift 2;;
-    --base-branch) BASE_BRANCH="$2"; shift 2;;
     *) die "unknown arg: $1 (see SKILL.md)";;
   esac
 done
@@ -74,29 +73,10 @@ else
   git clone "$REPO" "$DIR" || die "git clone failed"
 fi
 
-# 3b) an empty repo (unborn HEAD, e.g. a brand-new GitHub repo) can't host git
-#     worktrees — sessions would fail with "invalid reference". Seed an initial
-#     empty commit and push it (push is best-effort: the local commit alone
-#     already unblocks worktrees).
-if ! git -C "$DIR" rev-parse --verify -q HEAD >/dev/null; then
-  info "repo is empty (no commits) — seeding an initial commit"
-  git -C "$DIR" commit --allow-empty -m "chore: initialize repository" \
-    || die "initial commit failed (git config user.name/user.email set on this host?)"
-  if git -C "$DIR" push -u origin HEAD 2>/tmp/pw-push.err; then
-    ok "pushed initial commit to origin"
-  else
-    printf '\033[33m!\033[0m initial push failed (%s). worker still works; push it yourself:\n  git -C %s push -u origin HEAD\n' \
-      "$(tr -d '\n' </tmp/pw-push.err)" "$DIR" >&2
-  fi
-fi
-
-# 4) register with an isolated identity (own machineId + worktrees)
+# 4) register with an isolated identity (own machineId + runtime state)
 mkdir -p "$STATE/baton"
 info "registering worker '$NAME' on project $PROJECT (state: $STATE)"
 REGISTER_ARGS=(worker register --project "$PROJECT" --url "$SERVER" --name "$NAME" --json)
-if [ -n "$BASE_BRANCH" ]; then
-  REGISTER_ARGS+=(--baseBranch "$BASE_BRANCH")
-fi
 REG=$(cd "$DIR" && XDG_DATA_HOME="$STATE" BATON_TOKEN="$TOKEN" \
   baton "${REGISTER_ARGS[@]}") \
   || die "register failed (name already in use in this project? pick another --name)"

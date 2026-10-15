@@ -4,7 +4,7 @@ import type { Id } from './ids.ts'
 // peer can fetch it. The server keeps the bytes transiently on its filesystem;
 // baton's model only ever carries this reference. Session attachments travel
 // inside a user_message payload as `attachments` (the Worker downloads each into
-// its worktree before the run); channel attachments are referenced by `url`.
+// its directory before the run); channel attachments are referenced by `url`.
 // Exactly one scope id is set — `sessionId` xor `channelId` — and `url` is the
 // authoritative download path either way.
 export type Attachment = {

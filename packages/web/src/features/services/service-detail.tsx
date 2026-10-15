@@ -1,8 +1,6 @@
 import type { Id } from '@baton/shared'
 import { type ReactNode, useState } from 'react'
 import { useApi } from '../../app/api-context'
-import { sessionPath } from '../../app/route'
-import { useSessions } from '../sessions/use-sessions'
 import { useWorkers } from '../workers/use-workers'
 import { formatServiceStartedAt, formatServiceUptime } from './format'
 import { useServices } from './use-services'
@@ -11,7 +9,6 @@ type ServiceDetailProps = {
   projectId: Id
   workerId: Id
   name: string
-  open: (id: string, title: string) => void
 }
 
 const DetailRow = ({ label, children }: { label: string; children: ReactNode }) => (
@@ -21,11 +18,10 @@ const DetailRow = ({ label, children }: { label: string; children: ReactNode }) 
   </div>
 )
 
-export const ServiceDetail = ({ projectId, workerId, name, open }: ServiceDetailProps) => {
+export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps) => {
   const api = useApi()
   const { data: services, loading, error, refresh } = useServices(projectId)
   const { data: workers } = useWorkers(projectId)
-  const { data: sessions } = useSessions(projectId)
   const [confirming, setConfirming] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [stopError, setStopError] = useState(false)
@@ -48,7 +44,6 @@ export const ServiceDetail = ({ projectId, workerId, name, open }: ServiceDetail
     )
 
   const worker = workers?.find(item => item.id === workerId)
-  const session = sessions?.find(item => item.id === service.sessionId)
 
   const stop = async () => {
     if (stopping) return
@@ -179,18 +174,8 @@ export const ServiceDetail = ({ projectId, workerId, name, open }: ServiceDetail
           <span className="font-medium">{worker?.name ?? `W-${workerId}`}</span>{' '}
           <span className="font-mono text-xs text-gray-500">W-{workerId}</span>
         </DetailRow>
-        <DetailRow label="Session">
-          {session ? (
-            <button
-              type="button"
-              onClick={() => open(sessionPath(projectId, session.id), session.name)}
-              className="font-medium text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-            >
-              {session.name}
-            </button>
-          ) : (
-            <span className="text-gray-500">session #{service.sessionId}</span>
-          )}
+        <DetailRow label="Working directory">
+          <span className="break-all font-mono">{service.cwd}</span>
         </DetailRow>
         <DetailRow label="Started">{formatServiceStartedAt(service.startedAt)}</DetailRow>
         <DetailRow label="Uptime">{formatServiceUptime(service.startedAt)}</DetailRow>

@@ -4,7 +4,7 @@ import { clientFor, common, resolveProjectId } from '../../util.ts'
 import { resolveSession } from './shared.ts'
 
 // Interrupt the in-flight turn — like pressing Esc in Claude Code. Aborts the
-// current SDK query but keeps the session, worktree, and conversation; the next
+// current SDK query but keeps the session, directory, and conversation; the next
 // message resumes. No-op when no turn is running.
 export const sessionAbortCommand = defineCommand({
   meta: {

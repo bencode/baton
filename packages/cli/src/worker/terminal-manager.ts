@@ -1,8 +1,8 @@
-import { existsSync } from 'node:fs'
+import { statSync } from 'node:fs'
 import type { Id } from '@baton/shared'
 import { type IPty, spawn } from 'node-pty'
 import { WebSocket } from 'ws'
-import type { WorkerConfig } from '../project-config.ts'
+import { type WorkerConfig, workerEnv } from '../project-config.ts'
 import {
   claudePtyCommand,
   codexPtyCommand,
@@ -13,7 +13,7 @@ import {
 } from './pty.ts'
 
 export type TerminalManager = {
-  open(sessionId: Id, agentSessionId: string, worktreePath: string): void
+  open(sessionId: Id, agentSessionId: string, cwd: string): void
   close(sessionId: Id): void
   has(sessionId: Id): boolean
   killAll(): void
@@ -31,30 +31,22 @@ export const createTerminalManager = (deps: {
   cfg: WorkerConfig
   log: (m: string) => void
   hasChild: (sessionId: Id) => boolean
-  prepareWorktree: (worktreePath: string) => void
 }): TerminalManager => {
-  const { cfg, log, hasChild, prepareWorktree } = deps
+  const { cfg, log, hasChild } = deps
   const terminals = new Map<Id, { pty: IPty; ws: WebSocket }>()
 
-  const open = (sessionId: Id, agentSessionId: string, worktreePath: string): void => {
+  const open = (sessionId: Id, agentSessionId: string, cwd: string): void => {
     const why = terminals.has(sessionId)
       ? 'already open'
       : hasChild(sessionId)
         ? 'headless child running'
-        : !existsSync(worktreePath)
-          ? `worktree missing (${worktreePath})`
+        : !statSync(cwd, { throwIfNoEntry: false })?.isDirectory()
+          ? `directory missing (${cwd})`
           : terminals.size >= MAX_TERMINALS
             ? `cap ${MAX_TERMINALS} reached`
             : null
     if (why) {
       log(`terminal #${sessionId}: ${why} — refusing`)
-      return
-    }
-
-    try {
-      prepareWorktree(worktreePath)
-    } catch (error) {
-      log(`terminal #${sessionId}: worktree preparation failed: ${String(error)}`)
       return
     }
 
@@ -66,8 +58,8 @@ export const createTerminalManager = (deps: {
       name: 'xterm-color',
       cols: 80,
       rows: 24,
-      cwd: worktreePath,
-      env: process.env as Record<string, string>,
+      cwd,
+      env: workerEnv(cfg),
     })
     const ws = new WebSocket(serverTerminalWsUrl(cfg.server, sessionId), {
       headers: { authorization: `Bearer ${cfg.apiToken}` },

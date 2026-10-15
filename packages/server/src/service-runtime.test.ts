@@ -9,7 +9,7 @@ describe('service runtime', () => {
       7,
       [
         {
-          sessionId: 3,
+          cwd: '/project/3',
           name: 'web',
           startedAt: 10,
           publicUrl: 'https://jingzhe.fmap.dev',
@@ -22,7 +22,7 @@ describe('service runtime', () => {
     assert.deepEqual(runtime.listWorker(7, 189), [
       {
         workerId: 7,
-        sessionId: 3,
+        cwd: '/project/3',
         name: 'web',
         startedAt: 10,
         publicUrl: 'https://jingzhe.fmap.dev',
@@ -36,12 +36,12 @@ describe('service runtime', () => {
     const runtime = createServiceRuntime()
     runtime.replace(
       7,
-      [{ sessionId: 3, name: 'web', startedAt: 10, publicUrl: 'https://one.example.com' }],
+      [{ cwd: '/project/3', name: 'web', startedAt: 10, publicUrl: 'https://one.example.com' }],
       100,
     )
     runtime.replace(
       8,
-      [{ sessionId: 4, name: 'web', startedAt: 20, publicUrl: 'https://two.example.com' }],
+      [{ cwd: '/project/4', name: 'web', startedAt: 20, publicUrl: 'https://two.example.com' }],
       100,
     )
     runtime.replace(7, [], 101)
@@ -49,7 +49,7 @@ describe('service runtime', () => {
     assert.deepEqual(runtime.listWorkers([7, 8], 102), [
       {
         workerId: 8,
-        sessionId: 4,
+        cwd: '/project/4',
         name: 'web',
         startedAt: 20,
         publicUrl: 'https://two.example.com',

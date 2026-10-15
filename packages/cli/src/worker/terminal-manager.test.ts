@@ -24,10 +24,9 @@ describe('terminal manager', () => {
     }),
   )
 
-  test('prepares an existing worktree before spawning and refuses when preparation fails', () => {
+  test('refuses a missing directory and a directory occupied by a headless runner', () => {
     const worktree = mkdtempSync(join(tmpdir(), 'baton-terminal-'))
     dirs.push(worktree)
-    const prepared: string[] = []
     const logs: string[] = []
     const manager = createTerminalManager({
       cfg,
@@ -35,16 +34,19 @@ describe('terminal manager', () => {
         logs.push(message)
       },
       hasChild: () => false,
-      prepareWorktree: path => {
-        prepared.push(path)
-        throw new Error('skill sync failed')
-      },
     })
 
-    manager.open(7, 'agent-session', worktree)
+    manager.open(7, 'agent-session', join(worktree, 'missing'))
 
-    assert.deepEqual(prepared, [worktree])
     assert.equal(manager.has(7), false)
-    assert.match(logs.at(-1) ?? '', /worktree preparation failed: Error: skill sync failed/)
+    assert.match(logs.at(-1) ?? '', /directory missing/)
+    const busy = createTerminalManager({
+      cfg,
+      log: message => logs.push(message),
+      hasChild: () => true,
+    })
+    busy.open(8, 'agent-session', worktree)
+    assert.equal(busy.has(8), false)
+    assert.match(logs.at(-1) ?? '', /headless child running/)
   })
 })

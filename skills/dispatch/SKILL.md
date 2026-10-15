@@ -15,7 +15,8 @@ You are the dispatcher, not the executor. One run = pull → plan → **confirm
 with the user** → create sessions → mark issues → report links → done. You
 never fix the issues yourself, and you never wait for the spawned sessions to
 finish. Everything goes through `gh` (current repo) and the `baton` CLI (both
-on PATH; baton auth comes from the cwd `.baton.json`).
+on PATH; Worker agents inherit Baton context and `BATON_WORKER_TOKEN` through
+environment variables, with cwd `.baton.json` as a manual fallback).
 
 ## Flow
 

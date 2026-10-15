@@ -138,7 +138,7 @@ describe('server HTTP — attachments', () => {
     assert.equal(only.status, 201)
     await ctx.store.sessions.materialize(session.id, {
       agentSessionId: 'uuid',
-      worktreePath: '/tmp/attachment-test',
+      cwd: '/tmp/attachment-test',
     })
     const claim = await ctx.store.turns.claim(session.id, {
       claimId: 'attachment-test',

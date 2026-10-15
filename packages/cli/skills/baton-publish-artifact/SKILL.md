@@ -5,7 +5,7 @@ description: Publish agent-generated files as public Baton Project Artifact link
 
 # Baton Publish Artifact
 
-Create and validate the requested file, then publish it from the current Baton worktree.
+Create and validate the requested file, then publish it from the current working directory.
 
 ## Workflow
 

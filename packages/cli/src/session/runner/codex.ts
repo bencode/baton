@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import type { AgentEvent, AgentItem, AgentUsage } from '@baton/shared'
 import { Codex, type Input, type ThreadOptions } from '@openai/codex-sdk'
 import type { AttemptClient } from '../../client.ts'
@@ -180,7 +181,7 @@ export async function* startCodexEvents(
   const env = compactEnv(buildSdkEnv(opts.envOverlay))
   const codex = new Codex(env ? { env } : undefined)
   const resuming = !config.agentSessionId.startsWith('pending:')
-  const addDirs = additionalDirs()
+  const addDirs = additionalDirs([join(config.runtimeDir, 'attachments')])
   const sandboxMode = codexSandboxMode(opts.planMode ?? false)
   const approvalPolicy = codexApprovalPolicy()
   const networkAccessEnabled = codexNetworkAccess()
@@ -193,7 +194,7 @@ export async function* startCodexEvents(
   if (opts.model) opts.log(`[model] ${opts.model}`)
   if (reasoningEffort) opts.log(`[effort] ${reasoningEffort}`)
   const threadOptions: ThreadOptions = {
-    workingDirectory: config.worktreePath,
+    workingDirectory: config.cwd,
     skipGitRepoCheck: true,
     sandboxMode,
     approvalPolicy,
@@ -215,7 +216,6 @@ export async function* startCodexEvents(
       config.agentSessionId = event.sessionId
       await worker.materialize({
         agentSessionId: event.sessionId,
-        worktreePath: config.worktreePath,
       })
       opts.log(`[codex] thread ${event.sessionId}`)
     }

@@ -92,3 +92,16 @@ describe('effort narrowing', () => {
     assert.equal(claudeEffort('higgh'), undefined)
   })
 })
+
+test('session attachment directory is included without replacing Worker reference directories', () => {
+  const original = process.env.BATON_ADD_DIRS
+  try {
+    process.env.BATON_ADD_DIRS = process.cwd()
+    assert.deepEqual(additionalDirs([process.cwd(), '/definitely/missing']), [process.cwd()])
+    delete process.env.BATON_ADD_DIRS
+    assert.deepEqual(additionalDirs([process.cwd()]), [process.cwd()])
+  } finally {
+    if (original === undefined) delete process.env.BATON_ADD_DIRS
+    else process.env.BATON_ADD_DIRS = original
+  }
+})

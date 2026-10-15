@@ -4,12 +4,12 @@ import { clientFor, common, resolveProjectId } from '../../util.ts'
 import { resolveSession } from './shared.ts'
 
 // Clear a session's context — reset the claude conversation (fresh agentSessionId)
-// but keep the session, worktree, and url. The running child is restarted with an
-// empty conversation; code in the worktree is preserved.
+// but keep the session, directory, and url. The running child is restarted with an
+// empty conversation; code in the directory is preserved.
 export const sessionClearCommand = defineCommand({
   meta: {
     name: 'clear',
-    description: 'reset the conversation context (keeps the session + worktree)',
+    description: 'reset the conversation context (keeps the session + directory)',
   },
   args: {
     session: { type: 'positional', required: true, description: 'session int id or name' },

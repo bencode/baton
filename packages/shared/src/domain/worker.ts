@@ -30,20 +30,18 @@ export type WorkerView = Worker & { connected: boolean }
 // (GET /workers/me/stream). The Worker is a persistent listener that
 // starts / stops / tears down Session child processes in response.
 //   start  — materialize if needed + spawn the child (covers create and resume)
-//   stop   — kill the child, keep the row + worktree (session goes inactive)
-//   delete — kill the child + remove the worktree (server drops the row)
+//   stop   — kill the child, keep the row + directory (session goes inactive)
+//   delete — kill the child + remove Session runtime files (server drops the row)
 export type WorkerCommand =
   | { cmd: 'session.reconcile'; sessionId: Id }
   | { cmd: 'session.start'; sessionId: Id; name: string }
   | { cmd: 'session.stop'; sessionId: Id }
-  // worktreePath carried so the worker can remove it even if it isn't currently
-  // tracking a child for this session (e.g. delete after a worker restart).
-  | { cmd: 'session.delete'; sessionId: Id; worktreePath: string | null }
+  | { cmd: 'session.delete'; sessionId: Id }
   // Auto-title after a completed turn: the worker reads the durable event log
   // and generates a short name with the session's matching agent backend.
-  | { cmd: 'session.title'; sessionId: Id; agentSessionId: string; worktreePath: string }
+  | { cmd: 'session.title'; sessionId: Id; agentSessionId: string; cwd: string }
   // Interactive terminal: open resumes the worker's agent in a node-pty in the
-  // session's worktree and dials an outbound WS back to the server (human-in-the-
+  // session's directory and dials an outbound WS back to the server (human-in-the-
   // loop, alongside the headless relay); close drops that WS, which kills the pty.
   // open carries the ids the worker needs to spawn so it doesn't have to re-fetch
   // (no await before reserving its slot — closes a spawn race).
@@ -52,13 +50,13 @@ export type WorkerCommand =
       sessionId: Id
       action: 'open'
       agentSessionId: string
-      worktreePath: string
+      cwd: string
     }
   | { cmd: 'session.terminal'; sessionId: Id; action: 'close' }
   | {
       cmd: 'service.run'
       requestId: string
-      sessionId: Id
+      cwd: string
       name: string
       argv: string[]
       publicUrl?: string

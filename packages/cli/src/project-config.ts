@@ -12,8 +12,7 @@ import type { AgentKind, Id } from '@baton/shared'
 // Lookup is strictly cwd-only (no upward walk). The worker commands' `--config`
 // flag is the single escape hatch: point it at an explicit path to run two
 // workers from the same directory (each daemon owns a distinct config file →
-// distinct identity). Flags don't propagate to child processes, so the agent's
-// bare `baton` calls in a worktree still resolve from cwd.
+// distinct identity). Worker context propagates to children through environment variables.
 export const PROJECT_CONFIG_NAME = '.baton.json'
 
 export type WorkerEntry = {
@@ -29,16 +28,13 @@ export type ProjectConfig = {
   workspace?: Id
   project?: Id
   name?: string
-  baseBranch?: string
   worker?: WorkerEntry
-  session?: Id
 }
 
 // Flattened projection for the worker daemon — derived on demand, not persisted.
 export type WorkerConfig = {
   server: string
   projectId: Id
-  baseBranch?: string
   workerId: Id
   agentKind: AgentKind
   name: string
@@ -47,16 +43,17 @@ export type WorkerConfig = {
 }
 
 // What the session child's run loop needs: where to stream from (server +
-// sessionId), what to spawn claude with (worktreePath + agentSessionId), and a
+// sessionId), what to spawn claude with (cwd + agentSessionId), and a
 // label (name). Worker credentials are passed straight into the WorkerClient,
-// not carried here. agentSessionId/worktreePath are non-null once materialized.
+// not carried here. agentSessionId/cwd are non-null once materialized.
 export type SessionConfig = {
   server: string
   sessionId: Id
   name: string
   agentKind: AgentKind
   agentSessionId: string
-  worktreePath: string
+  cwd: string
+  runtimeDir: string
 }
 
 // Pure path join; no fs touch. Default config location: `.baton.json` in cwd.
@@ -111,7 +108,6 @@ export const viewWorker = (cfg: ProjectConfig): WorkerConfig => {
   return {
     server,
     projectId: project,
-    baseBranch: cfg.baseBranch,
     workerId: worker.id,
     agentKind: worker.agentKind ?? 'claude-code',
     name: worker.name,
@@ -120,13 +116,10 @@ export const viewWorker = (cfg: ProjectConfig): WorkerConfig => {
   }
 }
 
-// Inverse of viewWorker: the `.baton.json` a worker drops into each session
-// worktree so the agent's bare `baton` calls resolve server/project/worker
-// from cwd (project-config lookup is strictly cwd-only — no upward walk).
-export const worktreeConfig = (cfg: WorkerConfig, session?: Id): ProjectConfig => ({
+// Project-level configuration; Session execution never rewrites this file.
+export const workerProjectConfig = (cfg: WorkerConfig): ProjectConfig => ({
   server: cfg.server,
   project: cfg.projectId,
-  baseBranch: cfg.baseBranch,
   worker: {
     id: cfg.workerId,
     name: cfg.name,
@@ -134,5 +127,16 @@ export const worktreeConfig = (cfg: WorkerConfig, session?: Id): ProjectConfig =
     machineId: cfg.machineId,
     apiToken: cfg.apiToken,
   },
-  ...(session === undefined ? {} : { session }),
+})
+
+export const workerEnv = (cfg: WorkerConfig): Record<string, string> => ({
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  ),
+  BATON_SERVER: cfg.server,
+  BATON_PROJECT_ID: String(cfg.projectId),
+  BATON_WORKER_ID: String(cfg.workerId),
+  BATON_WORKER_TOKEN: cfg.apiToken,
 })

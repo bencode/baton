@@ -5,14 +5,14 @@
 A persistent server holds the shared collaboration state: workspaces → projects
 → requirements (`R-N`) → tasks (`T-N`). *Workers* (`W-N`) — machines running a
 coding agent against a real repo — register themselves and pick up work as
-*sessions*, each executing in its own git worktree. Humans reach the same
+*sessions*, sharing the worker’s directory while keeping independent Agent conversations. Humans reach the same
 sessions from the web UI, DingTalk, or Feishu; the name is the relay-baton
 metaphor: work handed from node to node.
 
 ```
   web UI ─┐
  DingTalk ┼──▶  server (Hono + SQLite)  ◀──SSE──  workers (baton CLI + agent)
-   Feishu ┘        baton.example.com                 sessions in git worktrees
+   Feishu ┘        baton.example.com                 sessions in the worker directory
 ```
 
 ## Design notes

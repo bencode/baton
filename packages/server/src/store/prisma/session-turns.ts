@@ -218,7 +218,7 @@ const claim = async (
     }
   if (previous && (previous.status === 'stopping' || previous.leaseUntil.getTime() <= Date.now()))
     return { value: { kind: 'stopping', attemptId: previous.id }, events: [] }
-  if (!session.agentSessionId || !session.worktreePath)
+  if (!session.agentSessionId || !session.cwd)
     throw new ExecutionConflict('session is not materialized')
   if (session.paused || session.contextResetRequested)
     return { value: { kind: 'idle' }, events: [] }
@@ -317,7 +317,7 @@ const claim = async (
       config: {
         agentKind: toSession(session).agentKind,
         agentSessionId: session.agentSessionId,
-        worktreePath: session.worktreePath,
+        cwd: session.cwd,
       },
     },
     events,

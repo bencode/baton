@@ -127,10 +127,20 @@ const lintAndVerify = it => {
 }
 
 const workerId = () => {
+  const injected = process.env.BATON_WORKER_ID
+  if (injected !== undefined) {
+    const id = Number(injected)
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('invalid BATON_WORKER_ID')
+    return id
+  }
   try {
-    return JSON.parse(readFileSync('.baton.json', 'utf8')).worker?.id
-  } catch {
-    return undefined
+    const id = JSON.parse(readFileSync('.baton.json', 'utf8')).worker?.id
+    if (id !== undefined && (!Number.isSafeInteger(id) || id <= 0))
+      throw new Error('invalid Worker id in .baton.json')
+    return id
+  } catch (error) {
+    if (error.code === 'ENOENT') return undefined
+    throw error
   }
 }
 

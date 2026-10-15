@@ -18,7 +18,8 @@ describe('isAgentConversationResumable', () => {
     name: 'claude',
     agentKind: 'claude-code',
     agentSessionId: '00000000-0000-4000-8000-000000000001',
-    worktreePath: '/tmp/wt',
+    cwd: '/tmp/wt',
+    runtimeDir: '/tmp/baton-test-runtime',
   }
 
   test('claude resumes only after its transcript exists', () => {
@@ -62,7 +63,8 @@ const cfg: SessionConfig = {
   name: 'x',
   agentKind: 'claude-code',
   agentSessionId: 'uuid',
-  worktreePath: '/tmp/wt',
+  cwd: '/tmp/wt',
+  runtimeDir: '/tmp/baton-test-runtime',
 }
 const claimed = (): ClaimedExecution => ({
   kind: 'execute',

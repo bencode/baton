@@ -13,14 +13,14 @@ export type RunnerRecord = {
   pid: number
   pgid: number
 }
-const recordPath = (worktreePath: string): string => join(worktreePath, RUNNER_RECORD)
+const recordPath = (cwd: string): string => join(cwd, RUNNER_RECORD)
 const codeOf = (error: unknown): unknown =>
   typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
 
-export const readRunnerRecord = async (worktreePath: string): Promise<RunnerRecord | null> => {
+export const readRunnerRecord = async (cwd: string): Promise<RunnerRecord | null> => {
   let raw: string
   try {
-    raw = await readFile(recordPath(worktreePath), 'utf8')
+    raw = await readFile(recordPath(cwd), 'utf8')
   } catch (error) {
     if (codeOf(error) === 'ENOENT') return null
     throw error
@@ -40,11 +40,8 @@ export const readRunnerRecord = async (worktreePath: string): Promise<RunnerReco
   return value as RunnerRecord
 }
 
-export const writeRunnerRecord = async (
-  worktreePath: string,
-  record: RunnerRecord,
-): Promise<void> => {
-  const path = recordPath(worktreePath)
+export const writeRunnerRecord = async (cwd: string, record: RunnerRecord): Promise<void> => {
+  const path = recordPath(cwd)
   const temporary = `${path}.${record.runnerToken}.tmp`
   await writeFile(temporary, JSON.stringify(record), { mode: 0o600, flag: 'wx' })
   await rename(temporary, path)

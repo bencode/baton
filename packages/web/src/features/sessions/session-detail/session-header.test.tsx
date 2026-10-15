@@ -13,7 +13,7 @@ const session = (shareToken: string | null, overrides: Partial<Session> = {}): S
   name: 'demo',
   agentKind: 'claude-code',
   agentSessionId: 'a1b2c3d4',
-  worktreePath: '/tmp/wt',
+  cwd: '/tmp/wt',
   shareToken,
   createdAt: 0,
   updatedAt: 0,

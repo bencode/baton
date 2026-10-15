@@ -28,7 +28,7 @@ describe('server HTTP — services', () => {
         const startedAt = Date.now()
         const service = {
           workerId: seeded.workerId,
-          sessionId: command.sessionId,
+          cwd: command.cwd,
           name: command.name,
           startedAt,
           ...(command.publicUrl ? { publicUrl: command.publicUrl } : {}),
@@ -46,23 +46,11 @@ describe('server HTTP — services', () => {
         services.resolve({ requestId: command.requestId, ok: true })
       }
     })
-    const session = await ctx.store.sessions.create({
-      projectId: seeded.projectId,
-      workerId: seeded.workerId,
-      mode: 'worker',
-      name: 'service-session',
-      agentKind: 'claude-code',
-    })
-    await ctx.store.sessions.materialize(session.id, {
-      agentSessionId: 'service-session-id',
-      worktreePath: '/tmp/service-session',
-    })
-
     const run = await postJson(
       app,
       `/workers/${seeded.workerId}/services`,
       {
-        sessionId: session.id,
+        cwd: '/tmp/service-project',
         name: 'web',
         argv: ['pnpm', 'dev'],
         publicUrl: 'https://jingzhe.fmap.dev',
@@ -85,12 +73,26 @@ describe('server HTTP — services', () => {
     assert.equal(listed.length, 1)
     assert.deepEqual(listed[0], {
       workerId: seeded.workerId,
-      sessionId: session.id,
+      cwd: '/tmp/service-project',
       name: 'web',
       startedAt: listed[0]?.startedAt,
       publicUrl: 'https://jingzhe.fmap.dev',
       note: 'Spec Factory preview',
     })
+
+    const session = await ctx.store.sessions.create({
+      projectId: seeded.projectId,
+      workerId: seeded.workerId,
+      mode: 'worker',
+      name: 'unrelated',
+      agentKind: 'claude-code',
+    })
+    const deleted = await app.request(`/sessions/${session.id}`, {
+      method: 'DELETE',
+      headers: auth(seeded.workerToken),
+    })
+    assert.equal(deleted.status, 204)
+    assert.equal(services.listWorker(seeded.workerId).length, 1)
 
     const stopped = await app.request(`/workers/${seeded.workerId}/services/web`, {
       method: 'DELETE',
@@ -99,17 +101,17 @@ describe('server HTTP — services', () => {
     assert.equal(stopped.status, 204)
     assert.deepEqual(services.listWorker(seeded.workerId), [])
 
-    const legacy = await postJson(
+    const withoutMetadata = await postJson(
       app,
       `/workers/${seeded.workerId}/services`,
-      { sessionId: session.id, name: 'api', argv: ['pnpm', 'dev:server'] },
+      { cwd: '/tmp/service-project', name: 'api', argv: ['pnpm', 'dev:server'] },
       auth(seeded.workerToken),
     )
-    assert.equal(legacy.status, 201)
+    assert.equal(withoutMetadata.status, 201)
     assert.deepEqual(services.listWorker(seeded.workerId), [
       {
         workerId: seeded.workerId,
-        sessionId: session.id,
+        cwd: '/tmp/service-project',
         name: 'api',
         startedAt: services.listWorker(seeded.workerId)[0]?.startedAt,
       },
@@ -121,14 +123,14 @@ describe('server HTTP — services', () => {
       body: JSON.stringify({
         services: [
           {
-            sessionId: session.id,
+            cwd: '/tmp/service-project',
             name: 'web',
             startedAt: 10,
             publicUrl: 'https://jingzhe.fmap.dev',
             note: 'Spec Factory preview',
           },
           {
-            sessionId: session.id,
+            cwd: '/tmp/service-project',
             name: 'api',
             startedAt: 20,
             publicUrl: 'javascript:alert(1)',
@@ -141,7 +143,7 @@ describe('server HTTP — services', () => {
     assert.deepEqual(services.listWorker(seeded.workerId), [
       {
         workerId: seeded.workerId,
-        sessionId: session.id,
+        cwd: '/tmp/service-project',
         name: 'web',
         startedAt: 10,
         publicUrl: 'https://jingzhe.fmap.dev',
@@ -149,7 +151,7 @@ describe('server HTTP — services', () => {
       },
       {
         workerId: seeded.workerId,
-        sessionId: session.id,
+        cwd: '/tmp/service-project',
         name: 'api',
         startedAt: 20,
       },
@@ -166,7 +168,7 @@ describe('server HTTP — services', () => {
       postJson(
         app,
         `/workers/${seeded.workerId}/services`,
-        { sessionId: 1, name: 'web', argv: ['pnpm', 'dev'], ...metadata },
+        { cwd: '/tmp/service-project', name: 'web', argv: ['pnpm', 'dev'], ...metadata },
         auth(seeded.workerToken),
       )
 
@@ -176,6 +178,8 @@ describe('server HTTP — services', () => {
       400,
     )
     assert.equal((await request({ note: 'x'.repeat(501) })).status, 400)
+    for (const cwd of ['', 'relative/path', '/bad\0path'])
+      assert.equal((await request({ cwd })).status, 400)
     unsubscribe()
   })
 })

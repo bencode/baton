@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { parseDuration, resolveAuth, splitCsv } from './util.ts'
+import { resolveBaseUrl, resolveBaseUrlOrNull } from './config.ts'
+import { parseDuration, resolveAuth, resolveProjectId, resolveWorkerId, splitCsv } from './util.ts'
 
 describe('splitCsv', () => {
   test('parses / trims / drops empties; undefined when absent', () => {
@@ -40,4 +44,40 @@ describe('parseDuration', () => {
     assert.throws(() => parseDuration('5x'))
     assert.throws(() => parseDuration(''))
   })
+})
+
+test('Worker context wins over cwd configuration and survives a different cwd', () => {
+  const root = mkdtempSync(join(tmpdir(), 'baton-context-'))
+  const originalCwd = process.cwd()
+  const keys = ['BATON_SERVER', 'BATON_PROJECT_ID', 'BATON_WORKER_ID'] as const
+  const previous = keys.map(key => process.env[key])
+  try {
+    process.chdir(root)
+    process.env.BATON_SERVER = 'http://worker'
+    process.env.BATON_PROJECT_ID = '7'
+    process.env.BATON_WORKER_ID = '9'
+    assert.equal(resolveBaseUrl(), 'http://worker')
+    assert.equal(resolveProjectId({}), 7)
+    assert.equal(resolveWorkerId(), 9)
+    writeFileSync(
+      '.baton.json',
+      JSON.stringify({ server: 'http://file', project: 99, worker: { id: 100 } }),
+    )
+    assert.equal(resolveBaseUrl(), 'http://worker')
+    assert.equal(resolveBaseUrlOrNull(), 'http://worker')
+    assert.equal(resolveBaseUrl('http://explicit'), 'http://explicit')
+    assert.equal(resolveProjectId({ project: 42 }), 42)
+    assert.equal(resolveWorkerId(), 9)
+    process.env.BATON_WORKER_ID = 'invalid'
+    assert.throws(resolveWorkerId, /invalid BATON_WORKER_ID/)
+    process.env.BATON_PROJECT_ID = '0'
+    assert.throws(() => resolveProjectId({}), /invalid BATON_PROJECT_ID/)
+  } finally {
+    process.chdir(originalCwd)
+    keys.forEach((key, index) => {
+      if (previous[index] === undefined) delete process.env[key]
+      else process.env[key] = previous[index]
+    })
+    rmSync(root, { recursive: true, force: true })
+  }
 })

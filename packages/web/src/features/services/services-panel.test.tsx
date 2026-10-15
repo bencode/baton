@@ -1,4 +1,4 @@
-import type { ServicePresence, SessionView, WorkerView } from '@baton/shared'
+import type { ServicePresence, WorkerView } from '@baton/shared'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { Api } from '../../api'
@@ -15,18 +15,9 @@ const worker = {
   connected: true,
 } as WorkerView
 
-const session = {
-  id: 7,
-  projectId: 1,
-  workerId: 20,
-  name: 'smoke-glm',
-  busy: false,
-  attached: true,
-} as SessionView
-
 const service: ServicePresence = {
   workerId: 20,
-  sessionId: 7,
+  cwd: '/project/7',
   name: 'web',
   startedAt: Date.now() - 120_000,
 }
@@ -43,7 +34,6 @@ test('lists a live service, opens its detail, and confirms before stopping it', 
       <ServicesPanel
         projectId={1}
         workers={[worker]}
-        sessions={[session]}
         activeId="/proj/1/service/20/web"
         open={open}
       />
@@ -53,7 +43,7 @@ test('lists a live service, opens its detail, and confirms before stopping it', 
   fireEvent.click(await screen.findByText('web'))
   expect(open).toHaveBeenCalledWith('/proj/1/service/20/web', 'W-20/web')
   expect(screen.getByText('web').closest('.group')?.className).toContain('bg-blue-50')
-  expect(screen.getByText('glm · smoke-glm')).toBeTruthy()
+  expect(screen.getByText('glm · /project/7')).toBeTruthy()
   expect(screen.getByText('2m')).toBeTruthy()
 
   fireEvent.click(screen.getByLabelText('stop web'))
@@ -74,13 +64,7 @@ test('keeps a service visible and reports a failed stop', async () => {
 
   render(
     <ApiContext.Provider value={api}>
-      <ServicesPanel
-        projectId={1}
-        workers={[worker]}
-        sessions={[session]}
-        activeId=""
-        open={vi.fn()}
-      />
+      <ServicesPanel projectId={1} workers={[worker]} activeId="" open={vi.fn()} />
     </ApiContext.Provider>,
   )
 
@@ -93,10 +77,9 @@ test('keeps a service visible and reports a failed stop', async () => {
 
 test('keeps equal service names isolated by worker', async () => {
   const secondWorker = { ...worker, id: 21, name: 'codex' }
-  const secondSession = { ...session, id: 8, workerId: 21, name: 'smoke-codex' }
   const api = {
     services: {
-      listByProject: vi.fn(async () => [service, { ...service, workerId: 21, sessionId: 8 }]),
+      listByProject: vi.fn(async () => [service, { ...service, workerId: 21, cwd: '/project/8' }]),
       stop: vi.fn(async () => undefined),
     },
   } as unknown as Api
@@ -104,13 +87,7 @@ test('keeps equal service names isolated by worker', async () => {
 
   render(
     <ApiContext.Provider value={api}>
-      <ServicesPanel
-        projectId={1}
-        workers={[worker, secondWorker]}
-        sessions={[session, secondSession]}
-        activeId=""
-        open={open}
-      />
+      <ServicesPanel projectId={1} workers={[worker, secondWorker]} activeId="" open={open} />
     </ApiContext.Provider>,
   )
 

@@ -32,9 +32,9 @@ export const parseEffort = (raw: string): AgentEffort | null => {
   return isAgentEffort(v) ? v : null
 }
 
-// `agentSessionId` and `worktreePath` are null between creation and
+// `agentSessionId` and `cwd` are null between creation and
 // materialization: a session row is created remotely (just project/worker/name),
-// then the owning Worker mints the agent session id + git worktree and fills
+// then the owning Worker mints the agent session id + working directory and fills
 // them in. Both are non-null once the Worker has materialized the session.
 export type Session = {
   id: Id
@@ -44,7 +44,7 @@ export type Session = {
   name: string
   agentKind: AgentKind
   agentSessionId: string | null
-  worktreePath: string | null
+  cwd: string | null
   // Unguessable per-session key for the standalone share page (/s/:shareToken).
   // null for legacy sessions created before sharing existed.
   shareToken: string | null

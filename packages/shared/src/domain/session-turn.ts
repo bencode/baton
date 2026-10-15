@@ -40,7 +40,7 @@ export type Attempt = {
   finishedAt: number | null
   result: AttemptResult | null
 }
-export type RunConfig = { agentKind: AgentKind; agentSessionId: string; worktreePath: string }
+export type RunConfig = { agentKind: AgentKind; agentSessionId: string; cwd: string }
 export type UserMessage = SessionEvent & { type: 'user_message'; payload: UserMessagePayload }
 export type ClaimedExecution = {
   kind: 'execute'

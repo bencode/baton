@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { promisify } from 'node:util'
 import type { WorkerCreation, WorkerCreationStep } from '@baton/shared'
-import { worktreeConfig } from '../project-config.ts'
+import { workerProjectConfig } from '../project-config.ts'
 import type { ProvisionerClient } from './client.ts'
 import { commandEnvironment, type ProvisionerConfig } from './config.ts'
 import { launchWorkerAgent, workerStatePath } from './launchd.ts'
@@ -77,10 +77,9 @@ export const provisionWorker = async (
     flag: 'wx',
     mode: 0o600,
   })
-  const cfg = worktreeConfig({
+  const cfg = workerProjectConfig({
     server: config.server,
     projectId: creation.projectId,
-    baseBranch: 'main',
     workerId: result.worker.id,
     name: result.worker.name,
     agentKind: result.worker.agentKind,

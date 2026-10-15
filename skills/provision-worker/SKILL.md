@@ -36,7 +36,6 @@ bash "${CLAUDE_SKILL_DIR}/scripts/provision-worker.sh" \
   ( --project <id> | --new-project <name> --workspace <id> ) \
   [--claude-bin /Users/<you>/.local/bin/reclaude] \
   [--dir ~/work/<name>] \
-  [--base-branch <branch>] \
   [--server https://baton.fmap.dev/api]
 ```
 
@@ -47,10 +46,8 @@ What it does (idempotent; refuses if the plist already exists):
 2. Resolves the project — `--project <id>`, or creates one with `--new-project`.
 3. Clones the repo to `--dir` (or reuses an existing checkout / local path).
 4. Registers the worker with its **own `XDG_DATA_HOME`**
-   (`~/.local/share/baton-workers/<name>`) → a distinct machineId + worktrees,
-   so it's independent even if it shares a project. `--base-branch` is persisted
-   in the generated `.baton.json`; without it the repo's current branch is used,
-   falling back to `main`.
+   (`~/.local/share/baton-workers/<name>`) → a distinct machineId and runtime state.
+   Sessions share the selected directory and keep independent Agent conversations.
 5. Writes `~/Library/LaunchAgents/dev.fmap.baton-worker-<name>.plist` (templated
    from the canonical `baton` worker plist) and `launchctl bootstrap`s it.
 6. Polls until the new worker shows `alive: true`, then prints its **W-N** handle.
@@ -60,9 +57,7 @@ What it does (idempotent; refuses if the plist already exists):
 - **Default model = reclaude** — the host must already be `reclaude login`'d. For
   a different model, point `--claude-bin` at another wrapper, or hand-edit the
   plist's `EnvironmentVariables` to add `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`.
-- **Empty repos are seeded:** a brand-new repo with zero commits can't host git
-  worktrees (sessions would fail with `invalid reference`), so the script
-  creates an initial empty commit and pushes it to origin (push is best-effort).
+- **Empty repos:** sessions work without an initial commit; provisioning does not commit or push.
 - **Name uniqueness:** the name must be unused in the target project (server
   enforces `(project, name)` unique). A collision aborts with a hint.
 - **launchctl-from-launchd risk:** bootstrapping a sibling agent from inside a

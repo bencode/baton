@@ -19,20 +19,18 @@ export const buildSdkEnv = (
 // worker configs keep pointing at the same binary.
 export const claudeExecutable = (): string | undefined => process.env.BATON_CLAUDE_BIN
 
-// Extra workspace roots beyond the session worktree (the SDK's --add-dir). The
+// Extra workspace roots beyond the session directory (the SDK's --add-dir). The
 // worker mounts read-only reference repos (e.g. /resources/<repo>) so the agent
 // can grep/read real source when asked "how is X wired" — without these it only
-// sees its own worktree and falls back to asking the user. Worker-level (same
+// sees its working directory and falls back to asking the user. Worker-level (same
 // for every session): PATH-style colon-separated ABSOLUTE paths. Non-absolute or
 // missing entries are dropped so a stale path can't break every turn.
-export const additionalDirs = (): string[] | undefined => {
+export const additionalDirs = (required: string[] = []): string[] | undefined => {
   const raw = process.env.BATON_ADD_DIRS
-  if (!raw) return undefined
-  const dirs = raw
-    .split(':')
+  const dirs = [...required, ...(raw ?? '').split(':')]
     .map(s => s.trim())
     .filter(s => s !== '' && isAbsolute(s) && existsSync(s))
-  return dirs.length > 0 ? dirs : undefined
+  return dirs.length > 0 ? [...new Set(dirs)] : undefined
 }
 
 const truthy = (value: string | undefined): boolean | undefined => {

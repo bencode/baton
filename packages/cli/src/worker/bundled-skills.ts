@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ensureExcluded } from '../session/worktree.ts'
+import { ensureExcluded } from './git-exclude.ts'
 
 const SKILL_NAME = 'baton-publish-artifact'
 const TARGETS = [`.claude/skills/${SKILL_NAME}`, `.agents/skills/${SKILL_NAME}`] as const
@@ -18,18 +18,18 @@ const bundledSkillPath = (): string => {
   return found
 }
 
-const isTracked = (worktreePath: string, relativePath: string): boolean => {
-  const result = spawnSync('git', ['-C', worktreePath, 'ls-files', '--', relativePath], {
+const isTracked = (cwd: string, relativePath: string): boolean => {
+  const result = spawnSync('git', ['-C', cwd, 'ls-files', '--', relativePath], {
     encoding: 'utf8',
     stdio: 'pipe',
   })
   return result.status === 0 && result.stdout.trim().length > 0
 }
 
-export const syncBundledArtifactSkill = (repo: string, worktreePath: string): void => {
+export const syncBundledArtifactSkill = (cwd: string): void => {
   const source = bundledSkillPath()
-  TARGETS.filter(target => !isTracked(worktreePath, target)).forEach(target => {
-    ensureExcluded(repo, `${target}/`)
-    cpSync(source, join(worktreePath, target), { recursive: true, force: true })
+  TARGETS.filter(target => !isTracked(cwd, target)).forEach(target => {
+    ensureExcluded(cwd, `${target}/`)
+    cpSync(source, join(cwd, target), { recursive: true, force: true })
   })
 }

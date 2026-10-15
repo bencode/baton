@@ -15,7 +15,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     await ctx.cleanup()
   })
 
-  test('session create: returns int id + view fields; agentSessionId/worktreePath null', async () => {
+  test('session create: returns int id + view fields; agentSessionId/cwd null', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
     assert.equal(typeof session.id, 'number')
@@ -26,10 +26,10 @@ describe('server HTTP — sessions + chat protocol', () => {
     assert.equal(session.attached, false)
     const full = (await (await app.request(`/sessions/${session.id}`)).json()) as {
       agentSessionId: string | null
-      worktreePath: string | null
+      cwd: string | null
     }
     assert.equal(full.agentSessionId, null)
-    assert.equal(full.worktreePath, null)
+    assert.equal(full.cwd, null)
   })
 
   test('materialize (PATCH) + status report flips attached (worker-bearer)', async () => {
@@ -39,13 +39,13 @@ describe('server HTTP — sessions + chat protocol', () => {
 
     const patched = await app.request(`/sessions/${session.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ agentSessionId: 'uuid-1', worktreePath: '/tmp/wt' }),
+      body: JSON.stringify({ agentSessionId: 'uuid-1', cwd: '/tmp/wt' }),
       headers: { 'content-type': 'application/json', ...auth },
     })
     assert.equal(patched.status, 200)
-    const pv = (await patched.json()) as { agentSessionId: string; worktreePath: string }
+    const pv = (await patched.json()) as { agentSessionId: string; cwd: string }
     assert.equal(pv.agentSessionId, 'uuid-1')
-    assert.equal(pv.worktreePath, '/tmp/wt')
+    assert.equal(pv.cwd, '/tmp/wt')
 
     // worker reports child up → attached true; down → attached false.
     await postJson(app, `/sessions/${session.id}/status`, { active: true }, auth)
@@ -77,7 +77,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     const materialize = (id: number, agentSessionId: string) =>
       app.request(`/sessions/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ agentSessionId, worktreePath: `/tmp/wt-${id}` }),
+        body: JSON.stringify({ agentSessionId, cwd: `/tmp/wt-${id}` }),
         headers: { 'content-type': 'application/json', ...auth },
       })
 
@@ -107,7 +107,7 @@ describe('server HTTP — sessions + chat protocol', () => {
         sessionId: readyId,
         action: 'open',
         agentSessionId: 'codex-thread',
-        worktreePath: `/tmp/wt-${readyId}`,
+        cwd: `/tmp/wt-${readyId}`,
       },
     ])
   })
@@ -118,15 +118,15 @@ describe('server HTTP — sessions + chat protocol', () => {
     const auth = { authorization: `Bearer ${workerToken}` }
     await app.request(`/sessions/${session.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ agentSessionId: 'uuid-1', worktreePath: '/tmp/wt' }),
+      body: JSON.stringify({ agentSessionId: 'uuid-1', cwd: '/tmp/wt' }),
       headers: { 'content-type': 'application/json', ...auth },
     })
 
     const res = await postJson(app, `/sessions/${session.id}/clear`, {})
     assert.equal(res.status, 200)
-    const cleared = (await res.json()) as { agentSessionId: string; worktreePath: string }
+    const cleared = (await res.json()) as { agentSessionId: string; cwd: string }
     assert.notEqual(cleared.agentSessionId, 'uuid-1') // a fresh claude conversation
-    assert.equal(cleared.worktreePath, '/tmp/wt') // code in the worktree is kept
+    assert.equal(cleared.cwd, '/tmp/wt') // code in the worktree is kept
 
     const events = (await (await app.request(`/sessions/${session.id}/events`)).json()) as {
       type: string
@@ -425,7 +425,7 @@ describe('server HTTP — sessions + chat protocol', () => {
     }
     await app.request(`/sessions/${session.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ agentSessionId: 'codex-thread', worktreePath: '/tmp/wt' }),
+      body: JSON.stringify({ agentSessionId: 'codex-thread', cwd: '/tmp/wt' }),
       headers: { 'content-type': 'application/json', ...auth },
     })
 
@@ -459,7 +459,7 @@ describe('server HTTP — sessions + chat protocol', () => {
         cmd: 'session.title',
         sessionId: session.id,
         agentSessionId: 'codex-thread',
-        worktreePath: '/tmp/wt',
+        cwd: '/tmp/wt',
       },
     ])
   })

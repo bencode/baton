@@ -12,10 +12,30 @@ import {
   setWorker,
   viewWorker,
   type WorkerConfig,
-  worktreeConfig,
+  workerEnv,
+  workerProjectConfig,
 } from './project-config.ts'
 
 describe('project-config', () => {
+  test('Worker environment carries identity and inherited executable paths', () => {
+    const cfg: WorkerConfig = {
+      server: 'http://worker-server',
+      projectId: 7,
+      workerId: 9,
+      agentKind: 'codex',
+      name: 'worker',
+      machineId: 'machine',
+      apiToken: 'test-token',
+    }
+    const env = workerEnv(cfg)
+    assert.equal(env.BATON_SERVER, cfg.server)
+    assert.equal(env.BATON_PROJECT_ID, '7')
+    assert.equal(env.BATON_WORKER_ID, '9')
+    assert.equal(env.BATON_WORKER_TOKEN, cfg.apiToken)
+    assert.equal(env.PATH, process.env.PATH)
+    assert.ok(Object.values(env).every(value => typeof value === 'string'))
+  })
+
   test('save + load round-trip', () => {
     const root = mkdtempSync(join(tmpdir(), 'baton-cfg-'))
     try {
@@ -49,19 +69,17 @@ describe('project-config', () => {
     assert.equal(configPathFromArgs({}, '/some/cwd'), join('/some/cwd', '.baton.json'))
   })
 
-  test('worktreeConfig is the inverse of viewWorker', () => {
+  test('workerProjectConfig is the inverse of viewWorker', () => {
     const w: WorkerConfig = {
       server: 'http://x',
       projectId: 1,
-      baseBranch: 'develop',
       workerId: 9,
       agentKind: 'codex',
       name: 'w',
       machineId: 'mid',
       apiToken: 'wtok',
     }
-    assert.deepEqual(viewWorker(worktreeConfig(w)), w)
-    assert.equal(worktreeConfig(w, 42).session, 42)
+    assert.deepEqual(viewWorker(workerProjectConfig(w)), w)
   })
 
   test('setWorker + viewWorker round-trip (carries apiToken)', () => {
@@ -76,7 +94,6 @@ describe('project-config', () => {
       assert.equal(w.apiToken, 'wtok')
       assert.equal(w.server, 'http://x')
       assert.equal(w.projectId, 1)
-      assert.equal(w.baseBranch, undefined)
       assert.equal(w.agentKind, 'claude-code')
     } finally {
       rmSync(root, { recursive: true, force: true })

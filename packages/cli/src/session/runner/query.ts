@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { SessionConfig } from '../../project-config.ts'
 import { additionalDirs, buildSdkEnv, claudeEffort, claudeExecutable } from './sdk-env.ts'
@@ -8,7 +9,7 @@ import { additionalDirs, buildSdkEnv, claudeEffort, claudeExecutable } from './s
 export type QueryFn = (params: { prompt: string; options?: Options }) => AsyncIterable<SDKMessage>
 
 // Start one turn through the SDK. Mirrors the old buildClaudeArgs/spawn:
-//   - cwd: the session worktree (isolation, unchanged)
+//   - cwd: the Session working directory
 //   - sessionId vs resume: first turn presets our own UUID (= CLI --session-id),
 //     later turns resume it (= CLI --resume) — keeps transcript/title lookups working
 //   - bypassPermissions: behaviour-identical to --dangerously-skip-permissions
@@ -38,14 +39,14 @@ export const startQuery = (
 ): AsyncIterable<SDKMessage> => {
   const env = buildSdkEnv(envOverlay)
   const exe = claudeExecutable()
-  const addDirs = additionalDirs()
+  const addDirs = additionalDirs([join(config.runtimeDir, 'attachments')])
   const level = claudeEffort(effort)
   if (addDirs) log(`[add-dir] ${addDirs.join(', ')}`)
   if (planMode) log('[plan] read-only planning turn')
   if (model) log(`[model] ${model}`)
   if (level) log(`[effort] ${level}`)
   const options: Options = {
-    cwd: config.worktreePath,
+    cwd: config.cwd,
     permissionMode: planMode ? 'plan' : 'bypassPermissions',
     // Headless relay: no TTY/TUI can answer an interactive ask, so AskUserQuestion
     // would fail the whole turn. Block it — the model asks in plain text instead,

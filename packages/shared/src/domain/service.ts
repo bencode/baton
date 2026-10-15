@@ -5,7 +5,7 @@ import type { Id } from './ids.ts'
 // and route control requests.
 export type ServicePresence = {
   workerId: Id
-  sessionId: Id
+  cwd: string
   name: string
   startedAt: number
   publicUrl?: string
@@ -15,7 +15,7 @@ export type ServicePresence = {
 export type ServiceSnapshot = Omit<ServicePresence, 'workerId'>
 
 export type ServiceRunInput = {
-  sessionId: Id
+  cwd: string
   name: string
   argv: string[]
   publicUrl?: string

@@ -1,33 +1,19 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { mkdir, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { Id } from '@baton/shared'
 import type { ApiClient } from '../client.ts'
-import { defaultWorktreeDir, slug } from '../commands/session/shared.ts'
-import {
-  PROJECT_CONFIG_NAME,
-  saveProjectConfig,
-  type WorkerConfig,
-  worktreeConfig,
-} from '../project-config.ts'
+import { type WorkerConfig, workerEnv } from '../project-config.ts'
 import { generateTitle } from '../session/runner/title.ts'
 import { generateTitleWithCodex } from '../session/runner/title-codex.ts'
 import { parseFirstExchangeFromEvents, readFirstExchange } from '../session/runner/transcript.ts'
-import {
-  createWorktree,
-  ensureExcluded,
-  removeWorktree,
-  repoHeadBranch,
-  restoreWorktree,
-  syncBaseBranch,
-} from '../session/worktree.ts'
-import { syncBundledArtifactSkill } from './bundled-skills.ts'
 import { killProcessGroup } from './proc.ts'
+import { sessionRuntimeDir } from './runtime-paths.ts'
 import {
-  RUNNER_RECORD,
   type RunnerRecord,
   readRunnerRecord,
   stopRecordedRunner,
@@ -46,14 +32,12 @@ const binPath = (): string => {
 export type SessionSupervisor = {
   start(sessionId: Id, name: string): Promise<void>
   stop(sessionId: Id): Promise<void>
-  remove(sessionId: Id, worktreePath: string | null): Promise<void>
-  title(sessionId: Id, agentSessionId: string, worktreePath: string): Promise<void>
+  remove(sessionId: Id): Promise<void>
+  title(sessionId: Id, agentSessionId: string, cwd: string): Promise<void>
   reconcile(sessionId?: Id): Promise<void>
   has(sessionId: Id): boolean
   killAll(): Promise<void>
 }
-
-export type BaseBranchSync = (repo: string, branch: string) => Promise<string>
 
 // Supervises one disposable headless child per session (`baton session run <id>`):
 // materialize on first sight, (re)spawn, stop, delete, auto-title, and reconcile
@@ -62,30 +46,13 @@ export type BaseBranchSync = (repo: string, branch: string) => Promise<string>
 export const createSessionSupervisor = (deps: {
   client: ApiClient
   cfg: WorkerConfig
-  repo: string
+  cwd: string
   log: (m: string) => void
   hasTerminal: (sessionId: Id) => boolean
   closeTerminal: (sessionId: Id) => void
-  syncBase?: BaseBranchSync
 }): SessionSupervisor => {
-  const { client, cfg, repo, log, hasTerminal, closeTerminal } = deps
-  const worktreeDir = defaultWorktreeDir()
-  const baseBranch = cfg.baseBranch ?? repoHeadBranch(repo)
-  const syncBase = deps.syncBase ?? syncBaseBranch
-  let syncInFlight: Promise<string> | null = null
-  const syncedBase = (): Promise<string> => {
-    if (syncInFlight) return syncInFlight
-    const pending = syncBase(repo, baseBranch)
-    syncInFlight = pending
-    const clear = (): void => {
-      if (syncInFlight === pending) syncInFlight = null
-    }
-    void pending.then(clear, clear)
-    return pending
-  }
-  // Track the worktree path alongside the child so we can git-remove it on delete —
-  // by then the server row is gone, so we can't re-fetch it.
-  const children = new Map<Id, { child: ChildProcess; worktreePath: string }>()
+  const { client, cfg, cwd, log, hasTerminal, closeTerminal } = deps
+  const children = new Map<Id, { child: ChildProcess }>()
   const lifecycle = new Map<Id, Promise<void>>()
   const enqueue = (id: Id, action: () => Promise<void>): Promise<void> => {
     const previous = lifecycle.get(id)
@@ -108,8 +75,8 @@ export const createSessionSupervisor = (deps: {
 
   // Spawn the session child, handing it the worker credentials via env so it can
   // authenticate session writes with the worker token.
-  const stopRecord = async (sessionId: Id, worktreePath: string, token?: string): Promise<void> => {
-    const record = await readRunnerRecord(worktreePath)
+  const stopRecord = async (sessionId: Id, token?: string): Promise<void> => {
+    const record = await readRunnerRecord(sessionRuntimeDir(cfg, sessionId))
     if (!record) {
       if (token) throw new Error('missing record for an unfinished execution')
       return
@@ -121,11 +88,11 @@ export const createSessionSupervisor = (deps: {
 
   const spawnChild = async (
     sessionId: Id,
-    worktreePath: string,
+    cwd: string,
     wasCanceled: () => boolean,
   ): Promise<void> => {
     if (children.has(sessionId)) return
-    await stopRecord(sessionId, worktreePath)
+    await stopRecord(sessionId)
     const runnerToken = randomUUID()
     const child = spawn(
       process.execPath,
@@ -133,10 +100,11 @@ export const createSessionSupervisor = (deps: {
       {
         detached: true,
         stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
-        env: { ...process.env, BATON_SERVER: cfg.server, BATON_WORKER_TOKEN: cfg.apiToken },
+        cwd,
+        env: workerEnv(cfg),
       },
     )
-    const entry = { child, worktreePath }
+    const entry = { child }
     children.set(sessionId, entry)
     let readyTimer: ReturnType<typeof setTimeout>
     const ready = new Promise<void>((resolve, reject) => {
@@ -188,7 +156,7 @@ export const createSessionSupervisor = (deps: {
         pid: child.pid,
         pgid: child.pid,
       }
-      await writeRunnerRecord(worktreePath, record)
+      await writeRunnerRecord(sessionRuntimeDir(cfg, sessionId), record)
       await readiness
       if (wasCanceled()) return
       await new Promise<void>((resolve, reject) =>
@@ -200,9 +168,7 @@ export const createSessionSupervisor = (deps: {
     }
   }
 
-  // Materialize on first sight (mint agentSessionId + git worktree, PATCH back),
-  // then spawn. Idempotent: an already-materialized session (worker restart) reuses
-  // the worktree and just respawns.
+  // Materialize the Agent conversation in the Worker directory, then spawn.
   const startOne = async (sessionId: Id, name: string, epoch: number): Promise<void> => {
     const wasCanceled = (): boolean => currentStartEpoch(sessionId) !== epoch
     if (wasCanceled()) return
@@ -224,45 +190,23 @@ export const createSessionSupervisor = (deps: {
     )
       return
     if (wasCanceled()) return log(`session #${sessionId} start canceled before materializing`)
-    let worktreePath = session.worktreePath
-    if (!session.agentSessionId || !worktreePath) {
-      const sessionCode = randomUUID()
-      const agentSessionId = session.agentKind === 'codex' ? `pending:${sessionCode}` : sessionCode
-      worktreePath = join(worktreeDir, slug(`${name}-${sessionCode.slice(0, 8)}`))
-      const base = await syncedBase()
-      if (wasCanceled()) return log(`session #${sessionId} start canceled during git sync`)
-      createWorktree({
-        repo,
-        worktreePath,
-        sessionCode: sessionCode.slice(0, 8),
-        base,
-      })
-      await client.sessions.materialize(sessionId, { agentSessionId, worktreePath }, cfg.apiToken)
-      if (wasCanceled()) return log(`session #${sessionId} start canceled after materializing`)
-      log(`materialized session #${sessionId} → ${worktreePath}`)
-    } else if (!existsSync(worktreePath)) {
-      // Materialized, but the worktree dir is gone (container rebuild / cleanup) —
-      // recreate at the same path, keeping the agentSessionId so it still resumes.
-      await restoreWorktree(repo, worktreePath, session.agentSessionId.slice(0, 8), baseBranch)
-      if (wasCanceled()) return log(`session #${sessionId} start canceled during worktree restore`)
-      log(`recreated session #${sessionId} worktree (was missing) → ${worktreePath}`)
+    const directory = session.cwd ?? cwd
+    if (!(await stat(directory)).isDirectory()) throw new Error(`not a directory: ${directory}`)
+    if (wasCanceled()) return
+    if (!session.agentSessionId || !session.cwd) {
+      const id = randomUUID()
+      const agentSessionId = session.agentKind === 'codex' ? `pending:${id}` : id
+      await client.sessions.materialize(sessionId, { agentSessionId, cwd: directory }, cfg.apiToken)
+      log(`materialized session #${sessionId} (${name}) → ${directory}`)
     }
-    // Drop the worker's baton context into the worktree so the agent's bare `baton`
-    // calls resolve server/project/worker from cwd. Overwrite every start (refreshes
-    // a rotated token; no live child yet, so no race); keep it out of agent commits.
-    ensureExcluded(repo, PROJECT_CONFIG_NAME)
-    ensureExcluded(repo, '.baton-services/')
-    ensureExcluded(repo, RUNNER_RECORD)
-    ensureExcluded(repo, '.baton-runner.json.*.tmp')
-    saveProjectConfig(join(worktreePath, PROJECT_CONFIG_NAME), worktreeConfig(cfg, sessionId))
-    syncBundledArtifactSkill(repo, worktreePath)
+    await mkdir(sessionRuntimeDir(cfg, sessionId), { recursive: true, mode: 0o700 })
     // Re-check: the top guard ran before the awaits above (get / materialize), so a
     // terminal-open could have raced in and reserved the pty during that window —
     // don't spawn a headless child over it.
     if (hasTerminal(sessionId))
       return log(`session #${sessionId} terminal opened mid-start — skipping headless start`)
     if (wasCanceled()) return
-    await spawnChild(sessionId, worktreePath, wasCanceled)
+    await spawnChild(sessionId, directory, wasCanceled)
   }
 
   const start = (sessionId: Id, name: string): Promise<void> => {
@@ -278,38 +222,30 @@ export const createSessionSupervisor = (deps: {
     return pending
   }
 
-  // Stop: kill the child but keep the worktree (session goes inactive, resumable).
+  // Stop: kill the child but keep the working directory (session goes inactive, resumable).
   const stop = (sessionId: Id): Promise<void> => {
     cancelStart(sessionId)
     return enqueue(sessionId, async () => {
       const entry = children.get(sessionId)
-      const session = await client.sessions.get(sessionId)
-      if (session.worktreePath) await stopRecord(sessionId, session.worktreePath)
+      await stopRecord(sessionId)
       if (entry && children.get(sessionId) === entry) children.delete(sessionId)
     })
   }
 
-  const remove = (sessionId: Id, worktreePath: string | null): Promise<void> => {
+  const remove = (sessionId: Id): Promise<void> => {
     cancelStart(sessionId)
     closeTerminal(sessionId)
     return enqueue(sessionId, async () => {
       const entry = children.get(sessionId)
-      const path = entry?.worktreePath ?? worktreePath
-      if (path) {
-        await stopRecord(sessionId, path)
-        removeWorktree(repo, path)
-      }
+      await stopRecord(sessionId)
+      await rm(sessionRuntimeDir(cfg, sessionId), { recursive: true, force: true })
       if (children.get(sessionId) === entry) children.delete(sessionId)
     })
   }
 
   // Read the provider-neutral event log first so both agents share the same title
   // context. Claude's local transcript remains a fallback for legacy sessions.
-  const title = async (
-    sessionId: Id,
-    agentSessionId: string,
-    worktreePath: string,
-  ): Promise<void> => {
+  const title = async (sessionId: Id, agentSessionId: string, cwd: string): Promise<void> => {
     const session = await client.sessions.get(sessionId)
     const events = await client.sessions.listEvents(sessionId)
     const exchange =
@@ -323,7 +259,7 @@ export const createSessionSupervisor = (deps: {
             assistantText: exchange.assistantText,
           })
         : await generateTitle({
-            worktreePath,
+            cwd,
             userText: exchange.userText,
             assistantText: exchange.assistantText,
             queryFn: query,
@@ -349,13 +285,13 @@ export const createSessionSupervisor = (deps: {
         const session = await client.sessions.get(candidate.id)
         let execution = await client.sessions.execution(session.id)
         if (execution.attempt?.status === 'stopping') {
-          if (!session.worktreePath) throw new Error('unfinished execution without worktree')
+          if (!session.cwd) throw new Error('unfinished execution without cwd')
           if (
             children.has(session.id) &&
             Date.now() - (execution.attempt.stopRequestedAt ?? 0) < 10_000
           )
             return
-          await stopRecord(session.id, session.worktreePath, execution.attempt.runnerToken)
+          await stopRecord(session.id, execution.attempt.runnerToken)
           children.delete(session.id)
           await client.sessions.stopped(
             session.id,
@@ -365,12 +301,12 @@ export const createSessionSupervisor = (deps: {
           execution = await client.sessions.execution(session.id)
         }
         if (execution.paused) {
-          if (session.worktreePath) await stopRecord(session.id, session.worktreePath)
+          if (session.cwd) await stopRecord(session.id)
           return
         }
         if (execution.attempt?.status === 'running') {
-          if (!children.has(session.id) && session.worktreePath)
-            await stopRecord(session.id, session.worktreePath, execution.attempt.runnerToken)
+          if (!children.has(session.id) && session.cwd)
+            await stopRecord(session.id, execution.attempt.runnerToken)
           return
         }
         if (execution.pendingCount || execution.turn?.status === 'recovering')
@@ -381,7 +317,7 @@ export const createSessionSupervisor = (deps: {
       for (const [id, entry] of children) {
         if (!live.has(id))
           await enqueue(id, async () => {
-            await stopRecord(id, entry.worktreePath)
+            await stopRecord(id)
             if (children.get(id) === entry) children.delete(id)
           })
       }

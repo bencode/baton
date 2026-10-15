@@ -4,9 +4,10 @@ import { createClient, createWorkerClient } from '../../client.ts'
 import type { SessionConfig } from '../../project-config.ts'
 import type { FetchImpl } from '../../session/runner/attachments.ts'
 import { type EventSourceLike, runDaemon } from '../../session/runner.ts'
+import { sessionRuntimeDir } from '../../worker/runtime-paths.ts'
 
 // fetch that carries the worker Bearer — used to pull attachments into the
-// worktree past the gated /sessions/:id/attachments/:id route.
+// directory past the gated /sessions/:id/attachments/:id route.
 const bearerFetch =
   (token: string): FetchImpl =>
   (input, init) =>
@@ -82,7 +83,7 @@ export const sessionRunCommand = defineCommand({
     // Bearer-mode client: the child authenticates reads with the worker token.
     const client = createClient(server, { bearer: workerToken })
     const s = await client.sessions.get(sessionId)
-    if (!s.agentSessionId || !s.worktreePath)
+    if (!s.agentSessionId || !s.cwd)
       throw new Error(`session #${sessionId} is not materialized yet`)
     const config: SessionConfig = {
       server,
@@ -90,7 +91,8 @@ export const sessionRunCommand = defineCommand({
       name: s.name,
       agentKind: s.agentKind,
       agentSessionId: s.agentSessionId,
-      worktreePath: s.worktreePath,
+      cwd: s.cwd,
+      runtimeDir: sessionRuntimeDir({ server, workerId: s.workerId }, sessionId),
     }
     const worker = createWorkerClient(server, workerToken, sessionId)
     const ac = new AbortController()

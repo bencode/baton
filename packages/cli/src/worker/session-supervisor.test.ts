@@ -1,20 +1,21 @@
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, test } from 'node:test'
-import type { ApiClient } from '../client.ts'
+import { test } from 'node:test'
+import { type ApiClient, createClient } from '../client.ts'
 import type { WorkerConfig } from '../project-config.ts'
-import { writeRunnerRecord } from './session-process.ts'
+import { sessionRuntimeDir } from './runtime-paths.ts'
+import { readRunnerRecord, writeRunnerRecord } from './session-process.ts'
 import { createSessionSupervisor } from './session-supervisor.ts'
 
 const cfg: WorkerConfig = {
   server: 'http://localhost:3280',
   projectId: 1,
-  baseBranch: 'main',
   workerId: 9,
   agentKind: 'codex',
   name: 'test-worker',
@@ -22,172 +23,171 @@ const cfg: WorkerConfig = {
   apiToken: 'worker-token',
 }
 
-describe('createSessionSupervisor base sync', () => {
-  test('shares an in-flight sync and does not materialize sessions when it fails', async () => {
-    let syncCalls = 0
-    let materializeCalls = 0
-    let rejectSync: (error: Error) => void = () => {}
-    const blockedSync = new Promise<string>((_resolve, reject) => {
-      rejectSync = reject
-    })
-    const client = {
-      sessions: {
-        execution: async () => ({
-          paused: false,
-          contextResetRequested: false,
-          pendingCount: 0,
-          turn: null,
-          attempt: null,
-        }),
-        get: async (id: number) => ({
+const idle = {
+  paused: false,
+  contextResetRequested: false,
+  pendingCount: 0,
+  turn: null,
+  attempt: null,
+}
+
+for (const git of [false, true]) {
+  test(`shared directory sessions start and delete safely (unborn Git: ${git})`, {
+    timeout: 20_000,
+  }, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'baton-shared-cwd-'))
+    const cwd = join(root, 'project')
+    await mkdir(cwd)
+    if (git) execFileSync('git', ['init', '-q', cwd])
+    await writeFile(join(cwd, '.baton.json'), 'project-config-sentinel')
+    const sessions = new Map(
+      [101, 102].map(id => [
+        id,
+        {
           id,
+          workerId: cfg.workerId,
           agentKind: 'codex',
-          agentSessionId: null,
-          worktreePath: null,
-        }),
-        materialize: async () => {
-          materializeCalls++
+          name: `session-${id}`,
+          agentSessionId: null as string | null,
+          cwd: null as string | null,
         },
-      },
-    } as unknown as ApiClient
+      ]),
+    )
+    let markActive: () => void = () => {}
+    const active = new Set<number>()
+    const bothActive = new Promise<void>(resolve => {
+      markActive = resolve
+    })
+    const server = createServer(async (request, response) => {
+      const parts = new URL(request.url ?? '/', 'http://localhost').pathname.split('/')
+      const id = Number(parts[2])
+      const json = (value: unknown) => {
+        response.setHeader('content-type', 'application/json')
+        response.end(JSON.stringify(value))
+      }
+      if (parts[3] === 'stream') {
+        response.writeHead(200, { 'content-type': 'text/event-stream' })
+        response.flushHeaders()
+      } else if (parts[3] === 'execution') json(idle)
+      else if (parts[3] === 'turns') json({ kind: 'idle' })
+      else if (parts[3] === 'status') {
+        active.add(id)
+        if (active.size === 2) markActive()
+        json({ ok: true })
+      } else if (request.method === 'PATCH') {
+        let body = ''
+        for await (const chunk of request) body += chunk
+        Object.assign(sessions.get(id) ?? {}, JSON.parse(body))
+        json(sessions.get(id))
+      } else json(sessions.get(id))
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    assert.ok(address && typeof address === 'object')
+    const owner = { ...cfg, server: `http://127.0.0.1:${address.port}` }
+    const oldXdg = process.env.XDG_DATA_HOME
+    process.env.XDG_DATA_HOME = join(root, 'state')
     const supervisor = createSessionSupervisor({
-      client,
-      cfg,
-      repo: process.cwd(),
+      cfg: owner,
+      client: createClient(owner.server),
+      cwd,
       log: () => {},
       hasTerminal: () => false,
       closeTerminal: () => {},
-      syncBase: async () => {
-        syncCalls++
-        return blockedSync
-      },
     })
-
-    const first = supervisor.start(101, 'first')
-    const second = supervisor.start(102, 'second')
-    await new Promise(resolve => setImmediate(resolve))
-    assert.equal(syncCalls, 1)
-
-    rejectSync(new Error('sync unavailable'))
-    await assert.rejects(first, /sync unavailable/)
-    await assert.rejects(second, /sync unavailable/)
-    assert.equal(materializeCalls, 0)
-    assert.equal(supervisor.has(101), false)
-    assert.equal(supervisor.has(102), false)
+    try {
+      await Promise.all([supervisor.start(101, 'first'), supervisor.start(102, 'second')])
+      await bothActive
+      assert.equal(sessions.get(101)?.cwd, cwd)
+      assert.equal(sessions.get(102)?.cwd, cwd)
+      assert.notEqual(sessions.get(101)?.agentSessionId, sessions.get(102)?.agentSessionId)
+      const first = await readRunnerRecord(sessionRuntimeDir(owner, 101))
+      const second = await readRunnerRecord(sessionRuntimeDir(owner, 102))
+      assert.ok(first && second)
+      assert.notEqual(first.pid, second.pid)
+      const originalId = sessions.get(101)?.agentSessionId
+      await supervisor.stop(101)
+      await supervisor.start(101, 'first')
+      assert.equal(sessions.get(101)?.agentSessionId, originalId)
+      await supervisor.remove(101)
+      assert.equal(await readFile(join(cwd, '.baton.json'), 'utf8'), 'project-config-sentinel')
+      await assert.rejects(access(sessionRuntimeDir(owner, 101)), { code: 'ENOENT' })
+      assert.doesNotThrow(() => process.kill(second.pid, 0))
+      await access(sessionRuntimeDir(owner, 102))
+    } finally {
+      await supervisor.killAll()
+      if (oldXdg === undefined) delete process.env.XDG_DATA_HOME
+      else process.env.XDG_DATA_HOME = oldXdg
+      server.closeAllConnections()
+      await new Promise<void>(resolve => server.close(() => resolve()))
+      await rm(root, { recursive: true, force: true })
+    }
   })
+}
 
-  test('shares an in-flight start for the same session', async () => {
-    let getCalls = 0
-    let rejectSync: (error: Error) => void = () => {}
-    const blockedSync = new Promise<string>((_resolve, reject) => {
-      rejectSync = reject
-    })
-    const client = {
-      sessions: {
-        execution: async () => ({
-          paused: false,
-          contextResetRequested: false,
-          pendingCount: 0,
-          turn: null,
-          attempt: null,
-        }),
-        get: async (id: number) => {
-          getCalls++
-          return {
-            id,
-            agentKind: 'codex',
-            agentSessionId: null,
-            worktreePath: null,
-          }
-        },
-      },
-    } as unknown as ApiClient
-    const supervisor = createSessionSupervisor({
-      client,
-      cfg,
-      repo: process.cwd(),
-      log: () => {},
-      hasTerminal: () => false,
-      closeTerminal: () => {},
-      syncBase: async () => blockedSync,
-    })
-
-    const first = supervisor.start(101, 'first')
-    const duplicate = supervisor.start(101, 'first')
-    assert.equal(first, duplicate)
-    await new Promise(resolve => setImmediate(resolve))
-    assert.equal(getCalls, 1)
-
-    rejectSync(new Error('sync unavailable'))
-    await assert.rejects(first, /sync unavailable/)
-    await assert.rejects(duplicate, /sync unavailable/)
+test('duplicate starts share work and stop cancels materialization', async () => {
+  let release: () => void = () => {}
+  const blocked = new Promise<void>(resolve => {
+    release = resolve
   })
-
-  test('stop cancels a start that is waiting for git sync', async () => {
-    let materializeCalls = 0
-    let resolveSync: (ref: string) => void = () => {}
-    const blockedSync = new Promise<string>(resolve => {
-      resolveSync = resolve
-    })
-    const client = {
-      sessions: {
-        execution: async () => ({
-          paused: false,
-          contextResetRequested: false,
-          pendingCount: 0,
-          turn: null,
-          attempt: null,
-        }),
-        get: async (id: number) => ({
-          id,
-          agentKind: 'codex',
-          agentSessionId: null,
-          worktreePath: null,
-        }),
-        materialize: async () => {
-          materializeCalls++
-        },
+  let gets = 0
+  const client = {
+    sessions: {
+      get: async () => {
+        gets++
+        await blocked
+        return { agentSessionId: null, cwd: null }
       },
-    } as unknown as ApiClient
-    const supervisor = createSessionSupervisor({
-      client,
-      cfg,
-      repo: process.cwd(),
-      log: () => {},
-      hasTerminal: () => false,
-      closeTerminal: () => {},
-      syncBase: async () => blockedSync,
-    })
-
-    const starting = supervisor.start(101, 'first')
-    await new Promise(resolve => setImmediate(resolve))
-    const stopping = supervisor.stop(101)
-    resolveSync('refs/heads/main')
-    await starting
-    await stopping
-    assert.equal(materializeCalls, 0)
-    assert.equal(supervisor.has(101), false)
+      execution: async () => idle,
+      materialize: async () => {
+        assert.fail('canceled Session must not materialize')
+      },
+    },
+  } as unknown as ApiClient
+  const supervisor = createSessionSupervisor({
+    client,
+    cfg,
+    cwd: process.cwd(),
+    log: () => {},
+    hasTerminal: () => false,
+    closeTerminal: () => {},
   })
+  const first = supervisor.start(100001, 'first')
+  assert.equal(supervisor.start(100001, 'first'), first)
+  const stopped = supervisor.stop(100001)
+  release()
+  await first
+  await stopped
+  assert.equal(gets, 1)
+  assert.equal(supervisor.has(100001), false)
 })
 
 test('recovery confirms a recorded runner has exited before acknowledging stop; missing identity blocks', async () => {
-  const worktreePath = await mkdtemp(join(tmpdir(), 'baton-recovery-test-'))
+  const cwd = await mkdtemp(join(tmpdir(), 'baton-recovery-test-'))
+  const oldXdg = process.env.XDG_DATA_HOME
+  process.env.XDG_DATA_HOME = cwd
   const runnerToken = randomUUID()
   const child = spawn(
     process.execPath,
-    ['-e', 'setInterval(() => {}, 1000)', '--', '--runner-token', runnerToken],
-    { detached: true, stdio: 'ignore' },
+    [
+      '-e',
+      'process.send("ready"); setInterval(() => {}, 1000)',
+      '--',
+      '--runner-token',
+      runnerToken,
+    ],
+    { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] },
   )
   const exited = once(child, 'exit')
   let stopping = true
   let acknowledgements = 0
   try {
-    await once(child, 'spawn')
+    await once(child, 'message')
     assert.ok(child.pid)
     const pid = child.pid
     const client = {
       sessions: {
-        get: async () => ({ id: 101, workerId: cfg.workerId, worktreePath, name: 'test' }),
+        get: async () => ({ id: 101, workerId: cfg.workerId, cwd, name: 'test' }),
         execution: async () => ({
           paused: true,
           contextResetRequested: false,
@@ -206,7 +206,7 @@ test('recovery confirms a recorded runner has exited before acknowledging stop; 
     const supervisor = createSessionSupervisor({
       client,
       cfg,
-      repo: process.cwd(),
+      cwd: process.cwd(),
       log: () => {},
       hasTerminal: () => false,
       closeTerminal: () => {},
@@ -214,7 +214,8 @@ test('recovery confirms a recorded runner has exited before acknowledging stop; 
     await assert.rejects(supervisor.reconcile(101), /missing record/)
     assert.equal(acknowledgements, 0)
     assert.doesNotThrow(() => process.kill(pid, 0))
-    await writeRunnerRecord(worktreePath, {
+    await mkdir(sessionRuntimeDir(cfg, 101), { recursive: true })
+    await writeRunnerRecord(sessionRuntimeDir(cfg, 101), {
       server: cfg.server,
       workerId: cfg.workerId,
       sessionId: 101,
@@ -233,6 +234,8 @@ test('recovery confirms a recorded runner has exited before acknowledging stop; 
       child.kill('SIGKILL')
       await exited
     }
-    await rm(worktreePath, { recursive: true, force: true })
+    if (oldXdg === undefined) delete process.env.XDG_DATA_HOME
+    else process.env.XDG_DATA_HOME = oldXdg
+    await rm(cwd, { recursive: true, force: true })
   }
 })

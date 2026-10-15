@@ -21,7 +21,7 @@ test('sweep requests stop once and wakes recovery from persisted state, not a me
     })
     await ctx.store.sessions.materialize(session.id, {
       agentSessionId: 'pending:a',
-      worktreePath: '/tmp/s',
+      cwd: '/tmp/s',
     })
     await ctx.store.inputs.submit(session.id, { text: 'run' })
     const claim = await ctx.store.turns.claim(session.id, { claimId: 'c', runnerToken: 'r' })

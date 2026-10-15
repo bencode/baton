@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { isAbsolute } from 'node:path'
 import {
   type Id,
   isServiceName,
@@ -33,12 +34,13 @@ const strictMetadata = (input: { publicUrl?: unknown; note?: unknown }): Service
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
 
-const reportedService = (value: unknown, ownedSessionIds: Set<Id>): ServiceSnapshot | null => {
+const reportedService = (value: unknown): ServiceSnapshot | null => {
   const service = asRecord(value)
   if (
     !service ||
-    typeof service.sessionId !== 'number' ||
-    !ownedSessionIds.has(service.sessionId) ||
+    typeof service.cwd !== 'string' ||
+    !isAbsolute(service.cwd) ||
+    service.cwd.includes('\0') ||
     typeof service.name !== 'string' ||
     !isServiceName(service.name) ||
     typeof service.startedAt !== 'number'
@@ -53,7 +55,7 @@ const reportedService = (value: unknown, ownedSessionIds: Set<Id>): ServiceSnaps
       ? service.note.trim()
       : undefined
   return {
-    sessionId: service.sessionId,
+    cwd: service.cwd,
     name: service.name,
     startedAt: service.startedAt,
     ...(publicUrl ? { publicUrl } : {}),
@@ -91,7 +93,7 @@ export const registerServiceRoutes = (
     if (!commands.has(workerId)) return c.json({ error: 'worker is offline' }, 409)
 
     const body = (await c.req.json()) as {
-      sessionId?: unknown
+      cwd?: unknown
       name?: unknown
       argv?: unknown
       publicUrl?: unknown
@@ -107,27 +109,23 @@ export const registerServiceRoutes = (
         400,
       )
     if (
-      typeof body.sessionId !== 'number' ||
-      !Number.isInteger(body.sessionId) ||
-      body.sessionId <= 0 ||
+      typeof body.cwd !== 'string' ||
+      !isAbsolute(body.cwd) ||
+      body.cwd.includes('\0') ||
       !isServiceName(name) ||
       argv.length === 0 ||
       argv.some(arg => arg.length === 0) ||
       argv.length !== rawArgv.length
     )
-      return c.json({ error: 'sessionId, valid name, and non-empty argv required' }, 400)
+      return c.json({ error: 'absolute cwd, valid name, and non-empty argv required' }, 400)
     if (runtime.listWorker(workerId).some(service => service.name === name))
       return c.json({ error: `service "${name}" is already running` }, 409)
-    const session = await store.sessions.get(body.sessionId)
-    if (!session || session.workerId !== workerId || !session.worktreePath)
-      return c.json({ error: 'materialized session not found on worker' }, 404)
-
     const requestId = randomUUID()
     const resultPromise = runtime.expect(requestId)
     commands.publish(workerId, {
       cmd: 'service.run',
       requestId,
-      sessionId: session.id,
+      cwd: body.cwd,
       name,
       argv,
       ...metadata,
@@ -163,14 +161,9 @@ export const registerServiceRoutes = (
       services?: unknown
       result?: ServiceActionResult
     }
-    const ownedSessionIds = new Set(
-      (await store.sessions.listByProject(worker.projectId))
-        .filter(session => session.workerId === worker.id)
-        .map(session => session.id),
-    )
     const services = Array.isArray(body.services)
       ? body.services
-          .map(service => reportedService(service, ownedSessionIds))
+          .map(reportedService)
           .filter((service): service is ServiceSnapshot => service !== null)
       : []
     runtime.replace(worker.id, services)
