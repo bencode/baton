@@ -52,3 +52,25 @@ export const StopIcon = () => (
     <rect x="3.5" y="3.5" width="9" height="9" rx="2.5" />
   </svg>
 )
+
+const Glyph = ({ path }: { path: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    width="16"
+    height="16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path d={path} />
+  </svg>
+)
+export const PlanIcon = () => <Glyph path="M4 3h8v11H4zM6 1.5h4v3H6M6 7h4M6 10h3" />
+export const ExecuteIcon = () => <Glyph path="m9 1-6 8h5l-1 6 6-8H8z" />
+export const EffortIcon = () => <Glyph path="M3 12V9M8 12V5M13 12V2" />
+export const RetryIcon = () => <Glyph path="M3 5a5 5 0 1 1-.2 5M3 1v4h4" />
+export const FileIcon = () => <Glyph path="M4 1.5h5l3 3V14H4zM9 1.5v3h3M6 8h4M6 11h3" />

@@ -170,7 +170,7 @@ export const SessionHeader = ({
           {/* Hidden while a terminal is open: the terminal owns the session, so the
             server rejects a headless resume anyway (close it first). */}
           {!active && !terminalOpen && (
-            <button type="button" onClick={onResume} className="ui-button ui-primary text-xs">
+            <button type="button" onClick={onResume} className="ui-button">
               恢复会话
             </button>
           )}

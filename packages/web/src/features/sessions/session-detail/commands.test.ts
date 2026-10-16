@@ -77,9 +77,9 @@ describe('parseModelArgs', () => {
 
   test('a bad effort is rejected, not silently dropped', () => {
     const bad = parseModelArgs('opus higgh')
-    expect(bad.error).toMatch(/unknown effort/)
+    expect(bad.error).toMatch(/未知思考强度/)
     expect(bad.model).toBeNull() // must not fall back to setting the model alone
-    expect(parseModelArgs('opus high extra').error).toMatch(/bad args/)
+    expect(parseModelArgs('opus high extra').error).toMatch(/模型参数格式错误/)
   })
 })
 

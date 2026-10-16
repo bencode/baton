@@ -73,3 +73,52 @@ test('an empty dialog still receives focus so Escape can close it', () => {
   expect(document.activeElement).toBe(anchor)
   anchor.remove()
 })
+
+test('listbox preserves textarea focus and follows anchor movement on a content commit', () => {
+  const anchor = document.createElement('textarea')
+  document.body.append(anchor)
+  anchor.focus()
+  let bottom = 50
+  anchor.getBoundingClientRect = () =>
+    ({ left: 20, bottom, top: bottom - 20, right: 200 }) as DOMRect
+  const panel = (text: string) => (
+    <Popover
+      id="commands"
+      anchor={anchor}
+      role="listbox"
+      label="命令"
+      autoFocus={false}
+      onClose={vi.fn()}
+    >
+      <div role="option" aria-selected="true" tabIndex={-1}>
+        {text}
+      </div>
+    </Popover>
+  )
+  const view = render(panel('a'))
+  expect(document.activeElement).toBe(anchor)
+  expect(screen.getByRole('listbox').style.top).toBe('58px')
+  bottom = 100
+  view.rerender(panel('longer command'))
+  expect(screen.getByRole('listbox').style.top).toBe('108px')
+  expect(screen.getByRole('listbox').id).toBe('commands')
+  anchor.remove()
+})
+
+test('scrolling a sibling transcript does not dismiss a configuration form', () => {
+  const anchor = document.createElement('button')
+  const transcript = document.createElement('div')
+  document.body.append(anchor, transcript)
+  const close = vi.fn()
+  render(
+    <Popover anchor={anchor} role="dialog" label="模型" onClose={close}>
+      <input aria-label="模型 ID" />
+    </Popover>,
+  )
+  fireEvent.scroll(transcript)
+  expect(close).not.toHaveBeenCalled()
+  fireEvent.scroll(document)
+  expect(close).toHaveBeenCalledWith('outside')
+  anchor.remove()
+  transcript.remove()
+})

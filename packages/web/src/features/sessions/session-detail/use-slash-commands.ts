@@ -1,6 +1,6 @@
 import type { AgentKind } from '@baton/shared'
 import { type KeyboardEvent, useState } from 'react'
-import { matchCommands, resolveCommand, type SlashCommand } from './commands'
+import { matchCommands, type SlashCommand } from './commands'
 
 // Slash-command behaviour for the composer textarea: the autocomplete menu state
 // (highlight + dismiss) and the keyboard handling. Kept out of the composer so
@@ -40,7 +40,6 @@ export const useSlashCommands = (
       return
     }
     onCommand(cmd, cmd.args ?? '')
-    setDraft('')
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
@@ -74,20 +73,8 @@ export const useSlashCommands = (
         return true
       }
     }
-    // Plain Enter on a known command line runs it (including a bare "/plan" — a
-    // no-arg toggle now resolves); an unknown slash line falls through to send as
-    // plain text. Shift+Enter is always a newline, never a command.
-    if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
-      const resolved = resolveCommand(draft, agentKind)
-      if (resolved) {
-        e.preventDefault()
-        onCommand(resolved.command, resolved.args)
-        setDraft('')
-        return true
-      }
-    }
     return false
   }
 
-  return { menu, open, activeIndex, pick, reset, onKeyDown }
+  return { menu, open, activeIndex, pick, reset, dismiss: () => setDismissed(true), onKeyDown }
 }

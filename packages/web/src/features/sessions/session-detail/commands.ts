@@ -36,14 +36,14 @@ const MODEL_SUGGESTIONS: Record<AgentKind, string[]> = {
 }
 
 export const slashCommands = (kind: AgentKind): SlashCommand[] => [
-  { name: 'help', kind: 'help', desc: 'show available commands' },
-  { name: 'clear', kind: 'clear', desc: 'reset the conversation (keeps session + code)' },
-  { name: 'abort', kind: 'abort', desc: 'interrupt the running turn (like Esc)' },
-  { name: 'plan', kind: 'plan', desc: 'toggle read-only plan mode (no file edits)' },
+  { name: 'help', kind: 'help', desc: '查看可用命令' },
+  { name: 'clear', kind: 'clear', desc: '重置上下文，保留历史和待发送消息' },
+  { name: 'abort', kind: 'abort', desc: '停止当前执行（Esc）' },
+  { name: 'plan', kind: 'plan', desc: '切换规划模式，只读分析，不修改文件' },
   {
     name: 'model',
     kind: 'model',
-    desc: 'switch model + effort: /model <name> [effort] (bare /model resets)',
+    desc: '设置模型和思考强度；直接执行 /model 恢复默认',
     takesArgs: true,
     argSuggestions: MODEL_SUGGESTIONS[kind],
   },
@@ -71,12 +71,13 @@ export const parseModelArgs = (args: string): ModelArgs => {
   const parts = args.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return { model: null, effort: null }
   const [model, rawEffort, ...rest] = parts
-  if (!model || rest.length > 0) return { model: null, effort: null, error: `bad args: ${args}` }
+  if (!model || rest.length > 0)
+    return { model: null, effort: null, error: `模型参数格式错误：${args}` }
   if (rawEffort === undefined) return { model, effort: null }
   const effort = parseEffort(rawEffort)
   return effort
     ? { model, effort }
-    : { model: null, effort: null, error: `unknown effort: ${rawEffort}` }
+    : { model: null, effort: null, error: `未知思考强度：${rawEffort}` }
 }
 
 // Commands to show in the menu — while typing the name (no space yet), filtered
@@ -112,3 +113,12 @@ export const resolveCommand = (
   if (!command) return null
   return { command, args: parsed?.args ?? '' }
 }
+
+export const modelPresets = (kind: AgentKind): string[] => [
+  ...new Set(
+    MODEL_SUGGESTIONS[kind].flatMap(value => {
+      const { model } = parseModelArgs(value)
+      return model ? [model] : []
+    }),
+  ),
+]

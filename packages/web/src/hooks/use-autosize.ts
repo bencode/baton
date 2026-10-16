@@ -12,7 +12,19 @@ export const useAutosize = (
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, maxPx)}px`
+    const resize = () => {
+      el.style.height = 'auto'
+      el.style.height = `${Math.min(el.scrollHeight, maxPx)}px`
+    }
+    let width = el.getBoundingClientRect().width
+    resize()
+    const observer = new ResizeObserver(() => {
+      const next = el.getBoundingClientRect().width
+      if (next === width) return
+      width = next
+      resize()
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [ref, value, maxPx])
 }

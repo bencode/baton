@@ -29,7 +29,7 @@ describe('useSlashCommands pick', () => {
     const { hook, onCommand, setDraft } = mount('/model')
     act(() => hook.result.current.pick(modelCmd))
     expect(onCommand).toHaveBeenCalledWith(modelCmd, '')
-    expect(setDraft).toHaveBeenCalledWith('')
+    expect(setDraft).not.toHaveBeenCalled()
   })
 
   test('an arg suggestion runs immediately with its args', () => {

@@ -59,8 +59,7 @@ export const useSessionQueue = (
         const result = await api.sessions.cancelInput(sessionId, inputId)
         if (bound.current.id !== sessionId) return
         applySnapshot(result.queue)
-        if (!result.removed)
-          setError('Input is no longer queued — it may have started or already been removed')
+        if (!result.removed) setError('该消息已开始执行或已移除，无法撤回')
       } catch (cause) {
         if (bound.current.id === sessionId)
           setError(cause instanceof Error ? cause.message : String(cause))
