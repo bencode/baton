@@ -251,13 +251,20 @@
     max-height: calc(100dvh - 2rem);
     overflow-y: auto;
     border: 1px solid var(--color-ui-border);
-    border-radius: 8px;
+    border-radius: 12px;
     background: var(--color-ui-surface);
     padding: 24px;
     color: var(--color-ui-text);
   }
   .ui-dialog::backdrop {
     background: rgb(20 28 42 / 28%);
+  }
+  .ui-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
   }
 
   .ui-page {

@@ -28,18 +28,26 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const service = services?.find(item => item.workerId === workerId && item.name === name)
 
-  if (loading && services === null) return <div className="p-6 text-xs text-ui-muted">loading…</div>
+  if (loading && services === null)
+    return (
+      <div role="status" className="ui-page mg-page text-sm text-ui-muted">
+        加载服务…
+      </div>
+    )
   if (error && services === null)
     return (
       <div role="alert" className="p-6 text-sm text-ui-danger">
-        Unable to load service details.
+        无法加载服务详情。
+        <button type="button" onClick={refresh} className="ml-2 underline">
+          重试
+        </button>
       </div>
     )
   if (!service)
     return (
       <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
-        <p className="text-sm font-medium text-ui-text">Service is no longer running.</p>
-        <p className="text-xs text-ui-muted">Its runtime metadata has expired or been removed.</p>
+        <p className="text-sm font-medium text-ui-text">服务已结束运行。</p>
+        <p className="text-xs text-ui-muted">运行信息已过期或移除。</p>
       </div>
     )
 
@@ -56,7 +64,6 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
       refresh()
     } catch {
       setStopping(false)
-      setConfirming(false)
       setStopError(true)
     }
   }
@@ -75,67 +82,74 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
   }
 
   return (
-    <div className="ui-page flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+    <div className="ui-page mg-page mg-detail">
+      <header className="mg-page-header">
         <div className="min-w-0">
-          <p className="text-xs text-ui-muted">
-            Service ·{' '}
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              role="img"
+              aria-label="运行中"
+              className="h-2 w-2 shrink-0 rounded-full bg-ui-success"
+            />
+            <h2 className="ui-page-title truncate" title={name}>
+              {name}
+            </h2>
+            <span className="text-xs font-medium text-ui-success">运行中</span>
+          </div>
+          <p className="mg-description break-all">
+            服务 ·{' '}
             <span className="font-mono">
               W-{workerId}/{name}
             </span>
           </p>
-          <div className="mt-2 flex min-w-0 items-center gap-2">
-            <span
-              role="img"
-              aria-label="running"
-              className="h-2 w-2 shrink-0 rounded-full bg-ui-success"
-            />
-            <h2 className="ui-page-title truncate">{name}</h2>
-            <span className="text-xs font-medium text-ui-success">Running</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          disabled={stopping}
+          className="ui-button ui-danger shrink-0"
+        >
+          停止服务
+        </button>
+      </header>
+
+      {confirming && (
+        <div className="mg-confirm">
+          <p>确认停止“{name}”？此操作会停止正在运行的服务进程。</p>
+          <div className="mg-form-actions">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={stopping}
+              className="ui-button"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => void stop()}
+              disabled={stopping}
+              className="ui-button ui-danger"
+            >
+              {stopping ? '停止中…' : '确认停止'}
+            </button>
           </div>
         </div>
-        {confirming ? (
-          <div className="flex flex-wrap items-center gap-2 text-[13px]">
-            <span className="text-ui-muted">{stopping ? 'Stopping…' : `Stop ${name}?`}</span>
-            {!stopping && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void stop()}
-                  className="ui-button ui-danger-primary"
-                >
-                  Stop
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirming(false)}
-                  className="ui-quiet-button"
-                >
-                  Cancel
-                </button>
-              </>
-            )}
-          </div>
-        ) : (
-          <button type="button" onClick={() => setConfirming(true)} className="ui-button ui-danger">
-            Stop service
-          </button>
-        )}
-      </header>
+      )}
 
       {error && (
         <p role="status" className="text-xs text-ui-warning">
-          Service details may be out of date.
+          服务详情可能不是最新状态。
         </p>
       )}
       {stopError && (
         <p role="alert" className="text-sm text-ui-danger">
-          Couldn’t stop {name}.
+          无法停止 {name}，请稍后重试。
         </p>
       )}
 
       <dl className="divide-y divide-ui-border border-y border-ui-border">
-        <DetailRow label="Public URL">
+        <DetailRow label="公开地址">
           {service.publicUrl ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <a
@@ -151,11 +165,11 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
                 onClick={() => void copyPublicUrl()}
                 className="ui-quiet-button"
               >
-                {copyStatus === 'copied' ? 'Copied' : 'Copy'}
+                {copyStatus === 'copied' ? '已复制' : '复制'}
               </button>
               {copyStatus === 'error' && (
                 <span role="status" className="text-xs text-ui-danger">
-                  Copy failed
+                  复制失败
                 </span>
               )}
             </div>
@@ -163,18 +177,18 @@ export const ServiceDetail = ({ projectId, workerId, name }: ServiceDetailProps)
             '—'
           )}
         </DetailRow>
-        <DetailRow label="Note">
+        <DetailRow label="备注">
           {service.note ? <p className="max-w-[70ch] whitespace-pre-wrap">{service.note}</p> : '—'}
         </DetailRow>
-        <DetailRow label="Worker">
+        <DetailRow label="执行环境">
           <span className="font-medium">{worker?.name ?? `W-${workerId}`}</span>{' '}
           <span className="font-mono text-xs text-ui-muted">W-{workerId}</span>
         </DetailRow>
-        <DetailRow label="Working directory">
+        <DetailRow label="工作目录">
           <span className="break-all font-mono">{service.cwd}</span>
         </DetailRow>
-        <DetailRow label="Started">{formatServiceStartedAt(service.startedAt)}</DetailRow>
-        <DetailRow label="Uptime">{formatServiceUptime(service.startedAt)}</DetailRow>
+        <DetailRow label="启动时间">{formatServiceStartedAt(service.startedAt)}</DetailRow>
+        <DetailRow label="运行时长">{formatServiceUptime(service.startedAt)}</DetailRow>
       </dl>
     </div>
   )

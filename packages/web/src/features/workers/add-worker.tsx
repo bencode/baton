@@ -36,22 +36,22 @@ export const AddWorker = ({
       : null
   return (
     <Modal
-      title={view.kind === 'add' ? 'Add a worker' : 'Worker creation'}
+      title={view.kind === 'add' ? '添加执行环境' : '创建执行环境'}
       onClose={onClose}
-      className="max-w-lg"
+      className="mg-dialog"
     >
       <div className="flex flex-col gap-6">
         {setup.creations.error && (
           <p role="alert" className="text-xs text-ui-warning break-words">
-            Creation records could not be refreshed. Displayed progress may be out of date.{' '}
+            创建状态暂时无法刷新，当前进度可能不是最新状态。{' '}
             <button type="button" onClick={setup.refresh} className="underline">
-              Refresh records
+              刷新状态
             </button>
           </p>
         )}
         {view.kind === 'add' ? (
           <>
-            <div className="flex gap-2">
+            <div className="mg-methods">
               {(['template', 'register'] as const).map(value => (
                 <button
                   key={value}
@@ -59,9 +59,9 @@ export const AddWorker = ({
                   aria-pressed={mode === value}
                   disabled={setup.creating}
                   onClick={() => setMode(value)}
-                  className={`ui-button ${mode === value ? 'border-ui-accent-border bg-ui-selected text-ui-selected-text' : ''}`}
+                  className="ui-quiet-button"
                 >
-                  {value === 'template' ? 'From template' : 'Register existing'}
+                  {value === 'template' ? '从模板创建' : '注册已有环境'}
                 </button>
               ))}
             </div>
@@ -84,13 +84,9 @@ export const AddWorker = ({
           />
         ) : (
           <div className="flex flex-col gap-3 text-xs text-ui-muted">
-            <p>
-              {setup.creations.loading
-                ? 'Loading creation record…'
-                : 'This creation record is unavailable.'}
-            </p>
+            <p>{setup.creations.loading ? '加载创建状态…' : '无法获取此次创建状态。'}</p>
             <button type="button" onClick={setup.refresh} className="w-fit underline">
-              Refresh records
+              刷新状态
             </button>
             <button
               type="button"
@@ -99,7 +95,7 @@ export const AddWorker = ({
               }
               className="w-fit underline"
             >
-              Add a worker
+              添加执行环境
             </button>
           </div>
         )}

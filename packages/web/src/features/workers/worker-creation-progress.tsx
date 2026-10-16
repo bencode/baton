@@ -11,25 +11,76 @@ import { useApi } from '../../app/api-context'
 import type { AsyncState } from '../../hooks/use-async'
 
 const steps: { id: WorkerCreationStep; label: string }[] = [
-  { id: 'directory', label: 'Prepare directory' },
-  { id: 'git', label: 'Initialize Git repository' },
-  { id: 'register', label: 'Register worker' },
-  { id: 'start', label: 'Start worker' },
-  { id: 'connect', label: 'Connect to server' },
+  { id: 'directory', label: '准备目录' },
+  { id: 'git', label: '初始化 Git 仓库' },
+  { id: 'register', label: '注册执行环境' },
+  { id: 'start', label: '启动执行环境' },
+  { id: 'connect', label: '连接服务器' },
 ]
 
 export const creationStatusText = (creation: WorkerCreation): string => {
   const step = steps.find(item => item.id === creation.step)?.label
-  if (creation.status === 'pending') return 'Waiting for mini'
-  if (creation.status === 'succeeded') return 'Created'
-  if (creation.status === 'failed') return step ? `Failed: ${step}` : 'Creation failed'
-  return step ?? 'Preparing worker'
+  if (creation.status === 'pending') return '等待 mini'
+  if (creation.status === 'succeeded') return '已创建'
+  if (creation.status === 'failed') return step ? `失败：${step}` : '创建失败'
+  return step ?? '准备执行环境'
 }
 
 type Props = {
   creation: WorkerCreation
   onCreateAnother(input: CreateWorkerInput): void
   onStartConversation(workerId: Id): Promise<void>
+}
+
+const CreationSteps = ({ creation }: { creation: WorkerCreation }) => {
+  const currentStep = steps.findIndex(item => item.id === creation.step)
+  return (
+    <ol className="flex flex-col gap-3 text-xs">
+      {steps.map((step, index) => {
+        const complete = creation.status === 'succeeded' || index < currentStep
+        const current = creation.step === step.id
+        const failed = current && creation.status === 'failed'
+        const status = complete ? '已完成' : failed ? '失败' : current ? '进行中' : '等待'
+        return (
+          <li
+            key={step.id}
+            aria-current={current ? 'step' : undefined}
+            className="flex justify-between gap-3"
+          >
+            <span>{step.label}</span>
+            <span
+              className={failed ? 'text-ui-danger' : complete ? 'text-ui-success' : 'text-ui-muted'}
+            >
+              {status}
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+const CreationResources = ({ creation }: { creation: WorkerCreation }) => {
+  if (!creation.repoPath && creation.workerId === null) return null
+  return (
+    <details className="text-xs text-ui-muted">
+      <summary className="cursor-pointer">资源详情</summary>
+      <dl className="mt-3 flex flex-col gap-2 break-all">
+        {creation.repoPath && (
+          <>
+            <dt>本地仓库</dt>
+            <dd className="font-mono">{creation.repoPath}</dd>
+          </>
+        )}
+        {creation.workerId !== null && (
+          <>
+            <dt>执行环境 ID</dt>
+            <dd>{creation.workerId}</dd>
+          </>
+        )}
+      </dl>
+    </details>
+  )
 }
 
 export const WorkerCreationProgress = ({
@@ -85,7 +136,6 @@ export const WorkerCreationProgress = ({
       setStarting(false)
     }
   }
-  const currentStep = steps.findIndex(item => item.id === creation.step)
   const connected =
     workerId !== null &&
     worker.data?.id === workerId &&
@@ -94,14 +144,14 @@ export const WorkerCreationProgress = ({
     !worker.error
   const workerStatus =
     worker.error instanceof ApiError && worker.error.status === 404
-      ? 'This worker has been deleted.'
+      ? '此执行环境已删除。'
       : worker.error
-        ? `Could not check the worker: ${worker.error.message}`
+        ? `无法检查执行环境：${worker.error.message}`
         : worker.loading
-          ? 'Checking worker connection…'
+          ? '检查连接状态…'
           : connected
-            ? 'Worker is connected.'
-            : 'Worker is offline. Wait for it to reconnect before starting a conversation.'
+            ? '执行环境已连接。'
+            : '执行环境已离线，请等待重新连接后再开始会话。'
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -110,76 +160,25 @@ export const WorkerCreationProgress = ({
           {creationStatusText(creation)}
         </p>
       </div>
-      <ol className="flex flex-col gap-3 text-xs">
-        {steps.map((step, index) => {
-          const complete = creation.status === 'succeeded' || index < currentStep
-          const current = creation.step === step.id
-          const status = complete
-            ? 'Done'
-            : current
-              ? creation.status === 'failed'
-                ? 'Failed'
-                : 'In progress'
-              : 'Waiting'
-          return (
-            <li
-              key={step.id}
-              aria-current={current ? 'step' : undefined}
-              className="flex justify-between gap-3"
-            >
-              <span>{step.label}</span>
-              <span
-                className={
-                  status === 'Failed'
-                    ? 'text-ui-danger'
-                    : status === 'Done'
-                      ? 'text-ui-success'
-                      : 'text-ui-muted'
-                }
-              >
-                {status}
-              </span>
-            </li>
-          )
-        })}
-      </ol>
+      <CreationSteps creation={creation} />
       {creation.status === 'failed' && (
         <div role="alert" className="flex flex-col gap-2 text-xs text-ui-danger break-words">
-          <p>{creation.error ?? 'Worker creation failed.'}</p>
+          <p>{creation.error ?? '执行环境创建失败。'}</p>
           <p>
-            Resources are retained. Resolve the failure manually before submitting a new request.
+            已产生的资源会保留，请人工处理失败原因后再重新操作。
             {creation.workerId !== null &&
-              ' The registered worker may still occupy this name; manage it in the Workers sidebar.'}
+              ' 已注册的执行环境可能仍占用此名称，请在执行环境页处理。'}
           </p>
         </div>
       )}
-      {(creation.repoPath || creation.workerId !== null) && (
-        <details className="text-xs text-ui-muted">
-          <summary className="cursor-pointer">Resource details</summary>
-          <dl className="mt-2 flex flex-col gap-1 break-all">
-            {creation.repoPath && (
-              <>
-                <dt>Local repository</dt>
-                <dd>{creation.repoPath}</dd>
-              </>
-            )}
-            {creation.workerId !== null && (
-              <>
-                <dt>Worker ID</dt>
-                <dd>{creation.workerId}</dd>
-              </>
-            )}
-          </dl>
-        </details>
-      )}
+      <CreationResources creation={creation} />
       {creation.status === 'succeeded' && (
         <>
           <p
             role={worker.error ? 'alert' : undefined}
             className="text-xs text-ui-muted break-words"
           >
-            Creation completed.{' '}
-            {workerId === null ? 'No worker is associated with this record.' : workerStatus}
+            创建已完成。 {workerId === null ? '此次创建没有关联的执行环境。' : workerStatus}
           </p>
           {startError && (
             <p role="alert" className="text-xs text-ui-danger break-words">
@@ -192,7 +191,7 @@ export const WorkerCreationProgress = ({
             disabled={!connected || starting}
             className="ui-button ui-primary w-fit"
           >
-            {starting ? 'Starting…' : 'Start conversation'}
+            {starting ? '启动中…' : '开始会话'}
           </button>
         </>
       )}
@@ -208,13 +207,12 @@ export const WorkerCreationProgress = ({
           }
           className="w-fit text-xs text-ui-muted underline"
         >
-          Create another worker
+          再创建一个执行环境
         </button>
       )}
       {(creation.status === 'pending' || creation.status === 'running') && (
         <p className="text-xs text-ui-muted">
-          You can close this window. Creation continues on the mini; reopen its status in the
-          Workers sidebar.
+          关闭窗口不会中断创建；已注册的执行环境可在执行环境页查看。
         </p>
       )}
     </div>

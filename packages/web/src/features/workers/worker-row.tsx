@@ -23,28 +23,28 @@ export const WorkerRow = ({ worker, sessionCount, onDelete }: WorkerRowProps) =>
     }
   }
   return (
-    <div className="border-b border-ui-border py-3 last:border-0">
-      <div className="flex items-start gap-3">
+    <div className="mg-resource-row">
+      <div className="mg-resource-main">
         <span
           role="img"
-          aria-label={worker.connected ? 'online' : 'offline'}
+          aria-label={worker.connected ? '在线' : '离线'}
           className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${worker.connected ? 'bg-ui-success' : 'border border-ui-muted'}`}
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-medium" title={worker.name}>
+          <p className="mg-resource-title truncate" title={worker.name}>
             {worker.name}
           </p>
-          <p className="mt-1 break-all text-xs md:text-[11px] leading-4 text-ui-muted">
+          <p className="mg-resource-meta">
             {worker.agentKind === 'codex' ? 'Codex' : 'Claude Code'} · {worker.hostname}
           </p>
-          <p className="mt-1 text-xs md:text-[11px] leading-4 text-ui-muted">
-            W-{worker.id} · {worker.connected ? 'Online' : 'Offline'}
-            {sessionCount !== null && ` · ${sessionCount} conversations`}
+          <p className="mg-resource-meta">
+            W-{worker.id} · {worker.connected ? '在线' : '离线'}
+            {sessionCount !== null && ` · ${sessionCount} 段会话`}
           </p>
         </div>
         <button
           type="button"
-          aria-label="delete worker"
+          aria-label="删除执行环境"
           disabled={sessionCount === null || deleting}
           onClick={() => setConfirming(true)}
           className="ui-icon-button"
@@ -53,29 +53,28 @@ export const WorkerRow = ({ worker, sessionCount, onDelete }: WorkerRowProps) =>
         </button>
       </div>
       {confirming && (
-        <div className="mt-3 rounded-md bg-ui-panel p-3 text-sm">
+        <div className="mg-confirm">
           <p>
-            Delete this worker and its {sessionCount} conversations? This permanently removes their
-            history.
+            删除“{worker.name}”及其 {sessionCount} 段会话？会话历史将同时删除。
           </p>
-          <div className="mt-3 flex justify-end gap-2">
+          <div className="mg-form-actions">
             <button
               type="button"
               disabled={deleting}
               onClick={() => setConfirming(false)}
-              aria-label="cancel delete worker"
+              aria-label="取消删除执行环境"
               className="ui-button"
             >
-              Cancel
+              取消
             </button>
             <button
               type="button"
               disabled={deleting}
               onClick={() => void remove()}
-              aria-label="confirm delete worker"
+              aria-label="确认删除执行环境"
               className="ui-button ui-danger"
             >
-              {deleting ? 'Deleting…' : 'Delete worker'}
+              {deleting ? '删除中…' : '确认删除'}
             </button>
           </div>
         </div>

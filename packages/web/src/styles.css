@@ -2,6 +2,7 @@
 @import "./styles/theme.css";
 @import "./styles/controls.css";
 @import "./app/shell/workbench.css";
+@import "./styles/management.css";
 @plugin "@tailwindcss/typography";
 
 html,

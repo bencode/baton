@@ -20,9 +20,7 @@ export const createSessionOnWorker = async (
 ): Promise<SessionView> => {
   const worker = await api.workers.get(workerId)
   if (worker.projectId !== projectId || !worker.connected)
-    throw new Error(
-      'This worker is unavailable. Wait for it to reconnect before starting a conversation.',
-    )
+    throw new Error('此执行环境不可用，请确认连接状态后再开始会话。')
   const session = await api.sessions.create({ projectId, workerId })
   try {
     localStorage.setItem(preferenceKey(projectId), String(workerId))
