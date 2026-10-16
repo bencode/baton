@@ -1,34 +1,35 @@
 import type { Id } from '@baton/shared'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { RenderItem } from '../event-render'
 import { atBottom } from './stick-to-bottom'
 
-// All transcript scroll behavior in one place: stay pinned to the latest message
-// as events stream in, but never yank the view when the user has scrolled up; and
-// hold the reading position when older events are prepended ("load earlier").
-// `stick`/`prependFrom` are refs (no re-render on the frequent scroll handler);
-// `pinned` mirrors stick for the jump-to-latest button and flips only on a cross.
 export type TranscriptScroll = {
   scrollRef: React.RefObject<HTMLDivElement | null>
   pinned: boolean
   onScroll: () => void
   jumpToBottom: () => void
-  // Call right before fetching an older page so the layout effect can restore
-  // the reading position once the batch renders (otherwise the view jumps).
   markPrepend: () => void
+  onContentLoad: () => void
 }
 
-export const useTranscriptScroll = (sessionId: Id | null, itemCount: number): TranscriptScroll => {
+export const useTranscriptScroll = (
+  sessionId: Id | null,
+  items: readonly RenderItem[],
+  enabled: boolean,
+): TranscriptScroll => {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const stick = useRef(true)
   const [pinned, setPinned] = useState(true)
-  const prependFrom = useRef<number | null>(null)
+  const prependFrom = useRef<{ height: number; top: number } | null>(null)
+  const renderedItems = useRef<readonly RenderItem[] | null>(null)
+  const binding = useRef<{ sessionId: Id | null; enabled: boolean } | null>(null)
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     const next = atBottom(el.scrollHeight, el.scrollTop, el.clientHeight)
     stick.current = next
-    setPinned(prev => (prev === next ? prev : next))
+    setPinned(previous => (previous === next ? previous : next))
   }, [])
 
   const jumpToBottom = useCallback(() => {
@@ -40,29 +41,46 @@ export const useTranscriptScroll = (sessionId: Id | null, itemCount: number): Tr
   }, [])
 
   const markPrepend = useCallback(() => {
-    prependFrom.current = scrollRef.current?.scrollHeight ?? null
+    const el = scrollRef.current
+    prependFrom.current = el ? { height: el.scrollHeight, top: el.scrollTop } : null
   }, [])
 
-  // A newly opened session starts pinned to its latest message.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on session switch only
-  useEffect(() => {
-    stick.current = true
-    setPinned(true)
-  }, [sessionId])
-
-  // After items change: restore position if older events were just prepended,
-  // else keep the bottom pinned. Layout effect runs pre-paint → no flicker.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: itemCount is the intended trigger
-  useLayoutEffect(() => {
+  const onContentLoad = useCallback(() => {
     const el = scrollRef.current
-    if (!el) return
-    if (prependFrom.current !== null) {
-      el.scrollTop += el.scrollHeight - prependFrom.current
-      prependFrom.current = null
-      return
-    }
+    if (!el || el.clientHeight === 0 || prependFrom.current) return
     if (stick.current) el.scrollTop = el.scrollHeight
-  }, [itemCount])
+    onScroll()
+  }, [onScroll])
 
-  return { scrollRef, pinned, onScroll, jumpToBottom, markPrepend }
+  useLayoutEffect(() => {
+    const itemsChanged = renderedItems.current !== items
+    renderedItems.current = items
+    const previous = binding.current
+    const reset = previous?.sessionId !== sessionId || !previous?.enabled
+    binding.current = { sessionId, enabled }
+    if (!enabled || reset) {
+      prependFrom.current = null
+      stick.current = true
+      setPinned(true)
+    }
+    const el = scrollRef.current
+    if (!enabled || !el || el.clientHeight === 0 || (!itemsChanged && !reset)) return
+    if (prependFrom.current) {
+      el.scrollTop = prependFrom.current.top + el.scrollHeight - prependFrom.current.height
+      prependFrom.current = null
+      onScroll()
+    } else if (stick.current) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [sessionId, items, enabled, onScroll])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (sessionId === null || !enabled || !el) return
+    const observer = new ResizeObserver(onContentLoad)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [sessionId, enabled, onContentLoad])
+
+  return { scrollRef, pinned, onScroll, jumpToBottom, markPrepend, onContentLoad }
 }

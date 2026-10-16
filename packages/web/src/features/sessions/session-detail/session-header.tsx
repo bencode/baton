@@ -1,9 +1,10 @@
 import type { Id, Session } from '@baton/shared'
 import { useState } from 'react'
 import { standaloneSessionPath } from '../../../app/route'
-import { CopyIcon, InfoIcon } from '../../../components/icons'
+import { CheckIcon, CopyIcon, InfoIcon } from '../../../components/icons'
 import { copyText } from '../../../utils/clipboard'
 import { LoopsControl } from '../../loops/loops-control'
+import type { StreamState } from '../use-session-stream'
 
 // SessionHeader — one-line identity strip, gritty enough that the rest of the
 // surface stays a quiet reading area. Diagnostic info (cwd, full agent UUID)
@@ -14,6 +15,10 @@ import { LoopsControl } from '../../loops/loops-control'
 type HeaderProps = {
   session: Session
   active: boolean
+  busy: boolean
+  connected: boolean
+  streamStatus: StreamState['status']
+  initialEvent?: { model?: string; sessionId?: string }
   projectId: Id
   activeLoops: number
   terminalOpen: boolean
@@ -34,7 +39,7 @@ const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) =
     return (
       <button
         type="button"
-        title="rename"
+        title="重命名会话"
         onClick={() => {
           setDraft(name)
           setEditing(true)
@@ -53,7 +58,7 @@ const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) =
     <input
       // biome-ignore lint/a11y/noAutofocus: rename editor opens on explicit user click
       autoFocus
-      aria-label="session name"
+      aria-label="会话名称"
       value={draft}
       onChange={e => setDraft(e.target.value)}
       onFocus={e => e.target.select()}
@@ -84,10 +89,10 @@ const CopyButton = ({ text }: { text: string }) => {
       type="button"
       onClick={onCopy}
       className="ui-icon-button"
-      aria-label="copy agent session id"
-      title={copied ? 'copied' : 'copy agent session id'}
+      aria-label="复制 Agent 会话标识"
+      title={copied ? '已复制' : '复制 Agent 会话标识'}
     >
-      {copied ? '✓' : <CopyIcon />}
+      {copied ? <CheckIcon /> : <CopyIcon />}
     </button>
   )
 }
@@ -103,8 +108,8 @@ const ShareButton = ({ shareToken }: { shareToken: string }) => {
     window.setTimeout(() => setCopied(false), 1500)
   }
   return (
-    <button type="button" aria-label="share" onClick={onShare} className="ui-quiet-button">
-      {copied ? 'copied ✓' : 'share'}
+    <button type="button" aria-label="分享会话" onClick={onShare} className="ui-quiet-button">
+      {copied ? '已复制' : '分享'}
     </button>
   )
 }
@@ -112,6 +117,10 @@ const ShareButton = ({ shareToken }: { shareToken: string }) => {
 export const SessionHeader = ({
   session,
   active,
+  busy,
+  connected,
+  streamStatus,
+  initialEvent,
   projectId,
   activeLoops,
   terminalOpen,
@@ -122,35 +131,47 @@ export const SessionHeader = ({
   onRename,
 }: HeaderProps) => {
   const [open, setOpen] = useState(false)
+  const statusLabel =
+    streamStatus !== 'open'
+      ? '状态待同步'
+      : !connected
+        ? '执行环境离线'
+        : terminalOpen
+          ? '终端中'
+          : busy
+            ? '执行中'
+            : '空闲'
   const terminalReady =
     session.agentKind !== 'codex' ||
     (session.agentSessionId !== null &&
       !session.agentSessionId.startsWith('pending:') &&
       session.cwd !== null)
   return (
-    <div className="min-h-[42px] shrink-0 border-b border-ui-border bg-ui-surface px-3 py-2 md:px-6 md:py-1">
+    <div className="chat-session-header">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
         <div className="flex min-w-0 items-center gap-2">
           <SessionName name={session.name} onRename={onRename} />
-          <span className="text-xs md:text-[11px] text-ui-muted">{session.agentKind}</span>
+          <span className="text-xs md:text-[11px] text-ui-muted">
+            {session.agentKind === 'codex' ? 'Codex' : 'Claude Code'}
+          </span>
         </div>
         <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1 text-xs">
           <span className="mr-2 inline-flex items-center gap-1.5 text-xs md:text-[11px] text-ui-muted">
             <span
-              className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-ui-success' : 'bg-ui-border'}`}
+              className={`h-1.5 w-1.5 rounded-full ${streamStatus === 'open' && connected && busy ? 'bg-ui-accent' : 'bg-ui-border'}`}
             />
-            {active ? 'active' : 'inactive'}
+            {statusLabel}
           </span>
           {active && (
             <button type="button" onClick={onStop} className="ui-quiet-button ui-danger">
-              stop
+              停止进程
             </button>
           )}
           {/* Hidden while a terminal is open: the terminal owns the session, so the
             server rejects a headless resume anyway (close it first). */}
           {!active && !terminalOpen && (
-            <button type="button" onClick={onResume} className="ui-button ui-primary text-xs">
-              resume
+            <button type="button" onClick={onResume} className="ui-button">
+              恢复会话
             </button>
           )}
           {/* Interactive terminal — a hands-on alternative to the headless resume.
@@ -162,13 +183,13 @@ export const SessionHeader = ({
               onClick={onCloseTerminal}
               className="ui-button border-ui-accent-border bg-ui-selected text-ui-selected-text"
             >
-              close terminal
+              关闭终端
             </button>
           ) : (
             !active &&
             terminalReady && (
               <button type="button" onClick={onOpenTerminal} className="ui-quiet-button">
-                terminal
+                终端
               </button>
             )
           )}
@@ -182,18 +203,22 @@ export const SessionHeader = ({
             onClick={() => setOpen(o => !o)}
             className="ui-icon-button"
             aria-expanded={open}
-            aria-label={open ? 'hide details' : 'show details'}
+            aria-label={open ? '收起详情' : '显示详情'}
           >
             <InfoIcon />
           </button>
         </div>
       </div>
       {open && (
-        <div className="mt-2 flex flex-col gap-1 break-all rounded-md bg-ui-panel p-3 font-mono text-xs text-ui-muted">
-          <span>cwd: {session.cwd ?? '(pending materialize)'}</span>
+        <div className="mt-2 flex flex-col gap-1 break-all rounded-md bg-ui-panel p-3 text-xs text-ui-muted">
+          {initialEvent?.model && <span>初始事件模型：{initialEvent.model}</span>}
+          {initialEvent?.sessionId && initialEvent.sessionId !== session.agentSessionId && (
+            <span>初始事件会话：{initialEvent.sessionId}</span>
+          )}
+          <span>目录：{session.cwd ?? '尚未准备'}</span>
           <div className="flex items-center gap-2">
             <span>
-              agent session: <span>{session.agentSessionId ?? '(pending materialize)'}</span>
+              Agent 会话：<span>{session.agentSessionId ?? '尚未准备'}</span>
             </span>
             {session.agentSessionId !== null && <CopyButton text={session.agentSessionId} />}
           </div>

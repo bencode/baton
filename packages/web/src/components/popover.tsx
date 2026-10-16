@@ -12,7 +12,9 @@ type CloseReason = 'escape' | 'outside' | 'anchor-lost'
 export type PopoverProps = {
   anchor: HTMLElement | null
   label: string
-  role: 'menu' | 'dialog'
+  role: 'menu' | 'dialog' | 'listbox'
+  id?: string
+  autoFocus?: boolean
   placement?: 'bottom-start' | 'bottom-end' | 'top-start'
   point?: { x: number; y: number }
   className?: string
@@ -30,6 +32,8 @@ export const Popover = ({
   anchor,
   label,
   role,
+  id,
+  autoFocus = true,
   placement = 'bottom-start',
   point,
   className = '',
@@ -73,17 +77,17 @@ export const Popover = ({
     const observer = new ResizeObserver(updatePosition)
     observer.observe(popup)
     return () => observer.disconnect()
-  }, [anchor, placement, x, y])
+  })
   useEffect(() => {
     const popup = panel.current
     if (!anchor || !popup) return
     const first =
-      popup.querySelector<HTMLElement>('[aria-checked="true"]') ??
+      popup.querySelector<HTMLElement>('[aria-checked="true"], input:checked') ??
       popup.querySelector<HTMLElement>(
         'button:not(:disabled), input:not(:disabled), select:not(:disabled)',
       )
     const focusTarget = first ?? popup
-    focusTarget.focus()
+    if (autoFocus) focusTarget.focus()
     const outside = (event: MouseEvent) => {
       if (
         event.target instanceof Node &&
@@ -94,6 +98,8 @@ export const Popover = ({
     }
     const moved = (event: Event) => {
       if (event.target instanceof Node && popup.contains(event.target)) return
+      if (event.type === 'scroll' && event.target instanceof Node && !event.target.contains(anchor))
+        return
       close.current(anchor.isConnected ? 'outside' : 'anchor-lost')
     }
     document.addEventListener('mousedown', outside)
@@ -104,10 +110,11 @@ export const Popover = ({
       window.removeEventListener('resize', moved)
       document.removeEventListener('scroll', moved, true)
     }
-  }, [anchor])
+  }, [anchor, autoFocus])
   if (!anchor) return null
   const props = {
     ref: panel,
+    id,
     tabIndex: -1,
     'aria-label': label,
     style: position,
@@ -137,15 +144,9 @@ export const Popover = ({
     },
   }
   return createPortal(
-    role === 'menu' ? (
-      <div {...props} role="menu">
-        {children}
-      </div>
-    ) : (
-      <div {...props} role="dialog">
-        {children}
-      </div>
-    ),
+    <div {...props} role={role}>
+      {children}
+    </div>,
     anchor.closest('dialog[open]') ?? document.body,
   )
 }

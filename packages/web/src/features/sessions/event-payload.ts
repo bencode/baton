@@ -63,20 +63,19 @@ export const headerModel = (p: Record<string, unknown>): string | undefined =>
 export const systemActionNotice = (payload: unknown): string | null => {
   if (!isRecord(payload)) return null
   const action = payload.action
-  if (action === 'context_cleared') return 'context cleared — fresh conversation'
-  if (action === 'interrupt') return 'interrupted'
-  if (action === 'plan_mode')
-    return payload.planMode === true ? 'entered plan mode' : 'exited plan mode'
+  if (action === 'context_cleared') return '上下文已清空'
+  if (action === 'interrupt') return '本轮已停止'
+  if (action === 'plan_mode') return payload.planMode === true ? '已进入规划模式' : '已退出规划模式'
   if (action === 'model') {
     const m = str(payload.model)
     const e = str(payload.effort)
-    if (!m) return 'model reset to default'
-    return e ? `model → ${m} (${e})` : `model → ${m}`
+    if (!m) return '已恢复默认模型'
+    return e ? `模型已切换为 ${m}，推理强度：${e}` : `模型已切换为 ${m}`
   }
   // Interactive-terminal boundaries — mark the human-takeover window (those turns
   // bypass baton's event log, so this is what explains the transcript gap).
-  if (action === 'terminal_open') return 'interactive terminal opened'
-  if (action === 'terminal_close') return 'interactive terminal closed'
+  if (action === 'terminal_open') return '交互终端已打开'
+  if (action === 'terminal_close') return '交互终端已关闭'
   return null
 }
 

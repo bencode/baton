@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Markdown } from '../../../../components/markdown'
 import { Caret } from '../tool-block'
 
@@ -20,27 +20,27 @@ export const thinkingPreview = (text: string, max = 60): string => {
 
 export const ThinkingBlock = ({ text, bare = false }: { text: string; bare?: boolean }) => {
   const [open, setOpen] = useState(false)
-  const chrome = bare
-    ? 'px-1 py-1'
-    : 'rounded-md border border-gray-200 bg-white px-2 py-1.5 hover:bg-gray-50'
+  const id = useId()
   return (
-    <div className="flex flex-col gap-1">
+    <div className={bare ? 'chat-tool' : 'chat-tool chat-tool-standalone'}>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-2 self-start text-left font-mono text-xs text-gray-500 italic ${chrome}`}
+        className="chat-tool-summary ui-focus"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls={id}
       >
-        <span className="not-italic">
-          <Caret open={open} />
-        </span>
-        <span>thinking</span>
-        {!open && <span className="truncate text-gray-400">{thinkingPreview(text)}</span>}
+        <Caret open={open} />
+        <span className="chat-process-label">思考记录</span>
+        {!open && <span className="chat-tool-preview">{thinkingPreview(text)}</span>}
       </button>
-      {open && (
-        <div className="ml-4 max-w-4xl rounded-md border border-gray-100 bg-gray-50/60 px-3 py-2 text-sm text-gray-600 italic">
-          <Markdown text={text} />
-        </div>
-      )}
+      <div id={id} hidden={!open}>
+        {open && (
+          <div className="chat-thinking-text">
+            <Markdown text={text} variant="process" />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

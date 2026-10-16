@@ -21,7 +21,7 @@ export type StreamState = {
   status: 'connecting' | 'open' | 'closed' | 'error'
   hasOlder: boolean
   loadingOlder: boolean
-  loadOlder: () => void
+  loadOlder: (beforePrepend?: () => void) => Promise<void>
 }
 
 // Dedupe by stable server `id`, order by per-session `sequence`. Pure → tested.
@@ -64,26 +64,30 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
 
   // Page the WINDOW of events just before the current oldest (the contiguous
   // suffix grows upward). No-op at the start of the transcript or while loading.
-  const loadOlder = useCallback(async () => {
-    const before = oldestSeqRef.current
-    if (sessionId === null || before === null || before <= 0 || loadingOlderRef.current) return
-    loadingOlderRef.current = true
-    setLoadingOlder(true)
-    try {
-      const older = await api.sessions.listEvents(sessionId, { before, limit: OLDER_PAGE })
-      if (boundSidRef.current === sessionId) {
-        apply(older)
-        if (older.length < OLDER_PAGE) setHistoryExhausted(true)
+  const loadOlder = useCallback(
+    async (beforePrepend?: () => void) => {
+      const before = oldestSeqRef.current
+      if (sessionId === null || before === null || before <= 0 || loadingOlderRef.current) return
+      loadingOlderRef.current = true
+      setLoadingOlder(true)
+      try {
+        const older = await api.sessions.listEvents(sessionId, { before, limit: OLDER_PAGE })
+        if (boundSidRef.current === sessionId) {
+          if (older.length > 0) beforePrepend?.()
+          apply(older)
+          if (older.length < OLDER_PAGE) setHistoryExhausted(true)
+        }
+      } catch (err) {
+        console.error('[session-stream] load older failed', err)
+      } finally {
+        if (boundSidRef.current === sessionId) {
+          loadingOlderRef.current = false
+          setLoadingOlder(false)
+        }
       }
-    } catch (err) {
-      console.error('[session-stream] load older failed', err)
-    } finally {
-      if (boundSidRef.current === sessionId) {
-        loadingOlderRef.current = false
-        setLoadingOlder(false)
-      }
-    }
-  }, [sessionId, api, apply])
+    },
+    [sessionId, api, apply],
+  )
 
   useEffect(() => {
     boundSidRef.current = sessionId

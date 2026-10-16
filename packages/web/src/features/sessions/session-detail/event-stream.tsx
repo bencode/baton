@@ -1,14 +1,17 @@
 import type { RefObject, UIEventHandler } from 'react'
+import { ChatIcon, ChevronDownIcon } from '../../../components/icons'
 import type { RenderItem } from '../event-render'
 import { ActivityGroupView } from './activity-group'
 import { groupRenderItems } from './group-items'
 import { RenderItemView } from './render-item'
 
 type EventStreamProps = {
-  items: RenderItem[]
+  items: readonly RenderItem[]
   scrollRef: RefObject<HTMLDivElement | null>
   // Marks the trailing activity group as live (expanded) while a turn runs.
   working?: boolean
+  statusKnown?: boolean
+  onContentLoad?: () => void
   onScroll?: UIEventHandler<HTMLDivElement>
   // Pinned to the bottom — when false (and there are events) the jump button shows.
   pinned?: boolean
@@ -23,6 +26,8 @@ export const EventStream = ({
   items,
   scrollRef,
   working = false,
+  statusKnown = true,
+  onContentLoad,
   onScroll,
   pinned = true,
   onJumpToBottom,
@@ -33,44 +38,47 @@ export const EventStream = ({
   // `relative` wrapper so the jump button anchors to the viewport, not the
   // scrolled content; the inner div is the actual scroll container.
   <div className="relative min-w-0 flex-1 overflow-hidden">
-    <div
+    <section
       ref={scrollRef}
       onScroll={onScroll}
-      className="h-full overflow-auto bg-white px-3 py-4 sm:px-6"
+      onLoadCapture={onContentLoad}
+      aria-label="会话记录"
+      className="chat-scroll"
     >
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400">no events yet — say something below.</p>
+        <div className="chat-empty">
+          <ChatIcon />
+          <h2>从一条消息开始</h2>
+          <p>描述你的问题，或说说接下来想完成什么。</p>
+        </div>
       ) : (
-        <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-3">
+        <div className="chat-transcript">
           {hasOlder && (
-            <div className="flex justify-center pb-1">
+            <div className="chat-load-earlier">
               <button
                 type="button"
                 onClick={onLoadOlder}
                 disabled={loadingOlder}
-                className="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-500 text-xs hover:bg-gray-50 disabled:opacity-60"
+                className="ui-quiet-button"
               >
-                {loadingOlder ? '加载中…' : '↑ 加载更早的消息'}
+                {loadingOlder ? '加载中…' : '加载更早的消息'}
               </button>
             </div>
           )}
           {groupRenderItems(items, working).map(item =>
             item.kind === 'activity-group' ? (
-              <ActivityGroupView key={item.key} group={item} />
+              <ActivityGroupView key={item.key} group={item} statusKnown={statusKnown} />
             ) : (
               <RenderItemView key={item.key} item={item} />
             ),
           )}
         </div>
       )}
-    </div>
+    </section>
     {!pinned && items.length > 0 && (
-      <button
-        type="button"
-        onClick={onJumpToBottom}
-        className="absolute right-4 bottom-4 z-10 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-gray-600 text-xs shadow-md hover:bg-gray-50"
-      >
-        ↓ 最新消息
+      <button type="button" onClick={onJumpToBottom} className="chat-jump-latest ui-focus">
+        <ChevronDownIcon />
+        回到最新
       </button>
     )}
   </div>

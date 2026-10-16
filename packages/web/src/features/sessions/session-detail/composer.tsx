@@ -1,201 +1,285 @@
-import type { AgentEffort, AgentKind, Attachment } from '@baton/shared'
-import { useRef } from 'react'
-import { AttachmentStrip } from '../../../components/attachments/attachment-strip'
+import type { AgentKind, SessionView } from '@baton/shared'
+import { type ReactNode, useId, useRef, useState } from 'react'
+import { Popover } from '../../../components/popover'
 import { useAutosize } from '../../../hooks/use-autosize'
 import { useDropZone } from '../../../hooks/use-drop-zone'
 import { extractImageFiles, insertLabelToken } from '../../../utils/attachment'
-import { CommandMenu } from './command-menu'
-import type { SlashCommand } from './commands'
-import { PaperclipIcon, SendIcon, Spinner } from './icons'
+import { CommandHelp, CommandMenu } from './command-menu'
+import { parseModelArgs, resolveCommand, type SlashCommand } from './commands'
+import { ComposerAttachments } from './composer-attachments'
+import { ComposerOptions } from './composer-options'
+import { PaperclipIcon, SendIcon, Spinner, StopIcon } from './icons'
+import type { ComposerControls } from './use-composer-controls'
+import type { ComposerDraft } from './use-composer-draft'
+import type { DraftAttachments } from './use-draft-attachments'
 import { useSlashCommands } from './use-slash-commands'
-
-// Session-wide status chips above the textarea (plan mode, model override):
-// one full-width click target whose click toggles/resets the state. Tones are
-// full literal class strings so Tailwind's scanner sees them.
-const CHIP_TONES = {
-  amber: {
-    chip: 'bg-ui-warning-surface text-ui-warning ring-ui-warning-border hover:bg-ui-warning-surface',
-    hint: 'text-ui-warning',
-  },
-  indigo: {
-    chip: 'bg-ui-selected text-ui-selected-text ring-ui-accent-border hover:bg-ui-hover',
-    hint: 'text-ui-selected-muted',
-  },
-} as const
-
-type StatusChipProps = {
-  tone: keyof typeof CHIP_TONES
-  label: string
-  hint: string
-  onClick: () => void
-}
-
-const StatusChip = ({ tone, label, hint, onClick }: StatusChipProps) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`ui-focus mb-2 flex min-h-11 w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium ring-1 transition-colors md:min-h-0 [@media(pointer:coarse)]:min-h-11 ${CHIP_TONES[tone].chip}`}
-  >
-    {label}
-    <span className={`ml-auto ${CHIP_TONES[tone].hint}`}>{hint}</span>
-  </button>
-)
+import { WorkingIndicator } from './working-indicator'
 
 type ComposerProps = {
-  draft: string
-  setDraft: (v: string) => void
-  attachments: Attachment[]
-  onAddFiles: (files: File[]) => void
-  onRemoveAttachment: (id: string) => void
-  uploading: boolean
-  uploadError: string | null
-  sending: boolean
-  active: boolean
-  sendError: string | null
-  onSend: () => void
-  // Run a slash command (/clear, /help, /plan …) instead of sending a message.
-  onCommand: (command: SlashCommand, args: string) => void
-  // Session-wide read-only plan mode + its toggle (/plan command, Shift+Tab).
-  planMode: boolean
-  onTogglePlanMode: () => void
-  // Session-wide model + effort override (/model <name> [effort]); null = default.
-  // Clicking the chip resets both, same as a bare /model.
-  model: string | null
-  effort: AgentEffort | null
-  onResetModel: () => void
-  // Which agent this session runs — picks the /model preset list.
   agentKind: AgentKind
+  session: Pick<SessionView, 'attached' | 'connected' | 'busy'>
+  statusKnown: boolean
+  draft: ComposerDraft
+  attachments: DraftAttachments
+  controls: ComposerControls
+  queue: ReactNode
 }
 
-// One rounded input card: pending attachments + textarea stacked over a bottom
-// toolbar (📎 left, circular send button right). Attachments arrive three ways —
-// the 📎 picker, drag-drop, and paste — all funnelling through onAddFiles, which
-// uploads immediately; the whole card is the drop zone. Send is available via the
-// button and Enter (Shift+Enter = newline), both gated on `canSend` (idle + has
-// text/attachment).
 export const Composer = ({
-  draft,
-  setDraft,
-  attachments,
-  onAddFiles,
-  onRemoveAttachment,
-  uploading,
-  uploadError,
-  sending,
-  active,
-  sendError,
-  onSend,
-  onCommand,
-  planMode,
-  onTogglePlanMode,
-  model,
-  effort,
-  onResetModel,
   agentKind,
+  session,
+  statusKnown,
+  draft,
+  attachments,
+  controls,
+  queue,
 }: ComposerProps) => {
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const { dragging, dropProps } = useDropZone(onAddFiles)
-  const slash = useSlashCommands(draft, setDraft, onCommand, onTogglePlanMode, agentKind)
-  useAutosize(textareaRef, draft)
-  const busy = sending || uploading
-  const canSend = active && !busy && (draft.trim().length > 0 || attachments.length > 0)
-  const insertLabel = (label: string) =>
-    insertLabelToken(textareaRef.current, draft, setDraft, label)
+  const input = useRef<HTMLTextAreaElement>(null)
+  const picker = useRef<HTMLInputElement>(null)
+  const commandInFlight = useRef(false)
+  const [showHelp, setShowHelp] = useState(false)
+  const menuId = useId()
+  const helpId = useId()
+  const locked = draft.sending || controls.saving !== null || controls.pending !== null
+  const canAttach = session.attached && session.connected && !locked
+  const addFiles = (files: File[]) => {
+    if (canAttach) void attachments.addFiles(files)
+  }
+  const { dragging, dropProps } = useDropZone(addFiles, canAttach)
+  useAutosize(input, draft.text)
+
+  const runCommand = async (command: SlashCommand, args: string) => {
+    if (locked || commandInFlight.current) return
+    commandInFlight.current = true
+    const submittedText = draft.text
+    try {
+      let ok = false
+      if (command.kind === 'help') {
+        setShowHelp(true)
+        ok = true
+      } else if (command.kind === 'plan') ok = await controls.setMode(!controls.settings.planMode)
+      else if (command.kind === 'abort') ok = await controls.abort()
+      else if (command.kind === 'clear') ok = await controls.clear()
+      else if (command.kind === 'model') {
+        const parsed = parseModelArgs(args)
+        if (parsed.error) controls.reportError(parsed.error)
+        else ok = await controls.setModel(parsed.model, parsed.effort)
+      }
+      if (ok) draft.clearIfUnchanged(submittedText)
+    } finally {
+      commandInFlight.current = false
+    }
+  }
+  const slash = useSlashCommands(
+    draft.text,
+    draft.setText,
+    (command, args) => void runCommand(command, args),
+    () => {
+      if (!locked) void controls.setMode(!controls.settings.planMode)
+    },
+    agentKind,
+  )
+  const resolved = resolveCommand(draft.text, agentKind)
+  const execute = () => {
+    if (slash.open) {
+      const command = slash.menu[slash.activeIndex]
+      if (command) slash.pick(command)
+    } else if (resolved) void runCommand(resolved.command, resolved.args)
+    else void draft.submit()
+  }
+  const commandLabel = slash.open || resolved !== null
+  const sendLabel = draft.sending
+    ? '发送中…'
+    : commandLabel
+      ? '执行命令'
+      : statusKnown && session.busy
+        ? '加入队列'
+        : '发送'
+  const feedbackErrors = [
+    ...new Set(
+      [
+        draft.error,
+        controls.error,
+        attachments.items.some(item => item.status === 'failed')
+          ? '部分附件上传失败，请重试或移除后再发送。'
+          : null,
+      ].filter((error): error is string => error !== null),
+    ),
+  ]
   return (
-    <div className="shrink-0 border-t border-ui-border bg-ui-surface px-3 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-6 md:pt-3 md:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      <div
-        {...dropProps}
-        className={`mx-auto min-w-0 max-w-5xl rounded-lg border px-3 py-2 transition-colors focus-within:border-ui-accent focus-within:ring-1 focus-within:ring-ui-accent ${dragging ? 'border-ui-accent ring-1 ring-ui-accent' : 'border-ui-border'} ${active ? 'bg-ui-surface' : 'bg-ui-panel'}`}
-      >
-        {planMode && (
-          <StatusChip
-            tone="amber"
-            label="📋 PLAN MODE · 只读规划，不改文件"
-            hint="Shift+Tab 退出"
-            onClick={onTogglePlanMode}
-          />
+    <div className="composer-area">
+      <div className="composer-column">
+        {session.busy && (
+          <WorkingIndicator statusKnown={statusKnown} stopping={controls.pending === 'abort'} />
         )}
-        {model && (
-          <StatusChip
-            tone="indigo"
-            label={`🧠 MODEL · ${model}${effort ? ` · ${effort}` : ''}`}
-            hint="点击重置为默认"
-            onClick={onResetModel}
-          />
-        )}
-        {attachments.length > 0 && (
-          <AttachmentStrip
-            attachments={attachments}
-            onRemove={onRemoveAttachment}
-            onInsertLabel={insertLabel}
-          />
-        )}
-        {uploadError && <p className="mb-2 text-xs text-ui-danger">{uploadError}</p>}
-        {sendError && <p className="mb-2 text-xs text-ui-danger">{sendError}</p>}
-        {slash.open && (
-          <CommandMenu commands={slash.menu} activeIndex={slash.activeIndex} onPick={slash.pick} />
-        )}
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          onChange={e => {
-            setDraft(e.target.value)
-            slash.reset()
-          }}
-          onPaste={e => {
-            const files = extractImageFiles(e.clipboardData.items)
-            if (files.length === 0) return
-            e.preventDefault()
-            onAddFiles(files)
-          }}
-          onKeyDown={e => {
-            if (slash.onKeyDown(e)) return
-            // Enter sends; Shift+Enter is a newline (standard chat). ⌘/Ctrl-Enter
-            // also sends (no shift), so existing muscle memory still works.
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              if (canSend) onSend()
+        {queue}
+        <div
+          {...dropProps}
+          className="composer-box"
+          data-dragging={dragging}
+          data-busy={session.busy}
+          aria-busy={draft.sending}
+        >
+          <ComposerAttachments
+            items={attachments.items}
+            disabled={locked}
+            onRemove={attachments.remove}
+            onRetry={key => void attachments.retry(key)}
+            onInsertLabel={label =>
+              insertLabelToken(input.current, draft.text, draft.setText, label)
             }
-          }}
-          disabled={!active}
-          placeholder={
-            active ? '发消息…  Enter 发送 · Shift+Enter 换行' : 'session inactive — resume to send'
-          }
-          // text-base on phones keeps iOS Safari from auto-zooming on focus (it
-          // zooms any input < 16px); md: restores the desktop 14px density.
-          className="max-h-48 min-h-[3.25rem] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 text-base text-ui-text placeholder:text-ui-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed md:text-sm"
-        />
-        <div className="mt-2 flex items-center">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!active}
-            aria-label="attach files"
-            className="ui-icon-button"
-          >
-            <PaperclipIcon />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={e => {
-              onAddFiles(Array.from(e.target.files ?? []))
-              e.target.value = ''
-            }}
           />
-          <button
-            type="button"
-            onClick={onSend}
-            disabled={!canSend}
-            aria-label={busy ? 'sending' : 'send message'}
-            className="ui-icon-button ml-auto bg-ui-accent text-white hover:bg-ui-accent-hover hover:text-white disabled:bg-ui-border disabled:text-ui-muted"
-          >
-            {busy ? <Spinner /> : <SendIcon />}
-          </button>
+          <div className="composer-input-row">
+            <textarea
+              ref={input}
+              value={draft.text}
+              aria-label="消息"
+              aria-describedby={helpId}
+              aria-autocomplete="list"
+              aria-controls={slash.open ? menuId : undefined}
+              aria-activedescendant={slash.open ? `${menuId}-${slash.activeIndex}` : undefined}
+              placeholder="输入消息，或输入 / 查看命令…"
+              rows={2}
+              onChange={event => {
+                draft.setText(event.target.value)
+                slash.reset()
+              }}
+              onPaste={event => {
+                const files = extractImageFiles(event.clipboardData.items)
+                if (!files.length) return
+                event.preventDefault()
+                addFiles(files)
+              }}
+              onKeyDown={event => {
+                if (event.nativeEvent.isComposing || event.keyCode === 229) return
+                if (slash.onKeyDown(event)) return
+                if (event.key === 'Escape' && session.busy) {
+                  event.preventDefault()
+                  if (!controls.pending) void controls.abort()
+                }
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  execute()
+                }
+              }}
+            />
+          </div>
+          <div className="composer-toolbar">
+            <div className="composer-options">
+              <button
+                type="button"
+                className="composer-icon-button"
+                disabled={!canAttach}
+                aria-label="添加附件"
+                title="添加附件，也可以粘贴图片或拖入文件"
+                onClick={() => picker.current?.click()}
+              >
+                <PaperclipIcon />
+              </button>
+              <input
+                ref={picker}
+                type="file"
+                multiple
+                hidden
+                onChange={event => {
+                  addFiles(Array.from(event.target.files ?? []))
+                  event.target.value = ''
+                }}
+              />
+              <span className="composer-toolbar-separator" aria-hidden="true" />
+              <ComposerOptions agentKind={agentKind} controls={controls} disabled={draft.sending} />
+            </div>
+            <div className="composer-send-actions">
+              {session.busy && (
+                <button
+                  type="button"
+                  className="composer-stop"
+                  aria-label="停止当前执行"
+                  disabled={controls.pending !== null || controls.saving !== null}
+                  onClick={() => void controls.abort()}
+                >
+                  <StopIcon />
+                  <span>{controls.pending === 'abort' ? '停止中…' : '停止'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="composer-send"
+                disabled={commandLabel ? locked : !draft.canSend}
+                aria-label={sendLabel}
+                title={sendLabel}
+                onClick={execute}
+              >
+                {draft.sending ? <Spinner /> : <SendIcon />}
+                <span>{sendLabel}</span>
+              </button>
+            </div>
+          </div>
+          {dragging && (
+            <div className="composer-drop-hint">
+              <PaperclipIcon />
+              松开以添加附件
+            </div>
+          )}
         </div>
+        <div id={helpId} className="composer-footer">
+          {feedbackErrors.length > 0 ? (
+            <div role="alert" className="composer-footer-errors">
+              {feedbackErrors.map(error => (
+                <p key={error}>{error}</p>
+              ))}
+            </div>
+          ) : !session.connected ? (
+            <p>执行环境离线，连接恢复后可发送。</p>
+          ) : controls.notice ? (
+            <p role="status">{controls.notice}</p>
+          ) : !session.attached ? (
+            <div className="composer-footer-action">
+              <span>会话未启动，恢复后可发送。</span>
+              <button
+                type="button"
+                className="ui-button"
+                disabled={locked}
+                onClick={() => void controls.resume()}
+              >
+                {controls.pending === 'resume' ? '请求中…' : '恢复会话'}
+              </button>
+            </div>
+          ) : (
+            <p className="composer-input-help">Enter 发送 · Shift+Enter 换行</p>
+          )}
+        </div>
+        {slash.open && (
+          <Popover
+            anchor={input.current}
+            id={menuId}
+            role="listbox"
+            label="会话命令"
+            autoFocus={false}
+            placement="top-start"
+            className="composer-popup composer-command-popup"
+            onClose={slash.dismiss}
+          >
+            <CommandMenu
+              id={menuId}
+              commands={slash.menu}
+              activeIndex={slash.activeIndex}
+              onPick={slash.pick}
+            />
+          </Popover>
+        )}
+        {showHelp && (
+          <Popover
+            anchor={input.current}
+            role="dialog"
+            label="命令帮助"
+            placement="top-start"
+            className="composer-popup composer-help-popup"
+            onClose={() => setShowHelp(false)}
+          >
+            <CommandHelp agentKind={agentKind} onClose={() => setShowHelp(false)} />
+          </Popover>
+        )}
       </div>
     </div>
   )

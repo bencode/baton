@@ -20,16 +20,15 @@ const isProcess = (item: RenderItem): item is ProcessItem =>
 
 // Fold consecutive process items into groups; any other kind (assistant-text,
 // user-bubble, turn-end, …) flushes — the assistant speaking up is the natural
-// chunk boundary. A single process item keeps its plain form (group chrome
-// would cost more than it hides). Only the trailing group of a working session
+// chunk boundary. Single items retain the same group shell when a turn ends,
+// preserving disclosure state. Only the trailing group of a working session
 // is live. Pure: component layer only, the reducer stays untouched.
-export const groupRenderItems = (items: RenderItem[], working: boolean): StreamItem[] => {
+export const groupRenderItems = (items: readonly RenderItem[], working: boolean): StreamItem[] => {
   const out: StreamItem[] = []
   let buffer: ProcessItem[] = []
   const flush = (live: boolean): void => {
     if (buffer.length === 0) return
-    if (buffer.length === 1 && !live) out.push(buffer[0] as ProcessItem)
-    else out.push({ kind: 'activity-group', key: `group-${buffer[0]?.key}`, items: buffer, live })
+    out.push({ kind: 'activity-group', key: `group-${buffer[0]?.key}`, items: buffer, live })
     buffer = []
   }
   for (const item of items) {
@@ -55,22 +54,19 @@ export const groupSummary = (
   }
   const thinking = counts.get('thinking')
   counts.delete('thinking')
-  const parts = [...counts.entries()].map(([name, n]) => `${n} ${name}`)
-  if (thinking !== undefined) parts.push(`${thinking} thinking`)
-  const failed = g.items.filter(i => i.kind === 'tool-block' && i.isError).length
+  const parts = [...counts.entries()].map(([name, n]) => `${name} ${n} 项`)
+  if (thinking !== undefined) parts.push(`思考 ${thinking} 项`)
+  const failed = g.items.filter(
+    i => i.kind === 'tool-block' && (i.isError || i.status === 'failed'),
+  ).length
   return { steps: g.items.length, parts, failed }
 }
 
-// Timeline node semantics: pre-attentive scan layer for the expanded group.
-// Side-effectful tools read warmer than read-only ones; a tool whose result
-// hasn't folded in yet (live group only) is the step running right now.
-const WRITE_TOOLS = new Set(['Bash', 'Edit', 'Write', 'NotebookEdit'])
+export type NodeTone = 'running' | 'error' | 'neutral' | 'thinking'
 
-export type NodeTone = 'running' | 'error' | 'write' | 'read' | 'thinking'
-
-export const nodeTone = (item: ProcessItem, live: boolean): NodeTone => {
+export const nodeTone = (item: ProcessItem, live: boolean, statusKnown = true): NodeTone => {
   if (item.kind === 'thinking') return 'thinking'
-  if (item.isError) return 'error'
-  if (live && item.resultText === undefined) return 'running'
-  return WRITE_TOOLS.has(item.name) ? 'write' : 'read'
+  if (item.isError || item.status === 'failed') return 'error'
+  if (live && statusKnown && item.status === 'in_progress') return 'running'
+  return 'neutral'
 }
