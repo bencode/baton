@@ -1,6 +1,6 @@
 import type { SessionEvent } from '@baton/shared'
-import { act, cleanup, renderHook } from '@testing-library/react'
-import { createElement, type ReactNode } from 'react'
+import { act, cleanup, render, renderHook } from '@testing-library/react'
+import { Activity, type ActivityProps, createElement, type ReactNode } from 'react'
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest'
 import type { Api } from '../../api'
 import { ApiContext } from '../../app/api-context'
@@ -76,6 +76,93 @@ afterAll(() => {
 afterEach(cleanup)
 beforeEach(() => {
   FakeEventSource.instances = []
+})
+
+test('an open live stream does not confirm empty history before its response', async () => {
+  let done!: (rows: SessionEvent[]) => void
+  const listEvents = vi.fn(
+    () =>
+      new Promise<SessionEvent[]>(resolve => {
+        done = resolve
+      }),
+  )
+  const api = { sessionStreamUrl: () => '/stream', sessions: { listEvents } } as unknown as Api
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(ApiContext.Provider, { value: api }, children)
+  const hook = renderHook(() => useSessionStream(1), { wrapper })
+  act(() => instance(0).open())
+  expect(hook.result.current.status).toBe('open')
+  expect(hook.result.current.history.status).toBe('loading')
+  await act(async () => {
+    done([])
+  })
+  expect(hook.result.current.history.status).toBe('ready')
+  expect(hook.result.current.events).toEqual([])
+})
+
+test('history failure remains recoverable independently of the live connection', async () => {
+  const listEvents = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('history unavailable'))
+    .mockResolvedValue([ev(1, 0)])
+  const api = { sessionStreamUrl: () => '/stream', sessions: { listEvents } } as unknown as Api
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(ApiContext.Provider, { value: api }, children)
+  const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const hook = renderHook(() => useSessionStream(1), { wrapper })
+  act(() => instance(0).open())
+  await flush()
+  expect(hook.result.current.status).toBe('open')
+  expect(hook.result.current.history).toEqual({ status: 'error', message: 'history unavailable' })
+  await act(() => hook.result.current.retryHistory())
+  expect(hook.result.current.events).toHaveLength(1)
+  expect(hook.result.current.history.status).toBe('ready')
+  expect(errorLog).toHaveBeenCalledWith(
+    '[session-stream] history backfill failed',
+    expect.any(Error),
+  )
+  errorLog.mockRestore()
+})
+
+test('Activity reactivation preserves paged history while fetching only the missing tail', async () => {
+  let finishGap!: (rows: SessionEvent[]) => void
+  const rows = Array.from({ length: 200 }, (_, index) => ev(index + 100, index + 900))
+  const listEvents = vi
+    .fn()
+    .mockResolvedValueOnce(rows)
+    .mockResolvedValueOnce([ev(1, 7)])
+    .mockImplementation(
+      () =>
+        new Promise<SessionEvent[]>(resolve => {
+          finishGap = resolve
+        }),
+    )
+  const api = { sessionStreamUrl: () => '/stream', sessions: { listEvents } } as unknown as Api
+  let state!: ReturnType<typeof useSessionStream>
+  const Host = () => {
+    state = useSessionStream(1)
+    return null
+  }
+  const tree = (mode: 'visible' | 'hidden') =>
+    createElement(
+      ApiContext.Provider,
+      { value: api },
+      createElement(Activity, { mode } as ActivityProps, createElement(Host)),
+    )
+  const view = render(tree('visible'))
+  await flush()
+  await act(() => state.loadOlder())
+  view.rerender(tree('hidden'))
+  view.rerender(tree('visible'))
+  expect(state.events).toHaveLength(201)
+  expect(state.events[0]?.sequence).toBe(7)
+  expect(state.history.status).toBe('ready')
+  expect(listEvents).toHaveBeenLastCalledWith(1, { since: 1099 })
+  await act(async () => {
+    finishGap([ev(1000, 1100)])
+  })
+  expect(state.events).toHaveLength(202)
+  expect(state.hasOlder).toBe(false)
 })
 
 test('returning to the foreground reopens the stream and backfills the gap', async () => {

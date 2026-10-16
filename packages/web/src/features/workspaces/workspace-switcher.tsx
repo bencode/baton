@@ -5,7 +5,7 @@ import { useApi } from '../../app/api-context'
 import { workspacePath } from '../../app/route'
 import { PencilIcon } from '../../components/icons'
 import { InlineRename } from '../../components/inline-rename'
-import { SelectControl } from '../../components/select-control'
+import { Select } from '../../components/select'
 import { bumpLists } from '../../hooks/use-list-revision'
 import { useWorkspaces } from './use-workspaces'
 
@@ -52,27 +52,20 @@ export const WorkspaceSwitcher = ({ activeWorkspaceId, onNavigate }: WorkspaceSw
               onCancel={() => setEditing(false)}
             />
           ) : (
-            <SelectControl
+            <Select
               aria-label="切换工作区"
-              value={activeWorkspaceId ?? ''}
-              tone="quiet"
+              value={activeWorkspaceId === null ? null : String(activeWorkspaceId)}
+              options={workspaces.map(workspace => ({
+                value: String(workspace.id),
+                label: workspace.name,
+              }))}
+              placeholder="选择工作区"
               className="min-w-0 flex-1"
-              onChange={event => {
-                navigate(workspacePath(Number(event.target.value)))
+              onValueChange={value => {
+                navigate(workspacePath(Number(value)))
                 onNavigate?.()
               }}
-            >
-              {activeWorkspaceId === null && (
-                <option value="" disabled>
-                  选择工作区
-                </option>
-              )}
-              {workspaces.map(workspace => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </option>
-              ))}
-            </SelectControl>
+            />
           )}
           {active && !editing && (
             <button
