@@ -35,9 +35,9 @@ describe('groupRenderItems', () => {
     expect(last.live).toBe(true)
   })
 
-  test('a lone historical process item stays plain; a lone live one still groups', () => {
+  test('a lone process item keeps its group shell after the turn ends', () => {
     expect(groupRenderItems([tool('t1'), text('a1')], false).map(i => i.kind)).toEqual([
-      'tool-block',
+      'activity-group',
       'assistant-text',
     ])
     expect(groupRenderItems([tool('t1')], true).map(i => i.kind)).toEqual(['activity-group'])
@@ -52,7 +52,7 @@ describe('groupSummary', () => {
     )[0] as ActivityGroup
     expect(groupSummary(g)).toEqual({
       steps: 4,
-      parts: ['2 Bash', '1 Read', '1 thinking'],
+      parts: ['Bash 2 项', 'Read 1 项', '思考 1 项'],
       failed: 1,
     })
   })

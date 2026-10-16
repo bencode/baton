@@ -1,0 +1,205 @@
+.chat-markdown {
+  color: var(--color-ui-text);
+  font-size: 15px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+.chat-markdown > :first-child {
+  margin-top: 0;
+}
+.chat-markdown > :last-child {
+  margin-bottom: 0;
+}
+.chat-markdown p {
+  margin: 12px 0;
+}
+.chat-markdown :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--color-ui-heading);
+  margin: 26px 0 8px;
+}
+.chat-markdown h1 {
+  font-size: 22px;
+  line-height: 1.5;
+  margin: 30px 0 12px;
+}
+.chat-markdown h2 {
+  font-size: 19px;
+  line-height: 1.5;
+  margin: 30px 0 12px;
+}
+.chat-markdown h3 {
+  font-size: 16px;
+}
+.chat-markdown :is(h4, h5, h6) {
+  font-size: 15px;
+}
+.chat-markdown strong {
+  font-weight: 600;
+}
+.chat-markdown :is(ul, ol) {
+  margin: 10px 0 14px;
+  padding-left: 1.5em;
+}
+.chat-markdown ul {
+  list-style: disc;
+}
+.chat-markdown ol {
+  list-style: decimal;
+}
+.chat-markdown li {
+  padding-left: 3px;
+  margin: 6px 0;
+}
+.chat-markdown li::marker {
+  color: var(--color-ui-muted);
+}
+.chat-markdown li > :is(ul, ol) {
+  margin-block: 4px;
+}
+.chat-markdown .contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+.chat-markdown input[type="checkbox"] {
+  accent-color: var(--color-ui-accent);
+  margin-right: 6px;
+}
+.chat-markdown a {
+  color: var(--color-ui-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.chat-markdown :is(code, pre) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.chat-markdown :not(pre) > code {
+  font-size: 0.87em;
+  border-radius: 4px;
+  padding: 2px 5px;
+  background: var(--color-ui-hover);
+  color: var(--color-ui-heading);
+}
+.chat-code-block {
+  overflow: hidden;
+  border: 1px solid var(--color-ui-border);
+  border-radius: 8px;
+  margin: 14px 0 20px;
+  background: var(--color-ui-panel);
+}
+.chat-code-label {
+  font-size: 11px;
+  color: var(--color-ui-muted);
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--color-ui-border);
+  line-height: 1.6;
+}
+.chat-markdown pre {
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  tab-size: 2;
+}
+.chat-markdown pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+.chat-table {
+  overflow-x: auto;
+  border: 1px solid var(--color-ui-border);
+  border-radius: 8px;
+  margin: 14px 0 20px;
+}
+.chat-table table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 480px;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.chat-table :is(th, td) {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-ui-border);
+  text-align: left;
+  vertical-align: top;
+}
+.chat-table th {
+  background: var(--color-ui-panel);
+  color: var(--color-ui-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chat-table tr:last-child td {
+  border-bottom: none;
+}
+.chat-markdown blockquote {
+  margin: 16px 0;
+  padding: 10px 16px;
+  background: var(--color-ui-info-surface);
+  border-radius: 6px;
+  color: var(--color-ui-info-text);
+  font-size: 14px;
+}
+.chat-markdown blockquote p {
+  margin: 0;
+}
+.chat-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--color-ui-border);
+  margin: 24px 0;
+}
+.chat-markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.chat-markdown .katex-display {
+  margin: 14px 0;
+  padding: 8px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.chat-markdown :is(pre, a):focus-visible,
+.chat-table:focus-visible {
+  outline: 2px solid var(--color-ui-accent);
+  outline-offset: -2px;
+}
+.chat-markdown-process {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--color-ui-info-text);
+}
+.chat-markdown-process h1 {
+  font-size: 17px;
+}
+.chat-markdown-process h2 {
+  font-size: 16px;
+}
+.chat-markdown-process :is(h3, h4, h5, h6) {
+  font-size: 14px;
+}
+@media (max-width: 767px) {
+  .chat-markdown h1 {
+    font-size: 20px;
+  }
+  .chat-markdown h2 {
+    font-size: 18px;
+    margin-top: 26px;
+  }
+  .chat-markdown h3 {
+    margin-top: 22px;
+  }
+  .chat-markdown-process h1 {
+    font-size: 17px;
+  }
+  .chat-markdown-process h2 {
+    font-size: 16px;
+  }
+}

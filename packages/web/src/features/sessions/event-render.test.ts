@@ -369,3 +369,67 @@ describe('isAgentWorking', () => {
     ).toBe(true)
   })
 })
+
+test('completed empty tool output remains empty rather than pending', () => {
+  const out = reduceEvents([
+    ev('agent_event', {
+      type: 'item.completed',
+      item: {
+        type: 'command_execution',
+        id: 'empty',
+        status: 'completed',
+        command: 'true',
+        output: '',
+      },
+    }),
+  ])
+  expect(out).toMatchObject([{ kind: 'tool-block', status: 'completed', resultText: '' }])
+})
+
+test('only an explicit failed outcome without recovery is a final failure', () => {
+  const out = reduceEvents([
+    ev('agent_event', { type: 'error', message: 'Reconnecting...' }),
+    ev('turn_error', { outcome: 'failed', message: 'lease_expired', retrying: true }),
+    ev('turn_error', { message: 'legacy error' }),
+    ev('turn_error', { outcome: 'failed', message: 'spawn failed' }),
+  ])
+  expect(out.map(item => item.kind === 'turn-error' && item.finalFailure === true)).toEqual([
+    false,
+    false,
+    false,
+    true,
+  ])
+  expect(out.filter(item => item.kind === 'turn-error').map(item => item.message)).toEqual([
+    'Reconnecting...',
+    'lease_expired',
+    'legacy error',
+    'spawn failed',
+  ])
+})
+
+test('legacy SDK results update tool status, including empty output and failure', () => {
+  const out = reduceEvents([
+    ev('sdk_event', {
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'tool_use', id: 'ok', name: 'Bash', input: { command: 'true' } },
+          { type: 'tool_use', id: 'bad', name: 'Bash', input: { command: 'false' } },
+        ],
+      },
+    }),
+    ev('sdk_event', {
+      type: 'user',
+      message: {
+        content: [
+          { type: 'tool_result', tool_use_id: 'ok', content: '' },
+          { type: 'tool_result', tool_use_id: 'bad', content: 'exit 1', is_error: true },
+        ],
+      },
+    }),
+  ])
+  expect(out).toMatchObject([
+    { status: 'completed', resultText: '' },
+    { status: 'failed', isError: true, resultText: 'exit 1' },
+  ])
+})

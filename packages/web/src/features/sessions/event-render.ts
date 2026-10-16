@@ -4,6 +4,7 @@ import {
   type AgentKind,
   type Attachment,
   cancelledMessageIds,
+  type ItemStatus,
   type SessionEvent,
 } from '@baton/shared'
 import type { RateLimitInfo, TurnEndSummary } from './event-payload'
@@ -46,6 +47,7 @@ export type RenderItem =
       name: string
       input: unknown
       toolUseId: string
+      status?: ItemStatus
       resultText?: string
       isError?: boolean
       key: string
@@ -61,6 +63,7 @@ export type RenderItem =
       kind: 'turn-error'
       turnIndex: number
       message: string
+      finalFailure?: boolean
       rateLimit?: RateLimitInfo
       key: string
     }
@@ -106,6 +109,7 @@ export const reduceEvents = (
     const { text, isError } = formatToolResult(b)
     target.resultText = text
     target.isError = isError
+    target.status = isError ? 'failed' : 'completed'
   }
   let pendingResult: TurnEndSummary | undefined
   let pendingRateLimit: RateLimitInfo | undefined
@@ -128,7 +132,8 @@ export const reduceEvents = (
         name: 'Bash',
         input: { command: item.command },
         toolUseId: item.id,
-        resultText: item.output || undefined,
+        status: item.status,
+        resultText: item.status === 'in_progress' && !item.output ? undefined : item.output,
         isError: item.status === 'failed',
         key,
       }
@@ -139,6 +144,7 @@ export const reduceEvents = (
         name: `mcp__${item.server}__${item.tool}`,
         input: item.arguments,
         toolUseId: item.id,
+        status: item.status,
         resultText: item.output === undefined ? undefined : JSON.stringify(item.output),
         isError: item.isError ?? item.status === 'failed',
         key,
@@ -150,6 +156,7 @@ export const reduceEvents = (
         name: 'WebSearch',
         input: { query: item.query },
         toolUseId: item.id,
+        status: item.status,
         isError: item.status === 'failed',
         key,
       }
@@ -160,6 +167,7 @@ export const reduceEvents = (
         name: 'file_change',
         input: item.changes,
         toolUseId: item.id,
+        status: item.status,
         isError: item.status === 'failed',
         key,
       }
@@ -170,6 +178,7 @@ export const reduceEvents = (
         name: 'TodoWrite',
         input: item.items,
         toolUseId: item.id,
+        status: item.status,
         isError: item.status === 'failed',
         key,
       }
@@ -179,6 +188,7 @@ export const reduceEvents = (
       name: item.name,
       input: item.input,
       toolUseId: item.id,
+      status: item.status,
       resultText: item.output === undefined ? undefined : JSON.stringify(item.output),
       isError: item.isError ?? item.status === 'failed',
       key,
@@ -222,6 +232,7 @@ export const reduceEvents = (
       existing.input = next.input
       existing.resultText = next.resultText
       existing.isError = next.isError
+      existing.status = next.status
     } else {
       pendingAgentItems.set(item.id, next)
       items.push(next)
@@ -297,7 +308,7 @@ export const reduceEvents = (
     // turn_heartbeat is a liveness ping — it does not render.
     if (e.type === 'turn_heartbeat' || e.type === 'queue_changed') continue
     if (e.type === 'turn_aborted') {
-      items.push({ kind: 'system-notice', text: 'Turn stopped', key })
+      items.push({ kind: 'system-notice', text: '本轮已停止', key })
       pendingResult = undefined
       pendingRateLimit = undefined
       continue
@@ -310,6 +321,8 @@ export const reduceEvents = (
         kind: 'turn-error',
         turnIndex,
         message: msg,
+        finalFailure:
+          isRecord(e.payload) && e.payload.outcome === 'failed' && e.payload.retrying !== true,
         rateLimit: pendingRateLimit,
         key,
       })
@@ -392,6 +405,7 @@ export const reduceEvents = (
             name,
             input: b.input ?? null,
             toolUseId: id,
+            status: 'in_progress',
             key: `${key}-tool-${i}`,
           }
           items.push(item)

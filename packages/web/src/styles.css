@@ -3,6 +3,9 @@
 @import "./styles/controls.css";
 @import "./app/shell/workbench.css";
 @import "./styles/management.css";
+@import "./styles/chat-markdown.css";
+@import "./features/sessions/session-detail/transcript.css";
+@import "./features/sessions/session-detail/activity.css";
 @plugin "@tailwindcss/typography";
 
 html,

@@ -18,3 +18,19 @@ test('keeps backslash-parens inside code as literal text, not math', () => {
   expect(container.querySelector('.katex')).toBeNull()
   expect(container.querySelector('code')?.textContent).toBe('f\\(x\\)')
 })
+
+test('chat markdown preserves tables, fenced code, safe links, and math', () => {
+  const { container, getByRole } = render(
+    <Markdown
+      variant="chat"
+      text={
+        '| 名称 | 状态 |\n| --- | --- |\n| test | 正常 |\n\n```ts\nconst x = 1\n```\n\n[参考](https://example.com) 和 $a+b$'
+      }
+    />,
+  )
+  expect(getByRole('table').textContent).toContain('正常')
+  expect(getByRole('region', { name: '表格，可横向滚动' })).toBeTruthy()
+  expect(container.querySelector('pre code')?.textContent).toBe('const x = 1\n')
+  expect(getByRole('link', { name: '参考' }).getAttribute('rel')).toBe('noopener noreferrer')
+  expect(container.querySelector('.katex')).toBeTruthy()
+})

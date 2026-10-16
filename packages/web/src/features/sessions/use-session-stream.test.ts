@@ -1,7 +1,7 @@
 import type { SessionEvent } from '@baton/shared'
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
-import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest'
 import type { Api } from '../../api'
 import { ApiContext } from '../../app/api-context'
 import { mergeEvents, useSessionStream } from './use-session-stream'
@@ -73,6 +73,7 @@ beforeAll(() => {
 afterAll(() => {
   Reflect.deleteProperty(globalThis, 'EventSource')
 })
+afterEach(cleanup)
 beforeEach(() => {
   FakeEventSource.instances = []
 })
@@ -121,7 +122,11 @@ test('history pagination stops after a short page even when migration left seque
   const hook = renderHook(() => useSessionStream(1), { wrapper })
   await flush()
   expect(hook.result.current.hasOlder).toBe(true)
-  await act(async () => hook.result.current.loadOlder())
+  const beforePrepend = vi.fn(() => {
+    expect(hook.result.current.events[0]?.sequence).toBe(900)
+  })
+  await act(async () => hook.result.current.loadOlder(beforePrepend))
+  expect(beforePrepend).toHaveBeenCalledTimes(1)
   expect(listEvents.mock.calls[1]?.[1]).toEqual({ before: 900, limit: 600 })
   expect(hook.result.current.events[0]?.sequence).toBe(7)
   expect(hook.result.current.hasOlder).toBe(false)
@@ -129,4 +134,40 @@ test('history pagination stops after a short page even when migration left seque
   const connected = hook.result.current.connectionRevision
   await act(async () => instance(0).open())
   expect(hook.result.current.connectionRevision).toBe(connected + 1)
+})
+
+test('failed history or an obsolete session never arms a prepend marker', async () => {
+  const history = Array.from({ length: 200 }, (_, index) => ev(index + 100, index + 900))
+  let resolveOlder: ((value: SessionEvent[]) => void) | undefined
+  const older = new Promise<SessionEvent[]>(resolve => {
+    resolveOlder = resolve
+  })
+  const listEvents = vi
+    .fn()
+    .mockResolvedValueOnce(history)
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockReturnValueOnce(older)
+    .mockResolvedValue([])
+  const api = { sessionStreamUrl: () => '/stream', sessions: { listEvents } } as unknown as Api
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(ApiContext.Provider, { value: api }, children)
+  const hook = renderHook(({ id }) => useSessionStream(id), { wrapper, initialProps: { id: 1 } })
+  const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const beforePrepend = vi.fn()
+  await flush()
+  await act(async () => hook.result.current.loadOlder(beforePrepend))
+  expect(errorLog).toHaveBeenCalledWith('[session-stream] load older failed', expect.any(Error))
+  expect(beforePrepend).not.toHaveBeenCalled()
+  let pending: Promise<void> | undefined
+  act(() => {
+    pending = hook.result.current.loadOlder(beforePrepend)
+  })
+  hook.rerender({ id: 2 })
+  await act(async () => {
+    resolveOlder?.([ev(1, 0)])
+    await pending
+  })
+  expect(beforePrepend).not.toHaveBeenCalled()
+  expect(hook.result.current.events).toEqual([])
+  errorLog.mockRestore()
 })

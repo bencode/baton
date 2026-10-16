@@ -54,17 +54,14 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const [showHelp, setShowHelp] = useState(false)
 
   // Stick-to-bottom + jump-to-latest + load-earlier scroll handling (see hook).
-  const { scrollRef, pinned, onScroll, jumpToBottom, markPrepend } = useTranscriptScroll(
-    sessionId,
-    items.length,
-  )
+  const { scrollRef, pinned, onScroll, jumpToBottom, markPrepend, onContentLoad } =
+    useTranscriptScroll(sessionId, items, Boolean(session && !session.terminalOpen))
   // Record the reading position before fetching older events so it doesn't jump.
   const onLoadOlder = () => {
-    markPrepend()
-    loadOlder()
+    void loadOlder(markPrepend)
   }
 
-  if (!session) return <div className="p-6 text-sm text-gray-400">loading…</div>
+  if (!session) return <div className="p-6 text-sm text-ui-muted">加载中…</div>
 
   // Upload the batch concurrently; append every success and surface a count of
   // any failures instead of silently dropping the rest of the batch. Files
@@ -170,12 +167,18 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
 
   // Busy describes a durable execution, not whether the worker is attached.
   const working = sending || session.busy
+  const statusKnown = status === 'open' && session.connected
+  const initialEvent = items.find(item => item.kind === 'system-header')
 
   return (
     <div className="flex h-full min-w-0 flex-col">
       <SessionHeader
         session={session}
         active={session.attached}
+        busy={session.busy}
+        connected={session.connected}
+        streamStatus={status}
+        initialEvent={initialEvent}
         projectId={session.projectId}
         activeLoops={session.activeLoops}
         terminalOpen={session.terminalOpen}
@@ -197,6 +200,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
             items={items}
             scrollRef={scrollRef}
             working={working}
+            statusKnown={statusKnown}
+            onContentLoad={onContentLoad}
             onScroll={onScroll}
             pinned={pinned}
             onJumpToBottom={jumpToBottom}
@@ -204,7 +209,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
             loadingOlder={loadingOlder}
             onLoadOlder={onLoadOlder}
           />
-          {working && <WorkingIndicator onAbort={abort} />}
+          {working && <WorkingIndicator onAbort={abort} statusKnown={statusKnown} />}
           <QueuedMessages
             queued={queue.items}
             cancelling={queue.cancelling}

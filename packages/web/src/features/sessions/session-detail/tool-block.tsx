@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import type { ItemStatus } from '@baton/shared'
+import { useId, useState } from 'react'
+import { ChevronDownIcon } from '../../../components/icons'
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -37,100 +39,103 @@ const smartSummary = (name: string, input: unknown): string => {
   return truncate(`${k}: ${vs}`)
 }
 
-const lineCount = (s: string): number => (s.match(/\n/g)?.length ?? 0) + 1
-
 type ToolBlockProps = {
   name: string
   input: unknown
   resultText?: string
   isError?: boolean
+  status?: ItemStatus
+  live?: boolean
+  statusKnown?: boolean
+  bare?: boolean
 }
 
-// Rotating caret shared by the collapsible rows — one glyph, transform only.
 export const Caret = ({ open }: { open: boolean }) => (
-  <span
-    aria-hidden="true"
-    className={`text-gray-400 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
-  >
-    ▸
+  <span aria-hidden="true" className="chat-caret" data-open={open}>
+    <ChevronDownIcon />
   </span>
 )
 
-const SectionLabel = ({ children }: { children: string }) => (
-  <div className="mt-1 text-[10px] tracking-wider text-gray-400 uppercase">{children}</div>
-)
-
-// Value-first input rendering: a Bash invocation reads better as the command
-// itself than as `{ "command": "…" }`. Other tools keep the JSON (an Edit's
-// old/new strings genuinely need the structure).
 const inputText = (name: string, input: unknown): string =>
   name === 'Bash' && isRecord(input) && typeof input.command === 'string'
     ? input.command
-    : JSON.stringify(input, null, 2)
+    : (JSON.stringify(input, null, 2) ?? String(input))
 
-const ToolBlockBody = ({ name, input, resultText, isError }: ToolBlockProps) => (
-  <div className="ml-4 flex min-w-0 flex-col gap-1">
-    <SectionLabel>input</SectionLabel>
-    <pre className="overflow-x-auto rounded border border-gray-100 bg-gray-50 p-2 font-mono text-xs whitespace-pre-wrap break-words text-gray-700">
-      {inputText(name, input)}
-    </pre>
-    {resultText !== undefined && (
-      <>
-        <SectionLabel>{isError ? 'error' : 'result'}</SectionLabel>
-        <pre
-          className={`overflow-x-auto rounded border p-2 font-mono text-xs whitespace-pre-wrap break-words ${
-            isError
-              ? 'border-red-200 bg-red-50/50 text-red-800'
-              : 'border-gray-100 bg-white text-gray-700'
-          }`}
-        >
-          {resultText}
-        </pre>
-      </>
+const ToolBlockBody = ({
+  name,
+  input,
+  resultText,
+  isError,
+  status,
+  live,
+  statusKnown,
+}: ToolBlockProps) => (
+  <div className="chat-tool-payload">
+    <div className="chat-payload-label">输入</div>
+    {/* biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users must be able to scroll raw tool input. */}
+    <pre tabIndex={0}>{inputText(name, input)}</pre>
+    <div className="chat-payload-label chat-payload-result">
+      {isError || status === 'failed' ? '错误结果' : '结果'}
+    </div>
+    {resultText !== undefined ? (
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users must be able to scroll raw tool results.
+      <pre tabIndex={0}>{resultText === '' ? '（空输出）' : resultText}</pre>
+    ) : (
+      <p className="chat-missing-result">
+        {live && statusKnown && status === 'in_progress' ? '暂未收到结果' : '未提供结果'}
+      </p>
     )}
   </div>
 )
 
-// `bare` drops the per-row button chrome — inside an activity-group timeline
-// the vertical rule + node already provide the structure, so a border per row
-// would only re-fragment the group.
 export const ToolBlock = ({
   name,
   input,
   resultText,
   isError,
+  status,
+  live = false,
+  statusKnown = true,
   bare = false,
-}: ToolBlockProps & { bare?: boolean }) => {
-  const [open, setOpen] = useState(false)
+}: ToolBlockProps) => {
+  const [choice, setChoice] = useState<boolean | null>(null)
+  const id = useId()
+  const failed = isError || status === 'failed'
+  const open = choice ?? (live && status === 'in_progress' && !failed)
   const summary = smartSummary(name, input)
-  const lines = resultText !== undefined ? lineCount(resultText) : null
-  const chrome = bare
-    ? 'px-1 py-1 text-gray-600 hover:text-gray-900'
-    : 'rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-700 hover:bg-gray-50'
   return (
-    <div className="flex flex-col gap-1">
+    <div className={bare ? 'chat-tool' : 'chat-tool chat-tool-standalone'}>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
-        className={`flex max-w-full min-w-0 items-center gap-2 self-start text-left font-mono text-xs ${chrome}`}
+        className="chat-tool-summary ui-focus"
+        onClick={() => setChoice(!open)}
+        aria-expanded={open}
+        aria-controls={id}
       >
         <Caret open={open} />
-        <span className="shrink-0 font-semibold text-gray-800">{name}</span>
-        {summary && <span className="min-w-0 truncate text-gray-500">{summary}</span>}
-        {lines !== null && (
-          <span className="shrink-0 text-[10px] text-gray-400">
-            {lines} line{lines === 1 ? '' : 's'}
+        <span className="chat-tool-name">{name}</span>
+        {summary && <span className="chat-tool-preview">{summary}</span>}
+        {failed ? (
+          <span className="chat-status-error">失败</span>
+        ) : live && status === 'in_progress' ? (
+          <span className={statusKnown ? 'chat-status-running' : 'chat-status-muted'}>
+            {statusKnown ? '执行中' : '状态待同步'}
           </span>
-        )}
-        {isError && (
-          <span className="shrink-0 rounded bg-red-50 px-1 text-[10px] text-red-700 ring-1 ring-inset ring-red-200/60">
-            error
-          </span>
-        )}
+        ) : null}
       </button>
-      {open && (
-        <ToolBlockBody name={name} input={input} resultText={resultText} isError={isError} />
-      )}
+      <div id={id} hidden={!open}>
+        {open && (
+          <ToolBlockBody
+            name={name}
+            input={input}
+            resultText={resultText}
+            isError={isError}
+            status={status}
+            live={live}
+            statusKnown={statusKnown}
+          />
+        )}
+      </div>
     </div>
   )
 }

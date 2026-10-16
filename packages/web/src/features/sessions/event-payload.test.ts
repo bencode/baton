@@ -9,19 +9,17 @@ import {
 
 describe('systemActionNotice', () => {
   test('maps each known control action to its notice text', () => {
-    expect(systemActionNotice({ action: 'context_cleared' })).toBe(
-      'context cleared — fresh conversation',
-    )
-    expect(systemActionNotice({ action: 'interrupt' })).toBe('interrupted')
-    expect(systemActionNotice({ action: 'plan_mode', planMode: true })).toBe('entered plan mode')
-    expect(systemActionNotice({ action: 'plan_mode' })).toBe('exited plan mode')
-    expect(systemActionNotice({ action: 'model', model: 'opus' })).toBe('model → opus')
+    expect(systemActionNotice({ action: 'context_cleared' })).toBe('上下文已清空')
+    expect(systemActionNotice({ action: 'interrupt' })).toBe('本轮已停止')
+    expect(systemActionNotice({ action: 'plan_mode', planMode: true })).toBe('已进入规划模式')
+    expect(systemActionNotice({ action: 'plan_mode' })).toBe('已退出规划模式')
+    expect(systemActionNotice({ action: 'model', model: 'opus' })).toBe('模型已切换为 opus')
     expect(systemActionNotice({ action: 'model', model: 'opus', effort: 'max' })).toBe(
-      'model → opus (max)',
+      '模型已切换为 opus，推理强度：max',
     )
-    expect(systemActionNotice({ action: 'model' })).toBe('model reset to default')
+    expect(systemActionNotice({ action: 'model' })).toBe('已恢复默认模型')
     // A reset clears both, so effort alone can't linger in the notice.
-    expect(systemActionNotice({ action: 'model', effort: 'high' })).toBe('model reset to default')
+    expect(systemActionNotice({ action: 'model', effort: 'high' })).toBe('已恢复默认模型')
   })
   test('unknown action / non-record → null (caller falls back to raw)', () => {
     expect(systemActionNotice({ action: 'something_else' })).toBeNull()
