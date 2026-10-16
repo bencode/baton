@@ -1,10 +1,11 @@
-import { Children, isValidElement } from 'react'
+import { Children, Component, isValidElement, lazy, type ReactNode, Suspense } from 'react'
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { normalizeMath } from './math-normalize'
+import { markMermaidFences } from './remark-mermaid'
 
 // Thin wrapper around react-markdown with @tailwindcss/typography styling.
 //
@@ -17,12 +18,32 @@ import { normalizeMath } from './math-normalize'
 // doesn't shout. Tighten vertical margins for chat density.
 type MarkdownProps = { text: string; variant?: 'default' | 'chat' | 'process' }
 
+const LazyMermaidDiagram = lazy(() =>
+  import('./mermaid-diagram').then(module => ({ default: module.MermaidDiagram })),
+)
+
+class MermaidBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  componentDidCatch(error: Error) {
+    console.warn('[mermaid] component loading or rendering failed', error)
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
+
 const ChatCodeBlock: Components['pre'] = ({ children, node: _node, ...props }) => {
   const child = Children.toArray(children).find(isValidElement)
   const language =
     isValidElement<{ className?: string }>(child) &&
     child.props.className?.match(/(?:^|\s)language-(\S+)/)?.[1]
-  return (
+  const sourceBlock = (
     <section className="chat-code-block" aria-label={`${language || '代码'}，可横向滚动`}>
       {language && <div className="chat-code-label">{language}</div>}
       {/* biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users must be able to scroll long code lines. */}
@@ -30,6 +51,39 @@ const ChatCodeBlock: Components['pre'] = ({ children, node: _node, ...props }) =
         {children}
       </pre>
     </section>
+  )
+  if (
+    !isValidElement<{ children?: string; 'data-mermaid-complete'?: string }>(child) ||
+    child.props['data-mermaid-complete'] !== 'true' ||
+    typeof child.props.children !== 'string'
+  )
+    return sourceBlock
+  const source = child.props.children.replace(/\n$/, '')
+  return (
+    <MermaidBoundary
+      key={source}
+      fallback={
+        <div className="chat-mermaid">
+          <p className="chat-mermaid-status" role="alert">
+            图表未能渲染，已保留源码
+          </p>
+          {sourceBlock}
+        </div>
+      }
+    >
+      <Suspense
+        fallback={
+          <div className="chat-mermaid">
+            <p className="chat-mermaid-status" role="status">
+              正在生成图表…
+            </p>
+            {sourceBlock}
+          </div>
+        }
+      >
+        <LazyMermaidDiagram source={source}>{sourceBlock}</LazyMermaidDiagram>
+      </Suspense>
+    </MermaidBoundary>
   )
 }
 
@@ -73,7 +127,9 @@ export const Markdown = ({ text, variant = 'default' }: MarkdownProps) => (
     }
   >
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
+      remarkPlugins={
+        variant === 'chat' ? [remarkGfm, remarkMath, markMermaidFences] : [remarkGfm, remarkMath]
+      }
       rehypePlugins={[rehypeKatex]}
       components={{
         ...(variant !== 'default' ? { pre: ChatCodeBlock, table: ChatTable } : {}),
