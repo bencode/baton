@@ -8,11 +8,13 @@ import { type Code, isServiceName } from '@baton/shared'
 // In M2.6 only R-/T- carry codes (chat-referenced resources). Session
 // navigation uses its int id under /proj/<n>/session/<id>.
 export type ItemKind = 'requirement' | 'task'
+export type ProjectViewKind = 'workers' | 'services' | 'settings'
 
 export type Route =
   | { kind: 'home' }
   | { kind: 'workspace'; workspaceId: number }
   | { kind: 'project'; projectId: number }
+  | { kind: 'project-view'; projectId: number; view: ProjectViewKind }
   | { kind: 'item'; projectId: number; code: Code; itemKind: ItemKind }
   | { kind: 'session'; projectId: number; sessionId: number }
   | { kind: 'service'; projectId: number; workerId: number; name: string }
@@ -38,6 +40,9 @@ export const parseRoute = (pathname: string): Route => {
   if (seg[0] === 'proj') {
     const projectId = intSeg(seg[1])
     if (projectId === null) return { kind: 'home' }
+    const view = seg[2]
+    if (seg.length === 3 && (view === 'workers' || view === 'services' || view === 'settings'))
+      return { kind: 'project-view', projectId, view }
     // /proj/<p>/session/<sid>
     if (seg[2] === 'session') {
       const sessionId = intSeg(seg[3])
@@ -64,6 +69,8 @@ export const parseRoute = (pathname: string): Route => {
 const enc = encodeURIComponent
 export const workspacePath = (workspaceId: number): string => `/ws/${workspaceId}`
 export const projectPath = (projectId: number): string => `/proj/${projectId}`
+export const projectViewPath = (projectId: number, view: ProjectViewKind): string =>
+  `/proj/${projectId}/${view}`
 export const itemPath = (projectId: number, code: Code): string => `/proj/${projectId}/${enc(code)}`
 export const sessionPath = (projectId: number, sessionId: number): string =>
   `/proj/${projectId}/session/${sessionId}`
@@ -76,7 +83,9 @@ export const standaloneSessionPath = (shareToken: string): string => `/s/${share
 // Whether a path opens a tab (item or session).
 export const isItemRoute = (pathname: string): boolean => {
   const r = parseRoute(pathname)
-  return r.kind === 'item' || r.kind === 'session' || r.kind === 'service'
+  return (
+    r.kind === 'item' || r.kind === 'session' || r.kind === 'service' || r.kind === 'project-view'
+  )
 }
 
 // The active project for a path (drives the left tree), if any.

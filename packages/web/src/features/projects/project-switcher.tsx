@@ -1,120 +1,175 @@
 import type { Id } from '@baton/shared'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
-import { projectPath, workspacePath } from '../../app/route'
-import { InlineRename } from '../../components/inline-rename'
+import { projectPath } from '../../app/route'
+import { CheckIcon, ChevronDownIcon, PlusIcon } from '../../components/icons'
+import { Popover } from '../../components/popover'
 import { bumpLists } from '../../hooks/use-list-revision'
-import { ProjectMenu } from './project-menu'
 import { useProjects } from './use-projects'
 
-type ProjectSwitcherProps = { workspaceId: Id | null; activeProjectId: Id | null }
+type ProjectSwitcherProps = {
+  workspaceId: Id | null
+  activeProjectId: Id | null
+  onNavigate?(): void
+}
 
-export const ProjectSwitcher = ({ workspaceId, activeProjectId }: ProjectSwitcherProps) => {
+export const ProjectSwitcher = ({
+  workspaceId,
+  activeProjectId,
+  onNavigate,
+}: ProjectSwitcherProps) => {
   const api = useApi()
-  const { data: projects } = useProjects(workspaceId)
+  const { data, loading, error: loadError } = useProjects(workspaceId)
+  const projects = data?.filter(project => project.workspaceId === workspaceId)
+  const active = projects?.find(project => project.id === activeProjectId)
   const navigate = useNavigate()
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [editing, setEditing] = useState(false)
+  const nameInput = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (editing) nameInput.current?.focus()
+  }, [editing])
+  const [name, setName] = useState('')
   const [creating, setCreating] = useState(false)
-
-  const active = projects?.find(p => p.id === activeProjectId)
-
-  const rename = async (next: string) => {
-    setEditing(false)
-    if (!active) return
-    await api.projects
-      .update(active.id, { name: next })
-      .then(bumpLists, err => console.error('[projects] rename failed', err))
+  const [error, setError] = useState<string | null>(null)
+  const go = (id: Id) => {
+    setAnchor(null)
+    navigate(projectPath(id))
+    onNavigate?.()
   }
-  const create = async (name: string) => {
-    setCreating(false)
-    if (workspaceId === null) return
+  const create = async () => {
+    const trimmed = name.trim()
+    if (workspaceId === null || !trimmed || creating) return
+    setCreating(true)
+    setError(null)
     try {
-      const p = await api.projects.create({ workspaceId, name })
+      const project = await api.projects.create({ workspaceId, name: trimmed })
       bumpLists()
-      navigate(projectPath(p.id))
-    } catch (err) {
-      console.error('[projects] create failed', err)
+      setEditing(false)
+      setName('')
+      go(project.id)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setCreating(false)
     }
   }
-  // Deleting a project cascades (its sessions/workers/requirements/tasks go too) —
-  // ProjectMenu gates this behind a confirm. Land on another project, or the
-  // workspace's empty state when it was the last one.
-  const remove = async () => {
-    if (!active) return
-    const next = projects?.find(p => p.id !== active.id)
-    const fallback = workspaceId !== null ? workspacePath(workspaceId) : '/'
-    try {
-      await api.projects.remove(active.id)
-      bumpLists()
-      navigate(next ? projectPath(next.id) : fallback)
-    } catch (err) {
-      console.error('[projects] delete failed', err)
-    }
-  }
-
-  if (creating)
-    return (
-      <InlineRename
-        name=""
-        ariaLabel="new project name"
-        onCommit={create}
-        onCancel={() => setCreating(false)}
-      />
-    )
-  if (editing && active)
-    return (
-      <InlineRename
-        name={active.name}
-        ariaLabel="project name"
-        onCommit={rename}
-        onCancel={() => setEditing(false)}
-      />
-    )
-
-  // "+ new project" — available whenever a workspace is selected, so a member with
-  // an empty workspace can create their first one.
-  const newButton = workspaceId !== null && (
-    <button
-      type="button"
-      title="new project"
-      aria-label="new project"
-      onClick={() => setCreating(true)}
-      className="shrink-0 text-lg leading-none text-gray-400 transition-colors hover:text-gray-700"
-    >
-      ＋
-    </button>
-  )
-
-  if (!projects || projects.length === 0)
-    return (
-      <span className="flex w-full items-center justify-between gap-1">
-        <span className="text-sm text-gray-400">no project</span>
-        {newButton}
-      </span>
-    )
-
   return (
-    <span className="flex w-full items-center gap-1">
-      <select
-        aria-label="Project"
-        value={activeProjectId ?? ''}
-        onChange={e => navigate(projectPath(Number(e.target.value)))}
-        className="w-full rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-gray-800 transition-colors hover:border-gray-300 focus:outline-none focus-visible:border-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-600/20"
+    <>
+      <button
+        type="button"
+        className="wb-project-trigger"
+        disabled={workspaceId === null || loading}
+        aria-label="切换项目"
+        aria-haspopup="dialog"
+        aria-expanded={anchor !== null}
+        title={active?.name ?? '选择项目'}
+        onClick={event => {
+          setAnchor(anchor ? null : event.currentTarget)
+          setError(null)
+        }}
       >
-        {activeProjectId === null && (
-          <option value="" disabled>
-            project…
-          </option>
+        <span>{active?.name ?? (loading && workspaceId !== null ? '加载项目…' : '选择项目')}</span>
+        <ChevronDownIcon />
+      </button>
+      <Popover
+        anchor={anchor}
+        role="dialog"
+        label="项目"
+        className="wb-project-menu"
+        onClose={() => {
+          setAnchor(null)
+          if (!creating) setEditing(false)
+        }}
+      >
+        <div className="ui-menu-caption">切换项目</div>
+        {loadError && (
+          <p role="alert" className="px-3 py-2 text-xs text-ui-danger">
+            无法加载项目。
+            <button type="button" className="underline" onClick={bumpLists}>
+              重试
+            </button>
+          </p>
         )}
-        {projects.map(p => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
-      {active && <ProjectMenu onRename={() => setEditing(true)} onDelete={remove} />}
-      {newButton}
-    </span>
+        <div role="menu" aria-label="项目列表">
+          {projects?.map(project => (
+            <button
+              key={project.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={project.id === activeProjectId}
+              className="ui-menu-item"
+              onClick={() => go(project.id)}
+            >
+              <span className="min-w-0 flex-1 truncate" title={project.name}>
+                {project.name}
+              </span>
+              {project.id === activeProjectId && <CheckIcon />}
+            </button>
+          ))}
+        </div>
+        {!loadError && !projects?.length && (
+          <p className="px-3 py-2 text-xs text-ui-muted">还没有项目。</p>
+        )}
+        <div className="ui-menu-rule" />
+        {editing ? (
+          <form
+            className="space-y-3 p-3"
+            onSubmit={event => {
+              event.preventDefault()
+              void create()
+            }}
+          >
+            <label className="block text-xs" htmlFor="new-project-name">
+              项目名称
+            </label>
+            <input
+              ref={nameInput}
+              id="new-project-name"
+              className="ui-input w-full"
+              value={name}
+              disabled={creating}
+              onChange={event => setName(event.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={creating}
+                className="ui-button"
+                onClick={() => setEditing(false)}
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={creating || !name.trim()}
+                className="ui-button ui-primary"
+              >
+                {creating ? '创建中…' : '创建'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            className="ui-menu-item"
+            onClick={() => {
+              setEditing(true)
+              setName('')
+              setError(null)
+            }}
+          >
+            <PlusIcon />
+            新建项目
+          </button>
+        )}
+        {error && (
+          <p role="alert" className="px-3 py-2 text-xs text-ui-danger">
+            {error}
+          </p>
+        )}
+      </Popover>
+    </>
   )
 }

@@ -1,6 +1,7 @@
 import type { CreateWorkerInput, WorkerCreation } from '@baton/shared'
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError } from '../../api'
+import { SelectControl } from '../../components/select-control'
 import type { WorkerSetupState } from './use-worker-setup'
 
 export const createErrorText = (error: Error): string => {
@@ -54,11 +55,11 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
       }}
       className="flex flex-col gap-4"
     >
-      <p className="text-xs text-gray-500">
+      <p className="text-xs leading-5 text-ui-muted">
         Create a local Git repository and a worker on the mini. A remote repository is optional and
         can be added later.
       </p>
-      <label className="flex flex-col gap-1 text-sm" htmlFor={`${fieldId}-name`}>
+      <label className="flex flex-col gap-2 text-xs font-medium" htmlFor={`${fieldId}-name`}>
         Worker name
         <input
           id={`${fieldId}-name`}
@@ -67,27 +68,27 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           value={name}
           onChange={event => setName(event.target.value)}
           disabled={setup.creating}
-          className="rounded-md border border-gray-300 px-3 py-2 disabled:opacity-50"
+          className="ui-input w-full"
           placeholder="e.g. my-app"
         />
       </label>
-      <label className="flex flex-col gap-1 text-sm" htmlFor={`${fieldId}-template`}>
+      <label className="flex flex-col gap-2 text-xs font-medium" htmlFor={`${fieldId}-template`}>
         Template
-        <select
+        <SelectControl
           id={`${fieldId}-template`}
           value={template?.id ?? ''}
           disabled
-          className="rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+          className="w-full"
         >
           <option value={template?.id ?? ''}>
             {template?.name ??
               (setup.templates.loading ? 'Loading templates…' : 'No template available')}
           </option>
-        </select>
+        </SelectControl>
       </label>
-      <label className="flex flex-col gap-1 text-sm" htmlFor={`${fieldId}-agent`}>
+      <label className="flex flex-col gap-2 text-xs font-medium" htmlFor={`${fieldId}-agent`}>
         Agent
-        <select
+        <SelectControl
           id={`${fieldId}-agent`}
           value={agent ?? ''}
           onChange={event => {
@@ -95,7 +96,7 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
             if (selected) setAgentKind(selected)
           }}
           disabled={setup.creating || !agent}
-          className="rounded-md border border-gray-300 px-3 py-2 disabled:opacity-50"
+          className="w-full"
         >
           {!agent && <option value="">No agent available</option>}
           {template?.agentKinds.map(kind => (
@@ -103,10 +104,10 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
               {kind === 'codex' ? 'Codex' : 'Claude Code'}
             </option>
           ))}
-        </select>
+        </SelectControl>
       </label>
       {setup.templates.error ? (
-        <p role="alert" className="text-xs text-red-700 break-words">
+        <p role="alert" className="text-xs text-ui-danger break-words">
           Templates could not be refreshed. {setup.templates.error.message}{' '}
           <button type="button" onClick={setup.refresh} className="underline">
             Refresh
@@ -115,7 +116,7 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
       ) : (
         !setup.templates.loading &&
         !template?.available && (
-          <p className="text-xs text-amber-700">
+          <p className="text-xs text-ui-warning">
             The mini is unavailable. Try later or use Register existing.{' '}
             <button type="button" onClick={setup.refresh} className="underline">
               Refresh
@@ -124,7 +125,7 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
         )
       )}
       {setup.createError && (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-xs text-ui-danger">
           {createErrorText(setup.createError)}{' '}
           <button type="button" onClick={setup.refresh} className="underline">
             Refresh records
@@ -132,15 +133,11 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
         </p>
       )}
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={disabled}
-          className="rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-40"
-        >
+        <button type="submit" disabled={disabled} className="ui-button ui-primary">
           {setup.creating ? 'Submitting…' : 'Create worker'}
         </button>
         {setup.creating && (
-          <span className="text-xs text-gray-500" aria-live="polite">
+          <span className="text-xs leading-5 text-ui-muted" aria-live="polite">
             You can close this window.
           </span>
         )}

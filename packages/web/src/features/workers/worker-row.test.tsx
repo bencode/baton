@@ -1,9 +1,9 @@
 import type { SessionView, WorkerView } from '@baton/shared'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import type { Api } from '../../../api'
-import { ApiContext } from '../../../app/api-context'
-import { WorkersPanel } from '../workers-panel'
+import type { Api } from '../../api'
+import { ApiContext } from '../../app/api-context'
+import { WorkersPanel } from './workers-panel'
 
 afterEach(cleanup)
 
@@ -39,9 +39,8 @@ const renderPanel = () => {
         projectId={1}
         workers={[worker]}
         sessions={[session(7), session(8)]}
-        activeId=""
         open={vi.fn()}
-        close={close}
+        onSessionsDeleted={close}
       />
     </ApiContext.Provider>,
   )
@@ -53,9 +52,9 @@ test('deleting a worker needs a confirm, then removes it + closes its session ta
   // Trash → confirm view (with the cascade count); nothing deleted yet.
   fireEvent.click(await screen.findByLabelText('delete worker'))
   expect(remove).not.toHaveBeenCalled()
-  expect(screen.getByText('delete + 2 sessions?')).toBeTruthy()
+  expect(screen.getByText(/Delete this worker and its 2 conversations/)).toBeTruthy()
   // Confirm → remove worker #2 and close its two open tabs.
   fireEvent.click(screen.getByLabelText('confirm delete worker'))
   expect(remove).toHaveBeenCalledWith(2)
-  await waitFor(() => expect(close).toHaveBeenCalledTimes(2))
+  await waitFor(() => expect(close).toHaveBeenCalledWith([7, 8]))
 })

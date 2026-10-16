@@ -103,14 +103,14 @@ export const WorkerCreationProgress = ({
             ? 'Worker is connected.'
             : 'Worker is offline. Wait for it to reconnect before starting a conversation.'
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div>
-        <h3 className="text-sm font-medium break-words">{creation.name}</h3>
-        <p aria-live="polite" className="mt-1 text-xs text-gray-500">
+        <h3 className="text-[13px] font-medium break-words">{creation.name}</h3>
+        <p aria-live="polite" className="mt-1 text-xs text-ui-muted">
           {creationStatusText(creation)}
         </p>
       </div>
-      <ol className="flex flex-col gap-2 text-xs">
+      <ol className="flex flex-col gap-3 text-xs">
         {steps.map((step, index) => {
           const complete = creation.status === 'succeeded' || index < currentStep
           const current = creation.step === step.id
@@ -128,7 +128,15 @@ export const WorkerCreationProgress = ({
               className="flex justify-between gap-3"
             >
               <span>{step.label}</span>
-              <span className={status === 'Failed' ? 'text-red-700' : 'text-gray-500'}>
+              <span
+                className={
+                  status === 'Failed'
+                    ? 'text-ui-danger'
+                    : status === 'Done'
+                      ? 'text-ui-success'
+                      : 'text-ui-muted'
+                }
+              >
                 {status}
               </span>
             </li>
@@ -136,7 +144,7 @@ export const WorkerCreationProgress = ({
         })}
       </ol>
       {creation.status === 'failed' && (
-        <div role="alert" className="flex flex-col gap-2 text-xs text-red-700 break-words">
+        <div role="alert" className="flex flex-col gap-2 text-xs text-ui-danger break-words">
           <p>{creation.error ?? 'Worker creation failed.'}</p>
           <p>
             Resources are retained. Resolve the failure manually before submitting a new request.
@@ -146,7 +154,7 @@ export const WorkerCreationProgress = ({
         </div>
       )}
       {(creation.repoPath || creation.workerId !== null) && (
-        <details className="text-xs text-gray-500">
+        <details className="text-xs text-ui-muted">
           <summary className="cursor-pointer">Resource details</summary>
           <dl className="mt-2 flex flex-col gap-1 break-all">
             {creation.repoPath && (
@@ -168,13 +176,13 @@ export const WorkerCreationProgress = ({
         <>
           <p
             role={worker.error ? 'alert' : undefined}
-            className="text-xs text-gray-500 break-words"
+            className="text-xs text-ui-muted break-words"
           >
             Creation completed.{' '}
             {workerId === null ? 'No worker is associated with this record.' : workerStatus}
           </p>
           {startError && (
-            <p role="alert" className="text-xs text-red-700 break-words">
+            <p role="alert" className="text-xs text-ui-danger break-words">
               {startError.message}
             </p>
           )}
@@ -182,7 +190,7 @@ export const WorkerCreationProgress = ({
             type="button"
             onClick={() => void start()}
             disabled={!connected || starting}
-            className="w-fit rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+            className="ui-button ui-primary w-fit"
           >
             {starting ? 'Starting…' : 'Start conversation'}
           </button>
@@ -198,13 +206,13 @@ export const WorkerCreationProgress = ({
               agentKind: creation.agentKind,
             })
           }
-          className="w-fit text-xs text-gray-500 underline"
+          className="w-fit text-xs text-ui-muted underline"
         >
           Create another worker
         </button>
       )}
       {(creation.status === 'pending' || creation.status === 'running') && (
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-ui-muted">
           You can close this window. Creation continues on the mini; reopen its status in the
           Workers sidebar.
         </p>

@@ -36,7 +36,7 @@ export const InlineRename = ({ name, ariaLabel, onCommit, onCancel }: InlineRena
         }
       }}
       // text-base on phones: iOS Safari auto-zooms inputs under 16px on focus.
-      className="w-full rounded-md border border-blue-400 px-2 py-1 text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 sm:text-sm"
+      className="ui-input w-full border-ui-accent"
     />
   )
 }

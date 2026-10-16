@@ -1,47 +1,55 @@
-import { type ReactNode, useEffect, useRef } from 'react'
+import { type ReactNode, useEffect, useId, useRef } from 'react'
+import { CloseIcon } from './icons'
 
-// Centered overlay modal. No shared one existed before; account settings and the
-// add-worker guide both use it. Escape / backdrop click closes. `className`
-// overrides the card width (default max-w-sm).
 type ModalProps = {
   title: string
-  onClose: () => void
+  onClose(): void
   className?: string
   children: ReactNode
 }
 
 export const Modal = ({ title, onClose, className = 'max-w-sm', children }: ModalProps) => {
-  const cardRef = useRef<HTMLDivElement | null>(null)
+  const dialogRef = useRef<HTMLDialogElement | null>(null)
+  const titleId = useId()
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+    const dialog = dialogRef.current
+    dialog?.showModal()
+    return () => dialog?.close()
+  }, [])
+  const dismiss = () => {
+    dialogRef.current?.close()
+    onClose()
+  }
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: backdrop is the click-to-close target
-    <div
-      onMouseDown={e => {
-        if (!cardRef.current?.contains(e.target as Node)) onClose()
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      onCancel={event => {
+        event.preventDefault()
+        dismiss()
       }}
-      className="fixed inset-0 z-30 grid place-items-center bg-gray-900/30 px-4"
+      onMouseDown={event => {
+        if (event.target !== event.currentTarget) return
+        const bounds = event.currentTarget.getBoundingClientRect()
+        if (
+          event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom
+        )
+          dismiss()
+      }}
+      className={`ui-dialog ${className}`}
     >
-      <div
-        ref={cardRef}
-        className={`w-full ${className} rounded-xl border border-gray-200 bg-white p-5 shadow-xl`}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="close"
-            className="text-gray-400 transition-colors hover:text-gray-700"
-          >
-            ✕
-          </button>
-        </div>
-        {children}
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h2 id={titleId} className="text-lg leading-7 font-semibold tracking-tight text-ui-heading">
+          {title}
+        </h2>
+        <button type="button" onClick={dismiss} aria-label="close" className="ui-icon-button">
+          <CloseIcon />
+        </button>
       </div>
-    </div>
+      {children}
+    </dialog>
   )
 }

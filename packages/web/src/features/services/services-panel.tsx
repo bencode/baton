@@ -20,18 +20,18 @@ export const ServicesPanel = ({ projectId, workers, activeId, open }: ServicesPa
   )
 
   return (
-    <section className="flex flex-col gap-1">
-      <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-        Services
-      </h2>
-      {loading && services === null && <p className="px-2 text-sm text-gray-500">loading…</p>}
+    <section className="flex flex-col gap-4">
+      <h1 className="ui-page-title mb-2">Services</h1>
+      {loading && services === null && (
+        <p className="px-2 text-[13px] leading-5 text-ui-muted">loading…</p>
+      )}
       {!loading && error && services === null && (
-        <p role="alert" className="px-2 text-sm text-red-600">
+        <p role="alert" className="px-2 text-sm text-ui-danger">
           Unable to load services.
         </p>
       )}
       {!loading && !error && ordered.length === 0 && (
-        <div className="px-2 text-xs text-gray-500">
+        <div className="rounded-md bg-ui-panel p-4 text-[13px] leading-5 text-ui-muted">
           <p>No services running.</p>
           <p className="mt-0.5">
             Start one with{' '}
@@ -40,26 +40,28 @@ export const ServicesPanel = ({ projectId, workers, activeId, open }: ServicesPa
         </div>
       )}
       {error && services !== null && (
-        <p role="status" className="px-2 text-[11px] text-amber-700">
+        <p role="status" className="px-2 text-[11px] text-ui-warning">
           Services may be out of date.
         </p>
       )}
-      {ordered.map(service => {
-        const path = servicePath(projectId, service.workerId, service.name)
-        return (
-          <ServiceRow
-            key={`${service.workerId}/${service.name}`}
-            service={service}
-            workerName={workerNames.get(service.workerId) ?? `W-${service.workerId}`}
-            active={activeId === path}
-            open={() => open(path, `W-${service.workerId}/${service.name}`)}
-            stop={async () => {
-              await api.services.stop(service.workerId, service.name)
-              refresh()
-            }}
-          />
-        )
-      })}
+      <div>
+        {ordered.map(service => {
+          const path = servicePath(projectId, service.workerId, service.name)
+          return (
+            <ServiceRow
+              key={`${service.workerId}/${service.name}`}
+              service={service}
+              workerName={workerNames.get(service.workerId) ?? `W-${service.workerId}`}
+              active={activeId === path}
+              open={() => open(path, `W-${service.workerId}/${service.name}`)}
+              stop={async () => {
+                await api.services.stop(service.workerId, service.name)
+                refresh()
+              }}
+            />
+          )
+        })}
+      </div>
     </section>
   )
 }

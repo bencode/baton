@@ -1,5 +1,5 @@
 import type { Id, SessionView } from '@baton/shared'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { useAsync } from '../../hooks/use-async'
 import { useProjectRevision } from '../projects/use-project-revision'
@@ -11,35 +11,36 @@ import { useProjectRevision } from '../projects/use-project-revision'
 export const useSessions = (
   projectId: Id | null,
   pollMs = 15000,
-): { data: SessionView[] | null; loading: boolean; error: Error | null } => {
+): { data: SessionView[] | null; loading: boolean; error: Error | null; refresh(): void } => {
   const api = useApi()
   const rev = useProjectRevision(projectId, 'sessions')
   const [data, setData] = useState<SessionView[] | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
-  const alive = useRef(true)
+  const [revision, setRevision] = useState(0)
+  const refresh = useCallback(() => setRevision(value => value + 1), [])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: rev is a refetch trigger, not read in the body
   useEffect(() => {
-    alive.current = true
+    let alive = true
     if (projectId === null) {
       setData(null)
       setLoading(false)
       return () => {
-        alive.current = false
+        alive = false
       }
     }
     const tick = () => {
       api.sessions
         .listByProject(projectId)
         .then(d => {
-          if (!alive.current) return
+          if (!alive) return
           setData(d)
           setError(null)
           setLoading(false)
         })
         .catch(e => {
-          if (!alive.current) return
+          if (!alive) return
           setError(e instanceof Error ? e : new Error(String(e)))
           setLoading(false)
         })
@@ -47,12 +48,12 @@ export const useSessions = (
     tick()
     const t = setInterval(tick, pollMs)
     return () => {
-      alive.current = false
+      alive = false
       clearInterval(t)
     }
     // `rev` bumps on a project `sessions` signal → re-run the effect → refetch.
-  }, [api, projectId, pollMs, rev])
-  return { data, loading, error }
+  }, [api, projectId, pollMs, rev, revision])
+  return { data, loading, error, refresh }
 }
 
 // Session lookup by int id (no more S- codes). Returns null while loading or

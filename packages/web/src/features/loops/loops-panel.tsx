@@ -24,14 +24,14 @@ const LoopRow = ({ loop, busy, onToggle, onRemove }: LoopRowProps) => {
   const lastStatus = lastStatusText(loop.lastStatus)
 
   return (
-    <div className="px-4 py-3 transition-colors hover:bg-gray-50">
-      <p className="whitespace-pre-wrap break-words text-sm leading-5 text-gray-800">
+    <div className="px-4 py-3 transition-colors hover:bg-ui-panel">
+      <p className="whitespace-pre-wrap break-words text-[13px] leading-5 text-ui-text">
         {loop.message}
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs md:text-[11px] text-ui-muted">
         <span
           aria-hidden="true"
-          className={`h-1.5 w-1.5 rounded-full ${loop.enabled ? 'bg-emerald-500' : 'bg-gray-300'}`}
+          className={`h-1.5 w-1.5 rounded-full ${loop.enabled ? 'bg-ui-success' : 'bg-ui-border'}`}
         />
         <span>{loop.enabled ? 'Enabled' : 'Paused'}</span>
         <span aria-hidden="true">·</span>
@@ -47,7 +47,7 @@ const LoopRow = ({ loop, busy, onToggle, onRemove }: LoopRowProps) => {
             type="button"
             disabled={busy}
             onClick={() => void onToggle()}
-            className="rounded px-1.5 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 disabled:opacity-40"
+            className="ui-quiet-button"
           >
             {loop.enabled ? 'Pause' : 'Resume'}
           </button>
@@ -57,7 +57,7 @@ const LoopRow = ({ loop, busy, onToggle, onRemove }: LoopRowProps) => {
                 type="button"
                 disabled={busy}
                 onClick={() => void onRemove().then(removed => removed && setConfirming(false))}
-                className="rounded px-1.5 py-1 font-medium text-red-600 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/30 disabled:opacity-40"
+                className="ui-quiet-button ui-danger"
               >
                 Confirm
               </button>
@@ -65,7 +65,7 @@ const LoopRow = ({ loop, busy, onToggle, onRemove }: LoopRowProps) => {
                 type="button"
                 disabled={busy}
                 onClick={() => setConfirming(false)}
-                className="rounded px-1.5 py-1 font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/30 disabled:opacity-40"
+                className="ui-quiet-button"
               >
                 Cancel
               </button>
@@ -77,7 +77,7 @@ const LoopRow = ({ loop, busy, onToggle, onRemove }: LoopRowProps) => {
               title="delete scheduled task"
               disabled={busy}
               onClick={() => setConfirming(true)}
-              className="rounded p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/30 disabled:opacity-40"
+              className="ui-icon-button ui-danger"
             >
               <TrashIcon />
             </button>
@@ -112,12 +112,12 @@ export const LoopsPanel = ({ sessionId, projectId }: { sessionId: Id; projectId:
   return (
     <div className="flex min-h-0 flex-1 flex-col text-sm">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {loading && <p className="px-4 py-6 text-center text-gray-500">Loading tasks…</p>}
+        {loading && <p className="px-4 py-6 text-center text-ui-muted">Loading tasks…</p>}
         {!loading && loops?.length === 0 && (
-          <p className="px-4 py-6 text-center text-gray-500">No scheduled tasks yet.</p>
+          <p className="px-4 py-6 text-center text-ui-muted">No scheduled tasks yet.</p>
         )}
         {loops && loops.length > 0 && (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-ui-border">
             {loops.map(loop => (
               <LoopRow
                 key={loop.id}
@@ -135,7 +135,7 @@ export const LoopsPanel = ({ sessionId, projectId }: { sessionId: Id; projectId:
       {(loadError || actionError) && (
         <p
           role="alert"
-          className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700"
+          className="border-t border-ui-danger-border bg-ui-danger-surface px-4 py-2 text-xs text-ui-danger"
         >
           {actionError ?? `Could not refresh scheduled tasks: ${loadError?.message}`}
         </p>

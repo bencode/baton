@@ -13,16 +13,11 @@ const CommandBlock = ({ command }: { command: string }) => {
     window.setTimeout(() => setCopied(false), 1500)
   }
   return (
-    <div className="flex items-stretch gap-1.5">
-      <code className="flex-1 overflow-x-auto rounded-md bg-gray-50 px-2 py-1.5 text-[11px] whitespace-pre text-gray-700">
+    <div className="flex min-w-0 items-start gap-2">
+      <code className="min-h-8 min-w-0 flex-1 overflow-x-auto rounded-md bg-ui-panel px-2 py-1.5 text-[11px] whitespace-pre text-ui-text">
         {command}
       </code>
-      <button
-        type="button"
-        onClick={copy}
-        aria-label="copy command"
-        className="shrink-0 rounded-md border border-gray-300 px-2 text-xs text-gray-500 transition-colors hover:bg-gray-50"
-      >
+      <button type="button" onClick={copy} aria-label="copy command" className="ui-button shrink-0">
         {copied ? '✓' : 'copy'}
       </button>
     </div>
@@ -54,13 +49,13 @@ const TokenStep = () => {
     return (
       <div className="flex flex-col gap-1.5">
         <CommandBlock command={`export BATON_TOKEN=${token}`} />
-        <span className="text-xs text-amber-600">Shown once — copy it now.</span>
+        <span className="text-xs text-ui-warning">Shown once — copy it now.</span>
       </div>
     )
   return (
     <div className="flex flex-col gap-1.5">
       {has && (
-        <p className="text-xs text-gray-400">
+        <p className="text-xs leading-5 text-ui-muted">
           You already have a token — use the one you saved. Regenerating invalidates it (you'd
           re-set BATON_TOKEN everywhere it's used).
         </p>
@@ -69,7 +64,7 @@ const TokenStep = () => {
         type="button"
         onClick={() => void mint()}
         disabled={busy}
-        className="w-fit rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:opacity-40"
+        className="ui-button ui-primary w-fit"
       >
         {has ? 'Regenerate token' : 'Generate token'}
       </button>
@@ -79,8 +74,8 @@ const TokenStep = () => {
 
 const Step = ({ n, title, children }: { n: number; title: string; children: ReactNode }) => (
   <div className="flex flex-col gap-1.5">
-    <h3 className="text-sm font-medium text-gray-900">
-      <span className="text-gray-400">{n}.</span> {title}
+    <h3 className="text-sm font-medium text-ui-text">
+      <span className="text-ui-muted">{n}.</span> {title}
     </h3>
     {children}
   </div>
@@ -89,8 +84,8 @@ const Step = ({ n, title, children }: { n: number; title: string; children: Reac
 export const RegisterWorkerGuide = ({ projectId }: { projectId: Id }) => {
   const serverUrl = `${window.location.origin}/api`
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-xs text-gray-500">
+    <div className="flex flex-col gap-6">
+      <p className="text-xs leading-5 text-ui-muted">
         A worker is a machine that runs your agents. Set one up on any machine (your laptop, a
         server) — it connects back to this project.
       </p>
@@ -104,7 +99,7 @@ export const RegisterWorkerGuide = ({ projectId }: { projectId: Id }) => {
         <CommandBlock command={`baton worker register --url ${serverUrl} --project ${projectId}`} />
         <CommandBlock command="baton worker run" />
       </Step>
-      <p className="text-xs text-gray-400">
+      <p className="text-xs leading-5 text-ui-muted">
         The worker appears on the left once it connects. The machine needs Claude available
         (claude-code logged in, or ANTHROPIC_API_KEY set).
       </p>

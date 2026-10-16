@@ -48,6 +48,7 @@ const tasks: Task[] = [
 
 const fakeApi = () =>
   ({
+    auth: { me: vi.fn(async () => ({ authRequired: false, user: null })) },
     projects: { listByWorkspace: vi.fn(async () => [project]), get: vi.fn(async () => project) },
     requirements: { listByProject: vi.fn(async () => [login]) },
     tasks: { listByRequirement: vi.fn(async () => tasks) },
@@ -63,10 +64,20 @@ test('LeftPanel renders the requirement tree (deps + ready) and opens a task on 
   render(
     <ApiContext.Provider value={fakeApi()}>
       <MemoryRouter>
-        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={open} close={vi.fn()} />
+        <LeftPanel
+          onNewSession={vi.fn()}
+          onCollapse={vi.fn()}
+          onContextNavigate={vi.fn()}
+          workspaceId={1}
+          projectId={1}
+          activeId="/proj/1"
+          open={open}
+          close={vi.fn()}
+        />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
+  fireEvent.click(screen.getByRole('button', { name: '需求与任务' }))
   expect(await screen.findByText('User login')).toBeTruthy()
   expect(await screen.findByText('Design')).toBeTruthy()
   const impl = await screen.findByText('Implement')
@@ -93,8 +104,12 @@ test('rail session row: trash → inline confirm → removes session and closes 
     name: 'dogfood',
     busy: false,
     attached: false,
+    connected: true,
+    lastActiveAt: Date.now(),
+    worker: { name: 'w', hostname: 'h' },
   }
   const api = {
+    auth: { me: vi.fn(async () => ({ authRequired: false, user: null })) },
     projects: { listByWorkspace: vi.fn(async () => [project]), get: vi.fn(async () => project) },
     requirements: { listByProject: vi.fn(async () => []) },
     tasks: { listByRequirement: vi.fn(async () => []) },
@@ -107,14 +122,23 @@ test('rail session row: trash → inline confirm → removes session and closes 
   render(
     <ApiContext.Provider value={api}>
       <MemoryRouter>
-        <LeftPanel workspaceId={1} projectId={1} activeId="/proj/1" open={vi.fn()} close={close} />
+        <LeftPanel
+          onNewSession={vi.fn()}
+          onCollapse={vi.fn()}
+          onContextNavigate={vi.fn()}
+          workspaceId={1}
+          projectId={1}
+          activeId="/proj/1"
+          open={vi.fn()}
+          close={close}
+        />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
   // Trash is two-step: first click reveals the confirm, not a deletion.
-  fireEvent.click(await screen.findByLabelText('delete session'))
+  fireEvent.click(await screen.findByLabelText('删除会话'))
   expect(remove).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByLabelText('confirm delete'))
+  fireEvent.click(screen.getByLabelText('确认删除'))
   expect(remove).toHaveBeenCalledWith(7)
   // The tab close happens after the remove promise resolves.
   await vi.waitFor(() => expect(close).toHaveBeenCalledWith('/proj/1/session/7'))
@@ -125,6 +149,9 @@ test('chevron toggles aria-expanded and the tasks region aria-hidden', async () 
     <ApiContext.Provider value={fakeApi()}>
       <MemoryRouter>
         <LeftPanel
+          onNewSession={vi.fn()}
+          onCollapse={vi.fn()}
+          onContextNavigate={vi.fn()}
           workspaceId={1}
           projectId={1}
           activeId="/proj/1"
@@ -134,6 +161,7 @@ test('chevron toggles aria-expanded and the tasks region aria-hidden', async () 
       </MemoryRouter>
     </ApiContext.Provider>,
   )
+  fireEvent.click(screen.getByRole('button', { name: '需求与任务' }))
   await screen.findByText('User login')
   const chevron = container.querySelector('[aria-controls="1-tasks"]')
   const region = container.querySelector('#\\31 -tasks')

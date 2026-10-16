@@ -1,80 +1,140 @@
 import type { Id } from '@baton/shared'
-import { ChannelsPanel } from '../features/channels/channels-panel'
-import { ProjectSwitcher } from '../features/projects/project-switcher'
-import { useRequirements } from '../features/requirements/use-requirements'
-import { ServicesPanel } from '../features/services/services-panel'
-import { useSessions } from '../features/sessions/use-sessions'
-import { useWorkers } from '../features/workers/use-workers'
-import { WorkersPanel } from '../features/workers/workers-panel'
-import { usePersistedSet } from '../hooks/use-persisted-set'
-import { RequirementTree } from './requirement-tree'
+import { Activity, type ReactNode, useEffect, useState } from 'react'
+import { ServiceIcon, SettingsIcon, WorkerIcon } from '../components/icons'
+import { UserMenu } from '../features/auth/user-menu'
+import { SessionsPanel } from '../features/sessions/sessions-panel'
+import { WorkspaceSwitcher } from '../features/workspaces/workspace-switcher'
+import { type ProjectViewKind, parseRoute, projectViewPath } from './route'
+import { SidebarHeader } from './shell/app-header'
+import { HealthBadge } from './shell/health-badge'
+import { WorkItemsPanel } from './work-items-panel'
 
+type Section = 'sessions' | 'requirements'
 type LeftPanelProps = {
   workspaceId: Id | null
   projectId: Id | null
   activeId: string
-  open: (id: string, title: string) => void
-  close: (id: string) => void
+  open(path: string, title: string): void
+  close(path: string): void
+  onNewSession(): void
+  onCollapse(): void
+  onContextNavigate(): void
 }
+const NavigationToolbar = ({
+  section,
+  onChange,
+  actions,
+}: {
+  section: Section
+  onChange(section: Section): void
+  actions?: ReactNode
+}) => (
+  <div className="wb-navigation-toolbar">
+    <fieldset className="wb-categories" aria-label="项目内容">
+      <button
+        type="button"
+        aria-pressed={section === 'sessions'}
+        onClick={() => onChange('sessions')}
+      >
+        会话
+      </button>
+      <button
+        type="button"
+        aria-label="需求与任务"
+        aria-pressed={section === 'requirements'}
+        onClick={() => onChange('requirements')}
+      >
+        工作项
+      </button>
+    </fieldset>
+    {actions}
+  </div>
+)
 
-export const LeftPanel = ({ workspaceId, projectId, activeId, open, close }: LeftPanelProps) => {
-  const { data: requirements, loading } = useRequirements(projectId)
-  const { data: workers } = useWorkers(projectId)
-  const { data: sessions } = useSessions(projectId)
-  const collapsed = usePersistedSet('baton.req.collapsed')
+export const LeftPanel = ({
+  workspaceId,
+  projectId,
+  activeId,
+  open,
+  close,
+  onNewSession,
+  onCollapse,
+  onContextNavigate,
+}: LeftPanelProps) => {
+  const [section, setSection] = useState<Section>('sessions')
+  useEffect(() => {
+    const route = parseRoute(activeId)
+    if (route.kind === 'item') setSection('requirements')
+    if (route.kind === 'session') setSection('sessions')
+  }, [activeId])
+  const entries: { view: ProjectViewKind; label: string; icon: typeof WorkerIcon }[] = [
+    { view: 'workers', label: '执行环境', icon: WorkerIcon },
+    { view: 'services', label: '服务', icon: ServiceIcon },
+    { view: 'settings', label: '项目设置', icon: SettingsIcon },
+  ]
   return (
-    <div className="flex h-full flex-col gap-5 overflow-auto bg-gray-50/60 p-3">
-      <ProjectSwitcher workspaceId={workspaceId} activeProjectId={projectId} />
+    <aside aria-label="项目导航" className="wb-sidebar">
+      <SidebarHeader
+        workspaceId={workspaceId}
+        projectId={projectId}
+        onCollapse={onCollapse}
+        onNavigate={onContextNavigate}
+      />
       {projectId === null ? (
-        <p className="px-2 text-sm text-gray-400">Select a project.</p>
+        <p className="min-h-0 flex-1 px-3 py-4 text-xs text-ui-muted">请选择或创建项目。</p>
       ) : (
-        <section className="flex flex-col gap-1">
-          <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-            Requirements
-          </h2>
-          {loading && <p className="px-2 text-sm text-gray-400">loading…</p>}
-          {!loading && requirements?.length === 0 && (
-            <p className="px-2 text-sm text-gray-400">No requirements yet.</p>
-          )}
-          {requirements?.map(req => (
-            <RequirementTree
-              key={req.id}
-              requirement={req}
-              projectId={projectId}
-              activeId={activeId}
-              expanded={!collapsed.has(String(req.id))}
-              onToggle={() => collapsed.toggle(String(req.id))}
-              open={open}
-            />
-          ))}
-        </section>
+        <>
+          <div className="wb-navigation-body">
+            <Activity mode={section === 'sessions' ? 'visible' : 'hidden'}>
+              <SessionsPanel
+                projectId={projectId}
+                activeId={activeId}
+                open={open}
+                close={close}
+                onNewSession={onNewSession}
+                renderToolbar={actions => (
+                  <NavigationToolbar section={section} onChange={setSection} actions={actions} />
+                )}
+              />
+            </Activity>
+            <Activity mode={section === 'requirements' ? 'visible' : 'hidden'}>
+              <div className="wb-category-panel">
+                <NavigationToolbar section={section} onChange={setSection} />
+                <div className="wb-work-items">
+                  <WorkItemsPanel projectId={projectId} activeId={activeId} open={open} />
+                </div>
+              </div>
+            </Activity>
+          </div>
+          <nav aria-label="项目管理" className="wb-management">
+            {entries.map(entry => {
+              const path = projectViewPath(projectId, entry.view)
+              return (
+                <button
+                  key={entry.view}
+                  type="button"
+                  onClick={() => open(path, entry.label)}
+                  aria-current={activeId === path ? 'page' : undefined}
+                  className="ui-nav-item"
+                >
+                  <entry.icon />
+                  {entry.label}
+                </button>
+              )
+            })}
+          </nav>
+        </>
       )}
-      {projectId !== null && (
-        <section className="flex flex-col gap-1">
-          <h2 className="mb-1 px-1 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-            Workers
-          </h2>
-          <WorkersPanel
-            key={projectId}
-            projectId={projectId}
-            workers={workers}
-            sessions={sessions}
-            activeId={activeId}
-            open={open}
-            close={close}
-          />
-        </section>
-      )}
-      {projectId !== null && (
-        <ServicesPanel
-          key={projectId}
-          projectId={projectId}
-          workers={workers}
-          activeId={activeId}
-          open={open}
+      <div className="wb-account-footer">
+        <UserMenu
+          context={
+            <>
+              <WorkspaceSwitcher activeWorkspaceId={workspaceId} onNavigate={onContextNavigate} />
+              <HealthBadge />
+            </>
+          }
         />
-      )}
-      {workspaceId !== null && <ChannelsPanel workspaceId={workspaceId} />}
-    </div>
+      </div>
+    </aside>
   )
 }

@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 // Shared inline SVG glyphs (stroke=currentColor convention, same as the
 // composer icons in features/sessions/session-detail/icons.tsx).
 
@@ -137,4 +139,97 @@ export const LogoutIcon = () => (
     <path d="M10.5 11l3-3-3-3" />
     <path d="M13.5 8H6" />
   </svg>
+)
+
+const StrokeGlyph = ({ children }: { children: ReactNode }) => (
+  <svg
+    viewBox="0 0 16 16"
+    width="16"
+    height="16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    {children}
+  </svg>
+)
+
+export const PlusIcon = () => (
+  <StrokeGlyph>
+    <path d="M8 3v10M3 8h10" />
+  </StrokeGlyph>
+)
+export const CloseIcon = () => (
+  <StrokeGlyph>
+    <path d="m4 4 8 8m0-8-8 8" />
+  </StrokeGlyph>
+)
+export const SearchIcon = () => (
+  <StrokeGlyph>
+    <circle cx="7" cy="7" r="4.5" />
+    <path d="m10.5 10.5 3 3" />
+  </StrokeGlyph>
+)
+export const WorkerIcon = () => (
+  <StrokeGlyph>
+    <rect x="3" y="5" width="10" height="9" rx="2.5" />
+    <path d="M8 2v3M5.5 8.5h.01M10.5 8.5h.01M6 11h4" />
+  </StrokeGlyph>
+)
+export const ServiceIcon = () => (
+  <StrokeGlyph>
+    <rect x="2" y="2.5" width="12" height="4.5" rx="1.5" />
+    <rect x="2" y="9" width="12" height="4.5" rx="1.5" />
+    <path d="M5 4.7h.01M5 11.2h.01M8 4.7h3M8 11.2h3" />
+  </StrokeGlyph>
+)
+export const SettingsIcon = () => (
+  <StrokeGlyph>
+    <path d="m6 2-1 2-2 1-1 3 1 2 2 1 1 3h4l1-3 2-1 1-2-1-3-2-1-1-2Z" />
+    <circle cx="8" cy="8" r="2" />
+  </StrokeGlyph>
+)
+export const InfoIcon = () => (
+  <StrokeGlyph>
+    <circle cx="8" cy="8" r="6" />
+    <path d="M8 7v4M8 4.5h.01" />
+  </StrokeGlyph>
+)
+export const CopyIcon = () => (
+  <StrokeGlyph>
+    <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+    <path d="M10 5.5v-3H2.5V10h3" />
+  </StrokeGlyph>
+)
+
+export const BatonIcon = () => (
+  <StrokeGlyph>
+    <path d="m3 9 6-6M4 13l8-10M8 13l5-6" />
+  </StrokeGlyph>
+)
+export const PanelIcon = () => (
+  <StrokeGlyph>
+    <rect x="2" y="2.5" width="12" height="11" rx="2" />
+    <path d="M7 2.5v11" />
+  </StrokeGlyph>
+)
+export const FilterIcon = () => (
+  <StrokeGlyph>
+    <path d="M2.5 4h11M5 8h6M7 12h2" />
+  </StrokeGlyph>
+)
+export const ChatIcon = () => (
+  <StrokeGlyph>
+    <path d="M3 12.5 2 14V5a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H3Z" />
+    <path d="M5 5.5h6M5 8.5h4" />
+  </StrokeGlyph>
+)
+export const CheckIcon = () => (
+  <StrokeGlyph>
+    <path d="m3 8 3 3 7-7" />
+  </StrokeGlyph>
 )

@@ -14,12 +14,12 @@ import { useSlashCommands } from './use-slash-commands'
 // full literal class strings so Tailwind's scanner sees them.
 const CHIP_TONES = {
   amber: {
-    chip: 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100',
-    hint: 'text-amber-500',
+    chip: 'bg-ui-warning-surface text-ui-warning ring-ui-warning-border hover:bg-ui-warning-surface',
+    hint: 'text-ui-warning',
   },
   indigo: {
-    chip: 'bg-indigo-50 text-indigo-700 ring-indigo-200 hover:bg-indigo-100',
-    hint: 'text-indigo-400',
+    chip: 'bg-ui-selected text-ui-selected-text ring-ui-accent-border hover:bg-ui-hover',
+    hint: 'text-ui-selected-muted',
   },
 } as const
 
@@ -34,7 +34,7 @@ const StatusChip = ({ tone, label, hint, onClick }: StatusChipProps) => (
   <button
     type="button"
     onClick={onClick}
-    className={`mb-2 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium ring-1 transition-colors ${CHIP_TONES[tone].chip}`}
+    className={`ui-focus mb-2 flex min-h-11 w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium ring-1 transition-colors md:min-h-0 [@media(pointer:coarse)]:min-h-11 ${CHIP_TONES[tone].chip}`}
   >
     {label}
     <span className={`ml-auto ${CHIP_TONES[tone].hint}`}>{hint}</span>
@@ -103,10 +103,10 @@ export const Composer = ({
   const insertLabel = (label: string) =>
     insertLabelToken(textareaRef.current, draft, setDraft, label)
   return (
-    <div className="shrink-0 border-t border-gray-200 bg-white px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3 sm:pt-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="shrink-0 border-t border-ui-border bg-ui-surface px-3 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-6 md:pt-3 md:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div
         {...dropProps}
-        className={`mx-auto min-w-0 max-w-5xl rounded-xl border px-3 py-2 transition-colors focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${dragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'} ${active ? 'bg-white' : 'bg-gray-50'}`}
+        className={`mx-auto min-w-0 max-w-5xl rounded-lg border px-3 py-2 transition-colors focus-within:border-ui-accent focus-within:ring-1 focus-within:ring-ui-accent ${dragging ? 'border-ui-accent ring-1 ring-ui-accent' : 'border-ui-border'} ${active ? 'bg-ui-surface' : 'bg-ui-panel'}`}
       >
         {planMode && (
           <StatusChip
@@ -131,8 +131,8 @@ export const Composer = ({
             onInsertLabel={insertLabel}
           />
         )}
-        {uploadError && <p className="mb-2 text-xs text-red-600">{uploadError}</p>}
-        {sendError && <p className="mb-2 text-xs text-red-600">{sendError}</p>}
+        {uploadError && <p className="mb-2 text-xs text-ui-danger">{uploadError}</p>}
+        {sendError && <p className="mb-2 text-xs text-ui-danger">{sendError}</p>}
         {slash.open && (
           <CommandMenu commands={slash.menu} activeIndex={slash.activeIndex} onPick={slash.pick} />
         )}
@@ -163,18 +163,16 @@ export const Composer = ({
             active ? '发消息…  Enter 发送 · Shift+Enter 换行' : 'session inactive — resume to send'
           }
           // text-base on phones keeps iOS Safari from auto-zooming on focus (it
-          // zooms any input < 16px); sm: restores the desktop 14px density.
-          className="max-h-48 min-h-[3.25rem] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 text-base text-gray-800 focus:outline-none focus:ring-0 disabled:cursor-not-allowed sm:text-sm"
+          // zooms any input < 16px); md: restores the desktop 14px density.
+          className="max-h-48 min-h-[3.25rem] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 text-base text-ui-text placeholder:text-ui-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed md:text-sm"
         />
-        <div className="mt-1.5 flex items-center">
+        <div className="mt-2 flex items-center">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={!active}
             aria-label="attach files"
-            // Negative margin grows the tap target to ~28px without nudging the
-            // 16px glyph or the row height — comfortable on touch, unchanged on desktop.
-            className="-m-1.5 p-1.5 text-gray-400 transition-colors hover:text-gray-700 disabled:opacity-40"
+            className="ui-icon-button"
           >
             <PaperclipIcon />
           </button>
@@ -193,7 +191,7 @@ export const Composer = ({
             onClick={onSend}
             disabled={!canSend}
             aria-label={busy ? 'sending' : 'send message'}
-            className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 sm:h-8 sm:w-8"
+            className="ui-icon-button ml-auto bg-ui-accent text-white hover:bg-ui-accent-hover hover:text-white disabled:bg-ui-border disabled:text-ui-muted"
           >
             {busy ? <Spinner /> : <SendIcon />}
           </button>

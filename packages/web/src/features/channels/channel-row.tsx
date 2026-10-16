@@ -14,17 +14,17 @@ type ChannelRowProps = {
 export const ChannelRow = ({ channel, open, onDelete }: ChannelRowProps) => {
   const [confirming, setConfirming] = useState(false)
   return (
-    <div className="group relative flex items-center rounded-md text-sm text-gray-700 transition-colors duration-150 hover:bg-gray-100">
+    <div className="group relative flex items-center rounded-md text-[13px] text-ui-text transition-colors duration-150 hover:bg-ui-hover">
       <button
         type="button"
         onClick={open}
-        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left"
+        className="ui-focus flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left md:min-h-8 [@media(pointer:coarse)]:min-h-11"
       >
-        <span className="text-gray-400">#</span>
+        <span className="w-4 shrink-0 text-center text-ui-muted">#</span>
         <span className="truncate">{channel.title || channel.id.slice(0, 8)}</span>
       </button>
       {confirming ? (
-        <span className="flex shrink-0 items-center gap-3 px-1.5 text-xs">
+        <span className="flex shrink-0 items-center gap-1 text-xs">
           <button
             type="button"
             aria-label="confirm delete"
@@ -33,7 +33,7 @@ export const ChannelRow = ({ channel, open, onDelete }: ChannelRowProps) => {
               setConfirming(false)
               onDelete()
             }}
-            className="px-0.5 text-red-500 transition-colors hover:text-red-700"
+            className="ui-icon-button ui-danger"
           >
             ✓
           </button>
@@ -42,7 +42,7 @@ export const ChannelRow = ({ channel, open, onDelete }: ChannelRowProps) => {
             aria-label="cancel delete"
             title="cancel"
             onClick={() => setConfirming(false)}
-            className="px-0.5 text-gray-400 transition-colors hover:text-gray-700"
+            className="ui-icon-button"
           >
             ✗
           </button>
@@ -53,7 +53,7 @@ export const ChannelRow = ({ channel, open, onDelete }: ChannelRowProps) => {
           aria-label="delete channel"
           title="delete channel"
           onClick={() => setConfirming(true)}
-          className="shrink-0 px-1.5 text-gray-300 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+          className="ui-icon-button ui-danger [@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
         >
           <TrashIcon />
         </button>

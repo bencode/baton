@@ -1,13 +1,5 @@
 import { expect, test } from 'vitest'
-import {
-  closeOthers,
-  closeTab,
-  closeToRight,
-  MAX_TABS,
-  neighborTab,
-  openTab,
-  type Tab,
-} from './tabs-model'
+import { closeOthers, closeTab, closeToRight, neighborTab, openTab, type Tab } from './tabs-model'
 
 const ids = (tabs: Tab[]) => tabs.map(t => t.id)
 
@@ -25,17 +17,13 @@ test('openTab on an existing tab refreshes recency without duplicating', () => {
   expect(s3.find(t => t.id === '/t/a')?.lastActiveAt).toBe(3)
 })
 
-test('openTab evicts the least-recently-active tab past MAX_TABS', () => {
-  let s: Tab[] = []
-  for (let i = 0; i < MAX_TABS; i++) s = openTab(s, { id: `/t/${i}`, title: `${i}` }, i + 1)
-  // Touch the oldest (/t/0) so it is no longer the LRU candidate.
-  s = openTab(s, { id: '/t/0', title: '0' }, 100)
-  // Opening one more must evict /t/1 (now the least-recently-active).
-  s = openTab(s, { id: '/t/new', title: 'new' }, 101)
-  expect(s).toHaveLength(MAX_TABS)
-  expect(ids(s)).not.toContain('/t/1')
-  expect(ids(s)).toContain('/t/0')
-  expect(ids(s)).toContain('/t/new')
+test('opening more than six tabs preserves every open page', () => {
+  const tabs = Array.from({ length: 10 }, (_, index) => ({
+    id: `/t/${index}`,
+    title: String(index),
+    lastActiveAt: index,
+  }))
+  expect(openTab(tabs, { id: '/t/new', title: 'new' }, 11)).toHaveLength(11)
 })
 
 test('closeTab removes by id; neighborTab picks the positional fallback', () => {

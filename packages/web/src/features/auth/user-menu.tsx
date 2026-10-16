@@ -1,27 +1,21 @@
-import { useRef, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
-import { ChevronDownIcon, LogoutIcon } from '../../components/icons'
+import { LogoutIcon, MoreIcon, ServiceIcon, SettingsIcon } from '../../components/icons'
+import { Popover } from '../../components/popover'
 import { useAsync } from '../../hooks/use-async'
-import { useDismiss } from '../../hooks/use-dismiss'
 import { AccountSettings } from './account-settings'
 
-// Header user menu: the signed-in username with a dropdown to log out. Fetches
-// /auth/me itself (one cheap row — no shared context). Renders nothing when auth
-// is off (no user) so the open/dev-mode header stays clean. The emerald avatar
-// echoes the logo mark; the menu stays in the header's restrained gray vocabulary.
-export const UserMenu = () => {
+export const UserMenu = ({ context }: { context: ReactNode }) => {
   const api = useApi()
   const navigate = useNavigate()
-  const { data } = useAsync(() => api.auth.me(), 'user-menu-me')
+  const [attempt, setAttempt] = useState(0)
+  const { data, loading, error } = useAsync(() => api.auth.me(), attempt)
   const user = data?.user ?? null
-  const [open, setOpen] = useState(false)
+  const local = data?.authRequired === false && user === null
+  const label = user?.username ?? (local ? '本地模式' : '设置')
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const ref = useRef<HTMLDivElement | null>(null)
-  useDismiss(ref, open, () => setOpen(false))
-
-  if (!user) return null
-
   const logout = async () => {
     try {
       await api.auth.logout()
@@ -29,84 +23,95 @@ export const UserMenu = () => {
       navigate('/login', { replace: true })
     }
   }
-
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className="flex items-center gap-1.5 rounded-md py-1 pr-1.5 pl-1 text-sm text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
+        className="wb-account-trigger"
+        aria-label={`${label}，配置`}
+        aria-haspopup="dialog"
+        aria-expanded={anchor !== null}
+        onClick={event => setAnchor(anchor ? null : event.currentTarget)}
       >
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-[11px] font-semibold text-white">
-          {user.username.charAt(0).toUpperCase()}
+        <span className="wb-account-avatar">
+          {user ? user.username.charAt(0).toUpperCase() : <SettingsIcon />}
         </span>
-        <span className="max-w-[10rem] truncate font-medium">{user.username}</span>
-        <span
-          className={`text-gray-400 transition-transform duration-150 motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
-        >
-          <ChevronDownIcon />
+        <span className="min-w-0 flex-1 text-left">
+          <strong className="block truncate">{label}</strong>
+          <small className="mt-1 block text-ui-muted">{user ? '个人配置' : '工作区与配置'}</small>
         </span>
+        <MoreIcon />
       </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 z-20 mt-1.5 w-52 origin-top-right overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg shadow-gray-900/5 transition duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
-        >
-          <div className="flex items-center justify-between gap-2 px-3 py-2">
-            <span className="min-w-0 truncate text-sm font-medium text-gray-900">
-              {user.username}
-            </span>
-            {user.isAdmin ? (
-              <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                管理员
-              </span>
-            ) : (
-              <span className="shrink-0 text-[11px] text-gray-400">成员</span>
-            )}
-          </div>
-          <div className="my-1 h-px bg-gray-100" />
-          {user.isAdmin && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false)
-                navigate('/ops')
-              }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
-            >
-              <span className="text-gray-400">📺</span>
-              运行大屏
-            </button>
+      <Popover
+        anchor={anchor}
+        label="配置"
+        role="dialog"
+        placement="top-start"
+        className="wb-personal-panel"
+        onClose={() => setAnchor(null)}
+      >
+        {context}
+        <div className="wb-account-actions">
+          {loading && (
+            <p role="status" className="px-3 py-2 text-xs text-ui-muted">
+              加载账号…
+            </p>
           )}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false)
-              setSettingsOpen(true)
-            }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
-          >
-            <span className="text-gray-400">⚙️</span>
-            账户设置
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => void logout()}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
-          >
-            <span className="text-gray-400">
-              <LogoutIcon />
-            </span>
-            退出登录
-          </button>
+          {error && (
+            <p role="alert" className="px-3 py-2 text-xs text-ui-danger">
+              无法加载账号。
+              <button
+                type="button"
+                className="underline"
+                onClick={() => setAttempt(value => value + 1)}
+              >
+                重试
+              </button>
+            </p>
+          )}
+          {user && (
+            <>
+              <div className="ui-menu-caption">个人配置{user.isAdmin ? ' · 管理员' : ''}</div>
+              {user.isAdmin && (
+                <button
+                  type="button"
+                  className="ui-menu-item"
+                  onClick={() => {
+                    setAnchor(null)
+                    navigate('/ops')
+                  }}
+                >
+                  <ServiceIcon />
+                  运行大屏
+                </button>
+              )}
+              <button
+                type="button"
+                className="ui-menu-item"
+                onClick={() => {
+                  setAnchor(null)
+                  setSettingsOpen(true)
+                }}
+              >
+                <SettingsIcon />
+                账号设置
+              </button>
+              <button
+                type="button"
+                className="ui-menu-item"
+                onClick={() => {
+                  setAnchor(null)
+                  void logout()
+                }}
+              >
+                <LogoutIcon />
+                退出登录
+              </button>
+            </>
+          )}
         </div>
-      )}
+      </Popover>
       {settingsOpen && <AccountSettings onClose={() => setSettingsOpen(false)} />}
-    </div>
+    </>
   )
 }

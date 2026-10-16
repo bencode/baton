@@ -5,7 +5,7 @@
 // session) renders nothing — absence of a chip IS the "calm baseline" signal.
 //
 // Two visual variants:
-//   - pulse: small amber dot with animate-pulse — used for "in motion right
+//   - pulse: small blue dot — used for "in motion right
 //            now" states (task in_progress, session streaming). Animation is
 //            the signal; no text needed.
 //   - text:  small uppercase label in a semantic color. Used for terminal
@@ -19,9 +19,9 @@ type StateChipProps =
   | { kind: 'none' }
 
 const TONE_CLASSES: Record<ChipTone, string> = {
-  success: 'text-emerald-600',
-  danger: 'text-red-600',
-  muted: 'text-gray-400',
+  success: 'text-ui-success',
+  danger: 'text-ui-danger',
+  muted: 'text-ui-muted',
 }
 
 export const StateChip = (props: StateChipProps) => {
@@ -31,13 +31,11 @@ export const StateChip = (props: StateChipProps) => {
       <span
         role="img"
         aria-label={props.label ?? 'in progress'}
-        className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-500"
+        className="animate-breathe h-1.5 w-1.5 shrink-0 rounded-full bg-ui-accent"
       />
     )
   return (
-    <span
-      className={`shrink-0 text-[10px] font-medium tracking-wide uppercase ${TONE_CLASSES[props.tone]}`}
-    >
+    <span className={`shrink-0 text-[11px] font-medium ${TONE_CLASSES[props.tone]}`}>
       {props.label}
     </span>
   )

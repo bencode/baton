@@ -1,0 +1,39 @@
+@theme {
+  --color-ui-surface: #ffffff;
+  --color-ui-panel: oklch(97.5% 0.006 258);
+  --color-ui-text: oklch(28% 0.012 258);
+  --color-ui-muted: oklch(48% 0.016 258);
+  --color-ui-border: oklch(89% 0.012 258);
+  --color-ui-hover: oklch(95.5% 0.012 258);
+  --color-ui-accent: oklch(54% 0.14 255);
+  --color-ui-accent-hover: oklch(47% 0.14 255);
+  --color-ui-heading: oklch(32% 0.055 258);
+  --color-ui-selected: oklch(95% 0.029 255);
+  --color-ui-selected-text: oklch(37% 0.073 255);
+  --color-ui-selected-muted: oklch(46% 0.055 258);
+  --color-ui-accent-border: oklch(75% 0.055 258);
+  --color-ui-info-surface: oklch(97% 0.009 258);
+  --color-ui-info-text: oklch(43% 0.035 258);
+  --color-ui-success: oklch(43% 0.075 157);
+  --color-ui-success-surface: oklch(96% 0.014 157);
+  --color-ui-success-border: oklch(84% 0.035 157);
+  --color-ui-warning: oklch(45% 0.085 72);
+  --color-ui-warning-surface: oklch(97% 0.016 72);
+  --color-ui-warning-border: oklch(83% 0.045 72);
+  --color-ui-danger: oklch(47% 0.14 25);
+  --color-ui-danger-hover: oklch(42% 0.14 25);
+  --color-ui-danger-surface: oklch(97% 0.012 25);
+  --color-ui-danger-border: oklch(83% 0.045 25);
+}
+
+:root {
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  --ui-shell-inset: 12px;
+  --ui-shell-gap: 12px;
+}

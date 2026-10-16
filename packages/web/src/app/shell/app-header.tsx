@@ -1,36 +1,68 @@
 import type { Id } from '@baton/shared'
-import { MenuIcon } from '../../components/icons'
-import { UserMenu } from '../../features/auth/user-menu'
-import { WorkspaceSwitcher } from '../../features/workspaces/workspace-switcher'
-import { HealthBadge } from './health-badge'
+import type { Ref } from 'react'
+import { BatonIcon, PanelIcon } from '../../components/icons'
+import { ProjectSwitcher } from '../../features/projects/project-switcher'
+import { useProject } from '../../features/projects/use-projects'
 
-type AppHeaderProps = { workspaceId: Id | null; onOpenMenu: () => void }
+export const SidebarHeader = ({
+  workspaceId,
+  projectId,
+  onCollapse,
+  onNavigate,
+}: {
+  workspaceId: Id | null
+  projectId: Id | null
+  onCollapse(): void
+  onNavigate(): void
+}) => (
+  <div className="wb-sidebar-header">
+    <span className="wb-brand-mark" role="img" aria-label="baton">
+      <BatonIcon />
+    </span>
+    <ProjectSwitcher
+      key={workspaceId}
+      workspaceId={workspaceId}
+      activeProjectId={projectId}
+      onNavigate={onNavigate}
+    />
+    <button
+      type="button"
+      onClick={onCollapse}
+      className="ui-icon-button"
+      aria-label="收起导航"
+      title="收起导航"
+    >
+      <PanelIcon />
+    </button>
+  </div>
+)
 
-// The top bar: a phone-only menu toggle, the wordmark, the workspace switcher,
-// and (right) the server health badge + user menu.
-export const AppHeader = ({ workspaceId, onOpenMenu }: AppHeaderProps) => (
-  <header className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-    <div className="flex items-center gap-3">
+export const CompactHeader = ({
+  projectId,
+  menuButtonRef,
+  onOpenMenu,
+}: {
+  projectId: Id | null
+  menuButtonRef: Ref<HTMLButtonElement>
+  onOpenMenu(): void
+}) => {
+  const { data: project } = useProject(projectId)
+  return (
+    <header className="wb-compact-header">
       <button
+        ref={menuButtonRef}
         type="button"
         onClick={onOpenMenu}
-        aria-label="open menu"
-        className="-ml-1 rounded-md p-1 text-gray-500 transition-colors hover:bg-gray-100 md:hidden"
+        className="ui-icon-button"
+        aria-label="打开导航"
+        title="打开导航"
       >
-        <MenuIcon />
+        <PanelIcon />
       </button>
-      <h1 className="flex items-center gap-2 font-mono text-[15px] font-semibold tracking-tight text-gray-900">
-        <span className="inline-block h-2 w-2 rotate-45 bg-emerald-500" aria-hidden />
-        baton
-      </h1>
-      <span aria-hidden className="h-5 w-px bg-gray-200" />
-      <WorkspaceSwitcher activeWorkspaceId={workspaceId} />
-    </div>
-    <div className="flex items-center gap-3">
-      <span className="hidden sm:inline-flex">
-        <HealthBadge />
+      <span className="min-w-0 truncate">
+        {project?.id === projectId ? project.name : '选择项目'}
       </span>
-      <UserMenu />
-    </div>
-  </header>
-)
+      <span className="ml-auto text-ui-muted">baton</span>
+    </header>
+  )
+}
