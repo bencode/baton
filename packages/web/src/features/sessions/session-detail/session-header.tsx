@@ -1,10 +1,10 @@
 import type { Id, Session } from '@baton/shared'
 import { useState } from 'react'
-import { standaloneSessionPath } from '../../../app/route'
-import { CheckIcon, CopyIcon, InfoIcon } from '../../../components/icons'
-import { copyText } from '../../../utils/clipboard'
+import { InfoIcon } from '../../../components/icons'
+import { useIsMobile } from '../../../hooks/use-media-query'
 import { LoopsControl } from '../../loops/loops-control'
 import type { StreamState } from '../use-session-stream'
+import { MobileSessionActions, SessionDiagnostics, ShareButton } from './session-header-actions'
 
 // SessionHeader — one-line identity strip, gritty enough that the rest of the
 // surface stays a quiet reading area. Diagnostic info (cwd, full agent UUID)
@@ -77,43 +77,6 @@ const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) =
   )
 }
 
-const CopyButton = ({ text }: { text: string }) => {
-  const [copied, setCopied] = useState(false)
-  const onCopy = () => {
-    copyText(text)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <button
-      type="button"
-      onClick={onCopy}
-      className="ui-icon-button"
-      aria-label="复制 Agent 会话标识"
-      title={copied ? '已复制' : '复制 Agent 会话标识'}
-    >
-      {copied ? <CheckIcon /> : <CopyIcon />}
-    </button>
-  )
-}
-
-// Copy the standalone collaboration link (/s/:token) — same URL the DingTalk /
-// Feishu bots push. Anyone with the link can read the transcript and write into
-// the session (share token logs the visitor in with full permissions).
-const ShareButton = ({ shareToken }: { shareToken: string }) => {
-  const [copied, setCopied] = useState(false)
-  const onShare = () => {
-    copyText(window.location.origin + standaloneSessionPath(shareToken))
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <button type="button" aria-label="分享会话" onClick={onShare} className="ui-quiet-button">
-      {copied ? '已复制' : '分享'}
-    </button>
-  )
-}
-
 export const SessionHeader = ({
   session,
   active,
@@ -131,6 +94,7 @@ export const SessionHeader = ({
   onRename,
 }: HeaderProps) => {
   const [open, setOpen] = useState(false)
+  const isMobile = useIsMobile()
   const statusLabel =
     streamStatus !== 'open'
       ? '状态待同步'
@@ -146,6 +110,52 @@ export const SessionHeader = ({
     (session.agentSessionId !== null &&
       !session.agentSessionId.startsWith('pending:') &&
       session.cwd !== null)
+  if (isMobile)
+    return (
+      <div className="chat-session-header">
+        <div className="chat-mobile-title">
+          <SessionName name={session.name} onRename={onRename} />
+        </div>
+        <div className="chat-mobile-bar">
+          <div className="chat-mobile-status">
+            <span className="chat-mobile-agent">
+              {session.agentKind === 'codex' ? 'Codex' : 'Claude Code'}
+            </span>
+            <span
+              aria-hidden="true"
+              className={`chat-mobile-status-dot ${streamStatus === 'open' && connected && busy ? 'bg-ui-accent' : 'bg-ui-border'}`}
+            />
+            <span className="shrink-0">{statusLabel}</span>
+          </div>
+          <div className="chat-mobile-primary-actions">
+            {terminalOpen ? (
+              <button type="button" onClick={onCloseTerminal} className="ui-button">
+                关闭终端
+              </button>
+            ) : active ? (
+              <button type="button" onClick={onStop} className="ui-quiet-button ui-danger">
+                停止进程
+              </button>
+            ) : (
+              <button type="button" onClick={onResume} className="ui-button">
+                恢复会话
+              </button>
+            )}
+            <MobileSessionActions
+              session={session}
+              initialEvent={initialEvent}
+              active={active}
+              terminalOpen={terminalOpen}
+              terminalReady={terminalReady}
+              projectId={projectId}
+              activeLoops={activeLoops}
+              onOpenTerminal={onOpenTerminal}
+              onRename={onRename}
+            />
+          </div>
+        </div>
+      </div>
+    )
   return (
     <div className="chat-session-header">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
@@ -210,18 +220,8 @@ export const SessionHeader = ({
         </div>
       </div>
       {open && (
-        <div className="mt-2 flex flex-col gap-1 break-all rounded-md bg-ui-panel p-3 text-xs text-ui-muted">
-          {initialEvent?.model && <span>初始事件模型：{initialEvent.model}</span>}
-          {initialEvent?.sessionId && initialEvent.sessionId !== session.agentSessionId && (
-            <span>初始事件会话：{initialEvent.sessionId}</span>
-          )}
-          <span>目录：{session.cwd ?? '尚未准备'}</span>
-          <div className="flex items-center gap-2">
-            <span>
-              Agent 会话：<span>{session.agentSessionId ?? '尚未准备'}</span>
-            </span>
-            {session.agentSessionId !== null && <CopyButton text={session.agentSessionId} />}
-          </div>
+        <div className="mt-2">
+          <SessionDiagnostics session={session} initialEvent={initialEvent} />
         </div>
       )}
     </div>

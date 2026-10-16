@@ -20,6 +20,22 @@ type LoopsControlProps = {
   activeLoops: number
 }
 
+export const LoopsDialog = ({
+  sessionId,
+  projectId,
+  onClose,
+}: {
+  sessionId: Id
+  projectId: Id
+  onClose(): void
+}) => (
+  <Modal title="定时任务" onClose={onClose} className="max-w-lg">
+    <div className="-mx-5 -mb-6 flex max-h-[70vh] min-h-0 flex-col border-t border-ui-border">
+      <LoopsPanel sessionId={sessionId} projectId={projectId} />
+    </div>
+  </Modal>
+)
+
 export const LoopsControl = ({ sessionId, projectId, activeLoops }: LoopsControlProps) => {
   const [open, setOpen] = useState(false)
   const isMobile = useIsMobile()
@@ -51,11 +67,7 @@ export const LoopsControl = ({ sessionId, projectId, activeLoops }: LoopsControl
         </span>
       </button>
       {open && isMobile && (
-        <Modal title="Scheduled tasks" onClose={close} className="max-w-lg">
-          <div className="-mx-5 -mb-6 flex max-h-[70vh] min-h-0 flex-col border-t border-ui-border">
-            {panel}
-          </div>
-        </Modal>
+        <LoopsDialog sessionId={sessionId} projectId={projectId} onClose={close} />
       )}
       {open && !isMobile && (
         <div

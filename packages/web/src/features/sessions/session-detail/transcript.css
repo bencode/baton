@@ -336,14 +336,92 @@
 
 @media (max-width: 767px) {
   .chat-scroll {
-    padding: 24px 18px 32px;
+    padding: 16px 16px 24px;
+  }
+  .chat-transcript > * + * {
+    margin-top: 16px;
+  }
+  .chat-transcript > .chat-turn-info {
+    margin-top: 8px;
+    font-size: 11px;
   }
   .chat-user-content {
     max-width: 94%;
     padding: 10px 12px;
   }
   .chat-session-header {
-    padding-inline: 16px;
+    min-height: 48px;
+    padding: 0 12px;
+  }
+  .chat-mobile-title {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    min-height: 44px;
+  }
+  .chat-mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 47px;
+  }
+  .chat-mobile-status {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-ui-muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .chat-mobile-agent {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chat-mobile-status-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .chat-mobile-primary-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .chat-mobile-more {
+    position: relative;
+  }
+  .chat-mobile-task-count {
+    position: absolute;
+    top: 1px;
+    right: 0;
+    min-width: 14px;
+    padding: 0 3px;
+    border-radius: 4px;
+    background: var(--color-ui-selected);
+    color: var(--color-ui-selected-text);
+    font-size: 10px;
+    line-height: 14px;
+  }
+  .chat-mobile-actions {
+    width: 216px;
+  }
+  .chat-mobile-rename {
+    display: grid;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .chat-mobile-rename .ui-input {
+    width: 100%;
+  }
+  .chat-mobile-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
   }
   .chat-connection-notice {
     padding: 10px 16px;
