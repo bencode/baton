@@ -20,9 +20,9 @@ export const HealthBadge = () => {
   const dot =
     health === 'ok' ? 'bg-ui-success' : health === 'unreachable' ? 'bg-ui-danger' : 'bg-gray-400'
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-ui-muted">
+    <span className="wb-health inline-flex items-center gap-2 text-[11px] text-ui-muted">
       <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-      {`server: ${health}`}
+      服务连接：{{ checking: '检查中', ok: '正常', unreachable: '无法连接' }[health]}
     </span>
   )
 }

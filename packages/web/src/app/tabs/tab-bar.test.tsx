@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { TabBar } from './tab-bar'
 import type { Tab } from './tabs-model'
@@ -30,7 +31,7 @@ test('context-menu item fires its handler on click (mousedown does not dismiss f
     />,
   )
   fireEvent.contextMenu(screen.getByRole('button', { name: 'b' }))
-  const item = screen.getByRole('menuitem', { name: 'Close others' })
+  const item = screen.getByRole('menuitem', { name: '关闭其他页签' })
   // A real click is mousedown then click; the mousedown must not kill the menu.
   fireEvent.mouseDown(item)
   fireEvent.click(item)
@@ -69,11 +70,38 @@ test('tab actions are reachable without a context click and support keyboard foc
       onCloseAll={noop}
     />,
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Actions for b' }))
-  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Close' }))
+  fireEvent.click(screen.getByRole('button', { name: '页签操作' }))
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: '关闭当前页签' }))
   fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
-  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Close others' }))
-  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: '关闭其他页签' }))
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
   expect(screen.queryByRole('menu')).toBeNull()
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actions for b' }))
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: '页签操作' }))
+})
+
+test('closing the active tab from its context menu focuses the remaining tab', async () => {
+  const Fixture = () => {
+    const [entries, setEntries] = useState(tabs)
+    const [active, setActive] = useState('/t/a')
+    return (
+      <TabBar
+        tabs={entries}
+        activeId={active}
+        onSelect={setActive}
+        onClose={id => {
+          setEntries(items => items.filter(item => item.id !== id))
+          setActive('/t/b')
+        }}
+        onCloseOthers={noop}
+        onCloseRight={noop}
+        onCloseAll={noop}
+      />
+    )
+  }
+  render(<Fixture />)
+  fireEvent.contextMenu(screen.getByRole('button', { name: 'a' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: '关闭当前页签' }))
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'b' })),
+  )
 })

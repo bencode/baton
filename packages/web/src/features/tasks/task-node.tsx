@@ -15,8 +15,8 @@ export const TaskNode = ({ task, depth, active, onOpen }: TaskNodeProps) => {
     <button
       type="button"
       onClick={onOpen}
-      style={{ paddingLeft: `${36 + depth * 14}px` }}
-      className={`ui-focus flex min-h-11 w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-[13px] transition-colors duration-150 md:min-h-8 [@media(pointer:coarse)]:min-h-11 ${
+      style={{ paddingLeft: `${40 + depth * 12}px` }}
+      className={`ui-focus flex min-h-11 w-full items-center gap-2 rounded-lg py-2 pr-3 text-left text-[13px] transition-colors duration-150 md:min-h-8 [@media(pointer:coarse)]:min-h-11 ${
         active ? 'bg-ui-selected text-ui-selected-text' : 'text-ui-muted hover:bg-ui-hover/70'
       }`}
     >

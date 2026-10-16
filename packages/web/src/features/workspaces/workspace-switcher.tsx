@@ -9,61 +9,92 @@ import { SelectControl } from '../../components/select-control'
 import { bumpLists } from '../../hooks/use-list-revision'
 import { useWorkspaces } from './use-workspaces'
 
-type WorkspaceSwitcherProps = { activeWorkspaceId: Id | null }
+type WorkspaceSwitcherProps = { activeWorkspaceId: Id | null; onNavigate?(): void }
 
-export const WorkspaceSwitcher = ({ activeWorkspaceId }: WorkspaceSwitcherProps) => {
+export const WorkspaceSwitcher = ({ activeWorkspaceId, onNavigate }: WorkspaceSwitcherProps) => {
   const api = useApi()
-  const { data: workspaces } = useWorkspaces()
+  const { data: workspaces, loading, error: loadError } = useWorkspaces()
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
-  if (!workspaces || workspaces.length === 0)
-    return <span className="text-[13px] text-ui-muted">no workspace</span>
-  const active = workspaces.find(w => w.id === activeWorkspaceId)
-  const rename = async (next: string) => {
+  const [error, setError] = useState<string | null>(null)
+  const active = workspaces?.find(workspace => workspace.id === activeWorkspaceId)
+  const rename = async (name: string) => {
     setEditing(false)
     if (!active) return
-    await api.workspaces.update(active.id, { name: next }).then(bumpLists, () => {})
+    setError(null)
+    try {
+      await api.workspaces.update(active.id, { name })
+      bumpLists()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
   }
-  if (editing && active)
-    return (
-      <InlineRename
-        name={active.name}
-        ariaLabel="workspace name"
-        onCommit={rename}
-        onCancel={() => setEditing(false)}
-      />
-    )
   return (
-    <span className="inline-flex min-w-0 max-w-full items-center gap-1">
-      <SelectControl
-        aria-label="Workspace"
-        value={activeWorkspaceId ?? ''}
-        onChange={e => navigate(workspacePath(Number(e.target.value)))}
-        tone="quiet"
-        className="min-w-0 flex-1"
-      >
-        {activeWorkspaceId === null && (
-          <option value="" disabled>
-            workspace…
-          </option>
-        )}
-        {workspaces.map(w => (
-          <option key={w.id} value={w.id}>
-            {w.name}
-          </option>
-        ))}
-      </SelectControl>
-      {active && (
-        <button
-          type="button"
-          title="rename workspace"
-          aria-label="rename workspace"
-          onClick={() => setEditing(true)}
-          className="ui-icon-button shrink-0"
-        >
-          <PencilIcon />
-        </button>
+    <section className="wb-workspace-control" aria-label="工作区">
+      <span className="ui-menu-caption block">工作区</span>
+      {loadError ? (
+        <p role="alert" className="px-3 py-2 text-xs text-ui-danger">
+          无法加载工作区。
+        </p>
+      ) : loading ? (
+        <p role="status" className="px-3 py-2 text-xs text-ui-muted">
+          加载工作区…
+        </p>
+      ) : !workspaces?.length ? (
+        <p className="px-3 py-2 text-xs text-ui-muted">暂无工作区</p>
+      ) : (
+        <div className="flex min-w-0 items-center gap-2 px-2">
+          {editing && active ? (
+            <InlineRename
+              name={active.name}
+              ariaLabel="工作区名称"
+              onCommit={rename}
+              onCancel={() => setEditing(false)}
+            />
+          ) : (
+            <SelectControl
+              aria-label="切换工作区"
+              value={activeWorkspaceId ?? ''}
+              tone="quiet"
+              className="min-w-0 flex-1"
+              onChange={event => {
+                navigate(workspacePath(Number(event.target.value)))
+                onNavigate?.()
+              }}
+            >
+              {activeWorkspaceId === null && (
+                <option value="" disabled>
+                  选择工作区
+                </option>
+              )}
+              {workspaces.map(workspace => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </SelectControl>
+          )}
+          {active && !editing && (
+            <button
+              type="button"
+              className="ui-icon-button"
+              title="重命名工作区"
+              aria-label="重命名工作区"
+              onClick={() => {
+                setError(null)
+                setEditing(true)
+              }}
+            >
+              <PencilIcon />
+            </button>
+          )}
+        </div>
       )}
-    </span>
+      {error && (
+        <p role="alert" className="px-3 py-2 text-xs text-ui-danger">
+          {error}
+        </p>
+      )}
+    </section>
   )
 }

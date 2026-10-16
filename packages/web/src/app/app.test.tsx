@@ -22,7 +22,7 @@ const renderBadge = (api: Api) =>
 test('HealthBadge shows "ok" when /health resolves', async () => {
   const api = { health: vi.fn(async () => ({ ok: true })) } as unknown as Api
   renderBadge(api)
-  expect(await screen.findByText('server: ok')).toBeTruthy()
+  expect(await screen.findByText('服务连接：正常')).toBeTruthy()
 })
 
 test('HealthBadge shows "unreachable" when /health rejects', async () => {
@@ -32,7 +32,7 @@ test('HealthBadge shows "unreachable" when /health rejects', async () => {
     }),
   } as unknown as Api
   renderBadge(api)
-  expect(await screen.findByText('server: unreachable')).toBeTruthy()
+  expect(await screen.findByText('服务连接：无法连接')).toBeTruthy()
 })
 
 test('Shell renders the top bar, a resize separator and empty states with no data', async () => {
@@ -48,10 +48,11 @@ test('Shell renders the top bar, a resize separator and empty states with no dat
       </MemoryRouter>
     </ApiContext.Provider>,
   )
-  expect(screen.getByText('baton')).toBeTruthy()
-  expect(await screen.findByText('no workspace')).toBeTruthy()
-  expect(screen.getByText('Select a project.')).toBeTruthy()
-  expect(screen.getByText('Choose your project')).toBeTruthy()
+  expect(screen.getByLabelText('baton')).toBeTruthy()
+  fireEvent.click(await screen.findByRole('button', { name: '本地模式，配置' }))
+  expect(await screen.findByText('暂无工作区')).toBeTruthy()
+  expect(screen.getByText('请选择或创建项目。')).toBeTruthy()
+  expect(screen.getByText('选择你的项目')).toBeTruthy()
   expect(container.querySelector('[data-separator]')).toBeTruthy()
 })
 
@@ -87,6 +88,10 @@ test('crossing the mobile breakpoint preserves the open page and its unsaved inp
   fireEvent.change(await screen.findByLabelText('Project name'), {
     target: { value: 'Unsaved draft' },
   })
+  fireEvent.click(screen.getByRole('button', { name: '收起导航' }))
+  expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('Unsaved draft')
+  fireEvent.click(screen.getByRole('button', { name: '打开导航' }))
+  expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('Unsaved draft')
   act(() => {
     mobile = true
     listeners.forEach(listener => {

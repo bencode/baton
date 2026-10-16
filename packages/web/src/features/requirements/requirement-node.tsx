@@ -23,7 +23,7 @@ export const RequirementNode = ({
   const cancelled = requirement.status === 'cancelled'
   return (
     <div
-      className={`group flex w-full items-center gap-1 rounded-md px-1 py-1 transition-colors duration-150 ${
+      className={`group flex w-full items-center gap-1 rounded-lg px-3 py-2 transition-colors duration-150 ${
         active ? 'bg-ui-selected' : 'hover:bg-ui-hover/70'
       }`}
     >

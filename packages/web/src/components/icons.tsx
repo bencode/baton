@@ -205,3 +205,31 @@ export const CopyIcon = () => (
     <path d="M10 5.5v-3H2.5V10h3" />
   </StrokeGlyph>
 )
+
+export const BatonIcon = () => (
+  <StrokeGlyph>
+    <path d="m3 9 6-6M4 13l8-10M8 13l5-6" />
+  </StrokeGlyph>
+)
+export const PanelIcon = () => (
+  <StrokeGlyph>
+    <rect x="2" y="2.5" width="12" height="11" rx="2" />
+    <path d="M7 2.5v11" />
+  </StrokeGlyph>
+)
+export const FilterIcon = () => (
+  <StrokeGlyph>
+    <path d="M2.5 4h11M5 8h6M7 12h2" />
+  </StrokeGlyph>
+)
+export const ChatIcon = () => (
+  <StrokeGlyph>
+    <path d="M3 12.5 2 14V5a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H3Z" />
+    <path d="M5 5.5h6M5 8.5h4" />
+  </StrokeGlyph>
+)
+export const CheckIcon = () => (
+  <StrokeGlyph>
+    <path d="m3 8 3 3 7-7" />
+  </StrokeGlyph>
+)

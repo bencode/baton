@@ -10,19 +10,29 @@ export const DesktopSplit = ({
   left,
   detail,
   isMobile,
+  collapsed,
 }: {
   left: ReactNode
   detail: ReactNode
   isMobile: boolean
+  collapsed: boolean
 }) => {
   const resourcePanel = usePanelRef()
-  const desktopWidth = useRef(274)
-  const previousMobile = useRef(isMobile)
+  const desktopWidth = useRef(288)
+  const hidden = isMobile || collapsed
+  const previousHidden = useRef(hidden)
+  const restoring = useRef(false)
+  if (previousHidden.current !== hidden) restoring.current = true
   useLayoutEffect(() => {
-    if (previousMobile.current === isMobile) return
-    previousMobile.current = isMobile
-    resourcePanel.current?.resize(isMobile ? '0px' : `${desktopWidth.current}px`)
-  }, [isMobile, resourcePanel])
+    if (previousHidden.current === hidden) return
+    previousHidden.current = hidden
+    // Group re-registers changed constraints during commit; restore after it settles.
+    const targetWidth = desktopWidth.current
+    const frame = requestAnimationFrame(() => {
+      resourcePanel.current?.resize(hidden ? '0px' : `${targetWidth}px`)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [hidden, resourcePanel])
   const layout = useDefaultLayout({
     id: 'baton-workbench-split-v1',
     panelIds: PANEL_IDS,
@@ -31,26 +41,36 @@ export const DesktopSplit = ({
   return (
     <Group
       orientation="horizontal"
-      className="min-h-0 flex-1"
+      className="wb-split"
       defaultLayout={layout.defaultLayout}
-      onLayoutChanged={isMobile ? undefined : layout.onLayoutChanged}
+      onLayoutChanged={hidden ? undefined : layout.onLayoutChanged}
     >
       <Panel
         id="resources"
         panelRef={resourcePanel}
         onResize={size => {
-          if (!isMobile && size.inPixels >= 240) desktopWidth.current = size.inPixels
+          if (hidden || window.matchMedia('(max-width: 767px)').matches || size.inPixels < 240)
+            return
+          if (restoring.current) {
+            if (Math.abs(size.inPixels - desktopWidth.current) < 1) restoring.current = false
+            return
+          }
+          desktopWidth.current = size.inPixels
         }}
-        defaultSize="274px"
-        minSize={isMobile ? '0px' : '240px'}
-        maxSize={isMobile ? '0px' : '400px'}
+        defaultSize={hidden ? '0px' : '288px'}
+        minSize={hidden ? '0px' : '240px'}
+        maxSize={hidden ? '0px' : '400px'}
         groupResizeBehavior="preserve-pixel-size"
       >
-        {left}
+        <div
+          className="h-full"
+          inert={hidden}
+          style={{ visibility: hidden ? 'hidden' : undefined }}
+        >
+          {left}
+        </div>
       </Panel>
-      {!isMobile && (
-        <Separator className="w-px bg-ui-border transition-colors hover:bg-ui-accent" />
-      )}
+      {!hidden && <Separator className="wb-separator" />}
       <Panel id="detail" minSize={isMobile ? '0px' : '320px'}>
         {detail}
       </Panel>

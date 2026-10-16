@@ -1,4 +1,5 @@
 import type { Id } from '@baton/shared'
+import type { ReactNode } from 'react'
 import { RequirementDetail } from '../../features/requirements/requirement-detail'
 import { ServiceDetail } from '../../features/services/service-detail'
 import { SessionDetail } from '../../features/sessions/session-detail'
@@ -10,6 +11,7 @@ import type { Tab } from '../tabs/tabs-model'
 import { ProjectView } from './project-view'
 
 type DetailPaneProps = {
+  header: ReactNode
   tabs: Tab[]
   activeId: string
   open(path: string, title: string): void
@@ -53,24 +55,24 @@ const ProjectStart = ({
     <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
       <span aria-hidden className="mb-1 h-3 w-3 rotate-45 bg-ui-accent" />
       <h1 className="ui-page-title">
-        {projectId === null ? 'Choose your project' : 'What would you like to work on?'}
+        {projectId === null ? '选择你的项目' : '准备开始哪项工作？'}
       </h1>
       <p className="max-w-sm text-[13px] leading-relaxed text-ui-muted">
         {projectId === null
-          ? 'Select or create a project above to get started.'
-          : 'Start a conversation, or pick one from the sidebar to continue.'}
+          ? '从左侧选择或创建项目，开始使用。'
+          : '开始一段新会话，或从左侧选择已有会话继续。'}
       </p>
       {projectId !== null && (
         <div className="mt-2 flex flex-wrap justify-center gap-2">
           <button type="button" onClick={onNewSession} className="ui-button ui-primary">
-            New conversation
+            新会话
           </button>
           <button
             type="button"
-            onClick={() => open(projectViewPath(projectId, 'workers'), 'Workers')}
+            onClick={() => open(projectViewPath(projectId, 'workers'), '执行环境')}
             className="ui-button"
           >
-            Manage workers
+            管理执行环境
           </button>
         </div>
       )}
@@ -79,7 +81,8 @@ const ProjectStart = ({
 }
 
 export const DetailPane = (props: DetailPaneProps) => (
-  <main className="flex h-full min-w-0 flex-col bg-ui-surface">
+  <main className="wb-detail">
+    {props.header}
     <TabBar
       tabs={props.tabs}
       activeId={props.activeId}

@@ -12,7 +12,7 @@ import { useIsMobile } from '../hooks/use-media-query'
 import { ApiContext } from './api-context'
 import { LeftPanel } from './left-panel'
 import { parseRoute, projectViewPath, sessionPath } from './route'
-import { AppHeader } from './shell/app-header'
+import { CompactHeader } from './shell/app-header'
 import { DetailPane } from './shell/detail-pane'
 import { DesktopSplit, MobileMain } from './shell/layout'
 import { useShellRouting } from './shell/use-shell-routing'
@@ -26,6 +26,7 @@ export const Shell = () => {
   const { routeProjectId, workspaceId } = useShellRouting({ activeId, tabs, retitle })
   const isMobile = useIsMobile()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false)
   const [newSessionProject, setNewSessionProject] = useState<number | null>(null)
   const menuButton = useRef<HTMLButtonElement>(null)
   const newSessionTrigger = useRef<HTMLElement | null>(null)
@@ -54,6 +55,8 @@ export const Shell = () => {
     <LeftPanel
       key={routeProjectId}
       onNewSession={startSession}
+      onCollapse={() => (isMobile ? setDrawerOpen(false) : setDesktopCollapsed(true))}
+      onContextNavigate={() => setDrawerOpen(false)}
       workspaceId={workspaceId}
       projectId={routeProjectId}
       activeId={activeId}
@@ -63,6 +66,15 @@ export const Shell = () => {
   )
   const detail = (
     <DetailPane
+      header={
+        isMobile || desktopCollapsed ? (
+          <CompactHeader
+            projectId={routeProjectId}
+            menuButtonRef={menuButton}
+            onOpenMenu={() => (isMobile ? setDrawerOpen(true) : setDesktopCollapsed(false))}
+          />
+        ) : null
+      }
       tabs={tabs}
       onNewSession={startSession}
       onSessionsDeleted={(projectId, ids) =>
@@ -83,13 +95,7 @@ export const Shell = () => {
     />
   )
   return (
-    <div className="flex h-dvh min-w-0 flex-col bg-ui-panel text-ui-text">
-      <AppHeader
-        workspaceId={workspaceId}
-        projectId={routeProjectId}
-        menuButtonRef={menuButton}
-        onOpenMenu={() => setDrawerOpen(true)}
-      />
+    <div className="wb-shell">
       {newSessionProject !== null && newSessionProject === routeProjectId && (
         <NewSessionDialog
           key={newSessionProject}
@@ -101,11 +107,16 @@ export const Shell = () => {
           }}
           onManageWorkers={() => {
             setNewSessionProject(null)
-            openItem(projectViewPath(newSessionProject, 'workers'), 'Workers')
+            openItem(projectViewPath(newSessionProject, 'workers'), '执行环境')
           }}
         />
       )}
-      <DesktopSplit left={isMobile ? null : left} detail={detail} isMobile={isMobile} />
+      <DesktopSplit
+        left={isMobile ? null : left}
+        detail={detail}
+        isMobile={isMobile}
+        collapsed={desktopCollapsed}
+      />
       {isMobile && (
         <MobileMain
           left={left}

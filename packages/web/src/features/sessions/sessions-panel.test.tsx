@@ -57,7 +57,14 @@ const fixture = () => {
   const open = vi.fn()
   render(
     <ApiContext.Provider value={api as unknown as Api}>
-      <SessionsPanel projectId={1} activeId="/proj/1" close={close} open={open} />
+      <SessionsPanel
+        onNewSession={vi.fn()}
+        renderToolbar={actions => actions}
+        projectId={1}
+        activeId="/proj/1"
+        close={close}
+        open={open}
+      />
     </ApiContext.Provider>,
   )
   return { api, close, open }
@@ -68,21 +75,23 @@ test('sessions are independent of the worker hierarchy and searchable by name an
   const f = fixture()
   fireEvent.click(await screen.findByText('Login'))
   expect(f.open).toHaveBeenCalledWith('/proj/1/session/1', 'Login')
-  fireEvent.change(screen.getByLabelText('Search conversations'), { target: { value: 'login' } })
+  fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+  fireEvent.change(screen.getByLabelText('搜索当前项目的会话'), { target: { value: 'login' } })
   expect(screen.queryByText('Deployment')).toBeNull()
-  fireEvent.change(screen.getByLabelText('Filter by worker'), { target: { value: '2' } })
-  expect(screen.getByText(/No matching conversations/)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '按执行环境筛选' }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'worker-2' }))
+  expect(screen.getByText(/没有匹配的会话/)).toBeTruthy()
 })
 
 test('failed deletion remains visible and retry closes only the removed session', async () => {
   const f = fixture()
   f.api.sessions.remove.mockRejectedValueOnce(new Error('Cannot delete'))
   await screen.findByText('Login')
-  fireEvent.click(screen.getAllByLabelText('delete session')[0] as HTMLElement)
-  fireEvent.click(screen.getByLabelText('confirm delete'))
+  fireEvent.click(screen.getAllByLabelText('删除会话')[0] as HTMLElement)
+  fireEvent.click(screen.getByLabelText('确认删除'))
   await screen.findByText('Cannot delete')
   expect(f.close).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByLabelText('confirm delete'))
+  fireEvent.click(screen.getByLabelText('确认删除'))
   await waitFor(() => expect(f.close).toHaveBeenCalledWith('/proj/1/session/2'))
   expect(screen.queryByText('Deployment')).toBeNull()
   expect(screen.getByText('Login')).toBeTruthy()
@@ -98,12 +107,19 @@ test('initial load failure is an error, and retry restores the list', async () =
   } as unknown as Api
   render(
     <ApiContext.Provider value={api}>
-      <SessionsPanel projectId={1} activeId="/proj/1" open={vi.fn()} close={vi.fn()} />
+      <SessionsPanel
+        onNewSession={vi.fn()}
+        renderToolbar={actions => actions}
+        projectId={1}
+        activeId="/proj/1"
+        open={vi.fn()}
+        close={vi.fn()}
+      />
     </ApiContext.Provider>,
   )
-  expect((await screen.findByRole('alert')).textContent).toContain('Unable to load conversations')
-  expect(screen.queryByText(/No conversations yet/)).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect((await screen.findByRole('alert')).textContent).toContain('无法加载会话')
+  expect(screen.queryByText(/暂无会话/)).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '重试' }))
   await screen.findByText('Login')
   expect(screen.queryByRole('alert')).toBeNull()
 })
@@ -144,4 +160,21 @@ test('late requests from an old project cannot overwrite current session or work
   })
   expect(result.current.sessions.data).toEqual([])
   expect(result.current.workers.data).toEqual([])
+})
+
+test('closing search clears the query and clearing the worker chip restores the list', async () => {
+  fixture()
+  await screen.findByText('Login')
+  fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+  fireEvent.change(screen.getByLabelText('搜索当前项目的会话'), { target: { value: 'login' } })
+  expect(screen.queryByText('Deployment')).toBeNull()
+  fireEvent.keyDown(screen.getByLabelText('搜索当前项目的会话'), { key: 'Escape' })
+  expect(screen.queryByLabelText('搜索当前项目的会话')).toBeNull()
+  expect(screen.getByText('Deployment')).toBeTruthy()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: '搜索会话' }))
+  fireEvent.click(screen.getByRole('button', { name: '按执行环境筛选' }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'worker-1' }))
+  expect(screen.queryByText('Deployment')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '清除执行环境筛选' }))
+  expect(screen.getByText('Deployment')).toBeTruthy()
 })
