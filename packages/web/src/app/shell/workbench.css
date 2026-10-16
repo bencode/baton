@@ -533,8 +533,14 @@
     gap: 0;
   }
   .wb-tab-strip {
-    height: 52px;
+    height: 44px;
     padding-right: 4px;
+  }
+  .wb-page-tab[data-active="true"] {
+    background: oklch(97% 0.015 255 / 0.8);
+  }
+  .wb-detail .chat-mobile-title {
+    display: none;
   }
   .wb-page-tab {
     max-width: 238px;
