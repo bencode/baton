@@ -15,12 +15,19 @@ const HISTORY_WINDOW = 200
 // user starts pinned to the bottom); only paging upward pulls the big block.
 const OLDER_PAGE = 600
 
+export type HistoryState =
+  | { status: 'loading' }
+  | { status: 'ready' }
+  | { status: 'error'; message: string }
+
 export type StreamState = {
   connectionRevision: number
   events: SessionEvent[]
   status: 'connecting' | 'open' | 'closed' | 'error'
   hasOlder: boolean
   loadingOlder: boolean
+  history: HistoryState
+  retryHistory(): Promise<void>
   loadOlder: (beforePrepend?: () => void) => Promise<void>
 }
 
@@ -40,6 +47,12 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
   const [events, setEvents] = useState<SessionEvent[]>([])
   const [status, setStatus] = useState<StreamState['status']>('connecting')
   const [loadingOlder, setLoadingOlder] = useState(false)
+  const [history, setHistory] = useState<HistoryState>({ status: 'loading' })
+  const historyLoaded = useRef(false)
+  const retry = useRef<(() => Promise<void>) | null>(null)
+  const retryHistory = useCallback(async () => {
+    await retry.current?.()
+  }, [])
   // Highest sequence seen (reconnect resume point) and lowest loaded (the
   // "load older" cursor). Refs so they're current without re-running effects.
   const lastSeqRef = useRef(0)
@@ -90,70 +103,71 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
   )
 
   useEffect(() => {
+    const changed = boundSidRef.current !== sessionId
     boundSidRef.current = sessionId
     loadingOlderRef.current = false
     setLoadingOlder(false)
-    if (sessionId === null) {
+    if (changed || sessionId === null) {
       setEvents([])
+      historyLoaded.current = false
+      setHistory({ status: 'loading' })
+      lastSeqRef.current = 0
+      oldestSeqRef.current = null
+      setHistoryExhausted(false)
+    }
+    if (sessionId === null) {
       setStatus('closed')
       return
     }
-    setEvents([])
     setStatus('connecting')
-    lastSeqRef.current = 0
-    oldestSeqRef.current = null
-    setHistoryExhausted(false)
     let alive = true
     let opened = false
-    let loaded = false // the initial window load has succeeded at least once
-    const runBackfill = (
-      load: Promise<SessionEvent[]>,
-      onLoaded?: (history: SessionEvent[]) => void,
-    ) =>
-      load
-        .then(history => {
-          if (!alive) return
-          apply(history)
-          onLoaded?.(history)
-          // A failed backfill parks status on 'error'; a later success while the
-          // tail is up means we're genuinely live again.
-          if (es.readyState === EventSource.OPEN) setStatus('open')
+    const loadHistory = async () => {
+      if (!alive) return
+      const initial = !historyLoaded.current
+      setHistory({ status: initial ? 'loading' : 'ready' })
+      try {
+        const rows = await api.sessions.listEvents(
+          sessionId,
+          initial ? { limit: HISTORY_WINDOW } : { since: lastSeqRef.current },
+        )
+        if (!alive) return
+        apply(rows)
+        if (initial) setHistoryExhausted(rows.length < HISTORY_WINDOW)
+        historyLoaded.current = true
+        setHistory({ status: 'ready' })
+      } catch (cause) {
+        if (!alive) return
+        console.error('[session-stream] history backfill failed', cause)
+        setHistory({
+          status: 'error',
+          message: cause instanceof Error ? cause.message : String(cause),
         })
-        .catch((err: unknown) => {
-          if (!alive) return
-          // A hole in the transcript — keep the "connection lost" banner rather
-          // than lie with 'open'. The resume point didn't advance, so the next
-          // reconnect retries the same gap.
-          console.error('[session-stream] history backfill failed', err)
-          setStatus('error')
-        })
-    // Initial open loads the recent window; reconnects pull only the gap since
-    // the last seen sequence (or the window again if the initial load failed).
-    const loadInitial = () =>
-      runBackfill(api.sessions.listEvents(sessionId, { limit: HISTORY_WINDOW }), history => {
-        setHistoryExhausted(history.length < HISTORY_WINDOW)
-        loaded = true
-      })
-    const loadGap = () =>
-      runBackfill(api.sessions.listEvents(sessionId, { since: lastSeqRef.current }))
+      }
+    }
+    retry.current = loadHistory
     // (Re)open the live tail. Every open wires its own handlers; the onopen of a
     // reopen (opened already true) backfills the gap missed while disconnected.
     const openStream = (): EventSource => {
       const stream = new EventSource(api.sessionStreamUrl(sessionId))
       stream.onopen = () => {
+        if (!alive || stream !== es) return
         setConnectionRevision(value => value + 1)
         setStatus('open')
-        if (opened) loaded ? loadGap() : loadInitial()
+        if (opened) void loadHistory()
         opened = true
       }
       stream.onmessage = e => {
+        if (!alive || stream !== es) return
         try {
           apply([JSON.parse(e.data) as SessionEvent])
         } catch (error) {
           console.error('[session-stream] invalid event', error)
         }
       }
-      stream.onerror = () => setStatus('error')
+      stream.onerror = () => {
+        if (alive && stream === es) setStatus('error')
+      }
       return stream
     }
     let es = openStream()
@@ -161,7 +175,7 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     // leave readyState OPEN without ever firing onerror, so the browser never
     // reconnects on its own and the tail silently dies. On each return to the
     // foreground we drop the maybe-dead socket and reopen — the fresh onopen
-    // runs loadGap to refill whatever arrived while we were hidden.
+    // backfills whatever arrived while we were hidden.
     const reopen = () => {
       if (!alive) return
       es.close()
@@ -169,7 +183,7 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
     }
     const onVisible = () => document.visibilityState === 'visible' && reopen()
     const onPageShow = (e: PageTransitionEvent) => e.persisted && reopen()
-    loadInitial()
+    void loadHistory()
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('pageshow', onPageShow)
     return () => {
@@ -177,11 +191,23 @@ export const useSessionStream = (sessionId: Id | null): StreamState => {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('pageshow', onPageShow)
       es.close()
+      if (retry.current === loadHistory) retry.current = null
       setStatus('closed')
     }
   }, [sessionId, api, apply])
 
-  const first = events[0]
+  const bound = boundSidRef.current === sessionId
+  const visibleEvents = bound ? events : []
+  const first = visibleEvents[0]
   const hasOlder = first !== undefined && first.sequence > 0 && !historyExhausted
-  return { connectionRevision, events, status, hasOlder, loadingOlder, loadOlder }
+  return {
+    connectionRevision,
+    events: visibleEvents,
+    status,
+    history: bound ? history : { status: 'loading' },
+    retryHistory,
+    hasOlder,
+    loadingOlder,
+    loadOlder,
+  }
 }

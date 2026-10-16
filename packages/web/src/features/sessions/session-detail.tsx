@@ -4,7 +4,7 @@ import { useApi } from '../../app/api-context'
 import { reduceEvents } from './event-render'
 import { Composer } from './session-detail/composer'
 import { ConnectionBanner } from './session-detail/connection-banner'
-import { EventStream } from './session-detail/event-stream'
+import { ConversationLoadState, EventStream } from './session-detail/event-stream'
 import { QueuedMessages } from './session-detail/queued-messages'
 import { SessionHeader } from './session-detail/session-header'
 import { TerminalView } from './session-detail/terminal-view'
@@ -22,14 +22,23 @@ type SessionDetailProps = { sessionId: Id }
 // from `useSessions` re-polls so we can use its fresher copy when available.
 export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
   const api = useApi()
-  const { data: sessionShallow } = useSession(sessionId)
+  const { data, error: sessionError, refresh: refreshSession } = useSession(sessionId)
+  const sessionShallow = data?.id === sessionId ? data : null
   // projectId comes from the session itself, so this body works keyed by
   // sessionId alone — reused by both the in-app tab and the standalone /s/:token page.
   const projectId = sessionShallow?.projectId ?? null
   const { data: liveSessions, refresh } = useSessions(projectId)
   const session = liveSessions?.find(s => s.id === sessionId) ?? sessionShallow
-  const { events, status, hasOlder, loadingOlder, loadOlder, connectionRevision } =
-    useSessionStream(session?.id ?? null)
+  const {
+    events,
+    status,
+    history,
+    retryHistory,
+    hasOlder,
+    loadingOlder,
+    loadOlder,
+    connectionRevision,
+  } = useSessionStream(session?.id ?? null)
   const items = useMemo(
     () => reduceEvents(events, { agentKind: session?.agentKind }),
     [events, session?.agentKind],
@@ -67,7 +76,20 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     void loadOlder(markPrepend)
   }
 
-  if (!session) return <div className="p-6 text-sm text-ui-muted">加载中…</div>
+  if (!session)
+    return (
+      <div className="flex h-full min-w-0 flex-col">
+        {sessionError ? (
+          <ConversationLoadState
+            status="error"
+            message={`会话加载失败。${sessionError.message}`}
+            onRetry={refreshSession}
+          />
+        ) : (
+          <ConversationLoadState status="loading" message="正在加载会话…" />
+        )}
+      </div>
+    )
 
   const stop = () => void api.sessions.stop(sessionId).catch(controls.reportError)
   // Open / close the interactive terminal. session.terminalOpen flips true (via the
@@ -111,6 +133,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
         <>
           <EventStream
             items={items}
+            history={history}
+            onRetryHistory={() => void retryHistory()}
             scrollRef={scrollRef}
             working={session.busy}
             statusKnown={statusKnown}

@@ -1,7 +1,7 @@
 import type { Id, SessionView } from '@baton/shared'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useApi } from '../../app/api-context'
-import { useAsync } from '../../hooks/use-async'
+import { type AsyncState, useAsync } from '../../hooks/use-async'
 import { useProjectRevision } from '../projects/use-project-revision'
 
 // Sessions in this project, kept fresh by the project stream: a `sessions`
@@ -58,10 +58,16 @@ export const useSessions = (
 
 // Session lookup by int id (no more S- codes). Returns null while loading or
 // when sessionId is null.
-export const useSession = (sessionId: Id | null) => {
+export const useSession = (
+  sessionId: Id | null,
+): AsyncState<SessionView | null> & { refresh(): void } => {
   const api = useApi()
-  return useAsync<SessionView | null>(
+  const [attempt, setAttempt] = useState(0)
+  const key = useMemo(() => ({ sessionId, attempt }), [sessionId, attempt])
+  const refresh = useCallback(() => setAttempt(value => value + 1), [])
+  const state = useAsync<SessionView | null>(
     () => (sessionId !== null ? api.sessions.get(sessionId) : Promise.resolve(null)),
-    sessionId,
+    key,
   )
+  return { ...state, refresh }
 }

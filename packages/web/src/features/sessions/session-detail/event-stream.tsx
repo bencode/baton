@@ -1,12 +1,16 @@
 import type { RefObject, UIEventHandler } from 'react'
 import { ChatIcon, ChevronDownIcon } from '../../../components/icons'
 import type { RenderItem } from '../event-render'
+import type { HistoryState } from '../use-session-stream'
 import { ActivityGroupView } from './activity-group'
 import { groupRenderItems } from './group-items'
+import { Spinner } from './icons'
 import { RenderItemView } from './render-item'
 
 type EventStreamProps = {
   items: readonly RenderItem[]
+  history?: HistoryState
+  onRetryHistory?: () => void
   scrollRef: RefObject<HTMLDivElement | null>
   // Marks the trailing activity group as live (expanded) while a turn runs.
   working?: boolean
@@ -22,8 +26,26 @@ type EventStreamProps = {
   onLoadOlder?: () => void
 }
 
+export const ConversationLoadState = (
+  props:
+    | { status: 'loading'; message: string }
+    | { status: 'error'; message: string; onRetry(): void },
+) => (
+  <div className="chat-load-state" role={props.status === 'error' ? 'alert' : 'status'}>
+    {props.status === 'loading' && <Spinner />}
+    <p>{props.message}</p>
+    {props.status === 'error' && (
+      <button type="button" className="ui-button" onClick={props.onRetry}>
+        重试
+      </button>
+    )}
+  </div>
+)
+
 export const EventStream = ({
   items,
+  history = { status: 'ready' },
+  onRetryHistory,
   scrollRef,
   working = false,
   statusKnown = true,
@@ -45,7 +67,15 @@ export const EventStream = ({
       aria-label="会话记录"
       className="chat-scroll"
     >
-      {items.length === 0 ? (
+      {items.length === 0 && history.status === 'loading' ? (
+        <ConversationLoadState status="loading" message="正在加载聊天记录…" />
+      ) : items.length === 0 && history.status === 'error' ? (
+        <ConversationLoadState
+          status="error"
+          message={`聊天记录加载失败。${history.message}`}
+          onRetry={() => onRetryHistory?.()}
+        />
+      ) : items.length === 0 ? (
         <div className="chat-empty">
           <ChatIcon />
           <h2>从一条消息开始</h2>
@@ -53,6 +83,13 @@ export const EventStream = ({
         </div>
       ) : (
         <div className="chat-transcript">
+          {history.status === 'error' && (
+            <ConversationLoadState
+              status="error"
+              message={`聊天记录未能更新。${history.message}`}
+              onRetry={() => onRetryHistory?.()}
+            />
+          )}
           {hasOlder && (
             <div className="chat-load-earlier">
               <button

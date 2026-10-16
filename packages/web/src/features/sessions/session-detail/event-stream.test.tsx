@@ -1,11 +1,39 @@
 import type { Attachment } from '@baton/shared'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { createRef } from 'react'
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import type { RenderItem } from '../event-render'
 import { EventStream } from './event-stream'
 
 afterEach(cleanup)
+
+test('empty state waits for history confirmation and failures offer retry', () => {
+  const retry = vi.fn()
+  const props = { items: [], scrollRef: createRef<HTMLDivElement>(), onRetryHistory: retry }
+  const view = render(<EventStream {...props} history={{ status: 'loading' }} />)
+  expect(screen.getByRole('status').textContent).toBe('正在加载聊天记录…')
+  expect(screen.queryByText('从一条消息开始')).toBeNull()
+  view.rerender(<EventStream {...props} history={{ status: 'error', message: '网络错误' }} />)
+  expect(screen.getByRole('alert').textContent).toContain('网络错误')
+  expect(screen.queryByText('从一条消息开始')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '重试' }))
+  expect(retry).toHaveBeenCalledOnce()
+  view.rerender(<EventStream {...props} history={{ status: 'ready' }} />)
+  expect(screen.getByText('从一条消息开始')).toBeTruthy()
+})
+
+test('background loading or failure keeps previously loaded answers readable', () => {
+  const props = {
+    items: [{ kind: 'assistant-text', key: 'answer', text: '已有回答' }] as RenderItem[],
+    scrollRef: createRef<HTMLDivElement>(),
+  }
+  const view = render(<EventStream {...props} history={{ status: 'loading' }} />)
+  expect(screen.getByText('已有回答')).toBeTruthy()
+  expect(screen.queryByText('正在加载聊天记录…')).toBeNull()
+  view.rerender(<EventStream {...props} history={{ status: 'error', message: '更新失败' }} />)
+  expect(screen.getByText('已有回答')).toBeTruthy()
+  expect(screen.getByRole('alert').textContent).toContain('更新失败')
+})
 
 const tool = (key: string, status: 'in_progress' | 'completed' = 'completed'): RenderItem => ({
   kind: 'tool-block',
