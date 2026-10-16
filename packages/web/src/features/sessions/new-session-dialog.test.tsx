@@ -61,7 +61,7 @@ const chooseWorker = async () =>
 test('worker selection is explicit and creation remembers the successful worker', async () => {
   const f = fixture()
   render(f.view())
-  const create = screen.getByRole('button', { name: 'Create conversation' }) as HTMLButtonElement
+  const create = screen.getByRole('button', { name: '创建会话' }) as HTMLButtonElement
   expect(create.disabled).toBe(true)
   await chooseWorker()
   fireEvent.click(create)
@@ -78,7 +78,7 @@ test('offline remembered worker never silently switches to another environment',
   const radio = (await screen.findByRole('radio', { name: /offline/ })) as HTMLInputElement
   expect(radio.disabled).toBe(true)
   expect((screen.getByRole('radio', { name: /^mini/ }) as HTMLInputElement).checked).toBe(false)
-  expect((screen.getByText('Create conversation') as HTMLButtonElement).disabled).toBe(true)
+  expect((screen.getByText('创建会话') as HTMLButtonElement).disabled).toBe(true)
 })
 
 test.each([
@@ -89,10 +89,10 @@ test.each([
   f.workers.get.mockResolvedValueOnce({ ...worker, ...invalid })
   render(f.view())
   await chooseWorker()
-  fireEvent.click(screen.getByText('Create conversation'))
-  expect((await screen.findByRole('alert')).textContent).toContain('unavailable')
+  fireEvent.click(screen.getByText('创建会话'))
+  expect((await screen.findByRole('alert')).textContent).toContain('不可用')
   expect(f.sessions.create).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByText('Create conversation'))
+  fireEvent.click(screen.getByText('创建会话'))
   await waitFor(() => expect(f.onCreated).toHaveBeenCalledWith(session))
 })
 
@@ -101,10 +101,10 @@ test('POST failure releases the selected worker for another attempt', async () =
   f.sessions.create.mockRejectedValueOnce(new Error('Create failed'))
   render(f.view())
   await chooseWorker()
-  fireEvent.click(screen.getByText('Create conversation'))
+  fireEvent.click(screen.getByText('创建会话'))
   await screen.findByText('Create failed')
   expect((screen.getByRole('radio', { name: /^mini/ }) as HTMLInputElement).checked).toBe(true)
-  fireEvent.click(screen.getByText('Create conversation'))
+  fireEvent.click(screen.getByText('创建会话'))
   await waitFor(() => expect(f.onCreated).toHaveBeenCalledWith(session))
 })
 
@@ -114,10 +114,10 @@ test('closing or changing projects during submission cannot open a stale convers
   f.sessions.create.mockReturnValueOnce(response.promise)
   const { rerender } = render(f.view())
   await chooseWorker()
-  fireEvent.click(screen.getByText('Create conversation'))
+  fireEvent.click(screen.getByText('创建会话'))
   await waitFor(() => expect(f.sessions.create).toHaveBeenCalledTimes(1))
-  expect((screen.getByText('Creating…') as HTMLButtonElement).disabled).toBe(true)
-  fireEvent.click(screen.getByText('Creating…'))
+  expect((screen.getByText('创建中…') as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(screen.getByText('创建中…'))
   expect(f.sessions.create).toHaveBeenCalledTimes(1)
   rerender(f.view(2))
   await act(async () => response.resolve(session))
@@ -132,7 +132,7 @@ test('storage failure does not turn a successful creation into an error', async 
     throw new DOMException('blocked', 'SecurityError')
   })
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  fireEvent.click(screen.getByText('Create conversation'))
+  fireEvent.click(screen.getByText('创建会话'))
   await waitFor(() => expect(f.onCreated).toHaveBeenCalledWith(session))
   expect(warning).toHaveBeenCalled()
   expect(screen.queryByRole('alert')).toBeNull()
@@ -145,5 +145,5 @@ test('an online remembered worker is selected when its project opens the dialog 
   expect(((await screen.findByRole('radio', { name: /^mini/ })) as HTMLInputElement).checked).toBe(
     true,
   )
-  expect((screen.getByText('Create conversation') as HTMLButtonElement).disabled).toBe(false)
+  expect((screen.getByText('创建会话') as HTMLButtonElement).disabled).toBe(false)
 })

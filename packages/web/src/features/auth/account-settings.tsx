@@ -1,74 +1,98 @@
 import { type FormEvent, useState } from 'react'
+import { ApiError } from '../../api'
 import { useApi } from '../../app/api-context'
 import { Modal } from '../../components/modal'
 
-// Change your own password — verify the current one, set a new one.
 const ChangePassword = () => {
   const api = useApi()
   const [oldPassword, setOld] = useState('')
   const [newPassword, setNew] = useState('')
   const [status, setStatus] = useState<'idle' | 'saving' | 'ok' | 'err'>('idle')
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
+  const [error, setError] = useState<string | null>(null)
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
     if (!oldPassword || !newPassword || status === 'saving') return
     setStatus('saving')
+    setError(null)
     try {
       await api.auth.changePassword(oldPassword, newPassword)
       setOld('')
       setNew('')
       setStatus('ok')
-    } catch {
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError && cause.status === 401
+          ? '当前密码不正确，或登录已失效，请确认后重试'
+          : cause instanceof ApiError && cause.status === 400
+            ? '请填写当前密码和新密码'
+            : '密码更新失败，请稍后重试',
+      )
       setStatus('err')
     }
   }
-  const field =
-    'rounded-md border border-gray-200 px-2 py-1 text-sm outline-none focus:border-blue-400'
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold text-gray-900">改密码</h3>
-      <input
-        type="password"
-        autoComplete="current-password"
-        value={oldPassword}
-        onChange={e => {
-          setOld(e.target.value)
-          setStatus('idle')
-        }}
-        placeholder="当前密码"
-        className={field}
-      />
-      <input
-        type="password"
-        autoComplete="new-password"
-        value={newPassword}
-        onChange={e => {
-          setNew(e.target.value)
-          setStatus('idle')
-        }}
-        placeholder="新密码"
-        className={field}
-      />
-      <div className="flex items-center gap-2">
+    <form onSubmit={submit} className="mg-form">
+      <div>
+        <h3 className="text-sm font-medium">修改密码</h3>
+        <p className="mg-description">验证当前密码后，设置新的登录密码。</p>
+      </div>
+      <label className="mg-field" htmlFor="account-current-password">
+        当前密码
+        <input
+          id="account-current-password"
+          type="password"
+          autoComplete="current-password"
+          disabled={status === 'saving'}
+          value={oldPassword}
+          onChange={event => {
+            setOld(event.target.value)
+            setStatus('idle')
+            setError(null)
+          }}
+          className="ui-input"
+        />
+      </label>
+      <label className="mg-field" htmlFor="account-new-password">
+        新密码
+        <input
+          id="account-new-password"
+          type="password"
+          autoComplete="new-password"
+          disabled={status === 'saving'}
+          value={newPassword}
+          onChange={event => {
+            setNew(event.target.value)
+            setStatus('idle')
+            setError(null)
+          }}
+          className="ui-input"
+        />
+      </label>
+      {error && (
+        <p role="alert" className="text-sm text-ui-danger">
+          {error}
+        </p>
+      )}
+      {status === 'ok' && (
+        <p role="status" className="text-sm text-ui-success">
+          密码已更新
+        </p>
+      )}
+      <div className="mg-form-actions">
         <button
           type="submit"
           disabled={!oldPassword || !newPassword || status === 'saving'}
-          className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:opacity-40"
+          className="ui-button ui-primary"
         >
-          更新密码
+          {status === 'saving' ? '更新中…' : '更新密码'}
         </button>
-        {status === 'ok' && <span className="text-xs text-emerald-600">已更新 ✓</span>}
-        {status === 'err' && <span className="text-xs text-red-600">当前密码不对</span>}
       </div>
     </form>
   )
 }
 
-// Account self-service. The personal API token lives in the "Add worker" guide now
-// (generating one only makes sense in the context of installing a worker), so this
-// is just the password change.
 export const AccountSettings = ({ onClose }: { onClose: () => void }) => (
-  <Modal title="账户设置" onClose={onClose}>
+  <Modal title="账号设置" onClose={onClose} className="mg-dialog mg-dialog-compact">
     <ChangePassword />
   </Modal>
 )

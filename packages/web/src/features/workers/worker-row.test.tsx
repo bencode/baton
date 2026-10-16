@@ -50,11 +50,11 @@ const renderPanel = () => {
 test('deleting a worker needs a confirm, then removes it + closes its session tabs', async () => {
   const { remove, close } = renderPanel()
   // Trash → confirm view (with the cascade count); nothing deleted yet.
-  fireEvent.click(await screen.findByLabelText('delete worker'))
+  fireEvent.click(await screen.findByLabelText('删除执行环境'))
   expect(remove).not.toHaveBeenCalled()
-  expect(screen.getByText(/Delete this worker and its 2 conversations/)).toBeTruthy()
+  expect(screen.getByText(/及其 2 段会话/)).toBeTruthy()
   // Confirm → remove worker #2 and close its two open tabs.
-  fireEvent.click(screen.getByLabelText('confirm delete worker'))
+  fireEvent.click(screen.getByLabelText('确认删除执行环境'))
   expect(remove).toHaveBeenCalledWith(2)
   await waitFor(() => expect(close).toHaveBeenCalledWith([7, 8]))
 })

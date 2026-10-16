@@ -85,25 +85,25 @@ test('crossing the mobile breakpoint preserves the open page and its unsaved inp
       </MemoryRouter>
     </ApiContext.Provider>,
   )
-  fireEvent.change(await screen.findByLabelText('Project name'), {
+  fireEvent.change(await screen.findByLabelText('项目名称'), {
     target: { value: 'Unsaved draft' },
   })
   fireEvent.click(screen.getByRole('button', { name: '收起导航' }))
-  expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('Unsaved draft')
+  expect((screen.getByLabelText('项目名称') as HTMLInputElement).value).toBe('Unsaved draft')
   fireEvent.click(screen.getByRole('button', { name: '打开导航' }))
-  expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('Unsaved draft')
+  expect((screen.getByLabelText('项目名称') as HTMLInputElement).value).toBe('Unsaved draft')
   act(() => {
     mobile = true
     listeners.forEach(listener => {
       listener()
     })
   })
-  expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('Unsaved draft')
+  expect((screen.getByLabelText('项目名称') as HTMLInputElement).value).toBe('Unsaved draft')
   act(() => {
     mobile = false
     listeners.forEach(listener => {
       listener()
     })
   })
-  expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('Unsaved draft')
+  expect((screen.getByLabelText('项目名称') as HTMLInputElement).value).toBe('Unsaved draft')
 })

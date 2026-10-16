@@ -15,6 +15,6 @@ test('native cancellation and the close button notify the modal owner', () => {
   expect(dialog.hasAttribute('open')).toBe(true)
   fireEvent(dialog, new Event('cancel', { cancelable: true }))
   expect(onClose).toHaveBeenCalledTimes(1)
-  fireEvent.click(screen.getByRole('button', { name: 'close', hidden: true }))
+  fireEvent.click(screen.getByRole('button', { name: '关闭', hidden: true }))
   expect(onClose).toHaveBeenCalledTimes(2)
 })

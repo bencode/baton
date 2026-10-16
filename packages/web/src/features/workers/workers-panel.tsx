@@ -1,5 +1,5 @@
 import type { Id, SessionView, WorkerView } from '@baton/shared'
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { sessionPath } from '../../app/route'
 import { PlusIcon } from '../../components/icons'
@@ -15,6 +15,7 @@ type WorkersPanelProps = {
   sessions: SessionView[] | null
   open: (id: string, title: string) => void
   onSessionsDeleted(sessionIds: readonly Id[]): void
+  feedback?: ReactNode
 }
 
 export const WorkersPanel = ({
@@ -23,6 +24,7 @@ export const WorkersPanel = ({
   sessions,
   open,
   onSessionsDeleted,
+  feedback,
 }: WorkersPanelProps) => {
   const api = useApi()
   const [deleted, setDeleted] = useState<Id[]>([])
@@ -57,13 +59,24 @@ export const WorkersPanel = ({
     open(sessionPath(projectId, session.id), session.name)
   }
   return (
-    <div className="flex flex-col gap-4">
-      {workers === null ? (
-        <p className="text-sm text-ui-muted">Worker information is not available yet.</p>
-      ) : workers.length === 0 ? (
-        <p className="rounded-md bg-ui-panel p-4 text-sm text-ui-muted">
-          No workers yet. Add a worker from a template or register an existing one.
-        </p>
+    <div>
+      <header className="mg-page-header">
+        <div>
+          <h1>执行环境</h1>
+          <p className="mg-description">执行环境（Worker）为会话提供 Agent 和运行目录。</p>
+        </div>
+        <button
+          ref={addButton}
+          type="button"
+          onClick={event => show({ kind: 'add' }, event.currentTarget)}
+          className="ui-button ui-primary shrink-0"
+        >
+          <PlusIcon /> 添加执行环境
+        </button>
+      </header>
+      {feedback}
+      {workers === null ? null : workers.length === 0 ? (
+        <p className="mg-empty">暂无执行环境。点击上方“添加执行环境”，从模板创建或注册已有环境。</p>
       ) : (
         <div>
           {workers
@@ -94,18 +107,10 @@ export const WorkersPanel = ({
         <p role="alert" className="px-2 text-xs text-ui-danger">
           {createErrorText(setup.createError)}{' '}
           <button type="button" onClick={setup.refresh} className="underline">
-            Refresh records
+            刷新状态
           </button>
         </p>
       )}
-      <button
-        ref={addButton}
-        type="button"
-        onClick={event => show({ kind: 'add' }, event.currentTarget)}
-        className="ui-button ui-primary w-fit"
-      >
-        <PlusIcon /> Add worker
-      </button>
       {view && (
         <AddWorker
           key={view.kind === 'add' ? 'add' : view.creationId}

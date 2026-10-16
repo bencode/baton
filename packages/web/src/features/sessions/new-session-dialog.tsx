@@ -53,26 +53,24 @@ export const NewSessionDialog = ({
     }
   }
   return (
-    <Modal title="New conversation" onClose={onClose} className="max-w-lg">
-      <p className="mb-4 text-sm text-ui-muted">
-        Choose a worker for this conversation. Its execution environment cannot be changed later.
-      </p>
+    <Modal title="新会话" onClose={onClose} className="mg-dialog">
+      <p className="mb-4 text-sm text-ui-muted">选择本次会话使用的执行环境，创建后不能更换。</p>
       {workers.loading && workers.data === null && (
         <p role="status" className="py-4 text-sm text-ui-muted">
-          Loading workers…
+          加载执行环境…
         </p>
       )}
       {workers.error && (
         <p role="alert" className="mb-3 text-sm text-ui-danger">
-          Unable to refresh workers.{' '}
+          无法刷新执行环境。{' '}
           <button type="button" onClick={workers.refresh} className="underline">
-            Retry
+            重试
           </button>
         </p>
       )}
       {workers.data && (
         <fieldset disabled={creating} className="min-w-0 space-y-2">
-          <legend className="sr-only">Worker</legend>
+          <legend className="sr-only">执行环境</legend>
           {workers.data.map(worker => (
             <label
               key={worker.id}
@@ -96,25 +94,25 @@ export const NewSessionDialog = ({
                 </span>
               </span>
               <span className="shrink-0 text-xs text-ui-muted">
-                {worker.connected ? 'Online' : 'Offline'}
+                {worker.connected ? '在线' : '离线'}
               </span>
             </label>
           ))}
           {workers.data.length === 0 && (
             <p className="rounded-md bg-ui-panel p-4 text-sm text-ui-muted">
-              This project has no workers yet. Add one to start a conversation.
+              此项目还没有执行环境，请先添加一个。
             </p>
           )}
           {workers.data.length > 0 && !workers.data.some(worker => worker.connected) && (
             <p className="text-sm text-ui-muted">
-              No workers are online. Reconnect a worker or add another one.
+              当前没有在线的执行环境，请等待连接或添加其他环境。
             </p>
           )}
           {remembered !== null &&
             workers.data.some(worker => worker.id === remembered && !worker.connected) &&
             choice === undefined && (
               <p className="text-sm text-ui-muted">
-                Your last used worker is offline. Choose an online worker.
+                上次使用的执行环境已离线，请选择一个在线环境。
               </p>
             )}
         </fieldset>
@@ -124,17 +122,17 @@ export const NewSessionDialog = ({
           {error}
         </p>
       )}
-      <div className="mt-6 grid grid-cols-[auto_minmax(0,1fr)] gap-2 md:flex md:items-center">
+      <div className="mg-form-actions">
         <button
           type="button"
           disabled={creating}
           onClick={onManageWorkers}
-          className="ui-quiet-button col-span-2 mb-2 justify-self-start md:mr-auto md:mb-0"
+          className="ui-quiet-button mr-auto"
         >
-          Manage workers
+          管理执行环境
         </button>
         <button type="button" onClick={onClose} className="ui-button">
-          Cancel
+          取消
         </button>
         <button
           type="button"
@@ -142,7 +140,7 @@ export const NewSessionDialog = ({
           onClick={() => void create()}
           className="ui-button ui-primary min-w-0"
         >
-          {creating ? 'Creating…' : 'Create conversation'}
+          {creating ? '创建中…' : '创建会话'}
         </button>
       </div>
     </Modal>

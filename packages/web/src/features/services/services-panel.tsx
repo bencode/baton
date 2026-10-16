@@ -20,28 +20,42 @@ export const ServicesPanel = ({ projectId, workers, activeId, open }: ServicesPa
   )
 
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="ui-page-title mb-2">Services</h1>
+    <section>
+      <header className="mg-page-header">
+        <div>
+          <h1>服务</h1>
+          <p className="mg-description">查看当前项目正在运行的服务。</p>
+        </div>
+        <button type="button" className="ui-button" onClick={refresh}>
+          刷新
+        </button>
+      </header>
       {loading && services === null && (
-        <p className="px-2 text-[13px] leading-5 text-ui-muted">loading…</p>
+        <p role="status" className="mg-feedback text-ui-muted">
+          加载服务…
+        </p>
       )}
       {!loading && error && services === null && (
-        <p role="alert" className="px-2 text-sm text-ui-danger">
-          Unable to load services.
+        <p role="alert" className="mg-feedback text-ui-danger">
+          无法加载服务。
+          <button type="button" onClick={refresh} className="ml-2 underline">
+            重试
+          </button>
         </p>
       )}
       {!loading && !error && ordered.length === 0 && (
-        <div className="rounded-md bg-ui-panel p-4 text-[13px] leading-5 text-ui-muted">
-          <p>No services running.</p>
+        <div className="mg-empty">
+          <p>暂无运行中的服务。</p>
           <p className="mt-0.5">
-            Start one with{' '}
-            <code className="font-mono">baton service run NAME --cwd DIR -- COMMAND</code>.
+            由 Agent 或命令行启动：{' '}
+            <code className="break-all font-mono">baton service run NAME --cwd DIR -- COMMAND</code>
+            。
           </p>
         </div>
       )}
       {error && services !== null && (
-        <p role="status" className="px-2 text-[11px] text-ui-warning">
-          Services may be out of date.
+        <p role="status" className="mg-feedback text-ui-warning">
+          服务信息可能不是最新状态。
         </p>
       )}
       <div>

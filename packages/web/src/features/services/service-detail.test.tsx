@@ -61,14 +61,14 @@ test('shows runtime metadata, copies the public URL, shows its directory, and st
   expect(screen.getByText('2m')).toBeTruthy()
 
   expect(screen.getByText(service.cwd)).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+  fireEvent.click(screen.getByRole('button', { name: '复制' }))
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(service.publicUrl))
-  expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: '已复制' })).toBeTruthy()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Stop service' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+  fireEvent.click(screen.getByRole('button', { name: '停止服务' }))
+  fireEvent.click(screen.getByRole('button', { name: '确认停止' }))
   await waitFor(() => expect(stop).toHaveBeenCalledWith(20, 'web'))
-  expect(await screen.findByText('Service is no longer running.')).toBeTruthy()
+  expect(await screen.findByText('服务已结束运行。')).toBeTruthy()
 })
 
 test('keeps details visible when stop fails', async () => {
@@ -84,9 +84,9 @@ test('keeps details visible when stop fails', async () => {
   renderDetail(api)
 
   await screen.findByText('Spec Factory preview')
-  fireEvent.click(screen.getByRole('button', { name: 'Stop service' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
-  expect((await screen.findByRole('alert')).textContent).toContain('Couldn’t stop web.')
+  fireEvent.click(screen.getByRole('button', { name: '停止服务' }))
+  fireEvent.click(screen.getByRole('button', { name: '确认停止' }))
+  expect((await screen.findByRole('alert')).textContent).toContain('无法停止 web，')
   expect(screen.getByText('Spec Factory preview')).toBeTruthy()
 })
 
@@ -97,6 +97,6 @@ test('shows an ended state when the service is absent', async () => {
   } as unknown as Api
   renderDetail(api)
 
-  expect(await screen.findByText('Service is no longer running.')).toBeTruthy()
+  expect(await screen.findByText('服务已结束运行。')).toBeTruthy()
   expect(screen.queryByText('Spec Factory preview')).toBeNull()
 })

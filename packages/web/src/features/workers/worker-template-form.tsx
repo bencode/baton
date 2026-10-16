@@ -6,15 +6,12 @@ import type { WorkerSetupState } from './use-worker-setup'
 
 export const createErrorText = (error: Error): string => {
   if (error instanceof ApiError) {
-    if (error.status === 409)
-      return 'This name is already in use. Check workers and creation records, or choose another name.'
-    if (error.status === 503)
-      return 'The mini is unavailable. Try later or register an existing worker.'
-    if (error.status === 401) return 'Your sign-in has expired. Sign in again before continuing.'
-    if (error.status === 404)
-      return 'This project is unavailable. Select an existing project before continuing.'
+    if (error.status === 409) return '名称已被占用，请检查已有执行环境，或换一个名称。'
+    if (error.status === 503) return 'mini 暂时不可用，请稍后重试或注册已有环境。'
+    if (error.status === 401) return '登录已失效，请重新登录后继续。'
+    if (error.status === 404) return '此项目不可用，请选择其他项目后继续。'
   }
-  return 'The request could not be confirmed. Refresh creation records before submitting again; it may already have been accepted.'
+  return '暂时无法确认请求结果，系统可能已接受此次创建。请先刷新状态，确认后再提交。'
 }
 
 type Props = {
@@ -26,7 +23,10 @@ type Props = {
 export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) => {
   const fieldId = useId()
   const nameInput = useRef<HTMLInputElement | null>(null)
-  useEffect(() => nameInput.current?.focus(), [])
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => nameInput.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [])
   const [name, setName] = useState(initialInput?.name ?? '')
   const [agentKind, setAgentKind] = useState(initialInput?.agentKind ?? 'claude-code')
   const template = setup.templates.data?.find(item => item.id === 'mini-local')
@@ -53,14 +53,13 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
         event.preventDefault()
         void submit()
       }}
-      className="flex flex-col gap-4"
+      className="mg-form"
     >
       <p className="text-xs leading-5 text-ui-muted">
-        Create a local Git repository and a worker on the mini. A remote repository is optional and
-        can be added later.
+        在 mini 上创建本地 Git 仓库和执行环境，远程仓库可稍后绑定。
       </p>
-      <label className="flex flex-col gap-2 text-xs font-medium" htmlFor={`${fieldId}-name`}>
-        Worker name
+      <label className="mg-field" htmlFor={`${fieldId}-name`}>
+        名称
         <input
           id={`${fieldId}-name`}
           ref={nameInput}
@@ -69,11 +68,11 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           onChange={event => setName(event.target.value)}
           disabled={setup.creating}
           className="ui-input w-full"
-          placeholder="e.g. my-app"
+          placeholder="例如 my-app"
         />
       </label>
-      <label className="flex flex-col gap-2 text-xs font-medium" htmlFor={`${fieldId}-template`}>
-        Template
+      <label className="mg-field" htmlFor={`${fieldId}-template`}>
+        模板
         <SelectControl
           id={`${fieldId}-template`}
           value={template?.id ?? ''}
@@ -81,12 +80,11 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           className="w-full"
         >
           <option value={template?.id ?? ''}>
-            {template?.name ??
-              (setup.templates.loading ? 'Loading templates…' : 'No template available')}
+            {template?.name ?? (setup.templates.loading ? '加载模板…' : '暂无可用模板')}
           </option>
         </SelectControl>
       </label>
-      <label className="flex flex-col gap-2 text-xs font-medium" htmlFor={`${fieldId}-agent`}>
+      <label className="mg-field" htmlFor={`${fieldId}-agent`}>
         Agent
         <SelectControl
           id={`${fieldId}-agent`}
@@ -98,7 +96,7 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           disabled={setup.creating || !agent}
           className="w-full"
         >
-          {!agent && <option value="">No agent available</option>}
+          {!agent && <option value="">暂无可用 Agent</option>}
           {template?.agentKinds.map(kind => (
             <option key={kind} value={kind}>
               {kind === 'codex' ? 'Codex' : 'Claude Code'}
@@ -108,18 +106,18 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
       </label>
       {setup.templates.error ? (
         <p role="alert" className="text-xs text-ui-danger break-words">
-          Templates could not be refreshed. {setup.templates.error.message}{' '}
+          无法刷新模板。 {setup.templates.error.message}{' '}
           <button type="button" onClick={setup.refresh} className="underline">
-            Refresh
+            刷新
           </button>
         </p>
       ) : (
         !setup.templates.loading &&
         !template?.available && (
           <p className="text-xs text-ui-warning">
-            The mini is unavailable. Try later or use Register existing.{' '}
+            mini 暂时不可用，请稍后重试或切换到“注册已有环境”。{' '}
             <button type="button" onClick={setup.refresh} className="underline">
-              Refresh
+              刷新
             </button>
           </p>
         )
@@ -128,17 +126,17 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
         <p role="alert" className="text-xs text-ui-danger">
           {createErrorText(setup.createError)}{' '}
           <button type="button" onClick={setup.refresh} className="underline">
-            Refresh records
+            刷新状态
           </button>
         </p>
       )}
-      <div className="flex items-center gap-3">
+      <div className="mg-form-actions">
         <button type="submit" disabled={disabled} className="ui-button ui-primary">
-          {setup.creating ? 'Submitting…' : 'Create worker'}
+          {setup.creating ? '提交中…' : '创建执行环境'}
         </button>
         {setup.creating && (
           <span className="text-xs leading-5 text-ui-muted" aria-live="polite">
-            You can close this window.
+            可以关闭窗口，创建将在后台继续。
           </span>
         )}
       </div>

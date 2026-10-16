@@ -115,24 +115,25 @@ export const ProjectSwitcher = ({
         <div className="ui-menu-rule" />
         {editing ? (
           <form
-            className="space-y-3 p-3"
+            className="mg-form p-3"
             onSubmit={event => {
               event.preventDefault()
               void create()
             }}
           >
-            <label className="block text-xs" htmlFor="new-project-name">
-              项目名称
-            </label>
-            <input
-              ref={nameInput}
-              id="new-project-name"
-              className="ui-input w-full"
-              value={name}
-              disabled={creating}
-              onChange={event => setName(event.target.value)}
-            />
-            <div className="flex justify-end gap-2">
+            <p className="text-xs leading-5 text-ui-muted">创建项目后，可按需添加执行环境。</p>
+            <div className="mg-field">
+              <label htmlFor="new-project-name">项目名称</label>
+              <input
+                ref={nameInput}
+                id="new-project-name"
+                className="ui-input w-full"
+                value={name}
+                disabled={creating}
+                onChange={event => setName(event.target.value)}
+              />
+            </div>
+            <div className="mg-form-actions">
               <button
                 type="button"
                 disabled={creating}

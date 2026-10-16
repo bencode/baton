@@ -46,9 +46,9 @@ test('lists a live service, opens its detail, and confirms before stopping it', 
   expect(screen.getByText('glm · /project/7')).toBeTruthy()
   expect(screen.getByText('2m')).toBeTruthy()
 
-  fireEvent.click(screen.getByLabelText('stop web'))
+  fireEvent.click(screen.getByLabelText('停止 web'))
   expect(stop).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByLabelText('confirm stop web'))
+  fireEvent.click(screen.getByLabelText('确认停止 web'))
   await waitFor(() => expect(stop).toHaveBeenCalledWith(20, 'web'))
 })
 
@@ -69,9 +69,9 @@ test('keeps a service visible and reports a failed stop', async () => {
   )
 
   await screen.findByText('web')
-  fireEvent.click(screen.getByLabelText('stop web'))
-  fireEvent.click(screen.getByLabelText('confirm stop web'))
-  expect((await screen.findByRole('alert')).textContent).toContain('Couldn’t stop web.')
+  fireEvent.click(screen.getByLabelText('停止 web'))
+  fireEvent.click(screen.getByLabelText('确认停止 web'))
+  expect((await screen.findByRole('alert')).textContent).toContain('无法停止 web，')
   expect(screen.getByText('web')).toBeTruthy()
 })
 
@@ -96,4 +96,19 @@ test('keeps equal service names isolated by worker', async () => {
   fireEvent.click(rows[1] as HTMLElement)
   expect(open).toHaveBeenNthCalledWith(1, '/proj/1/service/20/web', 'W-20/web')
   expect(open).toHaveBeenNthCalledWith(2, '/proj/1/service/21/web', 'W-21/web')
+})
+
+test('a failed initial load can be retried from the page', async () => {
+  const listByProject = vi
+    .fn(async () => [service])
+    .mockRejectedValueOnce(new Error('Network unavailable'))
+  render(
+    <ApiContext.Provider value={{ services: { listByProject } } as unknown as Api}>
+      <ServicesPanel projectId={1} workers={[worker]} activeId="" open={vi.fn()} />
+    </ApiContext.Provider>,
+  )
+  expect((await screen.findByRole('alert')).textContent).toContain('无法加载服务')
+  fireEvent.click(screen.getByRole('button', { name: '重试' }))
+  expect(await screen.findByText('web')).toBeTruthy()
+  expect(screen.queryByRole('alert')).toBeNull()
 })

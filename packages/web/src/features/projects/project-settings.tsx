@@ -57,18 +57,16 @@ const SettingsForm = ({
     }
   }
   return (
-    <div className="max-w-xl space-y-8">
+    <div className="mg-settings">
       <form
         onSubmit={event => {
           event.preventDefault()
           void save()
         }}
-        className="flex flex-col items-start gap-3"
+        className="mg-form"
       >
-        <div className="flex w-full flex-col gap-2">
-          <label htmlFor={`project-name-${projectId}`} className="block text-xs font-medium">
-            Project name
-          </label>
+        <div className="mg-field">
+          <label htmlFor={`project-name-${projectId}`}>项目名称</label>
           <input
             id={`project-name-${projectId}`}
             value={draft}
@@ -80,43 +78,45 @@ const SettingsForm = ({
             className="ui-input w-full"
           />
         </div>
-        <button
-          type="submit"
-          disabled={pending !== null || !draft.trim()}
-          className="ui-button ui-primary"
-        >
-          {pending === 'save' ? 'Saving…' : 'Save changes'}
-        </button>
-        {saved && (
-          <p role="status" className="text-sm text-ui-success">
-            Changes saved.
-          </p>
-        )}
+        <div className="mg-form-actions mg-form-actions-start">
+          <button
+            type="submit"
+            disabled={pending !== null || !draft.trim()}
+            className="ui-button ui-primary self-start"
+          >
+            {pending === 'save' ? '保存中…' : '保存更改'}
+          </button>
+          {saved && (
+            <p role="status" className="text-sm text-ui-success">
+              已保存
+            </p>
+          )}
+        </div>
       </form>
-      <section className="border-t border-ui-border pt-6">
-        <h2 className="text-sm font-medium">Delete project</h2>
-        <p className="mt-2 text-sm text-ui-muted">
-          Permanently delete this project, its workers, conversations, requirements and tasks.
-        </p>
+      <section className="mg-danger-section">
+        <h2 className="text-sm font-medium">删除项目</h2>
+        <p className="mt-2 text-sm text-ui-muted">永久删除此项目及其执行环境、会话、需求和任务。</p>
         {confirming ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="text-sm">Delete this project?</span>
-            <button
-              type="button"
-              disabled={pending !== null}
-              onClick={() => setConfirming(false)}
-              className="ui-button"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={pending !== null}
-              onClick={() => void remove()}
-              className="ui-button ui-danger"
-            >
-              {pending === 'delete' ? 'Deleting…' : 'Confirm delete'}
-            </button>
+          <div className="mg-confirm">
+            <p>确认删除“{name}”及其全部资源？</p>
+            <div className="mg-form-actions">
+              <button
+                type="button"
+                disabled={pending !== null}
+                onClick={() => setConfirming(false)}
+                className="ui-button"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={pending !== null}
+                onClick={() => void remove()}
+                className="ui-button ui-danger"
+              >
+                {pending === 'delete' ? '删除中…' : '确认删除'}
+              </button>
+            </div>
           </div>
         ) : (
           <button
@@ -125,7 +125,7 @@ const SettingsForm = ({
             onClick={() => setConfirming(true)}
             className="ui-button ui-danger mt-3"
           >
-            Delete project
+            删除项目
           </button>
         )}
       </section>
@@ -144,13 +144,16 @@ export const ProjectSettings = ({ projectId, onDeleted }: ProjectSettingsProps) 
   if (loading && !data)
     return (
       <p role="status" className="text-sm text-ui-muted">
-        Loading project…
+        加载项目…
       </p>
     )
   if (error || !data)
     return (
       <p role="alert" className="text-sm text-ui-danger">
-        Unable to load this project.
+        无法加载项目。
+        <button type="button" onClick={bumpLists} className="ml-2 underline">
+          重试
+        </button>
       </p>
     )
   return (

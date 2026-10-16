@@ -22,37 +22,41 @@ const WorkersView = ({
   const workers = useWorkers(projectId)
   const sessions = useSessions(projectId)
   return (
-    <>
-      <p className="mb-6 text-[13px] leading-5 text-ui-muted">
-        Workers provide the agent and execution environment for your conversations.
-      </p>
-      {(workers.error || sessions.error) && (
-        <p role="alert" className="mb-4 text-sm text-ui-danger">
-          Some worker information could not be refreshed.{' '}
-          <button
-            type="button"
-            className="underline"
-            onClick={() => {
-              workers.refresh()
-              sessions.refresh()
-            }}
-          >
-            Retry
-          </button>
-        </p>
-      )}
-      <WorkersPanel
-        projectId={projectId}
-        workers={workers.data}
-        sessions={sessions.data}
-        open={open}
-        onSessionsDeleted={ids => {
-          onSessionsDeleted(projectId, ids)
-          workers.refresh()
-          sessions.refresh()
-        }}
-      />
-    </>
+    <WorkersPanel
+      feedback={
+        <>
+          {workers.loading && workers.data === null && (
+            <p role="status" className="mg-feedback text-ui-muted">
+              加载执行环境…
+            </p>
+          )}
+          {(workers.error || sessions.error) && (
+            <p role="alert" className="mg-feedback text-ui-danger">
+              部分执行环境信息暂时无法刷新。{' '}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  workers.refresh()
+                  sessions.refresh()
+                }}
+              >
+                重试
+              </button>
+            </p>
+          )}
+        </>
+      }
+      projectId={projectId}
+      workers={workers.data}
+      sessions={sessions.data}
+      open={open}
+      onSessionsDeleted={ids => {
+        onSessionsDeleted(projectId, ids)
+        workers.refresh()
+        sessions.refresh()
+      }}
+    />
   )
 }
 
@@ -75,20 +79,21 @@ export const ProjectView = ({
   onProjectDeleted,
 }: ProjectViewProps) => (
   <div className="h-full overflow-auto">
-    <div className="ui-page">
-      {view !== 'services' && (
-        <h1 className="ui-page-title mb-2">
-          {view === 'workers' ? 'Workers' : 'Project settings'}
-        </h1>
+    <div className="ui-page mg-page">
+      {view === 'settings' && (
+        <header className="mg-page-header">
+          <div>
+            <h1>项目设置</h1>
+            <p className="mg-description">管理当前项目的基本信息。</p>
+          </div>
+        </header>
       )}
       {view === 'workers' && (
         <WorkersView projectId={projectId} open={open} onSessionsDeleted={onSessionsDeleted} />
       )}
       {view === 'services' && <ServicesView projectId={projectId} open={open} />}
       {view === 'settings' && (
-        <div className="mt-6">
-          <ProjectSettings projectId={projectId} onDeleted={onProjectDeleted} />
-        </div>
+        <ProjectSettings projectId={projectId} onDeleted={onProjectDeleted} />
       )}
     </div>
   </div>
