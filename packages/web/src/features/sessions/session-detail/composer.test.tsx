@@ -80,17 +80,15 @@ const feedback = () => {
   return element
 }
 
-test('the message description shows shortcuts or offline status without stacking both', () => {
+test('the message description stays empty when ready and shows offline status', () => {
   const { api, view } = setup()
-  expect(feedback().textContent).toBe('Enter 发送 · Shift+Enter 换行')
-  expect(screen.queryByText('输入 / 查看命令')).toBeNull()
+  expect(feedback().textContent).toBe('')
   view.rerender(
     <ApiContext value={api}>
       <Host session={{ ...current, connected: false }} />
     </ApiContext>,
   )
   expect(feedback().textContent).toBe('执行环境离线，连接恢复后可发送。')
-  expect(screen.queryByText('Enter 发送 · Shift+Enter 换行')).toBeNull()
 })
 
 test('all current errors remain visible together and replace lower-priority footer content', async () => {
@@ -117,7 +115,6 @@ test('all current errors remain visible together and replace lower-priority foot
   expect(error.textContent).toContain('配置请求失败')
   expect(error.textContent).toContain('部分附件上传失败，请重试或移除后再发送。')
   expect(feedback().textContent).not.toContain('执行环境离线')
-  expect(feedback().textContent).not.toContain('Enter 发送')
 })
 
 test('the inactive footer keeps resume and replaces its hint with the request acknowledgement', async () => {
@@ -130,7 +127,6 @@ test('the inactive footer keeps resume and replaces its hint with the request ac
   expect(resume).toHaveBeenCalledExactlyOnceWith(1)
   expect(within(feedback()).getByRole('status').textContent).toBe('已请求恢复会话，等待连接。')
   expect(feedback().textContent).not.toContain('会话未启动')
-  expect(feedback().textContent).not.toContain('Enter 发送')
   expect(send).not.toHaveBeenCalled()
 })
 

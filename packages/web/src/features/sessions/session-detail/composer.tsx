@@ -138,7 +138,7 @@ export const Composer = ({
               aria-autocomplete="list"
               aria-controls={slash.open ? menuId : undefined}
               aria-activedescendant={slash.open ? `${menuId}-${slash.activeIndex}` : undefined}
-              placeholder="输入消息，或输入 / 查看命令…"
+              placeholder="输入消息 · / 命令 · Shift+Enter 换行"
               rows={2}
               onChange={event => {
                 draft.setText(event.target.value)
@@ -245,9 +245,7 @@ export const Composer = ({
                 {controls.pending === 'resume' ? '请求中…' : '恢复会话'}
               </button>
             </div>
-          ) : (
-            <p className="composer-input-help">Enter 发送 · Shift+Enter 换行</p>
-          )}
+          ) : null}
         </div>
         {slash.open && (
           <Popover
