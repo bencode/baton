@@ -10,7 +10,7 @@
   scrollbar-color: var(--color-ui-border) transparent;
 }
 .chat-transcript {
-  max-width: 760px;
+  max-width: 960px;
   min-width: 0;
   margin-inline: auto;
 }
