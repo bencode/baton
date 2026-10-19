@@ -48,29 +48,29 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 56px;
+  height: 44px;
   padding: 0 12px;
   flex-shrink: 0;
 }
 .wb-brand-mark {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
   background: var(--color-ui-accent);
   color: white;
   flex-shrink: 0;
 }
 .wb-brand-mark svg {
-  width: 23px;
-  height: 23px;
+  width: 20px;
+  height: 20px;
 }
 .wb-project-trigger {
   display: flex;
   min-width: 0;
   flex: 1;
-  height: 38px;
+  height: 32px;
   align-items: center;
   gap: 8px;
   padding: 0 4px;
@@ -112,7 +112,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 40px;
+  min-height: 34px;
   gap: 8px;
   border-bottom: 1px solid var(--color-ui-border);
   flex-shrink: 0;
@@ -120,12 +120,12 @@
 .wb-categories {
   display: flex;
   min-width: 0;
-  gap: 20px;
+  gap: 16px;
   padding-left: 12px;
 }
 .wb-categories button {
   position: relative;
-  height: 40px;
+  height: 34px;
   color: var(--color-ui-muted);
   font-size: 13px;
   white-space: nowrap;
@@ -194,16 +194,16 @@
 .wb-list-label {
   display: flex;
   justify-content: space-between;
-  margin: 24px 12px 8px;
+  margin: 16px 12px 4px;
   font-size: 11px;
   font-weight: 500;
   color: var(--color-ui-muted);
 }
 .wb-session-group:first-child .wb-list-label {
-  margin-top: 16px;
+  margin-top: 10px;
 }
 .wb-session-row {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .wb-session-symbol {
   position: relative;
@@ -227,12 +227,13 @@
 }
 .wb-management {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   border-top: 1px solid var(--color-ui-border);
-  padding: 12px 0;
+  padding: 6px 0;
   flex-shrink: 0;
 }
 .wb-management .ui-nav-item {
+  min-height: 30px;
   padding: 0 12px;
   border-radius: 8px;
 }
@@ -247,16 +248,16 @@
 }
 .wb-account-footer {
   border-top: 1px solid var(--color-ui-border);
-  padding: 8px 0;
+  padding: 4px 0;
   flex-shrink: 0;
 }
 .wb-account-trigger {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 6px 12px;
   width: 100%;
-  height: 56px;
+  height: 44px;
   border-radius: 8px;
   font-size: 12px;
 }
@@ -270,8 +271,8 @@
 .wb-account-avatar {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   background: oklch(89% 0.036 255);
   color: var(--color-ui-heading);
@@ -311,7 +312,7 @@
 .wb-tab-strip {
   display: flex;
   align-items: center;
-  height: 44px;
+  height: 34px;
   padding: 0 8px;
   flex-shrink: 0;
   background: oklch(97.5% 0.012 255 / 0.9);
@@ -337,8 +338,8 @@
   content: "";
   position: absolute;
   right: 0;
-  top: 14px;
-  bottom: 14px;
+  top: 10px;
+  bottom: 10px;
   width: 1px;
   background: var(--color-ui-border);
 }
@@ -364,7 +365,7 @@
   min-width: 0;
   flex: 1;
   gap: 6px;
-  padding: 0 4px 0 12px;
+  padding: 0 4px 0 10px;
   font-size: 12px;
   text-align: left;
   color: var(--color-ui-muted);
@@ -477,15 +478,6 @@
   outline: 2px solid var(--color-ui-accent);
   outline-offset: -2px;
 }
-@media (max-height: 750px) and (min-width: 768px) {
-  .wb-session-row > div > button:first-child {
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
-  .wb-list-label {
-    margin-top: 12px;
-  }
-}
 @media (max-width: 767px) {
   .wb-shell {
     padding: 0;
@@ -567,7 +559,8 @@
   .wb-page-tab:not([data-active="true"]) .wb-tab-close {
     opacity: 1;
   }
-  .ui-menu-item {
+  .ui-menu-item,
+  .wb-management .ui-nav-item {
     min-height: 44px;
   }
 }

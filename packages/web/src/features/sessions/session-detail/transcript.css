@@ -2,7 +2,7 @@
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 36px 32px 40px;
+  padding: 20px 24px 24px;
   background: var(--color-ui-surface);
   overflow-anchor: none;
   overscroll-behavior: contain;
@@ -15,7 +15,7 @@
   margin-inline: auto;
 }
 .chat-transcript > * + * {
-  margin-top: 24px;
+  margin-top: 16px;
 }
 .chat-user-message {
   display: flex;
@@ -25,11 +25,11 @@
 .chat-user-content {
   max-width: 88%;
   min-width: 0;
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-radius: 12px 12px 3px 12px;
   background: var(--color-ui-hover);
   font-size: 14px;
-  line-height: 1.8;
+  line-height: 1.65;
   overflow-wrap: anywhere;
 }
 .chat-user-content > p {
@@ -292,22 +292,23 @@
   border-radius: 6px;
 }
 .chat-session-header {
-  min-height: 46px;
+  min-height: 38px;
   flex-shrink: 0;
-  padding: 4px 24px;
+  padding: 2px 16px;
   border-bottom: 1px solid var(--color-ui-border);
   background: var(--color-ui-surface);
 }
 .chat-session-header .ui-button,
 .chat-session-header .ui-quiet-button,
 .chat-session-header .ui-icon-button {
-  min-height: 32px;
+  min-height: 28px;
+  padding-block: 0;
   border-radius: 6px;
   font-size: 12px;
 }
 .chat-session-header .ui-icon-button {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
 }
 .chat-session-header .ui-icon-button > svg {
   width: 16px;

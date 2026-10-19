@@ -34,6 +34,6 @@
   --ui-space-5: 20px;
   --ui-space-6: 24px;
   --ui-space-8: 32px;
-  --ui-shell-inset: 12px;
-  --ui-shell-gap: 12px;
+  --ui-shell-inset: 8px;
+  --ui-shell-gap: 8px;
 }

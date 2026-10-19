@@ -44,7 +44,7 @@ const SessionName = ({ name, onRename }: { name: string; onRename: (n: string) =
           setDraft(name)
           setEditing(true)
         }}
-        className="ui-focus min-h-11 max-w-64 truncate rounded text-[13px] font-semibold tracking-tight text-ui-text decoration-dotted hover:underline md:min-h-8 [@media(pointer:coarse)]:min-h-11"
+        className="ui-focus min-h-11 max-w-64 truncate rounded text-[13px] font-semibold tracking-tight text-ui-text decoration-dotted hover:underline md:min-h-7 [@media(pointer:coarse)]:min-h-11"
       >
         {name}
       </button>

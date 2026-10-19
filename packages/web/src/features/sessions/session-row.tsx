@@ -57,7 +57,7 @@ export const SessionRow = ({ session, active, onOpen, onDelete }: SessionRowProp
           type="button"
           onClick={onOpen}
           aria-current={active ? 'page' : undefined}
-          className="ui-focus flex min-w-0 flex-1 items-start gap-2 rounded-lg px-3 py-3 text-left"
+          className="ui-focus flex min-w-0 flex-1 items-start gap-2 rounded-lg px-3 py-2 text-left"
         >
           <span className="wb-session-symbol">
             <ChatIcon />
@@ -80,7 +80,7 @@ export const SessionRow = ({ session, active, onOpen, onDelete }: SessionRowProp
               )}
             </span>
             <span
-              className={`mt-1 flex items-center gap-2 text-xs md:text-[11px] ${active ? 'text-ui-selected-muted' : 'text-ui-muted'}`}
+              className={`mt-0.5 flex items-center gap-2 text-xs md:text-[11px] ${active ? 'text-ui-selected-muted' : 'text-ui-muted'}`}
             >
               <span
                 className="truncate"

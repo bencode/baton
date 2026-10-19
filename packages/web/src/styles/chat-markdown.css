@@ -1,7 +1,7 @@
 .chat-markdown {
   color: var(--color-ui-text);
-  font-size: 15px;
-  line-height: 1.85;
+  font-size: 14px;
+  line-height: 1.7;
   overflow-wrap: anywhere;
 }
 .chat-markdown > :first-child {
@@ -11,7 +11,7 @@
   margin-bottom: 0;
 }
 .chat-markdown p {
-  margin: 12px 0;
+  margin: 8px 0;
 }
 .chat-markdown :is(h1, h2, h3, h4, h5, h6) {
   font-weight: 600;
