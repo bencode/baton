@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useEffect, useRef } from 'react'
+import styles from './markdown-outline.module.scss'
 
 export type MarkdownHeading = { id: string; title: string; level: number }
 
@@ -31,11 +32,13 @@ export const readHeading = (element: HTMLElement): MarkdownHeading => ({
 export const MarkdownOutline = ({
   headings,
   activeId,
+  layout,
   onPick,
   onClose,
 }: {
   headings: MarkdownHeading[]
   activeId: string | null
+  layout: 'embedded' | 'overlay'
   onPick(id: string): void
   onClose(): void
 }) => {
@@ -57,7 +60,12 @@ export const MarkdownOutline = ({
   }
 
   return (
-    <nav className="markdown-outline" aria-label="大纲" onKeyDown={closeOnEscape}>
+    <nav
+      className={styles.outline}
+      data-layout={layout}
+      aria-label="大纲"
+      onKeyDown={closeOnEscape}
+    >
       <ul>
         {headings.map((heading, index) => {
           const current = heading.id === activeId
@@ -66,7 +74,7 @@ export const MarkdownOutline = ({
               <button
                 ref={current ? active : index === 0 ? first : undefined}
                 type="button"
-                className="markdown-outline-item"
+                className={styles.item}
                 aria-current={current ? 'location' : undefined}
                 title={heading.title}
                 style={{ paddingInlineStart: 10 + (heading.level - minLevel) * 14 }}

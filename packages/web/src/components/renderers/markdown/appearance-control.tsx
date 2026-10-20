@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { CheckIcon, TypeIcon } from '../../icons'
 import { Popover } from '../../popover'
+import styles from './appearance-control.module.scss'
 import {
   MARKDOWN_FONT_SIZE,
   type MarkdownAppearance,
@@ -47,17 +48,17 @@ export const AppearanceControl = ({
         role="dialog"
         label="阅读外观"
         placement="bottom-end"
-        className="reading-appearance-popover"
+        className={styles.popover}
         onClose={() => setAnchor(null)}
       >
-        <div className="reading-appearance">
+        <div className={styles.panel}>
           <h3>阅读外观</h3>
-          <div className="reading-appearance-setting">
-            <div className="reading-appearance-header">
+          <div className={styles.setting}>
+            <div className={styles.header}>
               <label htmlFor={sizeId}>字号</label>
               <output htmlFor={sizeId}>{value.fontSize} px</output>
             </div>
-            <div className="reading-appearance-range">
+            <div className={styles.range}>
               <span aria-hidden>A</span>
               <input
                 id={sizeId}
@@ -68,14 +69,14 @@ export const AppearanceControl = ({
                 value={value.fontSize}
                 onChange={event => onChange({ ...value, fontSize: Number(event.target.value) })}
               />
-              <span aria-hidden className="reading-appearance-large">
+              <span aria-hidden className={styles.large}>
                 A
               </span>
             </div>
           </div>
-          <fieldset className="reading-appearance-setting">
+          <fieldset className={styles.setting}>
             <legend>页面宽度</legend>
-            <div className="reading-appearance-segments">
+            <div className={styles.segments}>
               {WIDTHS.map(option => (
                 <button
                   key={option.value}
@@ -88,9 +89,9 @@ export const AppearanceControl = ({
               ))}
             </div>
           </fieldset>
-          <fieldset className="reading-appearance-setting">
+          <fieldset className={styles.setting}>
             <legend>主题</legend>
-            <div className="reading-appearance-themes">
+            <div className={styles.themes}>
               {THEMES.map(option => (
                 <button
                   key={option.value}
@@ -98,7 +99,7 @@ export const AppearanceControl = ({
                   aria-pressed={value.theme === option.value}
                   onClick={() => onChange({ ...value, theme: option.value })}
                 >
-                  <span className="reading-appearance-swatch" data-reading-theme={option.value}>
+                  <span className={styles.swatch} data-reading-theme={option.value}>
                     Aa
                     {value.theme === option.value && <CheckIcon />}
                   </span>

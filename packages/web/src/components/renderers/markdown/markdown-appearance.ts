@@ -20,7 +20,6 @@ export const defaultMarkdownAppearance: MarkdownAppearance = {
 
 // Attributes of the element that carries the theme, width, and text size.
 export const appearanceSurfaceProps = (appearance: MarkdownAppearance) => ({
-  className: 'reader-surface',
   'data-reading-theme': appearance.theme,
   'data-reading-width': appearance.width,
   style: { '--reader-font-size': `${appearance.fontSize}px` } as CSSProperties,

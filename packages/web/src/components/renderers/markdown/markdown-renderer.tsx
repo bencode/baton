@@ -12,6 +12,7 @@ import {
   MarkdownOutline,
   readHeading,
 } from './markdown-outline'
+import styles from './markdown-renderer.module.scss'
 
 // How one link in the document behaves, decided by the caller:
 //   anchor   — '#…', jumps to that place in the document
@@ -207,32 +208,28 @@ export const MarkdownRenderer = ({
     img: ({ alt, src }) => {
       const url = typeof src === 'string' ? image(src) : null
       if (url !== null)
-        return <img className="reader-image" src={url} alt={alt ?? ''} loading="lazy" />
+        return <img className={styles.image} src={url} alt={alt ?? ''} loading="lazy" />
       return (
-        <span
-          className="reader-image-placeholder"
-          title={typeof src === 'string' ? src : undefined}
-        >
+        <span className={styles.imagePlaceholder} title={typeof src === 'string' ? src : undefined}>
           [图片{alt ? `: ${alt}` : ''}]
         </span>
       )
     },
   }
 
-  const surface = appearanceSurfaceProps(appearance)
   return (
     <div
-      {...surface}
+      {...appearanceSurfaceProps(appearance)}
       ref={root}
-      className={`${surface.className} markdown-renderer`}
+      className={styles.renderer}
       data-outline-layout={layout}
     >
       {visible && (
-        <div className="markdown-outline-layer">
+        <div className={styles.outlineLayer}>
           {layout === 'overlay' && (
             <button
               type="button"
-              className="markdown-outline-backdrop"
+              className={styles.backdrop}
               aria-label="关闭大纲"
               onClick={() => onOpenChange(false)}
             />
@@ -240,6 +237,7 @@ export const MarkdownRenderer = ({
           <MarkdownOutline
             headings={headings}
             activeId={activeId}
+            layout={layout}
             onPick={pick}
             onClose={() => onOpenChange(false)}
           />
@@ -247,13 +245,13 @@ export const MarkdownRenderer = ({
       )}
       <div
         ref={scroller}
-        className="markdown-renderer-scroll"
+        className={styles.scroll}
         onScroll={event => {
           scrollTop.current = event.currentTarget.scrollTop
           setActiveId(currentHeading(elements.current, event.currentTarget))
         }}
       >
-        <article ref={article} className="reader-markdown-page">
+        <article ref={article} className={styles.page}>
           <Markdown
             text={content}
             variant="reader"

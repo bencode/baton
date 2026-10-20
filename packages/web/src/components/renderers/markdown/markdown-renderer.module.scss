@@ -1,0 +1,317 @@
+// Rendered Markdown documents (MarkdownRenderer). Ported from gamma-reader's reader
+// prose, wide layout, reading themes, and highlight.js palettes, mapped onto Baton's
+// ui tokens. Code blocks, tables, and Mermaid reuse the chat block chrome
+// (.chat-code-block / .chat-table / .chat-mermaid).
+//
+// Classes from other code stay global: `reader-markdown` (set by the Markdown
+// component), the chat block chrome, KaTeX, GFM task lists, and highlight.js tokens.
+// Prose rules are scoped with `:where(.page)`, which adds no specificity, so they
+// weigh exactly what they did as global rules.
+
+// The reading surface: themes override the ui tokens for the document only. The
+// renderer fills its host and scrolls the document itself; the outline sits
+// beside it, or over it when the renderer is narrow.
+.renderer {
+  // Syntax palette for highlighted code fences.
+  --syntax-comment: oklch(0.46 0.02 250);
+  --syntax-keyword: oklch(0.43 0.15 325);
+  --syntax-string: oklch(0.4 0.08 155);
+  --syntax-number: oklch(0.43 0.11 65);
+  --syntax-title: oklch(0.44 0.12 255);
+  --syntax-variable: oklch(0.4 0.1 205);
+  --syntax-meta: oklch(0.42 0.035 285);
+  --syntax-deletion: oklch(0.48 0.16 25);
+  --markdown-outline-width: clamp(220px, 28cqi, 280px);
+
+  container-type: inline-size;
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  background: var(--color-ui-surface);
+  color: var(--color-ui-text);
+
+  &[data-reading-theme="paper"] {
+    --color-ui-surface: oklch(0.95 0.025 85);
+    --color-ui-panel: oklch(0.91 0.025 85);
+    --color-ui-border: oklch(0.82 0.025 80);
+    --color-ui-muted: oklch(0.43 0.02 70);
+    --color-ui-text: oklch(0.27 0.012 70);
+    --color-ui-heading: oklch(0.24 0.02 70);
+    --color-ui-accent: oklch(0.45 0.12 250);
+  }
+  &[data-reading-theme="dark"] {
+    --color-ui-surface: oklch(0.2 0.008 260);
+    --color-ui-panel: oklch(0.25 0.01 260);
+    --color-ui-border: oklch(0.36 0.012 260);
+    --color-ui-muted: oklch(0.72 0.01 260);
+    --color-ui-text: oklch(0.9 0.005 80);
+    --color-ui-heading: oklch(0.95 0.005 80);
+    --color-ui-accent: oklch(0.76 0.11 250);
+    --color-ui-hover: oklch(0.28 0.01 260);
+    --syntax-comment: oklch(0.72 0.025 250);
+    --syntax-keyword: oklch(0.76 0.13 325);
+    --syntax-string: oklch(0.77 0.1 155);
+    --syntax-number: oklch(0.79 0.11 75);
+    --syntax-title: oklch(0.78 0.1 255);
+    --syntax-variable: oklch(0.78 0.08 205);
+    --syntax-meta: oklch(0.74 0.025 285);
+    --syntax-deletion: oklch(0.72 0.14 25);
+
+    // Mermaid draws dark ink; keep its canvas light on the dark theme.
+    :global(.chat-mermaid-canvas) {
+      background: oklch(0.97 0 0);
+    }
+  }
+}
+
+.scroll {
+  // The wide reading grid measures the space left beside the outline.
+  container-type: inline-size;
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+.outlineLayer {
+  position: relative;
+  flex: 0 0 var(--markdown-outline-width);
+  min-width: 0;
+
+  .renderer[data-outline-layout="overlay"] & {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+  }
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: oklch(0 0 0 / 0.12);
+}
+
+.page {
+  // A flex child with auto margins sizes to its content; keep it within the tab.
+  width: 100%;
+  // Set here so the 74ch measure follows the chosen text size.
+  font-size: var(--reader-font-size, 16px);
+  max-width: 74ch;
+  margin: 0 auto;
+  padding: 32px 36px 80px;
+
+  @media (max-width: 799px) {
+    padding: 24px 18px 60px;
+  }
+}
+
+:where(.page) :global(.reader-markdown) {
+  --prose-gap: 14px;
+  --prose-heading-gap: 30px;
+  line-height: 1.85;
+  color: var(--color-ui-text);
+  overflow-wrap: anywhere;
+
+  > :first-child {
+    margin-top: 0;
+  }
+  > :last-child {
+    margin-bottom: 0;
+  }
+  :is(h1, h2, h3, h4, h5, h6) {
+    margin: var(--prose-heading-gap) 0 10px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--color-ui-heading);
+    text-wrap: balance;
+  }
+  h1 {
+    font-size: 1.85em;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+  h2 {
+    font-size: 1.27em;
+  }
+  :is(h3, h4, h5, h6) {
+    font-size: 1.07em;
+  }
+  :is(p, ul, ol, blockquote) {
+    margin: var(--prose-gap) 0;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  :is(ul, ol) {
+    padding-left: 1.5em;
+  }
+  ul {
+    list-style: disc;
+  }
+  ol {
+    list-style: decimal;
+  }
+  li {
+    margin: 4px 0;
+    padding-left: 2px;
+  }
+  li > :is(p, ul, ol) {
+    margin: 4px 0;
+  }
+  // GFM marks a whole list when any item is a task; only task items drop the bullet.
+  :global(.task-list-item) {
+    list-style: none;
+  }
+  input[type="checkbox"] {
+    margin-right: 6px;
+    vertical-align: -1px;
+  }
+  strong {
+    font-weight: 600;
+  }
+  a {
+    color: var(--color-ui-accent);
+    text-decoration: underline;
+  }
+  blockquote {
+    margin-inline: 0;
+    padding: 4px 14px;
+    border-radius: 6px;
+    background: var(--color-ui-panel);
+    color: var(--color-ui-muted);
+  }
+  hr {
+    margin: var(--prose-heading-gap) 0;
+    border: 0;
+    border-top: 1px solid var(--color-ui-border);
+  }
+  :is(code, pre) {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  :not(pre) > code {
+    padding: 2px 4px;
+    border-radius: 3px;
+    background: var(--color-ui-panel);
+    font-size: 0.9em;
+  }
+  pre {
+    margin: 0;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 0.8em;
+    line-height: 1.7;
+    white-space: pre;
+    overflow-wrap: normal;
+    tab-size: 2;
+  }
+  pre code {
+    padding: 0;
+    background: transparent;
+    font-size: inherit;
+  }
+  :global(.katex-display) {
+    margin: var(--prose-gap) 0;
+    padding: 6px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  :global(.chat-mermaid-canvas) > img {
+    display: block;
+    max-width: none;
+    margin: 0 auto;
+  }
+
+  // highlight.js tokens, coloured from the theme's syntax palette.
+  :global {
+    :is(.hljs-comment, .hljs-quote) {
+      color: var(--syntax-comment);
+      font-style: italic;
+    }
+    :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-formula) {
+      color: var(--syntax-keyword);
+    }
+    :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-template-tag) {
+      color: var(--syntax-string);
+    }
+    :is(.hljs-number, .hljs-built_in, .hljs-type, .hljs-attr, .hljs-symbol, .hljs-bullet) {
+      color: var(--syntax-number);
+    }
+    :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
+      color: var(--syntax-title);
+    }
+    :is(.hljs-variable, .hljs-template-variable, .hljs-params, .hljs-property) {
+      color: var(--syntax-variable);
+    }
+    :is(.hljs-meta, .hljs-operator, .hljs-punctuation) {
+      color: var(--syntax-meta);
+    }
+    .hljs-deletion {
+      color: var(--syntax-deletion);
+    }
+    .hljs-emphasis {
+      font-style: italic;
+    }
+    .hljs-strong {
+      font-weight: 600;
+    }
+    .hljs-link {
+      text-decoration: underline;
+    }
+  }
+}
+
+.image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: min(72vh, 900px);
+  margin: 24px auto;
+  object-fit: contain;
+}
+
+.imagePlaceholder {
+  color: var(--color-ui-muted);
+  font-size: 0.9em;
+}
+
+// Wide reading area: prose keeps a comfortable 760px column; code, tables,
+// diagrams, and display math may extend into the space on the right.
+@container (min-width: 960px) {
+  .page {
+    display: grid;
+    max-width: 1184px;
+    grid-template-columns:
+      [wide-start] minmax(0, 1fr)
+      [prose-start] minmax(0, 760px)
+      [prose-end] minmax(0, 1fr)
+      [wide-end];
+    padding: 56px 64px 104px;
+  }
+  .renderer[data-reading-width="full"] .page {
+    max-width: none;
+    grid-template-columns: [wide-start prose-start] minmax(0, 1fr) [prose-end wide-end];
+  }
+  .page > :global(.reader-markdown) {
+    display: contents;
+    --prose-gap: 17px;
+    --prose-heading-gap: 36px;
+  }
+  :where(.page) :global(.reader-markdown) {
+    > * {
+      min-width: 0;
+      grid-column: prose;
+    }
+    > :is(
+        :global(.chat-code-block),
+        :global(.chat-table),
+        :global(.chat-mermaid),
+        :global(.katex-display),
+        :has(> :global(.katex-display)),
+        p:has(> .image:only-child)
+      ) {
+      grid-column: prose-start / wide-end;
+    }
+  }
+}

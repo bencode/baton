@@ -1,18 +1,19 @@
 import { useState } from 'react'
+import styles from './image-renderer.module.scss'
 
 export type ImageSize = 'fit' | 'actual'
 
 const Picture = ({ src, alt, size }: { src: string; alt: string; size: ImageSize }) => {
   const [failed, setFailed] = useState(false)
   return failed ? (
-    <p role="alert" className="image-renderer-error">
+    <p role="alert" className={styles.error}>
       无法显示图片。
     </p>
   ) : (
     <img
       src={src}
       alt={alt}
-      className={size === 'fit' ? 'image-renderer-fit' : 'image-renderer-actual'}
+      className={size === 'fit' ? styles.fit : styles.actual}
       onError={() => setFailed(true)}
     />
   )
@@ -28,7 +29,7 @@ export const ImageRenderer = ({
   alt: string
   size: ImageSize
 }) => (
-  <div className="image-renderer" data-size={size}>
+  <div className={styles.renderer} data-size={size}>
     {/* A new src starts over, so a past load error clears. */}
     <Picture key={src} src={src} alt={alt} size={size} />
   </div>
@@ -43,7 +44,7 @@ export const ImageSizeToggle = ({
 }) => (
   <button
     type="button"
-    className="ui-button image-renderer-toggle"
+    className={`ui-button ${styles.toggle}`}
     aria-pressed={value === 'actual'}
     onClick={() => onChange(value === 'actual' ? 'fit' : 'actual')}
   >

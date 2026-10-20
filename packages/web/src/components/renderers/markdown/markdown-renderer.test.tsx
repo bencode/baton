@@ -82,7 +82,7 @@ test('only images the caller resolves load; raw HTML never reaches the page', ()
 
 test('the appearance styles the document surface', () => {
   const { container } = renderDoc({ fontSize: 19, width: 'full', theme: 'dark' })
-  const surface = container.querySelector('.reader-surface') as HTMLElement
+  const surface = container.querySelector('[data-reading-theme]') as HTMLElement
   expect(surface.getAttribute('data-reading-theme')).toBe('dark')
   expect(surface.getAttribute('data-reading-width')).toBe('full')
   expect(surface.style.getPropertyValue('--reader-font-size')).toBe('19px')

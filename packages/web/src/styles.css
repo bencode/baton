@@ -4,9 +4,6 @@
 @import "./app/shell/workbench.css";
 @import "./styles/management.css";
 @import "./styles/chat-markdown.css";
-@import "./components/renderers/markdown/markdown-renderer.css";
-@import "./components/renderers/code/code-renderer.css";
-@import "./components/renderers/image/image-renderer.css";
 @import "./features/sessions/session-detail/transcript.css";
 @import "./features/sessions/session-detail/activity.css";
 @import "./features/sessions/session-detail/composer.css";

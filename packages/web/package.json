@@ -46,6 +46,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "jsdom": "^29.1.1",
+    "sass-embedded": "1.105.2",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
     "unified": "11.0.5",

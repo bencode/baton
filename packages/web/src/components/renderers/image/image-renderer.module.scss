@@ -1,26 +1,32 @@
-/* One image: fitted by default, scrolls sideways at its own size. */
-.image-renderer {
+// One image: fitted by default, scrolls sideways at its own size.
+
+.renderer {
   display: grid;
   justify-items: center;
   padding: 16px 24px 48px;
+
+  &[data-size="actual"] {
+    justify-items: start;
+    overflow-x: auto;
+  }
 }
-.image-renderer[data-size="actual"] {
-  justify-items: start;
-  overflow-x: auto;
-}
-.image-renderer-fit {
+
+.fit {
   max-width: 100%;
   max-height: calc(100vh - 200px);
   object-fit: contain;
 }
-.image-renderer-actual {
+
+.actual {
   max-width: none;
 }
-.image-renderer-error {
+
+.error {
   font-size: 13px;
   color: var(--color-ui-danger);
 }
-.image-renderer-toggle[aria-pressed="true"] {
+
+.toggle[aria-pressed="true"] {
   background: var(--color-ui-selected);
   color: var(--color-ui-selected-text);
 }
