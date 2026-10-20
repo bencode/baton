@@ -75,8 +75,14 @@ export type ReduceEventsOptions = {
   agentKind?: AgentKind
 }
 
+const HEADER_MODEL: Record<AgentKind, string> = {
+  'claude-code': 'claude',
+  codex: 'codex',
+  pi: 'pi',
+}
+
 const defaultHeaderModel = (agentKind?: AgentKind): string =>
-  agentKind === 'codex' ? 'codex' : agentKind === 'claude-code' ? 'claude' : 'agent'
+  agentKind ? HEADER_MODEL[agentKind] : 'agent'
 
 const userBubble = (e: SessionEvent): Extract<RenderItem, { kind: 'user-bubble' }> => {
   const text = isRecord(e.payload) && typeof e.payload.text === 'string' ? e.payload.text : ''

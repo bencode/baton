@@ -2,6 +2,7 @@ import type { CreateWorkerInput, WorkerCreation } from '@baton/shared'
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError } from '../../api'
 import { SelectControl } from '../../components/select-control'
+import { agentKindLabel } from '../../utils/agent-kind'
 import type { WorkerSetupState } from './use-worker-setup'
 
 export const createErrorText = (error: Error): string => {
@@ -99,7 +100,7 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           {!agent && <option value="">暂无可用 Agent</option>}
           {template?.agentKinds.map(kind => (
             <option key={kind} value={kind}>
-              {kind === 'codex' ? 'Codex' : 'Claude Code'}
+              {agentKindLabel[kind]}
             </option>
           ))}
         </SelectControl>

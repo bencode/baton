@@ -10,6 +10,7 @@ import {
   codexEffort,
   codexNetworkAccess,
   codexSandboxMode,
+  PLAN_MODE_PREFIX,
 } from './sdk-env.ts'
 
 export type CodexInput = Input
@@ -164,11 +165,11 @@ const toAgentEvent = (raw: unknown): AgentEvent => {
 }
 
 const withPlanPrefix = (input: CodexInput): CodexInput => {
-  const prefix =
-    'Plan mode: inspect and propose a plan only. Do not edit files or run mutating commands.\n\n'
-  if (typeof input === 'string') return `${prefix}${input}`
+  if (typeof input === 'string') return `${PLAN_MODE_PREFIX}${input}`
   return input.map((entry, i) =>
-    i === 0 && entry.type === 'text' ? { ...entry, text: `${prefix}${entry.text}` } : entry,
+    i === 0 && entry.type === 'text'
+      ? { ...entry, text: `${PLAN_MODE_PREFIX}${entry.text}` }
+      : entry,
   )
 }
 

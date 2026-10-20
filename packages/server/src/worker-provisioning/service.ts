@@ -1,11 +1,12 @@
-import type {
-  CreateWorkerInput,
-  CreationWorkerResult,
-  Id,
-  Worker,
-  WorkerCreation,
-  WorkerCreationReport,
-  WorkerCreationStep,
+import {
+  type CreateWorkerInput,
+  type CreationWorkerResult,
+  type Id,
+  isAgentKind,
+  type Worker,
+  type WorkerCreation,
+  type WorkerCreationReport,
+  type WorkerCreationStep,
 } from '@baton/shared'
 import type { CommandBus } from '../command-bus.ts'
 import type { ProjectBus } from '../project-bus.ts'
@@ -37,11 +38,7 @@ export const creationBody = (value: unknown): Record<string, unknown> => {
 export const parseCreateWorkerInput = (value: unknown): CreateWorkerInput => {
   const body = creationBody(value)
   const name = typeof body.name === 'string' ? body.name.trim() : ''
-  if (
-    !name ||
-    body.templateId !== 'mini-local' ||
-    (body.agentKind !== 'claude-code' && body.agentKind !== 'codex')
-  )
+  if (!name || body.templateId !== 'mini-local' || !isAgentKind(body.agentKind))
     throw new WorkerCreationError(400, 'name, mini-local templateId, and valid agentKind required')
   return { name, templateId: 'mini-local', agentKind: body.agentKind }
 }

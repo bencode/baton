@@ -5,12 +5,17 @@ import { mkdir, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { Id } from '@baton/shared'
+import type { AgentKind, Id } from '@baton/shared'
 import type { ApiClient } from '../client.ts'
 import { type WorkerConfig, workerEnv } from '../project-config.ts'
-import { generateTitle } from '../session/runner/title.ts'
+import { generateTitle, type TitleOutcome } from '../session/runner/title.ts'
 import { generateTitleWithCodex } from '../session/runner/title-codex.ts'
-import { parseFirstExchangeFromEvents, readFirstExchange } from '../session/runner/transcript.ts'
+import { generateTitleWithPi } from '../session/runner/title-pi.ts'
+import {
+  type FirstExchange,
+  parseFirstExchangeFromEvents,
+  readFirstExchange,
+} from '../session/runner/transcript.ts'
 import { killProcessGroup } from './proc.ts'
 import { sessionRuntimeDir } from './runtime-paths.ts'
 import {
@@ -252,18 +257,12 @@ export const createSessionSupervisor = (deps: {
       parseFirstExchangeFromEvents(events) ??
       (session.agentKind === 'claude-code' ? readFirstExchange(agentSessionId) : null)
     if (!exchange) return log(`title #${sessionId}: no transcript yet, skipping`)
-    const outcome =
-      session.agentKind === 'codex'
-        ? await generateTitleWithCodex({
-            userText: exchange.userText,
-            assistantText: exchange.assistantText,
-          })
-        : await generateTitle({
-            cwd,
-            userText: exchange.userText,
-            assistantText: exchange.assistantText,
-            queryFn: query,
-          })
+    const titlers: Record<AgentKind, (e: FirstExchange) => Promise<TitleOutcome>> = {
+      'claude-code': e => generateTitle({ cwd, ...e, queryFn: query }),
+      codex: generateTitleWithCodex,
+      pi: generateTitleWithPi,
+    }
+    const outcome = await titlers[session.agentKind](exchange)
     if (outcome.kind === 'error') return log(`title #${sessionId} failed: ${outcome.reason}`)
     if (outcome.kind === 'declined')
       return log(`title #${sessionId}: not enough to title yet, skipping`)

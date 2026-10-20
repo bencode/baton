@@ -33,6 +33,13 @@ const MODEL_SUGGESTIONS: Record<AgentKind, string[]> = {
     'gpt-5.6-terra medium',
     'gpt-5.6-luna low',
   ],
+  // pi addresses models as provider/model.
+  pi: [
+    'deepseek/deepseek-v4-pro',
+    'deepseek/deepseek-flash',
+    'zai-coding-cn/glm-5.3',
+    'zai-coding-cn/glm-5.3 high',
+  ],
 }
 
 export const slashCommands = (kind: AgentKind): SlashCommand[] => [
