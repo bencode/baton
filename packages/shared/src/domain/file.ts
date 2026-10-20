@@ -10,15 +10,14 @@ export const FILE_SEARCH_MAX_RESULTS = 500
 export const FILE_SEARCH_DEADLINE_MS = 5_000
 export const FILE_SEARCH_QUERY_MAX_LENGTH = 200
 
-// A browsable root: the Worker's own directory, or another existing worktree of
-// the same Git repository. Ids are derived from the realpath, so they stay stable
-// across Worker restarts and stop resolving once the directory is gone.
-export type FileRoot = {
-  id: string
+// A browsable branch of the Worker's repository. Git checks a branch out in at
+// most one worktree, so the branch name alone addresses that worktree; files are
+// addressed as worker + branch + repository-relative path.
+export type FileBranch = {
+  name: string
+  // The worktree directory on the Worker, for display only.
   path: string
-  kind: 'worktree' | 'directory'
-  branch: string | null
-  // The root that is the Worker daemon's own directory.
+  // The worktree that is the Worker daemon's own directory.
   current: boolean
 }
 
@@ -33,13 +32,13 @@ export type FileView =
   | (FileMeta & { kind: 'too_large'; limit: number })
 
 export type FileQuery =
-  | { op: 'roots' }
-  | { op: 'list'; rootId: string; path: string }
-  | { op: 'search'; rootId: string; query: string }
-  | { op: 'view'; rootId: string; path: string }
+  | { op: 'branches' }
+  | { op: 'list'; branch: string; path: string }
+  | { op: 'search'; branch: string; query: string }
+  | { op: 'view'; branch: string; path: string }
 
 export type FileQueryData = {
-  roots: FileRoot[]
+  branches: FileBranch[]
   list: FileDirectory
   search: FileSearchResult
   view: FileView
@@ -48,7 +47,7 @@ export type FileQueryData = {
 export type FileErrorCode =
   | 'invalid_request'
   | 'forbidden_path'
-  | 'root_not_found'
+  | 'branch_not_found'
   | 'file_not_found'
   | 'unavailable'
   | 'worker_offline'
@@ -63,7 +62,7 @@ export type FileQueryResult = { requestId: string } & FileReply
 export const FILE_ERROR_STATUS: Record<FileErrorCode, 400 | 403 | 404 | 409 | 502 | 504> = {
   invalid_request: 400,
   forbidden_path: 403,
-  root_not_found: 404,
+  branch_not_found: 404,
   file_not_found: 404,
   worker_offline: 409,
   unavailable: 502,
@@ -73,7 +72,12 @@ export const FILE_ERROR_STATUS: Record<FileErrorCode, 400 | 403 | 404 | 409 | 50
 export const isFileErrorCode = (value: unknown): value is FileErrorCode =>
   typeof value === 'string' && Object.hasOwn(FILE_ERROR_STATUS, value)
 
-export const isFileRootId = (value: string): boolean => /^[0-9a-f]{16}$/.test(value)
+// A sanity bound only: the Worker matches the name exactly against its checked-out
+// branches, which is the real check.
+export const isBranchName = (value: string): boolean =>
+  value.length > 0 &&
+  value.length <= 255 &&
+  [...value].every(char => char.charCodeAt(0) > 0x1f && char.charCodeAt(0) !== 0x7f)
 
 // A root-relative path with '/' separators: no absolute paths, drive letters,
 // backslashes, NUL, or empty / '.' / '..' segments. '' (the root itself) only

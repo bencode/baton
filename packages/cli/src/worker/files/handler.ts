@@ -1,19 +1,20 @@
 import type { FileQuery, FileReply } from '@baton/shared'
+import { discoverBranches } from './branches.ts'
 import { FileError, listDirectory, searchFiles, viewFile } from './disk.ts'
-import { discoverRoots } from './roots.ts'
 
 const DEFAULT_CONCURRENCY = 4
 
 const run = async (baseDir: string, query: FileQuery): Promise<FileReply> => {
-  const roots = await discoverRoots(baseDir)
-  if (query.op === 'roots') return { ok: true, data: roots }
-  // Roots are rediscovered per query, so a removed worktree stops resolving instead
-  // of falling back to a same-named file elsewhere.
-  const root = roots.find(candidate => candidate.id === query.rootId)
-  if (!root) throw new FileError('root_not_found', `directory ${query.rootId} is not available`)
-  if (query.op === 'list') return { ok: true, data: await listDirectory(root.path, query.path) }
-  if (query.op === 'search') return { ok: true, data: await searchFiles(root.path, query.query) }
-  return { ok: true, data: await viewFile(root.path, query.path) }
+  const branches = await discoverBranches(baseDir)
+  if (query.op === 'branches') return { ok: true, data: branches }
+  // Branches are rediscovered per query, so a removed worktree stops resolving
+  // instead of falling back to a same-named file elsewhere.
+  const branch = branches.find(candidate => candidate.name === query.branch)
+  if (!branch)
+    throw new FileError('branch_not_found', `branch ${query.branch} has no checked-out worktree`)
+  if (query.op === 'list') return { ok: true, data: await listDirectory(branch.path, query.path) }
+  if (query.op === 'search') return { ok: true, data: await searchFiles(branch.path, query.query) }
+  return { ok: true, data: await viewFile(branch.path, query.path) }
 }
 
 // Answers one read-only query against the Worker directory `baseDir`. Never throws:
