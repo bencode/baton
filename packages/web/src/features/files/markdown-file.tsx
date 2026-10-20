@@ -4,6 +4,7 @@ import { useApi } from '../../app/api-context'
 import { fileRoutePath } from '../../app/route'
 import { AppearanceControl } from '../../components/renderers/markdown/appearance-control'
 import type { MarkdownLink } from '../../components/renderers/markdown/markdown-renderer'
+import { OutlineToggle } from '../../components/renderers/markdown/outline-toggle'
 import { useIsMobile } from '../../hooks/use-media-query'
 import { ReaderLoading, type TextFileView, useCodeView } from './code-file'
 import { FilePage, type FileShell } from './file-page'
@@ -30,6 +31,9 @@ export const MarkdownFile = ({ shell, view }: { shell: FileShell; view: TextFile
   const [mode, setMode] = useState<Mode>('rendered')
   const shown: Mode = mobile ? 'rendered' : mode
   const [preferences, setPreferences] = useReadingPreferences()
+  // Per tab and closed at first; the renderer says whether there is anything to list.
+  const [outline, setOutline] = useState(false)
+  const [hasOutline, setHasOutline] = useState(false)
   const code = useCodeView(view)
   const { route } = shell
 
@@ -49,10 +53,13 @@ export const MarkdownFile = ({ shell, view }: { shell: FileShell; view: TextFile
   const tools = (
     <>
       {shown === 'rendered' ? (
-        <AppearanceControl
-          value={preferences}
-          onChange={appearance => setPreferences({ ...preferences, ...appearance })}
-        />
+        <>
+          {hasOutline && <OutlineToggle open={outline} onOpenChange={setOutline} />}
+          <AppearanceControl
+            value={preferences}
+            onChange={appearance => setPreferences({ ...preferences, ...appearance })}
+          />
+        </>
       ) : (
         code.tools
       )}
@@ -73,7 +80,7 @@ export const MarkdownFile = ({ shell, view }: { shell: FileShell; view: TextFile
     </>
   )
   return (
-    <FilePage shell={shell} tools={tools} fill={shown === 'source'}>
+    <FilePage shell={shell} tools={tools} fill>
       {shown === 'rendered' ? (
         <Suspense fallback={<ReaderLoading />}>
           <MarkdownRenderer
@@ -81,6 +88,7 @@ export const MarkdownFile = ({ shell, view }: { shell: FileShell; view: TextFile
             appearance={preferences}
             link={link}
             image={image}
+            outline={{ open: outline, onOpenChange: setOutline, onAvailableChange: setHasOutline }}
           />
         </Suspense>
       ) : (
