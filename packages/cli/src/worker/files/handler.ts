@@ -1,30 +1,53 @@
-import type { FileQuery, FileReply } from '@baton/shared'
+import type {
+  FileBranch,
+  FileDirectory,
+  FileQuery,
+  FileReply,
+  FileSearchResult,
+  FileView,
+} from '@baton/shared'
 import { discoverBranches } from './branches.ts'
 import { listCommitDirectory, searchCommit, viewCommitFile } from './commit.ts'
-import { FileError, listDirectory, searchFiles, viewFile } from './disk.ts'
+import { FileError } from './common.ts'
+import { listDirectory, searchFiles, viewFile } from './disk.ts'
 
 const DEFAULT_CONCURRENCY = 4
+
+type Reader = {
+  list(path: string): Promise<FileDirectory>
+  search(query: string): Promise<FileSearchResult>
+  view(path: string): Promise<FileView>
+}
+
+// A checked-out branch reads its worktree's disk (uncommitted changes included);
+// any other branch reads its latest commit.
+const readerFor = (baseDir: string, branch: FileBranch): Reader => {
+  const { worktree, commit } = branch
+  if (worktree !== null)
+    return {
+      list: path => listDirectory(worktree, path),
+      search: query => searchFiles(worktree, query),
+      view: path => viewFile(worktree, path),
+    }
+  // discoverBranches only yields a branch without a worktree when it has a commit.
+  if (commit === null) throw new FileError('branch_not_found', `branch ${branch.name} is empty`)
+  return {
+    list: path => listCommitDirectory(baseDir, commit, path),
+    search: query => searchCommit(baseDir, commit, query),
+    view: path => viewCommitFile(baseDir, commit, path),
+  }
+}
 
 const run = async (baseDir: string, query: FileQuery): Promise<FileReply> => {
   const branches = await discoverBranches(baseDir)
   if (query.op === 'branches') return { ok: true, data: branches }
-  // Branches are rediscovered per query: a checked-out branch reads its worktree's
-  // disk, any other branch its latest commit. Nothing falls back to another branch.
+  // Branches are rediscovered per query; nothing falls back to another branch.
   const branch = branches.find(candidate => candidate.name === query.branch)
   if (!branch) throw new FileError('branch_not_found', `branch ${query.branch} does not exist`)
-  const { worktree, commit } = branch
-  if (worktree !== null) {
-    if (query.op === 'list') return { ok: true, data: await listDirectory(worktree, query.path) }
-    if (query.op === 'search') return { ok: true, data: await searchFiles(worktree, query.query) }
-    return { ok: true, data: await viewFile(worktree, query.path) }
-  }
-  // discoverBranches only yields a branch without a worktree when it has a commit.
-  if (commit === null) throw new FileError('branch_not_found', `branch ${query.branch} is empty`)
-  if (query.op === 'list')
-    return { ok: true, data: await listCommitDirectory(baseDir, commit, query.path) }
-  if (query.op === 'search')
-    return { ok: true, data: await searchCommit(baseDir, commit, query.query) }
-  return { ok: true, data: await viewCommitFile(baseDir, commit, query.path) }
+  const reader = readerFor(baseDir, branch)
+  if (query.op === 'list') return { ok: true, data: await reader.list(query.path) }
+  if (query.op === 'search') return { ok: true, data: await reader.search(query.query) }
+  return { ok: true, data: await reader.view(query.path) }
 }
 
 // Answers one read-only query against the Worker directory `baseDir`. Never throws:

@@ -1,26 +1,8 @@
-import { execFile } from 'node:child_process'
 import { realpath } from 'node:fs/promises'
-import { promisify } from 'node:util'
 import type { FileBranch } from '@baton/shared'
+import { runGit } from './git.ts'
 
-const run = promisify(execFile)
-const GIT_TIMEOUT_MS = 3_000
 const NOT_A_WORK_TREE_EXIT = 128
-
-// Read-only git: literal pathspecs, no optional locks, never prompts.
-export const runGit = async (
-  cwd: string,
-  args: string[],
-  maxBuffer = 4 * 1024 * 1024,
-): Promise<Buffer> => {
-  const { stdout } = await run('git', ['--literal-pathspecs', '-C', cwd, ...args], {
-    encoding: 'buffer',
-    timeout: GIT_TIMEOUT_MS,
-    maxBuffer,
-    env: { ...process.env, LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
-  })
-  return stdout
-}
 
 const git = async (cwd: string, args: string[]): Promise<string> =>
   (await runGit(cwd, args)).toString('utf8')

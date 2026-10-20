@@ -5,7 +5,6 @@ import { fileRoutePath, type Route } from '../../app/route'
 import { BranchIcon, CopyIcon, RefreshIcon } from '../../components/icons'
 import { fileErrorMessage, formatFileSize } from './file-messages'
 import { useFileQuery } from './use-file-query'
-import './files.css'
 
 type FileRoute = Extract<Route, { kind: 'file' }>
 
