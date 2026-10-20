@@ -5,7 +5,7 @@ import {
   type FileQuery,
   type FileReply,
   type Id,
-  isFileRootId,
+  isBranchName,
   normalizeFilePath,
 } from '@baton/shared'
 import type { Context, Hono } from 'hono'
@@ -32,26 +32,24 @@ const fail = (c: Ctx, code: FileErrorCode, message: string): Response =>
 const respond = (c: Ctx, reply: FileReply): Response =>
   reply.ok ? c.json(reply.data) : fail(c, reply.code, reply.message)
 
-// The worker addressed by the URL, if the caller is a user who may read this
+// The worker addressed by the URL, if the caller is a user who may read its
 // project. Workers themselves have no reason to read files through the server.
 const targetWorker = async (c: Ctx, store: Store): Promise<Id | Response> => {
   if (c.get('workerId') !== undefined)
     return c.json({ error: 'workers cannot read project files' }, 403)
-  const projectId = positiveInt(c.req.param('projectId') ?? '')
   const workerId = positiveInt(c.req.param('workerId') ?? '')
-  const worker = projectId && workerId ? await store.workers.get(workerId) : null
-  if (!projectId || !worker || worker.projectId !== projectId)
-    return c.json({ error: 'not found' }, 404)
-  return (await assertProjectAccess(c, store, projectId)) ?? worker.id
+  const worker = workerId ? await store.workers.get(workerId) : null
+  if (!worker) return c.json({ error: 'not found' }, 404)
+  return (await assertProjectAccess(c, store, worker.projectId)) ?? worker.id
 }
 
-const rootParam = (c: Ctx): string | null => {
-  const root = c.req.query('root') ?? ''
-  return isFileRootId(root) ? root : null
+const branchParam = (c: Ctx): string | null => {
+  const branch = c.req.query('branch') ?? ''
+  return isBranchName(branch) ? branch : null
 }
 
 export const registerFileRoutes = (app: Hono<AppEnv>, store: Store, files: FileRequests): void => {
-  const base = '/projects/:projectId/workers/:workerId/files'
+  const base = '/workers/:workerId'
 
   // Shared tail of every user-facing read: resolve the worker, validate the query,
   // forward it, and map the reply to HTTP.
@@ -63,31 +61,31 @@ export const registerFileRoutes = (app: Hono<AppEnv>, store: Store, files: FileR
     return respond(c, await files.query(workerId, query, c.req.raw.signal))
   }
 
-  app.get(`${base}/roots`, c => forward(c, () => ({ op: 'roots' })))
+  app.get(`${base}/branches`, c => forward(c, () => ({ op: 'branches' })))
 
   app.get(`${base}/list`, c =>
     forward(c, () => {
-      const rootId = rootParam(c)
+      const branch = branchParam(c)
       const path = normalizeFilePath(c.req.query('path') ?? '', true)
-      return rootId && path !== null ? { op: 'list', rootId, path } : null
+      return branch && path !== null ? { op: 'list', branch, path } : null
     }),
   )
 
   app.get(`${base}/search`, c =>
     forward(c, () => {
-      const rootId = rootParam(c)
+      const branch = branchParam(c)
       const query = (c.req.query('q') ?? '').trim()
-      return rootId && query && query.length <= FILE_SEARCH_QUERY_MAX_LENGTH
-        ? { op: 'search', rootId, query }
+      return branch && query && query.length <= FILE_SEARCH_QUERY_MAX_LENGTH
+        ? { op: 'search', branch, query }
         : null
     }),
   )
 
   app.get(`${base}/view`, c =>
     forward(c, () => {
-      const rootId = rootParam(c)
+      const branch = branchParam(c)
       const path = normalizeFilePath(c.req.query('path') ?? '')
-      return rootId && path !== null ? { op: 'view', rootId, path } : null
+      return branch && path !== null ? { op: 'view', branch, path } : null
     }),
   )
 
