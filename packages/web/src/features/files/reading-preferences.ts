@@ -1,16 +1,23 @@
-import { useSyncExternalStore } from 'react'
+import { type CSSProperties, useSyncExternalStore } from 'react'
 
-// How rendered documents look: one setting for every document tab, kept in this
-// browser. Values outside the allowed set fall back to the defaults.
+// How documents and source views look: one setting for every file tab, kept in
+// this browser. Values outside the allowed set fall back to the defaults.
 export type ReadingTheme = 'light' | 'paper' | 'dark'
 export type ReadingWidth = 'focused' | 'full'
-export type ReadingPreferences = { fontSize: number; width: ReadingWidth; theme: ReadingTheme }
+export type ReadingPreferences = {
+  fontSize: number
+  width: ReadingWidth
+  theme: ReadingTheme
+  // Source views wrap long lines instead of scrolling sideways.
+  wrap: boolean
+}
 
 export const READING_FONT_SIZE = { min: 12, max: 20 }
 export const defaultReadingPreferences: ReadingPreferences = {
   fontSize: 16,
   width: 'focused',
   theme: 'light',
+  wrap: false,
 }
 
 const STORAGE_KEY = 'baton.reader.preferences'
@@ -31,7 +38,7 @@ export const parseReadingPreferences = (raw: string | null): ReadingPreferences 
     string,
     unknown
   >
-  const { fontSize, width, theme } = stored
+  const { fontSize, width, theme, wrap } = stored
   return {
     fontSize:
       typeof fontSize === 'number' &&
@@ -42,6 +49,7 @@ export const parseReadingPreferences = (raw: string | null): ReadingPreferences 
         : defaultReadingPreferences.fontSize,
     width: WIDTHS.find(option => option === width) ?? defaultReadingPreferences.width,
     theme: THEMES.find(option => option === theme) ?? defaultReadingPreferences.theme,
+    wrap: typeof wrap === 'boolean' ? wrap : defaultReadingPreferences.wrap,
   }
 }
 
@@ -82,3 +90,11 @@ export const useReadingPreferences = (): [
   ReadingPreferences,
   (next: ReadingPreferences) => void,
 ] => [useSyncExternalStore(subscribe, snapshot), save]
+
+// Attributes of the element that carries the reading theme, width, and text size.
+export const readingSurfaceProps = (preferences: ReadingPreferences) => ({
+  className: 'reader-surface',
+  'data-reading-theme': preferences.theme,
+  'data-reading-width': preferences.width,
+  style: { '--reader-font-size': `${preferences.fontSize}px` } as CSSProperties,
+})

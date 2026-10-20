@@ -262,3 +262,8 @@ export const TypeIcon = () => (
     <path d="M1.5 12.5 5 3.5l3.5 9M2.8 9.5h4.4M10 12.5l2.25-5.5 2.25 5.5M10.75 10.75h3" />
   </StrokeGlyph>
 )
+export const WrapIcon = () => (
+  <StrokeGlyph>
+    <path d="M2 4h12M2 8h9.5a2.25 2.25 0 0 1 0 4.5H8M9.5 11l-1.5 1.5L9.5 14M2 12h3" />
+  </StrokeGlyph>
+)

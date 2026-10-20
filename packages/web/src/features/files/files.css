@@ -127,6 +127,15 @@
   align-items: center;
   gap: 4px;
 }
+.files-page-actions .ui-icon-button[aria-pressed="true"],
+.files-page-actions .ui-icon-button[aria-expanded="true"] {
+  background: var(--color-ui-selected);
+  color: var(--color-ui-selected-text);
+}
+/* Source views scroll inside the editor, so the page is held to the tab height. */
+.files-page-fill {
+  height: 100%;
+}
 .files-mode {
   display: flex;
   padding: 2px;
