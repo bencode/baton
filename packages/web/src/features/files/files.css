@@ -91,6 +91,8 @@
 .files-page-header {
   position: sticky;
   top: 0;
+  /* Above positioned content in the body, such as display math. */
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -132,7 +134,7 @@
   background: var(--color-ui-selected);
   color: var(--color-ui-selected-text);
 }
-/* Source views scroll inside the editor, so the page is held to the tab height. */
+/* Editors scroll inside themselves, so the page is held to the tab height. */
 .files-page-fill {
   height: 100%;
 }
@@ -162,32 +164,6 @@
   white-space: pre;
   tab-size: 2;
   color: var(--color-ui-text);
-}
-/* Image files: fitted by default, scroll when shown at their own size. */
-.image-view {
-  display: grid;
-  gap: 12px;
-  justify-items: center;
-  padding: 16px 24px 48px;
-}
-.image-view-toolbar {
-  justify-self: end;
-}
-.image-view-toolbar .ui-button[aria-pressed="true"] {
-  background: var(--color-ui-selected);
-  color: var(--color-ui-selected-text);
-}
-.image-view-fit {
-  max-width: 100%;
-  max-height: calc(100vh - 200px);
-  object-fit: contain;
-}
-.image-view-actual {
-  max-width: none;
-}
-.image-view:has(.image-view-actual) {
-  justify-items: start;
-  overflow-x: auto;
 }
 .files-notice {
   padding: 24px;

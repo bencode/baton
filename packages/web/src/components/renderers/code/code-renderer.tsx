@@ -4,15 +4,13 @@ import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import { classHighlighter } from '@lezer/highlight'
 import { basicSetup, EditorView } from 'codemirror'
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { readingSurfaceProps, useReadingPreferences } from './reading-preferences'
-
-export type SourceReaderHandle = { openSearch(): void }
+export type CodeRendererHandle = { openSearch(): void }
 
 // A grammar is fetched the first time a file in its language is opened; a name no
 // grammar claims reads as plain text.
-const languageFor = async (path: string): Promise<Extension[]> => {
+const languageFor = async (name: string): Promise<Extension[]> => {
   const { languages } = await import('@codemirror/language-data')
-  const description = LanguageDescription.matchFilename(languages, path.split('/').at(-1) ?? path)
+  const description = LanguageDescription.matchFilename(languages, name)
   return description ? [await description.load()] : []
 }
 
@@ -25,20 +23,19 @@ const topLine = (view: EditorView): number => {
 }
 
 // Read-only source with syntax colours by file name, line numbers, folding, and
-// search (Cmd/Ctrl-F or openSearch). Colours come from `tok-*` classes styled by
-// the reading theme, so the source follows light / paper / dark.
-export const SourceReader = ({
-  path,
+// search (Cmd/Ctrl-F or openSearch). It keeps one fixed editor look; colours come
+// from `tok-*` classes styled in code-renderer.css.
+export const CodeRenderer = ({
+  name,
   content,
   wrap,
   ref,
 }: {
-  path: string
+  name: string
   content: string
   wrap: boolean
-  ref?: Ref<SourceReaderHandle>
+  ref?: Ref<CodeRendererHandle>
 }) => {
-  const [preferences] = useReadingPreferences()
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const lineWrap = useRef(new Compartment())
@@ -60,7 +57,7 @@ export const SourceReader = ({
     if (!parent) return
     let disposed = false
     setFailed(false)
-    languageFor(path).then(
+    languageFor(name).then(
       language => {
         if (disposed) return
         const created = new EditorView({
@@ -74,7 +71,7 @@ export const SourceReader = ({
               syntaxHighlighting(classHighlighter),
               language,
               EditorState.readOnly.of(true),
-              EditorView.contentAttributes.of({ 'aria-label': `${path} 源码` }),
+              EditorView.contentAttributes.of({ 'aria-label': `${name} 源码` }),
               lineWrap.current.of(wrapping(latestWrap.current)),
             ],
           }),
@@ -87,7 +84,7 @@ export const SourceReader = ({
           })
       },
       error => {
-        console.error('[files] could not load the source view', error)
+        console.error('[code-renderer] could not load the editor', error)
         if (!disposed) setFailed(true)
       },
     )
@@ -99,14 +96,14 @@ export const SourceReader = ({
       }
       view.current = null
     }
-  }, [path, content, attempt])
+  }, [name, content, attempt])
 
   useEffect(() => {
     view.current?.dispatch({ effects: lineWrap.current.reconfigure(wrapping(wrap)) })
   }, [wrap])
 
   return (
-    <div {...readingSurfaceProps(preferences)}>
+    <div className="code-renderer">
       {failed ? (
         <p role="alert" className="files-notice text-ui-danger">
           无法加载源码视图。
@@ -115,7 +112,7 @@ export const SourceReader = ({
           </button>
         </p>
       ) : (
-        <div ref={host} className="source-reader" />
+        <div ref={host} className="code-renderer-editor" />
       )}
     </div>
   )
