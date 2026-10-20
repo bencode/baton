@@ -28,7 +28,8 @@ export class FileError extends Error {
   }
 }
 
-const notFound = (path: string): FileError => new FileError('file_not_found', `not found: ${path}`)
+export const notFound = (path: string): FileError =>
+  new FileError('file_not_found', `not found: ${path}`)
 
 const isMissing = (error: unknown): boolean =>
   ['ENOENT', 'ENOTDIR', 'ELOOP'].includes((error as NodeJS.ErrnoException).code ?? '')
@@ -42,6 +43,25 @@ const inside = (root: string, real: string): string | null => {
   return rel.split(sep).join('/')
 }
 
+// A requested repository-relative path: well-formed and not protected.
+export const checkedPath = (path: string, allowRoot: boolean): string => {
+  const rel = normalizeFilePath(path, allowRoot)
+  if (rel === null) throw new FileError('invalid_request', `invalid path: ${path}`)
+  if (isSensitiveFilePath(rel)) throw new FileError('forbidden_path', `protected file: ${rel}`)
+  return rel
+}
+
+// The lower-cased search term, or invalid_request when blank or too long.
+export const searchNeedle = (query: string): string => {
+  const trimmed = query.trim()
+  if (trimmed === '' || trimmed.length > FILE_SEARCH_QUERY_MAX_LENGTH)
+    throw new FileError(
+      'invalid_request',
+      `search query must be 1-${FILE_SEARCH_QUERY_MAX_LENGTH} characters`,
+    )
+  return trimmed.toLowerCase()
+}
+
 // A path whose real location escapes the root or lands on a protected file is
 // reported as missing, matching how listing hides it.
 const resolveInside = async (
@@ -49,9 +69,7 @@ const resolveInside = async (
   path: string,
   allowRoot: boolean,
 ): Promise<{ path: string; real: string }> => {
-  const rel = normalizeFilePath(path, allowRoot)
-  if (rel === null) throw new FileError('invalid_request', `invalid path: ${path}`)
-  if (isSensitiveFilePath(rel)) throw new FileError('forbidden_path', `protected file: ${rel}`)
+  const rel = checkedPath(path, allowRoot)
   let real: string
   try {
     real = await realpath(join(root, rel))
@@ -64,7 +82,7 @@ const resolveInside = async (
   return { path: rel, real }
 }
 
-const byKindThenName = (a: FileEntry, b: FileEntry): number => {
+export const byKindThenName = (a: FileEntry, b: FileEntry): number => {
   if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
   return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
 }
@@ -131,13 +149,7 @@ export const searchFiles = async (
   query: string,
   now: () => number = Date.now,
 ): Promise<FileSearchResult> => {
-  const trimmed = query.trim()
-  if (trimmed === '' || trimmed.length > FILE_SEARCH_QUERY_MAX_LENGTH)
-    throw new FileError(
-      'invalid_request',
-      `search query must be 1-${FILE_SEARCH_QUERY_MAX_LENGTH} characters`,
-    )
-  const needle = trimmed.toLowerCase()
+  const needle = searchNeedle(query)
   const deadline = now() + FILE_SEARCH_DEADLINE_MS
   const entries: FileEntry[] = []
   const pending = ['']
@@ -165,7 +177,8 @@ export const searchFiles = async (
   return { entries, truncated: false }
 }
 
-const decodeText = (bytes: Buffer): string | null => {
+// Text unless the bytes contain NUL or are not valid UTF-8.
+export const decodeText = (bytes: Buffer): string | null => {
   if (bytes.includes(0)) return null
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
@@ -183,9 +196,9 @@ export const viewFile = async (root: string, path: string): Promise<FileView> =>
   const name = file.path.split('/').at(-1) ?? file.path
   const info = await stat(file.real)
   if (!info.isFile()) throw notFound(file.path)
+  const meta = { path: file.path, name, commit: null }
   const tooLarge = (size: number): FileView => ({
-    path: file.path,
-    name,
+    ...meta,
     size,
     kind: 'too_large',
     limit: FILE_TEXT_MAX_BYTES,
@@ -200,8 +213,8 @@ export const viewFile = async (root: string, path: string): Promise<FileView> =>
     if (bytes.length > FILE_TEXT_MAX_BYTES) return tooLarge(bytes.length)
     const content = decodeText(bytes)
     return content === null
-      ? { path: file.path, name, size: bytes.length, kind: 'binary' }
-      : { path: file.path, name, size: bytes.length, kind: 'text', content }
+      ? { ...meta, size: bytes.length, kind: 'binary' }
+      : { ...meta, size: bytes.length, kind: 'text', content }
   } finally {
     await handle.close()
   }

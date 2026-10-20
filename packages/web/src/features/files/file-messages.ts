@@ -4,7 +4,7 @@ import { FileApiError } from '../../api/files'
 const MESSAGES: Record<FileErrorCode, string> = {
   worker_offline: '执行环境离线',
   worker_timeout: '执行环境未响应，可能需要升级 baton CLI',
-  branch_not_found: '该分支没有检出的工作目录（worktree 可能已被删除）',
+  branch_not_found: '分支不存在',
   file_not_found: '文件不存在',
   forbidden_path: '受保护的文件，不提供读取',
   invalid_request: '无效的文件地址',

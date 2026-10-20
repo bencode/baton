@@ -7,15 +7,23 @@ const run = promisify(execFile)
 const GIT_TIMEOUT_MS = 3_000
 const NOT_A_WORK_TREE_EXIT = 128
 
-const git = async (cwd: string, args: string[]): Promise<string> => {
-  const { stdout } = await run('git', ['-C', cwd, ...args], {
-    encoding: 'utf8',
+// Read-only git: literal pathspecs, no optional locks, never prompts.
+export const runGit = async (
+  cwd: string,
+  args: string[],
+  maxBuffer = 4 * 1024 * 1024,
+): Promise<Buffer> => {
+  const { stdout } = await run('git', ['--literal-pathspecs', '-C', cwd, ...args], {
+    encoding: 'buffer',
     timeout: GIT_TIMEOUT_MS,
-    maxBuffer: 4 * 1024 * 1024,
+    maxBuffer,
     env: { ...process.env, LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
   })
   return stdout
 }
+
+const git = async (cwd: string, args: string[]): Promise<string> =>
+  (await runGit(cwd, args)).toString('utf8')
 
 // Top of the work tree containing `dir`, or null outside one (no repository, a
 // bare repository, or inside .git all exit 128).
@@ -45,6 +53,17 @@ const parseWorktrees = (stdout: string): Worktree[] =>
       return path && ref && !skipped ? [{ path, name: ref.replace(/^refs\/heads\//, '') }] : []
     })
 
+// `git for-each-ref` lines of "<refname>\0<commit>"; ref names cannot contain newlines.
+const parseTips = (stdout: string): Map<string, string> =>
+  new Map(
+    stdout
+      .split('\n')
+      .map(line => line.split('\0'))
+      .flatMap(([ref, commit]) =>
+        ref && commit ? [[ref.replace(/^refs\/heads\//, ''), commit] as const] : [],
+      ),
+  )
+
 const existingPath = async (path: string): Promise<string | null> => {
   try {
     return await realpath(path)
@@ -55,29 +74,40 @@ const existingPath = async (path: string): Promise<string | null> => {
   }
 }
 
-// The branches a Worker may browse: every branch checked out in a worktree of the
-// repository whose root is the Worker's own directory. A directory that is not a
-// work tree root (no repository, a subdirectory, a bare repository) exposes nothing.
+const rank = (branch: FileBranch): number => (branch.current ? 0 : branch.worktree ? 1 : 2)
+
+// The local branches of the repository whose work tree root is the Worker's own
+// directory: those checked out in an existing worktree plus every other local
+// branch. The unborn branch of a repository without commits appears only through
+// its worktree. A directory that is not a work tree root (no repository, a
+// subdirectory, a bare repository) exposes nothing.
 export const discoverBranches = async (baseDir: string): Promise<FileBranch[]> => {
   const base = await realpath(baseDir)
   if ((await workTreeTop(base)) !== base) return []
   let worktrees: Worktree[]
+  let tips: Map<string, string>
   try {
-    worktrees = parseWorktrees(await git(base, ['worktree', 'list', '--porcelain', '-z']))
+    const [listed, refs] = await Promise.all([
+      git(base, ['worktree', 'list', '--porcelain', '-z']),
+      git(base, ['for-each-ref', '--format=%(refname)%00%(objectname)', 'refs/heads']),
+    ])
+    worktrees = parseWorktrees(listed)
+    tips = parseTips(refs)
   } catch (error) {
-    console.warn('[files] git worktree list failed; no branches to browse', error)
+    console.warn('[files] listing git branches failed; no branches to browse', error)
     return []
   }
-  const branches = await Promise.all(
-    worktrees.map(async ({ path, name }): Promise<FileBranch | null> => {
-      const real = await existingPath(path)
-      return real === null ? null : { name, path: real, current: real === base }
-    }),
+  const checkedOut = new Map(
+    (
+      await Promise.all(
+        worktrees.map(async ({ path, name }) => [name, await existingPath(path)] as const),
+      )
+    ).filter((entry): entry is readonly [string, string] => entry[1] !== null),
   )
-  return branches
-    .filter((branch): branch is FileBranch => branch !== null)
-    .sort(
-      (a, b) =>
-        Number(b.current) - Number(a.current) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
-    )
+  return [...new Set([...checkedOut.keys(), ...tips.keys()])]
+    .map(name => {
+      const worktree = checkedOut.get(name) ?? null
+      return { name, worktree, commit: tips.get(name) ?? null, current: worktree === base }
+    })
+    .sort((a, b) => rank(a) - rank(b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
 }

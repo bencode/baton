@@ -10,14 +10,17 @@ export const FILE_SEARCH_MAX_RESULTS = 500
 export const FILE_SEARCH_DEADLINE_MS = 5_000
 export const FILE_SEARCH_QUERY_MAX_LENGTH = 200
 
-// A browsable branch of the Worker's repository. Git checks a branch out in at
-// most one worktree, so the branch name alone addresses that worktree; files are
-// addressed as worker + branch + repository-relative path.
+// A local branch of the Worker's repository; files are addressed as worker +
+// branch + repository-relative path. Git checks a branch out in at most one
+// worktree: a checked-out branch is read from that worktree's disk (uncommitted
+// changes included), any other branch from its latest commit.
 export type FileBranch = {
   name: string
-  // The worktree directory on the Worker, for display only.
-  path: string
-  // The worktree that is the Worker daemon's own directory.
+  // The worktree that has the branch checked out, for display; null when none does.
+  worktree: string | null
+  // The branch tip; null only for the unborn branch of a repository without commits.
+  commit: string | null
+  // The branch checked out in the Worker daemon's own directory.
   current: boolean
 }
 
@@ -25,7 +28,8 @@ export type FileEntry = { name: string; path: string; kind: 'directory' | 'file'
 export type FileDirectory = { path: string; entries: FileEntry[]; truncated: boolean }
 export type FileSearchResult = { entries: FileEntry[]; truncated: boolean }
 
-type FileMeta = { path: string; name: string; size: number }
+// commit: the commit the content was read from; null when read from a worktree's disk.
+type FileMeta = { path: string; name: string; size: number; commit: string | null }
 export type FileView =
   | (FileMeta & { kind: 'text'; content: string })
   | (FileMeta & { kind: 'binary' })

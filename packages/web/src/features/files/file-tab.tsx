@@ -51,6 +51,13 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
           <p className="files-page-meta">
             <BranchIcon />
             <span className="truncate">{branch}</span>
+            {file.data && (
+              <span className="shrink-0">
+                {file.data.commit === null
+                  ? '· 工作目录'
+                  : `· 提交 ${file.data.commit.slice(0, 7)}`}
+              </span>
+            )}
             <span aria-hidden>·</span>
             <span className="truncate font-mono">{path}</span>
             {file.data && <span className="shrink-0">· {formatFileSize(file.data.size)}</span>}
