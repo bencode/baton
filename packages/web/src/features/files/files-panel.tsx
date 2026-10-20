@@ -6,7 +6,6 @@ import { useWorkers } from '../workers/use-workers'
 import type { TreeEnv } from './directory-node'
 import { useTreeToggles } from './tree-toggles'
 import { WorkerNode } from './worker-node'
-import './files.css'
 
 type FilesPanelProps = {
   projectId: Id

@@ -9,7 +9,6 @@ import {
   isExcludedDirectoryName,
   isSensitiveFilePath,
 } from '@baton/shared'
-import { runGit } from './branches.ts'
 import {
   byKindThenName,
   checkedPath,
@@ -17,7 +16,8 @@ import {
   FileError,
   notFound,
   searchNeedle,
-} from './disk.ts'
+} from './common.ts'
+import { runGit } from './git.ts'
 
 // Committed content of a branch with no worktree, read straight from Git objects:
 // nothing is checked out and no worktree, index, or HEAD is touched. Git trees

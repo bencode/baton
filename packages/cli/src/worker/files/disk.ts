@@ -5,31 +5,15 @@ import {
   FILE_DIRECTORY_MAX_ENTRIES,
   FILE_SEARCH_DEADLINE_MS,
   FILE_SEARCH_MAX_RESULTS,
-  FILE_SEARCH_QUERY_MAX_LENGTH,
   FILE_TEXT_MAX_BYTES,
   type FileDirectory,
   type FileEntry,
-  type FileErrorCode,
   type FileSearchResult,
   type FileView,
   isExcludedDirectoryName,
   isSensitiveFilePath,
-  normalizeFilePath,
 } from '@baton/shared'
-
-// An expected, client-facing outcome of a file query; anything else thrown while
-// reading is unexpected and reported as `unavailable`.
-export class FileError extends Error {
-  constructor(
-    readonly code: FileErrorCode,
-    message: string,
-  ) {
-    super(message)
-  }
-}
-
-export const notFound = (path: string): FileError =>
-  new FileError('file_not_found', `not found: ${path}`)
+import { byKindThenName, checkedPath, decodeText, notFound, searchNeedle } from './common.ts'
 
 const isMissing = (error: unknown): boolean =>
   ['ENOENT', 'ENOTDIR', 'ELOOP'].includes((error as NodeJS.ErrnoException).code ?? '')
@@ -41,25 +25,6 @@ const inside = (root: string, real: string): string | null => {
   const rel = relative(root, real)
   if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) return null
   return rel.split(sep).join('/')
-}
-
-// A requested repository-relative path: well-formed and not protected.
-export const checkedPath = (path: string, allowRoot: boolean): string => {
-  const rel = normalizeFilePath(path, allowRoot)
-  if (rel === null) throw new FileError('invalid_request', `invalid path: ${path}`)
-  if (isSensitiveFilePath(rel)) throw new FileError('forbidden_path', `protected file: ${rel}`)
-  return rel
-}
-
-// The lower-cased search term, or invalid_request when blank or too long.
-export const searchNeedle = (query: string): string => {
-  const trimmed = query.trim()
-  if (trimmed === '' || trimmed.length > FILE_SEARCH_QUERY_MAX_LENGTH)
-    throw new FileError(
-      'invalid_request',
-      `search query must be 1-${FILE_SEARCH_QUERY_MAX_LENGTH} characters`,
-    )
-  return trimmed.toLowerCase()
 }
 
 // A path whose real location escapes the root or lands on a protected file is
@@ -80,11 +45,6 @@ const resolveInside = async (
   const target = inside(root, real)
   if (target === null || isSensitiveFilePath(target)) throw notFound(rel)
   return { path: rel, real }
-}
-
-export const byKindThenName = (a: FileEntry, b: FileEntry): number => {
-  if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
-  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
 }
 
 // A symlink is shown as its target's kind, and only while the target stays inside
@@ -175,17 +135,6 @@ export const searchFiles = async (
     }
   }
   return { entries, truncated: false }
-}
-
-// Text unless the bytes contain NUL or are not valid UTF-8.
-export const decodeText = (bytes: Buffer): string | null => {
-  if (bytes.includes(0)) return null
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-  } catch (error) {
-    if (error instanceof TypeError) return null
-    throw error
-  }
 }
 
 // Text only. Oversized files are refused from their size alone; content is never
