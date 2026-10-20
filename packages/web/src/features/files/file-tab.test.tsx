@@ -45,10 +45,12 @@ test('a file loads once per activation and again only on refresh', async () => {
     path: 'docs/plan.md',
     name: 'plan.md',
     size: 5,
+    commit: null,
     kind: 'text',
     content: 'hello',
   }))
   expect(await screen.findByText('hello')).toBeTruthy()
+  expect(screen.getByText('· 工作目录')).toBeTruthy()
   expect(view).toHaveBeenCalledWith(
     { workerId: 2, branch: 'feat/x' },
     'docs/plan.md',
@@ -69,15 +71,29 @@ test.each([
     '文件大小 6.0 MiB，超过 5.0 MiB 上限，不提供预览。',
   ],
 ] as const)('%o shows a notice instead of content', async (shape, notice) => {
-  renderTabs(async () => ({ path: 'docs/plan.md', name: 'plan.md', ...shape }) as FileView)
+  renderTabs(
+    async () => ({ path: 'docs/plan.md', name: 'plan.md', commit: null, ...shape }) as FileView,
+  )
   expect(await screen.findByText(notice)).toBeTruthy()
   expect(document.querySelector('pre')).toBeNull()
 })
 
-test('a branch without a worktree is reported, not resolved elsewhere', async () => {
+test('content read from a commit names that commit', async () => {
+  renderTabs(async () => ({
+    path: 'docs/plan.md',
+    name: 'plan.md',
+    size: 5,
+    commit: '89ada05297d6cf638eeb704cc3bcd21a7b62fe58',
+    kind: 'text',
+    content: 'hello',
+  }))
+  expect(await screen.findByText('· 提交 89ada05')).toBeTruthy()
+})
+
+test('a missing branch is reported, not resolved elsewhere', async () => {
   const { view } = renderTabs(async () => {
     throw new FileApiError('missing', 404, 'branch_not_found')
   })
-  expect(await screen.findByText('该分支没有检出的工作目录（worktree 可能已被删除）')).toBeTruthy()
+  expect(await screen.findByText('分支不存在')).toBeTruthy()
   expect(view).toHaveBeenCalledTimes(1)
 })

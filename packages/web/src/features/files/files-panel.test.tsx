@@ -39,8 +39,9 @@ const directories: Record<string, FileDirectory> = {
 const setup = () => {
   const files = {
     branches: vi.fn(async () => [
-      { name: 'main', path: '/repo', current: true },
-      { name: 'feat/x', path: '/wt', current: false },
+      { name: 'main', worktree: '/repo', commit: 'a'.repeat(40), current: true },
+      { name: 'feat/x', worktree: '/wt', commit: 'b'.repeat(40), current: false },
+      { name: 'archive', worktree: null, commit: 'c'.repeat(40), current: false },
     ]),
     list: vi.fn(async (_scope: FileScope, path: string) => directories[path]),
     search: vi.fn(
@@ -126,4 +127,19 @@ test('searching a branch replaces its children with bounded path matches', async
   expect(screen.queryByText('README.md')).toBeNull()
   fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' })
   expect(await screen.findByText('README.md')).toBeTruthy()
+})
+
+test('branches without a worktree wait in a collapsed group until opened', async () => {
+  const { files } = setup()
+  await screen.findByText('README.md')
+  expect(screen.queryByRole('button', { name: /archive/ })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '其他本地分支 (1)' }))
+  fireEvent.click(screen.getByRole('button', { name: /^archive\s*已提交/ }))
+  await vi.waitFor(() =>
+    expect(files.list).toHaveBeenCalledWith(
+      { workerId: 2, branch: 'archive' },
+      '',
+      expect.anything(),
+    ),
+  )
 })

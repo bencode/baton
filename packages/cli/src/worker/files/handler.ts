@@ -1,5 +1,6 @@
 import type { FileQuery, FileReply } from '@baton/shared'
 import { discoverBranches } from './branches.ts'
+import { listCommitDirectory, searchCommit, viewCommitFile } from './commit.ts'
 import { FileError, listDirectory, searchFiles, viewFile } from './disk.ts'
 
 const DEFAULT_CONCURRENCY = 4
@@ -7,14 +8,23 @@ const DEFAULT_CONCURRENCY = 4
 const run = async (baseDir: string, query: FileQuery): Promise<FileReply> => {
   const branches = await discoverBranches(baseDir)
   if (query.op === 'branches') return { ok: true, data: branches }
-  // Branches are rediscovered per query, so a removed worktree stops resolving
-  // instead of falling back to a same-named file elsewhere.
+  // Branches are rediscovered per query: a checked-out branch reads its worktree's
+  // disk, any other branch its latest commit. Nothing falls back to another branch.
   const branch = branches.find(candidate => candidate.name === query.branch)
-  if (!branch)
-    throw new FileError('branch_not_found', `branch ${query.branch} has no checked-out worktree`)
-  if (query.op === 'list') return { ok: true, data: await listDirectory(branch.path, query.path) }
-  if (query.op === 'search') return { ok: true, data: await searchFiles(branch.path, query.query) }
-  return { ok: true, data: await viewFile(branch.path, query.path) }
+  if (!branch) throw new FileError('branch_not_found', `branch ${query.branch} does not exist`)
+  const { worktree, commit } = branch
+  if (worktree !== null) {
+    if (query.op === 'list') return { ok: true, data: await listDirectory(worktree, query.path) }
+    if (query.op === 'search') return { ok: true, data: await searchFiles(worktree, query.query) }
+    return { ok: true, data: await viewFile(worktree, query.path) }
+  }
+  // discoverBranches only yields a branch without a worktree when it has a commit.
+  if (commit === null) throw new FileError('branch_not_found', `branch ${query.branch} is empty`)
+  if (query.op === 'list')
+    return { ok: true, data: await listCommitDirectory(baseDir, commit, query.path) }
+  if (query.op === 'search')
+    return { ok: true, data: await searchCommit(baseDir, commit, query.query) }
+  return { ok: true, data: await viewCommitFile(baseDir, commit, query.path) }
 }
 
 // Answers one read-only query against the Worker directory `baseDir`. Never throws:

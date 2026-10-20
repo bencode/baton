@@ -17,7 +17,8 @@ export type TreeEnv = {
   open(path: string, title: string): void
 }
 
-const indent = (depth: number): CSSProperties => ({ '--files-depth': depth }) as CSSProperties
+export const indent = (depth: number): CSSProperties =>
+  ({ '--files-depth': depth }) as CSSProperties
 
 type TreeRowProps = {
   depth: number

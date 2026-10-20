@@ -55,6 +55,19 @@ describe('worker files — read-only queries on a real repository', () => {
     git(repo, 'commit', '-q', '-m', 'init')
     git(repo, 'worktree', 'add', '-q', '-b', 'feature', worktree)
     git(repo, 'worktree', 'add', '-q', '--detach', join(tmp, 'detached'))
+    // `archive` is committed through a temporary worktree, then left with none.
+    const archive = join(tmp, 'archive')
+    git(repo, 'worktree', 'add', '-q', '-b', 'archive', archive)
+    write(join(archive, 'src/app.ts'), 'archived')
+    write(join(archive, 'docs/old.md'), '# old')
+    write(join(archive, '.env'), 'SECRET=1')
+    write(join(archive, 'node_modules/pkg/index.js'), 'module.exports = 1')
+    write(join(archive, 'big.txt'), '')
+    truncateSync(join(archive, 'big.txt'), 5 * 1024 * 1024 + 1)
+    symlinkSync('src/app.ts', join(archive, 'link'))
+    git(archive, 'add', '-f', '.')
+    git(archive, 'commit', '-q', '-m', 'archive')
+    git(repo, 'worktree', 'remove', '--force', archive)
     write(join(repo, 'src/app.ts'), 'v2')
     write(join(repo, 'notes.md'), '# notes')
     write(join(repo, '.env'), 'SECRET=1')
@@ -72,11 +85,54 @@ describe('worker files — read-only queries on a real repository', () => {
   })
   after(() => rmSync(tmp, { recursive: true, force: true }))
 
-  test('branches are the worker directory first, then other checked-out worktrees', async () => {
+  test('branches: the worker directory, other worktrees, then branches without one', async () => {
+    const tip = (branch: string) => git(repo, 'rev-parse', branch).trim()
     assert.deepEqual(data(await query({ op: 'branches' }), 'branches'), [
-      { name: 'main', path: repo, current: true },
-      { name: 'feature', path: worktree, current: false },
+      { name: 'main', worktree: repo, commit: tip('main'), current: true },
+      { name: 'feature', worktree, commit: tip('feature'), current: false },
+      { name: 'archive', worktree: null, commit: tip('archive'), current: false },
     ])
+  })
+
+  test('a branch without a worktree is read from its latest commit', async () => {
+    const commit = git(repo, 'rev-parse', 'archive').trim()
+    const listing = data(await query({ op: 'list', branch: 'archive', path: '' }), 'list')
+    assert.deepEqual(
+      listing.entries.map(entry => `${entry.kind}:${entry.path}`),
+      ['directory:docs', 'directory:src', 'file:big.txt'],
+    )
+    assert.deepEqual(
+      data(await query({ op: 'view', branch: 'archive', path: 'src/app.ts' }), 'view'),
+      {
+        path: 'src/app.ts',
+        name: 'app.ts',
+        size: 8,
+        commit,
+        kind: 'text',
+        content: 'archived',
+      },
+    )
+    const view = (path: string) => query({ op: 'view', branch: 'archive', path })
+    assert.deepEqual(data(await view('big.txt'), 'view'), {
+      path: 'big.txt',
+      name: 'big.txt',
+      size: 5 * 1024 * 1024 + 1,
+      commit,
+      kind: 'too_large',
+      limit: 5 * 1024 * 1024,
+    })
+    assert.equal(failure(await view('.env')), 'forbidden_path')
+    assert.equal(failure(await view('link')), 'file_not_found')
+    assert.equal(failure(await view('docs')), 'file_not_found')
+    assert.equal(failure(await view('docs/missing.md')), 'file_not_found')
+    const search = async (text: string) =>
+      data(await query({ op: 'search', branch: 'archive', query: text }), 'search').entries
+    assert.deepEqual(
+      (await search('OLD')).map(entry => entry.path),
+      ['docs/old.md'],
+    )
+    assert.deepEqual(await search('index'), [])
+    assert.deepEqual(await search('env'), [])
   })
 
   test('a branch addresses its own worktree', async () => {
@@ -110,6 +166,7 @@ describe('worker files — read-only queries on a real repository', () => {
       path: 'src/app.ts',
       name: 'app.ts',
       size: 2,
+      commit: null,
       kind: 'text',
       content: 'v2',
     })
@@ -118,6 +175,7 @@ describe('worker files — read-only queries on a real repository', () => {
       path: 'big.txt',
       name: 'big.txt',
       size: 5 * 1024 * 1024 + 1,
+      commit: null,
       kind: 'too_large',
       limit: 5 * 1024 * 1024,
     })
@@ -146,10 +204,28 @@ describe('worker files — read-only queries on a real repository', () => {
     assert.deepEqual(gitState(), initialGitState)
   })
 
-  test('a branch whose worktree is removed stops resolving instead of falling back', async () => {
+  test('a branch whose worktree is removed is read from its commit, never elsewhere', async () => {
     git(repo, 'worktree', 'remove', '--force', worktree)
-    const reply = await query({ op: 'list', branch: 'feature', path: '' })
-    assert.equal(failure(reply), 'branch_not_found')
+    const view = data(await query({ op: 'view', branch: 'feature', path: 'src/app.ts' }), 'view')
+    assert.deepEqual(view.kind === 'text' && [view.content, view.commit], [
+      'v1',
+      git(repo, 'rev-parse', 'feature').trim(),
+    ])
+    assert.equal(failure(await query({ op: 'list', branch: 'nope', path: '' })), 'branch_not_found')
+  })
+
+  test('the unborn branch of a repository without commits reads its worktree', async () => {
+    const fresh = join(tmp, 'fresh')
+    git(tmp, 'init', '-q', '-b', 'main', fresh)
+    write(join(fresh, 'draft.md'), 'draft')
+    assert.deepEqual(await discoverBranches(fresh), [
+      { name: 'main', worktree: fresh, commit: null, current: true },
+    ])
+    const view = data(
+      await handleFileQuery(fresh, { op: 'view', branch: 'main', path: 'draft.md' }),
+      'view',
+    )
+    assert.equal(view.kind === 'text' && view.content, 'draft')
   })
 
   test('only a work tree root exposes branches', async () => {

@@ -3,7 +3,14 @@ import { useEffect, useState } from 'react'
 import type { FileScope } from '../../api/files'
 import { useApi } from '../../app/api-context'
 import { BranchIcon, CloseIcon, SearchIcon, WorkerIcon } from '../../components/icons'
-import { DirectoryChildren, FileRow, type TreeEnv, TreeMessage, TreeRow } from './directory-node'
+import {
+  DirectoryChildren,
+  FileRow,
+  indent,
+  type TreeEnv,
+  TreeMessage,
+  TreeRow,
+} from './directory-node'
 import { fileErrorMessage } from './file-messages'
 import { useFileQuery } from './use-file-query'
 
@@ -64,10 +71,12 @@ const BranchNode = ({
   env,
   workerId,
   branch,
+  depth,
 }: {
   env: TreeEnv
   workerId: Id
   branch: FileBranch
+  depth: number
 }) => {
   const key = `b:${workerId}:${branch.name}`
   const open = env.toggles.isOpen(key, branch.current)
@@ -87,15 +96,16 @@ const BranchNode = ({
   return (
     <>
       <TreeRow
-        depth={1}
+        depth={depth}
         icon={<BranchIcon />}
         label={
           <>
             {branch.name}
             {branch.current && <span className="files-tag">执行环境目录</span>}
+            {branch.worktree === null && <span className="files-tag">已提交</span>}
           </>
         }
-        title={branch.path}
+        title={branch.worktree ?? `提交 ${branch.commit?.slice(0, 7)}`}
         expanded={open}
         onClick={() => env.toggles.toggle(key)}
         actions={
@@ -114,7 +124,7 @@ const BranchNode = ({
         }
       />
       {open && searching && (
-        <label className="ui-search files-search">
+        <label className="ui-search files-search" style={indent(depth + 1)}>
           <SearchIcon />
           <input
             // biome-ignore lint/a11y/noAutofocus: the search box opens on an explicit click.
@@ -144,9 +154,9 @@ const BranchNode = ({
       )}
       {open &&
         (searching && query ? (
-          <SearchResults env={env} scope={scope} query={query} depth={2} />
+          <SearchResults env={env} scope={scope} query={query} depth={depth + 1} />
         ) : (
-          <DirectoryChildren env={env} scope={scope} path="" depth={2} />
+          <DirectoryChildren env={env} scope={scope} path="" depth={depth + 1} />
         ))}
     </>
   )
@@ -175,9 +185,30 @@ const BranchList = ({ env, workerId }: { env: TreeEnv; workerId: Id }) => {
         没有可浏览的分支：执行环境目录需是 Git 仓库根目录并检出分支，非 Git 目录可执行 git init。
       </TreeMessage>
     )
-  return branches.data.map(branch => (
-    <BranchNode key={branch.name} env={env} workerId={workerId} branch={branch} />
-  ))
+  const checkedOut = branches.data.filter(branch => branch.worktree !== null)
+  const others = branches.data.filter(branch => branch.worktree === null)
+  const groupKey = `g:${workerId}`
+  const groupOpen = env.toggles.isOpen(groupKey, false)
+  return (
+    <>
+      {checkedOut.map(branch => (
+        <BranchNode key={branch.name} env={env} workerId={workerId} branch={branch} depth={1} />
+      ))}
+      {others.length > 0 && (
+        <TreeRow
+          depth={1}
+          icon={<BranchIcon />}
+          label={`其他本地分支 (${others.length})`}
+          expanded={groupOpen}
+          onClick={() => env.toggles.toggle(groupKey)}
+        />
+      )}
+      {groupOpen &&
+        others.map(branch => (
+          <BranchNode key={branch.name} env={env} workerId={workerId} branch={branch} depth={2} />
+        ))}
+    </>
+  )
 }
 
 // Worker → branches → files. An offline worker is shown but never queried.
