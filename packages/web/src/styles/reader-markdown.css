@@ -1,6 +1,38 @@
-/* Rendered documents in file tabs. Ported from gamma-reader's reader prose and
-   highlight.js palette, mapped onto Baton's ui tokens. Code blocks, tables, and
-   Mermaid reuse the chat block chrome (.chat-code-block / .chat-table / .chat-mermaid). */
+/* Rendered documents in file tabs. Ported from gamma-reader's reader prose,
+   wide layout, reading themes, and highlight.js palettes, mapped onto Baton's ui
+   tokens. Code blocks, tables, and Mermaid reuse the chat block chrome
+   (.chat-code-block / .chat-table / .chat-mermaid). */
+
+/* The reading surface: themes override the ui tokens for the document only. */
+.reader-surface {
+  container-type: inline-size;
+  flex: 1;
+  background: var(--color-ui-surface);
+  color: var(--color-ui-text);
+}
+.reader-surface[data-reading-theme="paper"] {
+  --color-ui-surface: oklch(0.95 0.025 85);
+  --color-ui-panel: oklch(0.91 0.025 85);
+  --color-ui-border: oklch(0.82 0.025 80);
+  --color-ui-muted: oklch(0.43 0.02 70);
+  --color-ui-text: oklch(0.27 0.012 70);
+  --color-ui-heading: oklch(0.24 0.02 70);
+  --color-ui-accent: oklch(0.45 0.12 250);
+}
+.reader-surface[data-reading-theme="dark"] {
+  --color-ui-surface: oklch(0.2 0.008 260);
+  --color-ui-panel: oklch(0.25 0.01 260);
+  --color-ui-border: oklch(0.36 0.012 260);
+  --color-ui-muted: oklch(0.72 0.01 260);
+  --color-ui-text: oklch(0.9 0.005 80);
+  --color-ui-heading: oklch(0.95 0.005 80);
+  --color-ui-accent: oklch(0.76 0.11 250);
+  --color-ui-hover: oklch(0.28 0.01 260);
+}
+/* Mermaid draws dark ink; keep its canvas light on the dark theme. */
+.reader-surface[data-reading-theme="dark"] .chat-mermaid-canvas {
+  background: oklch(0.97 0 0);
+}
 
 .reader-markdown-page {
   /* A flex child with auto margins sizes to its content; keep it within the tab. */
@@ -12,7 +44,7 @@
 .reader-markdown {
   --prose-gap: 14px;
   --prose-heading-gap: 30px;
-  font-size: 15px;
+  font-size: var(--reader-font-size, 16px);
   line-height: 1.85;
   color: var(--color-ui-text);
   overflow-wrap: anywhere;
@@ -31,14 +63,15 @@
   text-wrap: balance;
 }
 .reader-markdown h1 {
-  font-size: 28px;
+  font-size: 1.85em;
+  line-height: 1.25;
   letter-spacing: -0.02em;
 }
 .reader-markdown h2 {
-  font-size: 19px;
+  font-size: 1.27em;
 }
 .reader-markdown :is(h3, h4, h5, h6) {
-  font-size: 16px;
+  font-size: 1.07em;
 }
 .reader-markdown :is(p, ul, ol, blockquote) {
   margin: var(--prose-gap) 0;
@@ -102,7 +135,7 @@
   margin: 0;
   padding: 14px 16px;
   overflow-x: auto;
-  font-size: 12.5px;
+  font-size: 0.8em;
   line-height: 1.7;
   white-space: pre;
   overflow-wrap: normal;
@@ -169,14 +202,187 @@
   text-decoration: underline;
 }
 
+/* Dark highlight.js palette (gamma-reader). */
+.reader-surface[data-reading-theme="dark"] :is(.hljs-comment, .hljs-quote) {
+  color: oklch(0.72 0.025 250);
+}
+.reader-surface[data-reading-theme="dark"]
+  :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-formula) {
+  color: oklch(0.76 0.13 325);
+}
+.reader-surface[data-reading-theme="dark"]
+  :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-template-tag) {
+  color: oklch(0.77 0.1 155);
+}
+.reader-surface[data-reading-theme="dark"]
+  :is(.hljs-number, .hljs-built_in, .hljs-type, .hljs-attr, .hljs-symbol, .hljs-bullet) {
+  color: oklch(0.79 0.11 75);
+}
+.reader-surface[data-reading-theme="dark"]
+  :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
+  color: oklch(0.78 0.1 255);
+}
+.reader-surface[data-reading-theme="dark"]
+  :is(.hljs-variable, .hljs-template-variable, .hljs-params, .hljs-property) {
+  color: oklch(0.78 0.08 205);
+}
+.reader-surface[data-reading-theme="dark"] :is(.hljs-meta, .hljs-operator, .hljs-punctuation) {
+  color: oklch(0.74 0.025 285);
+}
+.reader-surface[data-reading-theme="dark"] .hljs-deletion {
+  color: oklch(0.72 0.14 25);
+}
+
 @media (max-width: 799px) {
   .reader-markdown-page {
     padding: 24px 18px 60px;
   }
-  .reader-markdown {
-    font-size: 14px;
+}
+
+/* Wide reading area: prose keeps a comfortable 760px column; code, tables,
+   diagrams, and display math may extend into the space on the right. */
+@container (min-width: 960px) {
+  .reader-markdown-page {
+    display: grid;
+    max-width: 1184px;
+    grid-template-columns:
+      [wide-start] minmax(0, 1fr)
+      [prose-start] minmax(0, 760px)
+      [prose-end] minmax(0, 1fr)
+      [wide-end];
+    padding: 56px 64px 104px;
   }
-  .reader-markdown h1 {
-    font-size: 24px;
+  .reader-surface[data-reading-width="full"] .reader-markdown-page {
+    max-width: none;
+    grid-template-columns: [wide-start prose-start] minmax(0, 1fr) [prose-end wide-end];
   }
+  .reader-markdown-page > .reader-markdown {
+    display: contents;
+    --prose-gap: 17px;
+    --prose-heading-gap: 36px;
+  }
+  .reader-markdown > * {
+    min-width: 0;
+    grid-column: prose;
+  }
+  .reader-markdown
+    > :is(.chat-code-block, .chat-table, .chat-mermaid, .katex-display, :has(> .katex-display)) {
+    grid-column: prose-start / wide-end;
+  }
+}
+
+/* 「阅读外观」 popover (wider than the default menu popover). */
+.ui-popover.reading-appearance-popover {
+  width: 300px;
+}
+.reading-appearance {
+  display: grid;
+  gap: 16px;
+  padding: 6px 8px 8px;
+}
+.reading-appearance h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ui-heading);
+}
+.reading-appearance-setting {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.reading-appearance-setting :is(label, legend) {
+  font-size: 12px;
+  color: var(--color-ui-muted);
+}
+.reading-appearance-setting legend {
+  margin-bottom: 8px;
+}
+.reading-appearance-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.reading-appearance-header output {
+  color: var(--color-ui-text);
+}
+.reading-appearance-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--color-ui-muted);
+}
+.reading-appearance-range input {
+  flex: 1;
+  accent-color: var(--color-ui-accent);
+}
+.reading-appearance-large {
+  font-size: 18px;
+}
+.reading-appearance-segments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--color-ui-hover);
+}
+.reading-appearance-segments button {
+  height: 30px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--color-ui-muted);
+}
+.reading-appearance-segments button[aria-pressed="true"] {
+  background: var(--color-ui-surface);
+  color: var(--color-ui-text);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.08);
+}
+.reading-appearance-themes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.reading-appearance-themes button {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  font-size: 12px;
+  color: var(--color-ui-muted);
+}
+.reading-appearance-swatch {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--color-ui-border);
+  border-radius: 6px;
+  font-family: Georgia, serif;
+  font-size: 14px;
+}
+.reading-appearance-themes button[aria-pressed="true"] .reading-appearance-swatch {
+  border-color: var(--color-ui-accent);
+  box-shadow: 0 0 0 1px var(--color-ui-accent);
+}
+.reading-appearance-swatch svg {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 12px;
+  height: 12px;
+}
+.reading-appearance-swatch[data-reading-theme="light"] {
+  background: oklch(1 0 0);
+  color: oklch(0.28 0 0);
+}
+.reading-appearance-swatch[data-reading-theme="paper"] {
+  background: oklch(0.95 0.025 85);
+  color: oklch(0.27 0.012 70);
+}
+.reading-appearance-swatch[data-reading-theme="dark"] {
+  background: oklch(0.2 0.008 260);
+  color: oklch(0.9 0.005 80);
 }

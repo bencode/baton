@@ -257,3 +257,8 @@ export const RefreshIcon = () => (
     <path d="M13 8a5 5 0 1 1-1.5-3.5M13 2.5v3h-3" />
   </StrokeGlyph>
 )
+export const TypeIcon = () => (
+  <StrokeGlyph>
+    <path d="M1.5 12.5 5 3.5l3.5 9M2.8 9.5h4.4M10 12.5l2.25-5.5 2.25 5.5M10.75 10.75h3" />
+  </StrokeGlyph>
+)

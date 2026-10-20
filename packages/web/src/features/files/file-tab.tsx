@@ -5,6 +5,7 @@ import { fileRoutePath, type Route } from '../../app/route'
 import { BranchIcon, CopyIcon, RefreshIcon } from '../../components/icons'
 import { fileKindFor } from './file-kind'
 import { fileErrorMessage, formatFileSize } from './file-messages'
+import { ReadingAppearance } from './reading-appearance'
 import { useFileQuery } from './use-file-query'
 
 type FileRoute = Extract<Route, { kind: 'file' }>
@@ -90,6 +91,7 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
               {copy === 'copied' ? '已复制链接' : '复制失败'}
             </span>
           )}
+          {markdown && mode === 'rendered' && <ReadingAppearance />}
           {markdown && (
             <fieldset className="files-mode" aria-label="显示方式">
               {(['rendered', 'source'] as const).map(value => (
