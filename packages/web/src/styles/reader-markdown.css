@@ -5,6 +5,16 @@
 
 /* The reading surface: themes override the ui tokens for the document only. */
 .reader-surface {
+  /* Syntax palette shared by highlighted Markdown fences and the source reader. */
+  --syntax-comment: oklch(0.46 0.02 250);
+  --syntax-keyword: oklch(0.43 0.15 325);
+  --syntax-string: oklch(0.4 0.08 155);
+  --syntax-number: oklch(0.43 0.11 65);
+  --syntax-title: oklch(0.44 0.12 255);
+  --syntax-variable: oklch(0.4 0.1 205);
+  --syntax-meta: oklch(0.42 0.035 285);
+  --syntax-deletion: oklch(0.48 0.16 25);
+
   container-type: inline-size;
   flex: 1;
   background: var(--color-ui-surface);
@@ -28,6 +38,14 @@
   --color-ui-heading: oklch(0.95 0.005 80);
   --color-ui-accent: oklch(0.76 0.11 250);
   --color-ui-hover: oklch(0.28 0.01 260);
+  --syntax-comment: oklch(0.72 0.025 250);
+  --syntax-keyword: oklch(0.76 0.13 325);
+  --syntax-string: oklch(0.77 0.1 155);
+  --syntax-number: oklch(0.79 0.11 75);
+  --syntax-title: oklch(0.78 0.1 255);
+  --syntax-variable: oklch(0.78 0.08 205);
+  --syntax-meta: oklch(0.74 0.025 285);
+  --syntax-deletion: oklch(0.72 0.14 25);
 }
 /* Mermaid draws dark ink; keep its canvas light on the dark theme. */
 .reader-surface[data-reading-theme="dark"] .chat-mermaid-canvas {
@@ -163,35 +181,35 @@
   font-size: 0.9em;
 }
 
-/* highlight.js tokens (light palette from gamma-reader). */
+/* highlight.js tokens, coloured from the theme's syntax palette. */
 .reader-markdown :is(.hljs-comment, .hljs-quote) {
-  color: oklch(0.46 0.02 250);
+  color: var(--syntax-comment);
   font-style: italic;
 }
 .reader-markdown
   :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-formula) {
-  color: oklch(0.43 0.15 325);
+  color: var(--syntax-keyword);
 }
 .reader-markdown
   :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-template-tag) {
-  color: oklch(0.4 0.08 155);
+  color: var(--syntax-string);
 }
 .reader-markdown
   :is(.hljs-number, .hljs-built_in, .hljs-type, .hljs-attr, .hljs-symbol, .hljs-bullet) {
-  color: oklch(0.43 0.11 65);
+  color: var(--syntax-number);
 }
 .reader-markdown
   :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
-  color: oklch(0.44 0.12 255);
+  color: var(--syntax-title);
 }
 .reader-markdown :is(.hljs-variable, .hljs-template-variable, .hljs-params, .hljs-property) {
-  color: oklch(0.4 0.1 205);
+  color: var(--syntax-variable);
 }
 .reader-markdown :is(.hljs-meta, .hljs-operator, .hljs-punctuation) {
-  color: oklch(0.42 0.035 285);
+  color: var(--syntax-meta);
 }
 .reader-markdown .hljs-deletion {
-  color: oklch(0.48 0.16 25);
+  color: var(--syntax-deletion);
 }
 .reader-markdown .hljs-emphasis {
   font-style: italic;
@@ -201,37 +219,6 @@
 }
 .reader-markdown .hljs-link {
   text-decoration: underline;
-}
-
-/* Dark highlight.js palette (gamma-reader). */
-.reader-surface[data-reading-theme="dark"] :is(.hljs-comment, .hljs-quote) {
-  color: oklch(0.72 0.025 250);
-}
-.reader-surface[data-reading-theme="dark"]
-  :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-formula) {
-  color: oklch(0.76 0.13 325);
-}
-.reader-surface[data-reading-theme="dark"]
-  :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-template-tag) {
-  color: oklch(0.77 0.1 155);
-}
-.reader-surface[data-reading-theme="dark"]
-  :is(.hljs-number, .hljs-built_in, .hljs-type, .hljs-attr, .hljs-symbol, .hljs-bullet) {
-  color: oklch(0.79 0.11 75);
-}
-.reader-surface[data-reading-theme="dark"]
-  :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
-  color: oklch(0.78 0.1 255);
-}
-.reader-surface[data-reading-theme="dark"]
-  :is(.hljs-variable, .hljs-template-variable, .hljs-params, .hljs-property) {
-  color: oklch(0.78 0.08 205);
-}
-.reader-surface[data-reading-theme="dark"] :is(.hljs-meta, .hljs-operator, .hljs-punctuation) {
-  color: oklch(0.74 0.025 285);
-}
-.reader-surface[data-reading-theme="dark"] .hljs-deletion {
-  color: oklch(0.72 0.14 25);
 }
 
 @media (max-width: 799px) {

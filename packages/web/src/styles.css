@@ -5,6 +5,7 @@
 @import "./styles/management.css";
 @import "./styles/chat-markdown.css";
 @import "./styles/reader-markdown.css";
+@import "./styles/reader-source.css";
 @import "./features/sessions/session-detail/transcript.css";
 @import "./features/sessions/session-detail/activity.css";
 @import "./features/sessions/session-detail/composer.css";

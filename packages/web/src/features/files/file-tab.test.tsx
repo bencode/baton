@@ -52,7 +52,8 @@ test('a file loads once per activation and again only on refresh', async () => {
     kind: 'text',
     content: 'hello',
   }))
-  expect(await screen.findByText('hello')).toBeTruthy()
+  // The source reader (CodeMirror) is imported lazily on first render.
+  expect(await screen.findByText('hello', {}, { timeout: 10_000 })).toBeTruthy()
   expect(screen.getByText('· 工作目录')).toBeTruthy()
   expect(view).toHaveBeenCalledWith(
     { workerId: 2, branch: 'feat/x' },
@@ -61,7 +62,8 @@ test('a file loads once per activation and again only on refresh', async () => {
   )
   show(otherPath)
   show(fileRoutePath(route))
-  expect(screen.getByText('hello')).toBeTruthy()
+  // Showing the tab again rebuilds the editor from the loaded content, without a new read.
+  await vi.waitFor(() => expect(document.querySelector('.cm-content')?.textContent).toBe('hello'))
   expect(view).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByRole('button', { name: '刷新文件' }))
   await vi.waitFor(() => expect(view).toHaveBeenCalledTimes(2))
@@ -78,7 +80,7 @@ test.each([
     async () => ({ path: 'docs/plan.txt', name: 'plan.txt', commit: null, ...shape }) as FileView,
   )
   expect(await screen.findByText(notice)).toBeTruthy()
-  expect(document.querySelector('pre')).toBeNull()
+  expect(document.querySelector('.cm-editor')).toBeNull()
 })
 
 test('content read from a commit names that commit', async () => {
@@ -119,10 +121,16 @@ test('a Markdown file renders as a document and can switch to its source', async
     await screen.findByRole('heading', { name: 'Guide', level: 1 }, { timeout: 10_000 }),
   ).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: '源码' }))
-  expect(document.querySelector('pre')?.textContent).toBe('# Guide\n')
+  await vi.waitFor(
+    () => expect(document.querySelector('.cm-content')?.textContent).toBe('# Guide'),
+    {
+      timeout: 10_000,
+    },
+  )
+  expect(screen.getByRole('button', { name: '自动换行' })).toBeTruthy()
 })
 
-test('other text files show their source with no rendering toggle', async () => {
+test('other text files open in the source reader with search and wrapping', async () => {
   renderTabs(async () => ({
     path: 'docs/plan.txt',
     name: 'plan.txt',
@@ -131,6 +139,20 @@ test('other text files show their source with no rendering toggle', async () => 
     kind: 'text',
     content: '# plain',
   }))
-  expect(await screen.findByText('# plain')).toBeTruthy()
+  await vi.waitFor(
+    () => expect(document.querySelector('.cm-content')?.textContent).toBe('# plain'),
+    {
+      timeout: 10_000,
+    },
+  )
   expect(screen.queryByRole('button', { name: '源码' })).toBeNull()
+  expect(screen.getByRole('button', { name: '在文件中搜索' })).toBeTruthy()
+  const wrap = screen.getByRole('button', { name: '自动换行' })
+  expect(wrap.getAttribute('aria-pressed')).toBe('false')
+  fireEvent.click(wrap)
+  expect(wrap.getAttribute('aria-pressed')).toBe('true')
+  await vi.waitFor(() =>
+    expect(document.querySelector('.cm-content')?.classList.contains('cm-lineWrapping')).toBe(true),
+  )
+  fireEvent.click(wrap)
 })

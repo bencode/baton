@@ -1,4 +1,4 @@
-import type { CSSProperties, MouseEvent } from 'react'
+import type { MouseEvent } from 'react'
 import type { Components } from 'react-markdown'
 import { useNavigate } from 'react-router-dom'
 import rehypeHighlight from 'rehype-highlight'
@@ -6,7 +6,7 @@ import type { PluggableList } from 'unified'
 import { fileRoutePath, type Route } from '../../app/route'
 import { Markdown } from '../../components/markdown'
 import { highlightLanguages } from './highlight-languages'
-import { useReadingPreferences } from './reading-preferences'
+import { readingSurfaceProps, useReadingPreferences } from './reading-preferences'
 import { classifyLink } from './relative-link'
 
 type FileRoute = Extract<Route, { kind: 'file' }>
@@ -70,12 +70,7 @@ export const MarkdownReader = ({ route, content }: { route: FileRoute; content: 
     ),
   }
   return (
-    <div
-      className="reader-surface"
-      data-reading-theme={preferences.theme}
-      data-reading-width={preferences.width}
-      style={{ '--reader-font-size': `${preferences.fontSize}px` } as CSSProperties}
-    >
+    <div {...readingSurfaceProps(preferences)}>
       <div className="reader-markdown-page">
         <Markdown
           text={content}

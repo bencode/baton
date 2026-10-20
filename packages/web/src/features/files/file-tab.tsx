@@ -1,24 +1,42 @@
 import type { FileView } from '@baton/shared'
-import { lazy, Suspense, useState } from 'react'
+import { lazy, type RefObject, Suspense, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { fileRoutePath, type Route } from '../../app/route'
-import { BranchIcon, CopyIcon, RefreshIcon } from '../../components/icons'
+import { BranchIcon, CopyIcon, RefreshIcon, SearchIcon, WrapIcon } from '../../components/icons'
 import { fileKindFor } from './file-kind'
 import { fileErrorMessage, formatFileSize } from './file-messages'
 import { ReadingAppearance } from './reading-appearance'
+import { useReadingPreferences } from './reading-preferences'
+import type { SourceReaderHandle } from './source-reader'
 import { useFileQuery } from './use-file-query'
 
 type FileRoute = Extract<Route, { kind: 'file' }>
 type Mode = 'rendered' | 'source'
 
-// Highlighting and Markdown plugins load only when a document is first rendered.
+// Both readers load on first use: Markdown plugins with the rendered view, and
+// CodeMirror with the source view.
 const MarkdownReader = lazy(() =>
   import('./markdown-reader').then(module => ({ default: module.MarkdownReader })),
 )
+const SourceReader = lazy(() =>
+  import('./source-reader').then(module => ({ default: module.SourceReader })),
+)
 
-const FileBody = ({ route, view, mode }: { route: FileRoute; view: FileView; mode: Mode }) => {
+const FileBody = ({
+  route,
+  view,
+  mode,
+  wrap,
+  source,
+}: {
+  route: FileRoute
+  view: FileView
+  mode: Mode
+  wrap: boolean
+  source: RefObject<SourceReaderHandle | null>
+}) => {
   if (view.kind === 'text')
-    return mode === 'rendered' ? (
+    return (
       <Suspense
         fallback={
           <p role="status" className="files-notice">
@@ -26,10 +44,12 @@ const FileBody = ({ route, view, mode }: { route: FileRoute; view: FileView; mod
           </p>
         }
       >
-        <MarkdownReader route={route} content={view.content} />
+        {mode === 'rendered' ? (
+          <MarkdownReader route={route} content={view.content} />
+        ) : (
+          <SourceReader ref={source} path={view.path} content={view.content} wrap={wrap} />
+        )}
       </Suspense>
-    ) : (
-      <pre className="files-text">{view.content}</pre>
     )
   return (
     <p className="files-notice">
@@ -51,6 +71,10 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle')
   const markdown = fileKindFor(path) === 'markdown'
   const [mode, setMode] = useState<Mode>('rendered')
+  const shownMode: Mode = markdown ? mode : 'source'
+  const text = file.data?.kind === 'text'
+  const [preferences, setPreferences] = useReadingPreferences()
+  const source = useRef<SourceReaderHandle>(null)
   const name = path.split('/').at(-1) ?? path
 
   const copyLink = async () => {
@@ -64,7 +88,7 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
   }
 
   return (
-    <div className="files-page">
+    <div className={text && shownMode === 'source' ? 'files-page files-page-fill' : 'files-page'}>
       <header className="files-page-header">
         <div className="min-w-0">
           <h2 className="files-page-title" title={path}>
@@ -91,7 +115,30 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
               {copy === 'copied' ? '已复制链接' : '复制失败'}
             </span>
           )}
-          {markdown && mode === 'rendered' && <ReadingAppearance />}
+          {text && shownMode === 'source' && (
+            <>
+              <button
+                type="button"
+                className="ui-icon-button"
+                aria-label="在文件中搜索"
+                title="在文件中搜索"
+                onClick={() => source.current?.openSearch()}
+              >
+                <SearchIcon />
+              </button>
+              <button
+                type="button"
+                className="ui-icon-button"
+                aria-label="自动换行"
+                title="自动换行"
+                aria-pressed={preferences.wrap}
+                onClick={() => setPreferences({ ...preferences, wrap: !preferences.wrap })}
+              >
+                <WrapIcon />
+              </button>
+            </>
+          )}
+          {text && <ReadingAppearance />}
           {markdown && (
             <fieldset className="files-mode" aria-label="显示方式">
               {(['rendered', 'source'] as const).map(value => (
@@ -135,7 +182,13 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
         </p>
       )}
       {!file.error && file.data && (
-        <FileBody route={route} view={file.data} mode={markdown ? mode : 'source'} />
+        <FileBody
+          route={route}
+          view={file.data}
+          mode={shownMode}
+          wrap={preferences.wrap}
+          source={source}
+        />
       )}
       {!file.error && !file.data && file.loading && (
         <p role="status" className="files-notice">

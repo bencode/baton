@@ -1,0 +1,92 @@
+/* Read-only CodeMirror source view inside a file tab. Colours come from the
+   reading theme (.reader-surface tokens and the --syntax-* palette), so the
+   source follows light / paper / dark like rendered documents. */
+
+.reader-surface:has(> .source-reader) {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+.source-reader {
+  flex: 1;
+  min-height: 0;
+}
+.source-reader .cm-editor {
+  height: 100%;
+  background: var(--color-ui-surface);
+  color: var(--color-ui-text);
+  font-size: calc(var(--reader-font-size, 16px) * 0.8125);
+}
+.source-reader .cm-editor.cm-focused {
+  outline: none;
+}
+.source-reader .cm-scroller {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.65;
+}
+.source-reader .cm-content {
+  padding-block: 16px 48px;
+  caret-color: var(--color-ui-text);
+}
+.source-reader .cm-gutters {
+  border-right: 1px solid var(--color-ui-border);
+  background: var(--color-ui-panel);
+  color: var(--color-ui-muted);
+}
+.source-reader :is(.cm-activeLine, .cm-activeLineGutter) {
+  background: color-mix(in oklch, var(--color-ui-accent) 7%, transparent);
+}
+.source-reader .cm-foldPlaceholder {
+  border-color: var(--color-ui-border);
+  background: var(--color-ui-panel);
+  color: var(--color-ui-muted);
+}
+.source-reader .cm-panels {
+  border-color: var(--color-ui-border);
+  background: var(--color-ui-panel);
+  color: var(--color-ui-text);
+}
+.source-reader .cm-searchMatch {
+  background: color-mix(in oklch, var(--syntax-number) 28%, transparent);
+}
+
+/* classHighlighter tokens. */
+.source-reader .tok-comment {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+.source-reader .tok-keyword {
+  color: var(--syntax-keyword);
+}
+.source-reader :is(.tok-string, .tok-string2, .tok-inserted, .tok-url) {
+  color: var(--syntax-string);
+}
+.source-reader :is(.tok-number, .tok-bool, .tok-atom, .tok-literal) {
+  color: var(--syntax-number);
+}
+.source-reader :is(.tok-typeName, .tok-className, .tok-namespace, .tok-labelName) {
+  color: var(--syntax-title);
+}
+.source-reader
+  :is(.tok-variableName.tok-definition, .tok-propertyName, .tok-macroName, .tok-local) {
+  color: var(--syntax-variable);
+}
+.source-reader :is(.tok-meta, .tok-operator, .tok-punctuation) {
+  color: var(--syntax-meta);
+}
+.source-reader :is(.tok-deleted, .tok-invalid) {
+  color: var(--syntax-deletion);
+}
+.source-reader .tok-heading {
+  color: var(--syntax-title);
+  font-weight: 600;
+}
+.source-reader .tok-emphasis {
+  font-style: italic;
+}
+.source-reader .tok-strong {
+  font-weight: 600;
+}
+.source-reader .tok-link {
+  text-decoration: underline;
+}
