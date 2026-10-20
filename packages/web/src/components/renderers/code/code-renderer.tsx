@@ -4,6 +4,7 @@ import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import { classHighlighter } from '@lezer/highlight'
 import { basicSetup, EditorView } from 'codemirror'
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react'
+
 export type CodeRendererHandle = { openSearch(): void }
 
 // A grammar is fetched the first time a file in its language is opened; a name no
@@ -105,7 +106,7 @@ export const CodeRenderer = ({
   return (
     <div className="code-renderer">
       {failed ? (
-        <p role="alert" className="files-notice text-ui-danger">
+        <p role="alert" className="code-renderer-error">
           无法加载源码视图。
           <button type="button" className="ml-2 underline" onClick={() => setAttempt(n => n + 1)}>
             重试
