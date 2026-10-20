@@ -5,6 +5,7 @@ import { fileRoutePath, type Route } from '../../app/route'
 import { BranchIcon, CopyIcon, RefreshIcon, SearchIcon, WrapIcon } from '../../components/icons'
 import { fileKindFor } from './file-kind'
 import { fileErrorMessage, formatFileSize } from './file-messages'
+import { ImageView } from './image-view'
 import { ReadingAppearance } from './reading-appearance'
 import { useReadingPreferences } from './reading-preferences'
 import type { SourceReaderHandle } from './source-reader'
@@ -28,13 +29,24 @@ const FileBody = ({
   mode,
   wrap,
   source,
+  revision,
 }: {
   route: FileRoute
   view: FileView
   mode: Mode
   wrap: boolean
   source: RefObject<SourceReaderHandle | null>
+  revision: number
 }) => {
+  const api = useApi()
+  if (view.kind === 'image') {
+    const src = api.files.rawUrl(
+      { workerId: route.workerId, branch: route.branch },
+      view.path,
+      revision,
+    )
+    return <ImageView key={src} src={src} name={view.name} />
+  }
   if (view.kind === 'text')
     return (
       <Suspense
@@ -75,6 +87,12 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
   const text = file.data?.kind === 'text'
   const [preferences, setPreferences] = useReadingPreferences()
   const source = useRef<SourceReaderHandle>(null)
+  // Bumped on every refresh so image bytes are fetched again with the metadata.
+  const [revision, setRevision] = useState(0)
+  const refresh = () => {
+    setRevision(value => value + 1)
+    file.reload()
+  }
   const name = path.split('/').at(-1) ?? path
 
   const copyLink = async () => {
@@ -167,7 +185,7 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
             className="ui-icon-button"
             aria-label="刷新文件"
             title="刷新文件"
-            onClick={file.reload}
+            onClick={refresh}
           >
             <RefreshIcon />
           </button>
@@ -176,7 +194,7 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
       {file.error && (
         <p role="alert" className="files-notice text-ui-danger">
           {fileErrorMessage(file.error)}
-          <button type="button" className="ml-2 underline" onClick={file.reload}>
+          <button type="button" className="ml-2 underline" onClick={refresh}>
             重试
           </button>
         </p>
@@ -188,6 +206,7 @@ export const FileTab = ({ route }: { route: FileRoute }) => {
           mode={shownMode}
           wrap={preferences.wrap}
           source={source}
+          revision={revision}
         />
       )}
       {!file.error && !file.data && file.loading && (

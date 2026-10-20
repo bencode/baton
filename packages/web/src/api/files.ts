@@ -30,6 +30,9 @@ export type FilesApi = {
   list(scope: FileScope, path: string, signal?: AbortSignal): Promise<FileDirectory>
   search(scope: FileScope, query: string, signal?: AbortSignal): Promise<FileSearchResult>
   view(scope: FileScope, path: string, signal?: AbortSignal): Promise<FileView>
+  // Address of an image's bytes, for <img src> (same origin, so the session cookie
+  // rides along). A new revision makes the browser fetch it again.
+  rawUrl(scope: FileScope, path: string, revision?: number): string
 }
 
 const readError = async (
@@ -66,5 +69,7 @@ export const filesApi = (u: Url): FilesApi => {
       get(at(workerId, 'search', { branch, q: query }), signal),
     view: ({ workerId, branch }, path, signal) =>
       get(at(workerId, 'view', { branch, path }), signal),
+    rawUrl: ({ workerId, branch }, path, revision) =>
+      at(workerId, 'raw', { branch, path, ...(revision ? { r: String(revision) } : {}) }),
   }
 }

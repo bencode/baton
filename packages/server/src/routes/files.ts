@@ -3,6 +3,7 @@ import {
   FILE_SEARCH_QUERY_MAX_LENGTH,
   type FileErrorCode,
   type FileQuery,
+  type FileQueryData,
   type FileReply,
   type Id,
   isBranchName,
@@ -32,6 +33,23 @@ const fail = (c: Ctx, code: FileErrorCode, message: string): Response =>
 const respond = (c: Ctx, reply: FileReply): Response =>
   reply.ok ? c.json(reply.data) : fail(c, reply.code, reply.message)
 
+// Image bytes go out as the response body, never sniffed as another type; the
+// sandbox CSP keeps an SVG opened directly from running scripts.
+const IMAGE_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Cache-Control': 'private, no-store',
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+}
+
+const sendImage = (c: Ctx, reply: FileReply): Response => {
+  if (!reply.ok) return fail(c, reply.code, reply.message)
+  const { mediaType, base64 } = reply.data as FileQueryData['raw']
+  return c.body(new Uint8Array(Buffer.from(base64, 'base64')), 200, {
+    ...IMAGE_HEADERS,
+    'Content-Type': mediaType,
+  })
+}
+
 // The worker addressed by the URL, if the caller is a user who may read its
 // project. Workers themselves have no reason to read files through the server.
 const targetWorker = async (c: Ctx, store: Store): Promise<Id | Response> => {
@@ -53,12 +71,16 @@ export const registerFileRoutes = (app: Hono<AppEnv>, store: Store, files: FileR
 
   // Shared tail of every user-facing read: resolve the worker, validate the query,
   // forward it, and map the reply to HTTP.
-  const forward = async (c: Ctx, build: () => FileQuery | null): Promise<Response> => {
+  const forward = async (
+    c: Ctx,
+    build: () => FileQuery | null,
+    send = respond,
+  ): Promise<Response> => {
     const workerId = await targetWorker(c, store)
     if (workerId instanceof Response) return workerId
     const query = build()
     if (query === null) return fail(c, 'invalid_request', 'invalid file query')
-    return respond(c, await files.query(workerId, query, c.req.raw.signal))
+    return send(c, await files.query(workerId, query, c.req.raw.signal))
   }
 
   app.get(`${base}/branches`, c => forward(c, () => ({ op: 'branches' })))
@@ -87,6 +109,18 @@ export const registerFileRoutes = (app: Hono<AppEnv>, store: Store, files: FileR
       const path = normalizeFilePath(c.req.query('path') ?? '')
       return branch && path !== null ? { op: 'view', branch, path } : null
     }),
+  )
+
+  app.get(`${base}/raw`, c =>
+    forward(
+      c,
+      () => {
+        const branch = branchParam(c)
+        const path = normalizeFilePath(c.req.query('path') ?? '')
+        return branch && path !== null ? { op: 'raw', branch, path } : null
+      },
+      sendImage,
+    ),
   )
 
   app.put(

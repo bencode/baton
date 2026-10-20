@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { isBranchName, isSensitiveFilePath, normalizeFilePath } from './file.ts'
+import { imageMediaType, isBranchName, isSensitiveFilePath, normalizeFilePath } from './file.ts'
 
 test('normalizeFilePath accepts root-relative paths and rejects escapes', () => {
   assert.equal(normalizeFilePath('docs/计划 #1 100%.md'), 'docs/计划 #1 100%.md')
@@ -39,4 +39,12 @@ test('isBranchName accepts Git branch names and rejects empty or control charact
   for (const name of ['main', 'feat/files-read-chain', 'release-0.8'])
     assert.equal(isBranchName(name), true, name)
   for (const name of ['', 'a\0b', 'a\nb', 'x'.repeat(256)]) assert.equal(isBranchName(name), false)
+})
+
+test('imageMediaType recognises image extensions case-insensitively', () => {
+  assert.equal(imageMediaType('docs/arch.PNG'), 'image/png')
+  assert.equal(imageMediaType('logo.svg'), 'image/svg+xml')
+  assert.equal(imageMediaType('photo.jpeg'), 'image/jpeg')
+  for (const path of ['notes.md', 'png', 'archive.png.txt', 'Makefile'])
+    assert.equal(imageMediaType(path), null, path)
 })

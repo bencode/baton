@@ -33,6 +33,13 @@ const data = <Op extends FileQuery['op']>(reply: FileReply, _op: Op): FileQueryD
 
 const failure = (reply: FileReply): string => (reply.ok ? 'ok' : reply.code)
 
+// A 1×1 PNG.
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+)
+const SVG = '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
+
 describe('worker files — read-only queries on a real repository', () => {
   let tmp: string
   let repo: string
@@ -62,6 +69,7 @@ describe('worker files — read-only queries on a real repository', () => {
     write(join(archive, 'docs/old.md'), '# old')
     write(join(archive, '.env'), 'SECRET=1')
     write(join(archive, 'node_modules/pkg/index.js'), 'module.exports = 1')
+    write(join(archive, 'img/pic.png'), PNG)
     write(join(archive, 'big.txt'), '')
     truncateSync(join(archive, 'big.txt'), 5 * 1024 * 1024 + 1)
     symlinkSync('src/app.ts', join(archive, 'link'))
@@ -75,6 +83,9 @@ describe('worker files — read-only queries on a real repository', () => {
     write(join(repo, '.baton.json'), '{"token":"x"}')
     write(join(repo, 'node_modules/pkg/index.js'), 'module.exports = 1')
     write(join(repo, 'binary.bin'), Buffer.from([1, 0, 2]))
+    write(join(repo, 'img/arch.png'), PNG)
+    write(join(repo, 'img/fake.png'), 'not really a png')
+    write(join(repo, 'img/logo.svg'), SVG)
     write(join(repo, 'big.txt'), '')
     truncateSync(join(repo, 'big.txt'), 5 * 1024 * 1024 + 1)
     write(join(tmp, 'outside.txt'), 'outside')
@@ -99,7 +110,7 @@ describe('worker files — read-only queries on a real repository', () => {
     const listing = data(await query({ op: 'list', branch: 'archive', path: '' }), 'list')
     assert.deepEqual(
       listing.entries.map(entry => `${entry.kind}:${entry.path}`),
-      ['directory:docs', 'directory:src', 'file:big.txt'],
+      ['directory:docs', 'directory:img', 'directory:src', 'file:big.txt'],
     )
     assert.deepEqual(
       data(await query({ op: 'view', branch: 'archive', path: 'src/app.ts' }), 'view'),
@@ -149,6 +160,7 @@ describe('worker files — read-only queries on a real repository', () => {
     assert.deepEqual(
       listing.entries.map(entry => `${entry.kind}:${entry.name}`),
       [
+        'directory:img',
         'directory:many',
         'directory:src',
         'file:.env.example',
@@ -198,6 +210,32 @@ describe('worker files — read-only queries on a real repository', () => {
       truncated: false,
     })
     assert.deepEqual((await search('index')).entries, [])
+  })
+
+  test('images report metadata on view and send verified bytes on raw', async () => {
+    const view = data(await query({ op: 'view', branch: 'main', path: 'img/arch.png' }), 'view')
+    assert.deepEqual(view, {
+      path: 'img/arch.png',
+      name: 'arch.png',
+      size: PNG.length,
+      commit: null,
+      kind: 'image',
+      mediaType: 'image/png',
+    })
+    const raw = (branch: string, path: string) => query({ op: 'raw', branch, path })
+    assert.deepEqual(data(await raw('main', 'img/arch.png'), 'raw'), {
+      mediaType: 'image/png',
+      base64: PNG.toString('base64'),
+    })
+    assert.equal(data(await raw('main', 'img/logo.svg'), 'raw').mediaType, 'image/svg+xml')
+    assert.equal(failure(await raw('main', 'img/fake.png')), 'unsupported')
+    assert.equal(failure(await raw('main', 'notes.md')), 'unsupported')
+    assert.equal(failure(await raw('main', '.env')), 'forbidden_path')
+    assert.equal(failure(await raw('main', 'escape.txt')), 'file_not_found')
+    assert.deepEqual(data(await raw('archive', 'img/pic.png'), 'raw'), {
+      mediaType: 'image/png',
+      base64: PNG.toString('base64'),
+    })
   })
 
   test('reads leave every worktree HEAD, branch, and status unchanged', () => {

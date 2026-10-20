@@ -2,14 +2,15 @@ import type {
   FileBranch,
   FileDirectory,
   FileQuery,
+  FileQueryData,
   FileReply,
   FileSearchResult,
   FileView,
 } from '@baton/shared'
 import { discoverBranches } from './branches.ts'
-import { listCommitDirectory, searchCommit, viewCommitFile } from './commit.ts'
+import { listCommitDirectory, readRawCommitFile, searchCommit, viewCommitFile } from './commit.ts'
 import { FileError } from './common.ts'
-import { listDirectory, searchFiles, viewFile } from './disk.ts'
+import { listDirectory, readRawFile, searchFiles, viewFile } from './disk.ts'
 
 const DEFAULT_CONCURRENCY = 4
 
@@ -17,6 +18,7 @@ type Reader = {
   list(path: string): Promise<FileDirectory>
   search(query: string): Promise<FileSearchResult>
   view(path: string): Promise<FileView>
+  raw(path: string): Promise<FileQueryData['raw']>
 }
 
 // A checked-out branch reads its worktree's disk (uncommitted changes included);
@@ -28,6 +30,7 @@ const readerFor = (baseDir: string, branch: FileBranch): Reader => {
       list: path => listDirectory(worktree, path),
       search: query => searchFiles(worktree, query),
       view: path => viewFile(worktree, path),
+      raw: path => readRawFile(worktree, path),
     }
   // discoverBranches only yields a branch without a worktree when it has a commit.
   if (commit === null) throw new FileError('branch_not_found', `branch ${branch.name} is empty`)
@@ -35,6 +38,7 @@ const readerFor = (baseDir: string, branch: FileBranch): Reader => {
     list: path => listCommitDirectory(baseDir, commit, path),
     search: query => searchCommit(baseDir, commit, query),
     view: path => viewCommitFile(baseDir, commit, path),
+    raw: path => readRawCommitFile(baseDir, commit, path),
   }
 }
 
@@ -47,6 +51,7 @@ const run = async (baseDir: string, query: FileQuery): Promise<FileReply> => {
   const reader = readerFor(baseDir, branch)
   if (query.op === 'list') return { ok: true, data: await reader.list(query.path) }
   if (query.op === 'search') return { ok: true, data: await reader.search(query.query) }
+  if (query.op === 'raw') return { ok: true, data: await reader.raw(query.path) }
   return { ok: true, data: await reader.view(query.path) }
 }
 

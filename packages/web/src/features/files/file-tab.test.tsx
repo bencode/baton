@@ -1,8 +1,8 @@
 import type { FileView } from '@baton/shared'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, expect, test, vi } from 'vitest'
-import type { Api } from '../../api'
+import { afterEach, beforeAll, expect, test, vi } from 'vitest'
+import { type Api, createApi } from '../../api'
 import { FileApiError } from '../../api/files'
 import { ApiContext } from '../../app/api-context'
 import { fileRoutePath, type Route } from '../../app/route'
@@ -10,6 +10,12 @@ import { TabViewer } from '../../app/tabs/tab-viewer'
 import { FileTab } from './file-tab'
 
 afterEach(cleanup)
+
+// jsdom lays nothing out; CodeMirror still measures text ranges when it gets the chance.
+beforeAll(() => {
+  Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList
+  Range.prototype.getBoundingClientRect ??= () => new DOMRect()
+})
 
 const route: Extract<Route, { kind: 'file' }> = {
   kind: 'file',
@@ -21,7 +27,7 @@ const route: Extract<Route, { kind: 'file' }> = {
 const otherPath = '/proj/1/session/9'
 
 const renderTabs = (view: () => Promise<FileView>, file = route) => {
-  const api = { files: { view: vi.fn(view) } } as unknown as Api
+  const api = { files: { view: vi.fn(view), rawUrl: createApi().files.rawUrl } } as unknown as Api
   const filePath = fileRoutePath(file)
   const tabs = [
     { id: filePath, title: 'plan', lastActiveAt: 0 },
@@ -155,4 +161,27 @@ test('other text files open in the source reader with search and wrapping', asyn
     expect(document.querySelector('.cm-content')?.classList.contains('cm-lineWrapping')).toBe(true),
   )
   fireEvent.click(wrap)
+})
+
+test('an image file shows its bytes from the raw endpoint, fitted until switched', async () => {
+  renderTabs(
+    async () => ({
+      path: 'img/arch.png',
+      name: 'arch.png',
+      size: 68,
+      commit: null,
+      kind: 'image',
+      mediaType: 'image/png',
+    }),
+    { ...route, path: 'img/arch.png' },
+  )
+  const image = await screen.findByRole('img', { name: 'arch.png' })
+  expect(image.getAttribute('src')).toBe('/api/workers/2/raw?branch=feat%2Fx&path=img%2Farch.png')
+  expect(image.className).toBe('image-view-fit')
+  fireEvent.click(screen.getByRole('button', { name: '原始大小' }))
+  expect(screen.getByRole('img', { name: 'arch.png' }).className).toBe('image-view-actual')
+  fireEvent.click(screen.getByRole('button', { name: '刷新文件' }))
+  await vi.waitFor(() =>
+    expect(screen.getByRole('img', { name: 'arch.png' }).getAttribute('src')).toContain('&r=1'),
+  )
 })

@@ -1,11 +1,13 @@
 import {
   FILE_DIRECTORY_MAX_ENTRIES,
+  FILE_IMAGE_MAX_BYTES,
   FILE_SEARCH_MAX_RESULTS,
   FILE_TEXT_MAX_BYTES,
   type FileDirectory,
   type FileEntry,
   type FileSearchResult,
   type FileView,
+  imageMediaType,
   isExcludedDirectoryName,
   isSensitiveFilePath,
 } from '@baton/shared'
@@ -14,6 +16,7 @@ import {
   checkedPath,
   decodeText,
   FileError,
+  imagePayload,
   notFound,
   searchNeedle,
 } from './common.ts'
@@ -113,16 +116,28 @@ export const searchCommit = async (
   }
 }
 
-// Text only; an oversized blob is refused from its recorded size without reading it.
+// A regular file in the commit, with its recorded blob id and size.
+const regularEntry = async (repo: string, commit: string, rel: string) => {
+  const entry = (await lsTree(repo, ['-l', commit, '--', rel]))?.find(item => item.path === rel)
+  if (!entry || !isRegularFile(entry) || entry.size === null) throw notFound(rel)
+  return { oid: entry.oid, size: entry.size }
+}
+
+// Text, or image metadata whose bytes come from readRawCommitFile. An oversized
+// blob is refused from its recorded size without reading it.
 export const viewCommitFile = async (
   repo: string,
   commit: string,
   path: string,
 ): Promise<FileView> => {
   const rel = checkedPath(path, false)
-  const entry = (await lsTree(repo, ['-l', commit, '--', rel]))?.find(item => item.path === rel)
-  if (!entry || !isRegularFile(entry) || entry.size === null) throw notFound(rel)
+  const entry = await regularEntry(repo, commit, rel)
   const meta = { path: rel, name: rel.split('/').at(-1) ?? rel, commit }
+  const mediaType = imageMediaType(rel)
+  if (mediaType)
+    return entry.size > FILE_IMAGE_MAX_BYTES
+      ? { ...meta, size: entry.size, kind: 'too_large', limit: FILE_IMAGE_MAX_BYTES }
+      : { ...meta, size: entry.size, kind: 'image', mediaType }
   if (entry.size > FILE_TEXT_MAX_BYTES)
     return { ...meta, size: entry.size, kind: 'too_large', limit: FILE_TEXT_MAX_BYTES }
   const bytes = await runGit(repo, ['cat-file', 'blob', entry.oid], FILE_TEXT_MAX_BYTES + 1)
@@ -130,4 +145,20 @@ export const viewCommitFile = async (
   return content === null
     ? { ...meta, size: bytes.length, kind: 'binary' }
     : { ...meta, size: bytes.length, kind: 'text', content }
+}
+
+// Image bytes only, checked against the type their extension claims.
+export const readRawCommitFile = async (
+  repo: string,
+  commit: string,
+  path: string,
+): Promise<{ mediaType: string; base64: string }> => {
+  const rel = checkedPath(path, false)
+  const mediaType = imageMediaType(rel)
+  if (!mediaType) throw new FileError('unsupported', `not an image: ${rel}`)
+  const entry = await regularEntry(repo, commit, rel)
+  if (entry.size > FILE_IMAGE_MAX_BYTES)
+    throw new FileError('unsupported', `image too large: ${rel}`)
+  const bytes = await runGit(repo, ['cat-file', 'blob', entry.oid], FILE_IMAGE_MAX_BYTES + 1)
+  return imagePayload(rel, mediaType, bytes)
 }

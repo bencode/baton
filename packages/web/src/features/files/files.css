@@ -163,6 +163,32 @@
   tab-size: 2;
   color: var(--color-ui-text);
 }
+/* Image files: fitted by default, scroll when shown at their own size. */
+.image-view {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  padding: 16px 24px 48px;
+}
+.image-view-toolbar {
+  justify-self: end;
+}
+.image-view-toolbar .ui-button[aria-pressed="true"] {
+  background: var(--color-ui-selected);
+  color: var(--color-ui-selected-text);
+}
+.image-view-fit {
+  max-width: 100%;
+  max-height: calc(100vh - 200px);
+  object-fit: contain;
+}
+.image-view-actual {
+  max-width: none;
+}
+.image-view:has(.image-view-actual) {
+  justify-items: start;
+  overflow-x: auto;
+}
 .files-notice {
   padding: 24px;
   font-size: 13px;

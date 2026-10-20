@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import {
+  FILE_IMAGE_MAX_BYTES,
   FILE_TEXT_MAX_BYTES,
   type FileQuery,
   type FileReply,
   type Id,
+  IMAGE_MEDIA_TYPES,
   isFileErrorCode,
 } from '@baton/shared'
 import type { CommandBus } from './command-bus.ts'
@@ -53,6 +55,15 @@ const checkedReply = (op: FileQuery['op'], result: Record<string, unknown>): Fil
     (typeof data.content !== 'string' || Buffer.byteLength(data.content) > FILE_TEXT_MAX_BYTES)
   )
     return unavailable('worker sent text over the size limit')
+  if (
+    op === 'raw' &&
+    !(
+      Object.values(IMAGE_MEDIA_TYPES).includes(String(data.mediaType)) &&
+      typeof data.base64 === 'string' &&
+      Buffer.byteLength(data.base64, 'base64') <= FILE_IMAGE_MAX_BYTES
+    )
+  )
+    return unavailable('worker sent an invalid image')
   return { ok: true, data } as FileReply
 }
 

@@ -3,6 +3,7 @@ import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import {
   FILE_DIRECTORY_MAX_ENTRIES,
+  FILE_IMAGE_MAX_BYTES,
   FILE_SEARCH_DEADLINE_MS,
   FILE_SEARCH_MAX_RESULTS,
   FILE_TEXT_MAX_BYTES,
@@ -10,10 +11,19 @@ import {
   type FileEntry,
   type FileSearchResult,
   type FileView,
+  imageMediaType,
   isExcludedDirectoryName,
   isSensitiveFilePath,
 } from '@baton/shared'
-import { byKindThenName, checkedPath, decodeText, notFound, searchNeedle } from './common.ts'
+import {
+  byKindThenName,
+  checkedPath,
+  decodeText,
+  FileError,
+  imagePayload,
+  notFound,
+  searchNeedle,
+} from './common.ts'
 
 const isMissing = (error: unknown): boolean =>
   ['ENOENT', 'ENOTDIR', 'ELOOP'].includes((error as NodeJS.ErrnoException).code ?? '')
@@ -137,34 +147,59 @@ export const searchFiles = async (
   return { entries, truncated: false }
 }
 
-// Text only. Oversized files are refused from their size alone; content is never
-// read for them. O_NONBLOCK plus the regular-file checks keep a FIFO or device from
-// blocking the read.
-export const viewFile = async (root: string, path: string): Promise<FileView> => {
-  const file = await resolveInside(root, path, false)
-  const name = file.path.split('/').at(-1) ?? file.path
+// A regular file's bytes when it holds at most `limit` bytes, else its size. The
+// size is checked before anything is read; O_NONBLOCK plus the regular-file checks
+// keep a FIFO or device from blocking the read.
+const readWithin = async (
+  file: { path: string; real: string },
+  limit: number,
+): Promise<{ bytes: Buffer } | { oversize: number }> => {
   const info = await stat(file.real)
   if (!info.isFile()) throw notFound(file.path)
-  const meta = { path: file.path, name, commit: null }
-  const tooLarge = (size: number): FileView => ({
-    ...meta,
-    size,
-    kind: 'too_large',
-    limit: FILE_TEXT_MAX_BYTES,
-  })
-  if (info.size > FILE_TEXT_MAX_BYTES) return tooLarge(info.size)
+  if (info.size > limit) return { oversize: info.size }
   const handle = await open(file.real, constants.O_RDONLY | constants.O_NONBLOCK)
   try {
     const opened = await handle.stat()
     if (!opened.isFile()) throw notFound(file.path)
-    if (opened.size > FILE_TEXT_MAX_BYTES) return tooLarge(opened.size)
+    if (opened.size > limit) return { oversize: opened.size }
     const bytes = await handle.readFile()
-    if (bytes.length > FILE_TEXT_MAX_BYTES) return tooLarge(bytes.length)
-    const content = decodeText(bytes)
-    return content === null
-      ? { ...meta, size: bytes.length, kind: 'binary' }
-      : { ...meta, size: bytes.length, kind: 'text', content }
+    return bytes.length > limit ? { oversize: bytes.length } : { bytes }
   } finally {
     await handle.close()
   }
+}
+
+// Text, or image metadata whose bytes come from readRawFile. Oversized files are
+// refused from their size alone.
+export const viewFile = async (root: string, path: string): Promise<FileView> => {
+  const file = await resolveInside(root, path, false)
+  const meta = { path: file.path, name: file.path.split('/').at(-1) ?? file.path, commit: null }
+  const mediaType = imageMediaType(file.path)
+  if (mediaType) {
+    const info = await stat(file.real)
+    if (!info.isFile()) throw notFound(file.path)
+    return info.size > FILE_IMAGE_MAX_BYTES
+      ? { ...meta, size: info.size, kind: 'too_large', limit: FILE_IMAGE_MAX_BYTES }
+      : { ...meta, size: info.size, kind: 'image', mediaType }
+  }
+  const read = await readWithin(file, FILE_TEXT_MAX_BYTES)
+  if ('oversize' in read)
+    return { ...meta, size: read.oversize, kind: 'too_large', limit: FILE_TEXT_MAX_BYTES }
+  const content = decodeText(read.bytes)
+  return content === null
+    ? { ...meta, size: read.bytes.length, kind: 'binary' }
+    : { ...meta, size: read.bytes.length, kind: 'text', content }
+}
+
+// Image bytes only, checked against the type their extension claims.
+export const readRawFile = async (
+  root: string,
+  path: string,
+): Promise<{ mediaType: string; base64: string }> => {
+  const file = await resolveInside(root, path, false)
+  const mediaType = imageMediaType(file.path)
+  if (!mediaType) throw new FileError('unsupported', `not an image: ${file.path}`)
+  const read = await readWithin(file, FILE_IMAGE_MAX_BYTES)
+  if ('oversize' in read) throw new FileError('unsupported', `image too large: ${file.path}`)
+  return imagePayload(file.path, mediaType, read.bytes)
 }
