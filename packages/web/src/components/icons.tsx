@@ -233,3 +233,27 @@ export const CheckIcon = () => (
     <path d="m3 8 3 3 7-7" />
   </StrokeGlyph>
 )
+export const FileIcon = () => (
+  <StrokeGlyph>
+    <path d="M4 1.5h5l3.5 3.5v9.5H4Z" />
+    <path d="M9 1.5V5h3.5" />
+  </StrokeGlyph>
+)
+export const FolderIcon = () => (
+  <StrokeGlyph>
+    <path d="M1.5 4a1 1 0 0 1 1-1h3.5l1.5 1.5h6a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1Z" />
+  </StrokeGlyph>
+)
+export const BranchIcon = () => (
+  <StrokeGlyph>
+    <circle cx="4.5" cy="3.5" r="1.5" />
+    <circle cx="4.5" cy="12.5" r="1.5" />
+    <circle cx="11.5" cy="5.5" r="1.5" />
+    <path d="M4.5 5v6M11.5 7c0 2.5-2 3.5-7 4" />
+  </StrokeGlyph>
+)
+export const RefreshIcon = () => (
+  <StrokeGlyph>
+    <path d="M13 8a5 5 0 1 1-1.5-3.5M13 2.5v3h-3" />
+  </StrokeGlyph>
+)

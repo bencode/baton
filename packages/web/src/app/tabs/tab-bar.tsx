@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ChatIcon,
   CloseIcon,
+  FileIcon,
   MoreIcon,
   ServiceIcon,
   SettingsIcon,
@@ -30,6 +31,7 @@ const tabIcon = (path: string) => {
     return <SettingsIcon />
   }
   if (route.kind === 'service') return <ServiceIcon />
+  if (route.kind === 'file') return <FileIcon />
   return <ChatIcon />
 }
 const tabLabel = (tab: Tab) => {

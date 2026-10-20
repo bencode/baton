@@ -30,6 +30,7 @@ const fallbackTitle = (id: string): string => {
   const route = parseRoute(id)
   if (route.kind === 'project-view')
     return { workers: 'Workers', services: 'Services', settings: 'Project settings' }[route.view]
+  if (route.kind === 'file') return route.path.split('/').at(-1) ?? route.path
   return (id.split('/').pop() ?? id).slice(0, 8)
 }
 

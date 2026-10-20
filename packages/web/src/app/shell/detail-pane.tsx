@@ -1,5 +1,6 @@
 import type { Id } from '@baton/shared'
 import type { ReactNode } from 'react'
+import { FileTab } from '../../features/files/file-tab'
 import { RequirementDetail } from '../../features/requirements/requirement-detail'
 import { ServiceDetail } from '../../features/services/service-detail'
 import { SessionDetail } from '../../features/sessions/session-detail'
@@ -39,6 +40,7 @@ const renderTab = (tab: Tab, props: DetailPaneProps) => {
   if (route.kind === 'session') return <SessionDetail sessionId={route.sessionId} />
   if (route.kind === 'service')
     return <ServiceDetail projectId={route.projectId} workerId={route.workerId} name={route.name} />
+  if (route.kind === 'file') return <FileTab route={route} />
   if (route.kind !== 'item') return null
   if (route.itemKind === 'requirement')
     return <RequirementDetail projectId={route.projectId} code={route.code} />

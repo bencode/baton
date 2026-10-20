@@ -2,7 +2,7 @@
 // the project (workspace is derived from it) plus an optional open item (also the active tab).
 // Pure functions — no react-router — so they unit-test.
 
-import { type Code, isServiceName } from '@baton/shared'
+import { type Code, isBranchName, isServiceName, normalizeFilePath } from '@baton/shared'
 
 // Item kinds that travel as project-scoped codes in the URL.
 // In M2.6 only R-/T- carry codes (chat-referenced resources). Session
@@ -18,6 +18,8 @@ export type Route =
   | { kind: 'item'; projectId: number; code: Code; itemKind: ItemKind }
   | { kind: 'session'; projectId: number; sessionId: number }
   | { kind: 'service'; projectId: number; workerId: number; name: string }
+  // A file in one of a worker's checked-out branches; path is repository-relative.
+  | { kind: 'file'; projectId: number; workerId: number; branch: string; path: string }
 
 const kindFromCode = (code: string): ItemKind | null => {
   if (code.startsWith('R-')) return 'requirement'
@@ -43,6 +45,15 @@ export const parseRoute = (pathname: string): Route => {
     const view = seg[2]
     if (seg.length === 3 && (view === 'workers' || view === 'services' || view === 'settings'))
       return { kind: 'project-view', projectId, view }
+    // /proj/<p>/workers/<w>/files/<branch>/<path…> — the branch is one encoded segment.
+    if (seg[2] === 'workers') {
+      const workerId = intSeg(seg[3])
+      const branch = seg[5] ?? ''
+      const path = normalizeFilePath(seg.slice(6).join('/'))
+      if (workerId !== null && seg[4] === 'files' && isBranchName(branch) && path !== null)
+        return { kind: 'file', projectId, workerId, branch, path }
+      return { kind: 'project', projectId }
+    }
     // /proj/<p>/session/<sid>
     if (seg[2] === 'session') {
       const sessionId = intSeg(seg[3])
@@ -76,6 +87,13 @@ export const sessionPath = (projectId: number, sessionId: number): string =>
   `/proj/${projectId}/session/${sessionId}`
 export const servicePath = (projectId: number, workerId: number, name: string): string =>
   `/proj/${projectId}/service/${workerId}/${enc(name)}`
+export const fileRoutePath = ({
+  projectId,
+  workerId,
+  branch,
+  path,
+}: Omit<Extract<Route, { kind: 'file' }>, 'kind'>): string =>
+  `/proj/${projectId}/workers/${workerId}/files/${enc(branch)}/${path.split('/').map(enc).join('/')}`
 // Standalone, shell-less session page (shared deep link, e.g. from DingTalk).
 // Keyed by the session's unguessable share token, not its int id.
 export const standaloneSessionPath = (shareToken: string): string => `/s/${shareToken}`
@@ -84,7 +102,11 @@ export const standaloneSessionPath = (shareToken: string): string => `/s/${share
 export const isItemRoute = (pathname: string): boolean => {
   const r = parseRoute(pathname)
   return (
-    r.kind === 'item' || r.kind === 'session' || r.kind === 'service' || r.kind === 'project-view'
+    r.kind === 'item' ||
+    r.kind === 'session' ||
+    r.kind === 'service' ||
+    r.kind === 'project-view' ||
+    r.kind === 'file'
   )
 }
 

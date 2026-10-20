@@ -2,6 +2,7 @@ import type { Id } from '@baton/shared'
 import { type AdminApi, adminApi } from './admin'
 import { type AuthApi, authApi } from './auth'
 import { type ChannelsApi, channelsApi } from './channels'
+import { type FilesApi, filesApi } from './files'
 import { type LoopsApi, loopsApi } from './loops'
 import { type ProjectsApi, projectsApi } from './projects'
 import { API_BASE, request, type Url, urlFor } from './request'
@@ -39,6 +40,7 @@ export type Api = {
   loops: LoopsApi
   workerCreations: WorkerCreationsApi
   workers: WorkersApi
+  files: FilesApi
   admin: AdminApi
   // SSE URL for a session's transcript (EventSource sends the cookie same-origin).
   // Live-only — history comes from sessions.listEvents (one fetch), so the stream
@@ -61,6 +63,7 @@ export const createApi = (base: string = API_BASE): Api => {
     loops: loopsApi(u),
     workerCreations: workerCreationsApi(u),
     workers: workersApi(u),
+    files: filesApi(u),
     admin: adminApi(u),
     sessionStreamUrl: id => u(`/sessions/${id}/stream?live=1`),
   }

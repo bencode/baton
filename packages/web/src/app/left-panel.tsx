@@ -2,14 +2,14 @@ import type { Id } from '@baton/shared'
 import { Activity, type ReactNode, useEffect, useState } from 'react'
 import { ServiceIcon, SettingsIcon, WorkerIcon } from '../components/icons'
 import { UserMenu } from '../features/auth/user-menu'
+import { FilesPanel } from '../features/files/files-panel'
 import { SessionsPanel } from '../features/sessions/sessions-panel'
 import { WorkspaceSwitcher } from '../features/workspaces/workspace-switcher'
 import { type ProjectViewKind, parseRoute, projectViewPath } from './route'
 import { SidebarHeader } from './shell/app-header'
 import { HealthBadge } from './shell/health-badge'
-import { WorkItemsPanel } from './work-items-panel'
 
-type Section = 'sessions' | 'requirements'
+type Section = 'sessions' | 'files'
 type LeftPanelProps = {
   workspaceId: Id | null
   projectId: Id | null
@@ -38,13 +38,8 @@ const NavigationToolbar = ({
       >
         会话
       </button>
-      <button
-        type="button"
-        aria-label="需求与任务"
-        aria-pressed={section === 'requirements'}
-        onClick={() => onChange('requirements')}
-      >
-        工作项
+      <button type="button" aria-pressed={section === 'files'} onClick={() => onChange('files')}>
+        Files
       </button>
     </fieldset>
     {actions}
@@ -63,9 +58,7 @@ export const LeftPanel = ({
 }: LeftPanelProps) => {
   const [section, setSection] = useState<Section>('sessions')
   useEffect(() => {
-    const route = parseRoute(activeId)
-    if (route.kind === 'item') setSection('requirements')
-    if (route.kind === 'session') setSection('sessions')
+    if (parseRoute(activeId).kind === 'session') setSection('sessions')
   }, [activeId])
   const entries: { view: ProjectViewKind; label: string; icon: typeof WorkerIcon }[] = [
     { view: 'workers', label: '执行环境', icon: WorkerIcon },
@@ -97,13 +90,16 @@ export const LeftPanel = ({
                 )}
               />
             </Activity>
-            <Activity mode={section === 'requirements' ? 'visible' : 'hidden'}>
-              <div className="wb-category-panel">
-                <NavigationToolbar section={section} onChange={setSection} />
-                <div className="wb-work-items">
-                  <WorkItemsPanel projectId={projectId} activeId={activeId} open={open} />
-                </div>
-              </div>
+            <Activity mode={section === 'files' ? 'visible' : 'hidden'}>
+              <FilesPanel
+                key={projectId}
+                projectId={projectId}
+                activeId={activeId}
+                open={open}
+                renderToolbar={actions => (
+                  <NavigationToolbar section={section} onChange={setSection} actions={actions} />
+                )}
+              />
             </Activity>
           </div>
           <nav aria-label="项目管理" className="wb-management">
