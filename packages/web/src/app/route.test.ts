@@ -2,6 +2,7 @@ import { expect, test } from 'vitest'
 import {
   activeProjectId,
   emptyTabsPath,
+  fileRoutePath,
   isItemRoute,
   itemPath,
   parseRoute,
@@ -61,6 +62,30 @@ test('parseRoute: services are scoped by project, worker, and name', () => {
   expect(parseRoute('/proj/1/service/nope/web')).toEqual({ kind: 'project', projectId: 1 })
   expect(parseRoute('/proj/1/service/20')).toEqual({ kind: 'project', projectId: 1 })
   expect(parseRoute('/proj/1/service/20/not valid')).toEqual({ kind: 'project', projectId: 1 })
+})
+
+test('parseRoute: files are addressed by worker, branch, and repository path', () => {
+  const file = {
+    projectId: 1,
+    workerId: 3,
+    branch: 'feat/files-read-chain',
+    path: 'docs/计划 #1 100%.md',
+  }
+  const path = fileRoutePath(file)
+  expect(path).toBe(
+    '/proj/1/workers/3/files/feat%2Ffiles-read-chain/docs/%E8%AE%A1%E5%88%92%20%231%20100%25.md',
+  )
+  expect(parseRoute(path)).toEqual({ kind: 'file', ...file })
+  expect(isItemRoute(path)).toBe(true)
+  expect(fileRoutePath({ ...file, branch: 'main' })).not.toBe(path)
+  for (const invalid of [
+    '/proj/1/workers/x/files/main/a.md',
+    '/proj/1/workers/3/files/main',
+    '/proj/1/workers/3/files/main/..%2Fsecret',
+    '/proj/1/workers/3/tree/main/a.md',
+    '/proj/1/workers/3',
+  ])
+    expect(parseRoute(invalid)).toEqual({ kind: 'project', projectId: 1 })
 })
 
 test('path builders round-trip through parseRoute', () => {

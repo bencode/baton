@@ -1,4 +1,4 @@
-import type { Project, Requirement, Task } from '@baton/shared'
+import type { Project } from '@baton/shared'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -10,115 +10,35 @@ beforeEach(() => localStorage.clear())
 afterEach(cleanup)
 
 const project: Project = { id: 1, workspaceId: 1, name: 'web', createdAt: 0 }
-const login: Requirement = {
-  id: 1,
+const worker = { id: 1, projectId: 1, name: 'w', hostname: 'h', connected: true }
+const session = {
+  id: 7,
   projectId: 1,
-  code: 'R-1',
-  title: 'User login',
-  resources: [],
-  status: 'active',
-  createdAt: 0,
-  updatedAt: 0,
+  workerId: 1,
+  name: 'dogfood',
+  busy: false,
+  attached: false,
+  connected: true,
+  lastActiveAt: Date.now(),
+  worker: { name: 'w', hostname: 'h' },
 }
-// `Implement` (T-2) depends on `Design` (T-1, id 1); arrangeTasks orders Design first.
-const tasks: Task[] = [
-  {
-    id: 2,
-    requirementId: 1,
-    projectId: 1,
-    code: 'T-2',
-    title: 'Implement',
-    dependsOn: [1],
-    status: 'todo',
-    createdAt: 2,
-    updatedAt: 0,
-  },
-  {
-    id: 1,
-    requirementId: 1,
-    projectId: 1,
-    code: 'T-1',
-    title: 'Design',
-    dependsOn: [],
-    status: 'done',
-    createdAt: 1,
-    updatedAt: 0,
-  },
-]
 
-const fakeApi = () =>
+const fakeApi = (overrides: { remove?: () => Promise<undefined> } = {}) =>
   ({
     auth: { me: vi.fn(async () => ({ authRequired: false, user: null })) },
     projects: { listByWorkspace: vi.fn(async () => [project]), get: vi.fn(async () => project) },
-    requirements: { listByProject: vi.fn(async () => [login]) },
-    tasks: { listByRequirement: vi.fn(async () => tasks) },
     services: { listByProject: vi.fn(async () => []) },
-    sessions: { listByProject: vi.fn(async () => []) },
-    workerCreations: { templates: vi.fn(async () => []), listByProject: vi.fn(async () => []) },
-    workers: { listByProject: vi.fn(async () => []) },
-    channels: { listByWorkspace: vi.fn(async () => []) },
-  }) as unknown as Api
-
-test('LeftPanel renders the requirement tree (deps + ready) and opens a task on click', async () => {
-  const open = vi.fn()
-  render(
-    <ApiContext.Provider value={fakeApi()}>
-      <MemoryRouter>
-        <LeftPanel
-          onNewSession={vi.fn()}
-          onCollapse={vi.fn()}
-          onContextNavigate={vi.fn()}
-          workspaceId={1}
-          projectId={1}
-          activeId="/proj/1"
-          open={open}
-          close={vi.fn()}
-        />
-      </MemoryRouter>
-    </ApiContext.Provider>,
-  )
-  fireEvent.click(screen.getByRole('button', { name: '需求与任务' }))
-  expect(await screen.findByText('User login')).toBeTruthy()
-  expect(await screen.findByText('Design')).toBeTruthy()
-  const impl = await screen.findByText('Implement')
-  // Implement depends on the done Design task; row shows ↳ marker + code.
-  // 'todo' (default) renders no chip — absence is the baseline. 'done' shows
-  // up as a small uppercase 'done' state chip on the right.
-  expect(screen.queryByText('todo')).toBeNull()
-  expect(screen.getByText('done')).toBeTruthy()
-  expect(screen.getByText('↳')).toBeTruthy()
-  expect(screen.getByText('T-2')).toBeTruthy()
-  expect(screen.getByText('R-1')).toBeTruthy()
-  fireEvent.click(impl)
-  expect(open).toHaveBeenCalledWith('/proj/1/T-2', 'Implement')
-})
-
-test('rail session row: trash → inline confirm → removes session and closes its tab', async () => {
-  const remove = vi.fn(async () => undefined)
-  const close = vi.fn()
-  const worker = { id: 1, projectId: 1, name: 'w', hostname: 'h', connected: true }
-  const session = {
-    id: 7,
-    projectId: 1,
-    workerId: 1,
-    name: 'dogfood',
-    busy: false,
-    attached: false,
-    connected: true,
-    lastActiveAt: Date.now(),
-    worker: { name: 'w', hostname: 'h' },
-  }
-  const api = {
-    auth: { me: vi.fn(async () => ({ authRequired: false, user: null })) },
-    projects: { listByWorkspace: vi.fn(async () => [project]), get: vi.fn(async () => project) },
-    requirements: { listByProject: vi.fn(async () => []) },
-    tasks: { listByRequirement: vi.fn(async () => []) },
-    services: { listByProject: vi.fn(async () => []) },
-    sessions: { listByProject: vi.fn(async () => [session]), remove },
+    sessions: {
+      listByProject: vi.fn(async () => [session]),
+      remove: overrides.remove ?? vi.fn(),
+    },
     workerCreations: { templates: vi.fn(async () => []), listByProject: vi.fn(async () => []) },
     workers: { listByProject: vi.fn(async () => [worker]) },
     channels: { listByWorkspace: vi.fn(async () => []) },
-  } as unknown as Api
+    files: { branches: vi.fn(async () => []) },
+  }) as unknown as Api
+
+const renderPanel = (api: Api, close = vi.fn()) =>
   render(
     <ApiContext.Provider value={api}>
       <MemoryRouter>
@@ -135,6 +55,24 @@ test('rail session row: trash → inline confirm → removes session and closes 
       </MemoryRouter>
     </ApiContext.Provider>,
   )
+
+test('Files replaces work items and keeps the sessions panel mounted', async () => {
+  const api = fakeApi()
+  renderPanel(api)
+  expect(await screen.findByText('dogfood')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '工作项' })).toBeNull()
+  // Hidden panels never fetch: no file request until Files is shown.
+  expect(api.files.branches).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+  expect(await screen.findByRole('button', { name: /^w/ })).toBeTruthy()
+  await vi.waitFor(() => expect(api.files.branches).toHaveBeenCalledWith(1, expect.anything()))
+  expect(screen.getByText('dogfood')).toBeTruthy()
+})
+
+test('rail session row: trash → inline confirm → removes session and closes its tab', async () => {
+  const remove = vi.fn(async () => undefined)
+  const close = vi.fn()
+  renderPanel(fakeApi({ remove }), close)
   // Trash is two-step: first click reveals the confirm, not a deletion.
   fireEvent.click(await screen.findByLabelText('删除会话'))
   expect(remove).not.toHaveBeenCalled()
@@ -142,34 +80,4 @@ test('rail session row: trash → inline confirm → removes session and closes 
   expect(remove).toHaveBeenCalledWith(7)
   // The tab close happens after the remove promise resolves.
   await vi.waitFor(() => expect(close).toHaveBeenCalledWith('/proj/1/session/7'))
-})
-
-test('chevron toggles aria-expanded and the tasks region aria-hidden', async () => {
-  const { container } = render(
-    <ApiContext.Provider value={fakeApi()}>
-      <MemoryRouter>
-        <LeftPanel
-          onNewSession={vi.fn()}
-          onCollapse={vi.fn()}
-          onContextNavigate={vi.fn()}
-          workspaceId={1}
-          projectId={1}
-          activeId="/proj/1"
-          open={vi.fn()}
-          close={vi.fn()}
-        />
-      </MemoryRouter>
-    </ApiContext.Provider>,
-  )
-  fireEvent.click(screen.getByRole('button', { name: '需求与任务' }))
-  await screen.findByText('User login')
-  const chevron = container.querySelector('[aria-controls="1-tasks"]')
-  const region = container.querySelector('#\\31 -tasks')
-  expect(chevron?.getAttribute('aria-expanded')).toBe('true')
-  expect(region?.getAttribute('aria-hidden')).toBe('false')
-  if (chevron) fireEvent.click(chevron)
-  expect(chevron?.getAttribute('aria-expanded')).toBe('false')
-  expect(region?.getAttribute('aria-hidden')).toBe('true')
-  if (chevron) fireEvent.click(chevron)
-  expect(chevron?.getAttribute('aria-expanded')).toBe('true')
 })

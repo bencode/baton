@@ -181,15 +181,11 @@
   border-radius: 6px;
   color: var(--color-ui-selected-text);
 }
-.wb-session-list,
-.wb-work-items {
+.wb-session-list {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
   padding-bottom: 16px;
-}
-.wb-work-items {
-  padding-top: 16px;
 }
 .wb-list-label {
   display: flex;
