@@ -21,6 +21,11 @@
   flex: 1;
   min-height: 0;
 }
+.code-renderer-error {
+  padding: 24px;
+  font-size: 13px;
+  color: var(--color-ui-danger);
+}
 .code-renderer-editor .cm-editor {
   height: 100%;
   background: var(--color-ui-surface);
