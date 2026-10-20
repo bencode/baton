@@ -151,6 +151,9 @@
   .files-text {
     padding-inline: 16px;
   }
+}
+/* Without hover the row action would be undiscoverable. */
+@media (hover: none) {
   .files-row-action {
     opacity: 1;
   }
