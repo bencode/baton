@@ -127,6 +127,22 @@
   align-items: center;
   gap: 4px;
 }
+.files-mode {
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--color-ui-border);
+  border-radius: 6px;
+}
+.files-mode button {
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-ui-muted);
+}
+.files-mode button[aria-pressed="true"] {
+  background: var(--color-ui-selected);
+  color: var(--color-ui-selected-text);
+}
 .files-text {
   margin: 0;
   padding: 16px 24px;
