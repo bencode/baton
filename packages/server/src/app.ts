@@ -7,6 +7,7 @@ import { type ChannelBus, createChannelBus } from './channel-bus.ts'
 import { type ChannelPresence, createChannelPresence } from './channel-presence.ts'
 import { type CommandBus, createCommandBus } from './command-bus.ts'
 import { createEventBus, type EventBus } from './event-bus.ts'
+import { createFileRequests, type FileRequests } from './file-requests.ts'
 import { cookieAuth } from './middleware/cookie-auth.ts'
 import { createProjectBus, type ProjectBus } from './project-bus.ts'
 import { createRelayBus, type RelayBus } from './relay-bus.ts'
@@ -14,6 +15,7 @@ import { registerAdminRoutes } from './routes/admin.ts'
 import { registerArtifactPublicRoutes, registerArtifactRoutes } from './routes/artifacts.ts'
 import { registerAuthRoutes } from './routes/auth.ts'
 import { registerChannelRoutes } from './routes/channels.ts'
+import { registerFileRoutes } from './routes/files.ts'
 import { registerLoopRoutes } from './routes/loops.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
 import { registerProvisionerRoutes } from './routes/provisioner.ts'
@@ -67,6 +69,8 @@ type AppOptions = {
   // calls it post-serve. Tests omit it (they use app.fetch, no real WS upgrade).
   onInjectWs?: (inject: ReturnType<typeof createNodeWebSocket>['injectWebSocket']) => void
   services?: ServiceRuntime
+  // Pending read-only file queries awaiting their worker's reply (runtime-only).
+  files?: FileRequests
   artifactFiles?: ArtifactFileStore
 }
 
@@ -84,6 +88,7 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
     terminal = createTerminalBridge(),
     onInjectWs,
     services = createServiceRuntime(),
+    files = createFileRequests(commands),
     artifactFiles = createArtifactFileStore(defaultArtifactDir()),
     provisionerBus = createProvisionerBus(),
     provisionerToken = process.env.BATON_PROVISIONER_TOKEN,
@@ -120,8 +125,9 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
   registerArtifactRoutes(app, store, artifactFiles)
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store, projects)
-  registerWorkerRoutes(app, store, commands, runtime, projects, terminal)
+  registerWorkerRoutes(app, store, commands, runtime, projects, terminal, files)
   registerServiceRoutes(app, store, commands, services)
+  registerFileRoutes(app, store, files)
   registerAdminRoutes(app, store, runtime, busyTracker, commands)
   registerSessionRoutes(
     app,

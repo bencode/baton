@@ -1,5 +1,6 @@
 import { type ArtifactsClient, artifactsClient } from './client/artifacts.ts'
 import { primeLogin } from './client/auth.ts'
+import { type FilesClient, filesClient } from './client/files.ts'
 import { type LoopsClient, loopsClient } from './client/loops.ts'
 import { type ProjectClient, projectClient } from './client/projects.ts'
 import { request, setAuthHeaders } from './client/request.ts'
@@ -37,6 +38,7 @@ export type ApiClient = {
   tasks: TaskClient
   sessions: SessionsClient
   services: ServicesClient
+  files: FilesClient
   loops: LoopsClient
   workers: WorkersClient
 }
@@ -67,6 +69,7 @@ const clientFromBase = (baseUrl: string): ApiClient => ({
   tasks: taskClient(baseUrl),
   sessions: sessionsClient(baseUrl),
   services: servicesClient(baseUrl),
+  files: filesClient(baseUrl),
   loops: loopsClient(baseUrl),
   workers: workersClient(baseUrl),
 })

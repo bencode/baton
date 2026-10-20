@@ -3,6 +3,7 @@ import { EventSource } from 'eventsource'
 import type { ApiClient } from '../client.ts'
 import { PROJECT_CONFIG_NAME, type WorkerConfig } from '../project-config.ts'
 import { syncBundledArtifactSkill } from './bundled-skills.ts'
+import { createFileQueryRunner } from './files/handler.ts'
 import { ensureExcluded } from './git-exclude.ts'
 import { createLiveness } from './liveness.ts'
 import { createServiceSupervisor } from './service-supervisor.ts'
@@ -44,6 +45,8 @@ export const runWorkerDaemon = async (
     log,
     hasChild: id => supervisor.has(id),
   })
+  // Read-only Project Files queries, answered from this daemon's directory.
+  const files = createFileQueryRunner(cwd)
   const services = createServiceSupervisor({
     sendReport: report => client.services.report(report),
     cfg,
@@ -113,6 +116,10 @@ export const runWorkerDaemon = async (
         void services
           .stop(cmd.requestId, cmd.name)
           .catch(err => log(`service stop failed: ${String(err)}`))
+      else if (cmd.cmd === 'files.query')
+        void files(cmd.query)
+          .then(reply => client.files.report({ requestId: cmd.requestId, ...reply }))
+          .catch(err => log(`files query failed: ${String(err)}`))
     } catch (error) {
       log(`invalid command: ${String(error)}`)
     }
