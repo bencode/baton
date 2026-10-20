@@ -37,6 +37,8 @@
 .reader-markdown-page {
   /* A flex child with auto margins sizes to its content; keep it within the tab. */
   width: 100%;
+  /* Set here so the 74ch measure follows the chosen text size. */
+  font-size: var(--reader-font-size, 16px);
   max-width: 74ch;
   margin: 0 auto;
   padding: 32px 36px 80px;
@@ -44,7 +46,6 @@
 .reader-markdown {
   --prose-gap: 14px;
   --prose-heading-gap: 30px;
-  font-size: var(--reader-font-size, 16px);
   line-height: 1.85;
   color: var(--color-ui-text);
   overflow-wrap: anywhere;
