@@ -12,10 +12,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-// jsdom lays nothing out; CodeMirror still measures text ranges when it gets the chance.
+// jsdom lays nothing out: CodeMirror still measures text ranges when it gets the
+// chance, and the outline keeps its current heading scrolled into view.
 beforeAll(() => {
   Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList
   Range.prototype.getBoundingClientRect ??= () => new DOMRect()
+  Element.prototype.scrollIntoView ??= () => {}
 })
 
 const route: Extract<Route, { kind: 'file' }> = {
@@ -36,16 +38,16 @@ const DOC = [
 
 const Location = () => <output data-testid="location">{useLocation().pathname}</output>
 
-const renderGuide = () => {
+const renderGuide = (content = DOC) => {
   const api = {
     files: {
       view: async () => ({
         path: route.path,
         name: 'guide.md',
-        size: DOC.length,
+        size: content.length,
         commit: null,
         kind: 'text',
-        content: DOC,
+        content,
       }),
       rawUrl: createApi().files.rawUrl,
     },
@@ -120,4 +122,21 @@ test('a chosen appearance restyles the document and is remembered', async () => 
   expect(parseReadingPreferences(localStorage.getItem('baton.reader.preferences')).theme).toBe(
     'dark',
   )
+})
+
+test('the outline is offered for documents with headings, in the rendered view', async () => {
+  renderGuide()
+  await documentShown()
+  const toggle = await screen.findByRole('button', { name: '大纲' })
+  expect(toggle.getAttribute('aria-pressed')).toBe('false')
+  fireEvent.click(toggle)
+  expect(screen.getByRole('navigation', { name: '大纲' }).textContent).toBe('Guide')
+  fireEvent.click(screen.getByRole('button', { name: '源码' }))
+  expect(screen.queryByRole('button', { name: '大纲' })).toBeNull()
+})
+
+test('a document without headings offers no outline', async () => {
+  renderGuide('Just text.')
+  expect(await screen.findByText('Just text.', {}, { timeout: 10_000 })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '大纲' })).toBeNull()
 })
