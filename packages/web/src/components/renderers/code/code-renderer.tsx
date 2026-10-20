@@ -4,6 +4,7 @@ import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import { classHighlighter } from '@lezer/highlight'
 import { basicSetup, EditorView } from 'codemirror'
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import styles from './code-renderer.module.scss'
 
 export type CodeRendererHandle = { openSearch(): void }
 
@@ -25,7 +26,7 @@ const topLine = (view: EditorView): number => {
 
 // Read-only source with syntax colours by file name, line numbers, folding, and
 // search (Cmd/Ctrl-F or openSearch). It keeps one fixed editor look; colours come
-// from `tok-*` classes styled in code-renderer.css.
+// from `tok-*` classes styled in code-renderer.module.scss.
 export const CodeRenderer = ({
   name,
   content,
@@ -104,16 +105,16 @@ export const CodeRenderer = ({
   }, [wrap])
 
   return (
-    <div className="code-renderer">
+    <div className={styles.renderer}>
       {failed ? (
-        <p role="alert" className="code-renderer-error">
+        <p role="alert" className={styles.error}>
           无法加载源码视图。
           <button type="button" className="ml-2 underline" onClick={() => setAttempt(n => n + 1)}>
             重试
           </button>
         </p>
       ) : (
-        <div ref={host} className="code-renderer-editor" />
+        <div ref={host} className={styles.editor} />
       )}
     </div>
   )

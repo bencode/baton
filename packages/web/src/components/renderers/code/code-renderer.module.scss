@@ -1,0 +1,112 @@
+// Read-only CodeMirror view. One fixed editor look on the app's ui tokens; it
+// does not follow any document reading theme. CodeMirror's own classes
+// (cm-*, and tok-* from classHighlighter) are global.
+
+.renderer {
+  --syntax-comment: oklch(0.46 0.02 250);
+  --syntax-keyword: oklch(0.43 0.15 325);
+  --syntax-string: oklch(0.4 0.08 155);
+  --syntax-number: oklch(0.43 0.11 65);
+  --syntax-title: oklch(0.44 0.12 255);
+  --syntax-variable: oklch(0.4 0.1 205);
+  --syntax-meta: oklch(0.42 0.035 285);
+  --syntax-deletion: oklch(0.48 0.16 25);
+
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--color-ui-surface);
+}
+
+.error {
+  padding: 24px;
+  font-size: 13px;
+  color: var(--color-ui-danger);
+}
+
+.editor {
+  flex: 1;
+  min-height: 0;
+
+  :global {
+    .cm-editor {
+      height: 100%;
+      background: var(--color-ui-surface);
+      color: var(--color-ui-text);
+      font-size: 13px;
+    }
+    .cm-editor.cm-focused {
+      outline: none;
+    }
+    .cm-scroller {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      line-height: 1.65;
+    }
+    .cm-content {
+      padding-block: 16px 48px;
+      caret-color: var(--color-ui-text);
+    }
+    .cm-gutters {
+      border-right: 1px solid var(--color-ui-border);
+      background: var(--color-ui-panel);
+      color: var(--color-ui-muted);
+    }
+    :is(.cm-activeLine, .cm-activeLineGutter) {
+      background: color-mix(in oklch, var(--color-ui-accent) 7%, transparent);
+    }
+    .cm-foldPlaceholder {
+      border-color: var(--color-ui-border);
+      background: var(--color-ui-panel);
+      color: var(--color-ui-muted);
+    }
+    .cm-panels {
+      border-color: var(--color-ui-border);
+      background: var(--color-ui-panel);
+      color: var(--color-ui-text);
+    }
+    .cm-searchMatch {
+      background: color-mix(in oklch, var(--syntax-number) 28%, transparent);
+    }
+
+    // classHighlighter tokens.
+    .tok-comment {
+      color: var(--syntax-comment);
+      font-style: italic;
+    }
+    .tok-keyword {
+      color: var(--syntax-keyword);
+    }
+    :is(.tok-string, .tok-string2, .tok-inserted, .tok-url) {
+      color: var(--syntax-string);
+    }
+    :is(.tok-number, .tok-bool, .tok-atom, .tok-literal) {
+      color: var(--syntax-number);
+    }
+    :is(.tok-typeName, .tok-className, .tok-namespace, .tok-labelName) {
+      color: var(--syntax-title);
+    }
+    :is(.tok-variableName.tok-definition, .tok-propertyName, .tok-macroName, .tok-local) {
+      color: var(--syntax-variable);
+    }
+    :is(.tok-meta, .tok-operator, .tok-punctuation) {
+      color: var(--syntax-meta);
+    }
+    :is(.tok-deleted, .tok-invalid) {
+      color: var(--syntax-deletion);
+    }
+    .tok-heading {
+      color: var(--syntax-title);
+      font-weight: 600;
+    }
+    .tok-emphasis {
+      font-style: italic;
+    }
+    .tok-strong {
+      font-weight: 600;
+    }
+    .tok-link {
+      text-decoration: underline;
+    }
+  }
+}

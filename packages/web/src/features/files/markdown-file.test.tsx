@@ -116,7 +116,7 @@ test('a chosen appearance restyles the document and is remembered', async () => 
   await documentShown()
   fireEvent.click(screen.getByRole('button', { name: '阅读外观' }))
   fireEvent.click(screen.getByRole('button', { name: /深色/ }))
-  expect(container.querySelector('.reader-surface')?.getAttribute('data-reading-theme')).toBe(
+  expect(container.querySelector('[data-reading-theme]')?.getAttribute('data-reading-theme')).toBe(
     'dark',
   )
   expect(parseReadingPreferences(localStorage.getItem('baton.reader.preferences')).theme).toBe(

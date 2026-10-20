@@ -153,9 +153,11 @@ test('an image file shows its bytes from the raw endpoint, fitted until switched
   renderTabs(image, { ...route, path: 'img/arch.png' })
   const shown = await screen.findByRole('img', { name: 'arch.png' })
   expect(shown.getAttribute('src')).toBe('/api/workers/2/raw?branch=feat%2Fx&path=img%2Farch.png')
-  expect(shown.className).toBe('image-renderer-fit')
+  expect(shown.closest('[data-size]')?.getAttribute('data-size')).toBe('fit')
   fireEvent.click(screen.getByRole('button', { name: '原始大小' }))
-  expect(screen.getByRole('img', { name: 'arch.png' }).className).toBe('image-renderer-actual')
+  expect(
+    screen.getByRole('img', { name: 'arch.png' }).closest('[data-size]')?.getAttribute('data-size'),
+  ).toBe('actual')
   fireEvent.click(screen.getByRole('button', { name: '刷新文件' }))
   await vi.waitFor(() =>
     expect(screen.getByRole('img', { name: 'arch.png' }).getAttribute('src')).toContain('&r=1'),
@@ -169,8 +171,7 @@ test('phones keep images fitted and leave zooming to the system', async () => {
     matches: query === '(max-width: 767px)',
   }))
   renderTabs(image, { ...route, path: 'img/arch.png' })
-  expect((await screen.findByRole('img', { name: 'arch.png' })).className).toBe(
-    'image-renderer-fit',
-  )
+  const shown = await screen.findByRole('img', { name: 'arch.png' })
+  expect(shown.closest('[data-size]')?.getAttribute('data-size')).toBe('fit')
   expect(screen.queryByRole('button', { name: '原始大小' })).toBeNull()
 })
