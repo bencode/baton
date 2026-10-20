@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import type { PluggableList } from 'unified'
 import { normalizeMath } from './math-normalize'
 import { markMermaidFences } from './remark-mermaid'
 
@@ -16,7 +17,14 @@ import { markMermaidFences } from './remark-mermaid'
 //
 // Heading scale shrunk one step from prose-sm's article defaults so the bubble
 // doesn't shout. Tighten vertical margins for chat density.
-type MarkdownProps = { text: string; variant?: 'default' | 'chat' | 'process' }
+type MarkdownProps = {
+  text: string
+  variant?: 'default' | 'chat' | 'process' | 'reader'
+  // Reader extensions (file tabs); chat and other callers leave them unset.
+  rehypePlugins?: PluggableList
+  components?: Components
+  skipHtml?: boolean
+}
 
 const LazyMermaidDiagram = lazy(() =>
   import('./mermaid-diagram').then(module => ({ default: module.MermaidDiagram })),
@@ -94,11 +102,23 @@ const ChatTable: Components['table'] = ({ node: _node, ...props }) => (
   </section>
 )
 
-export const Markdown = ({ text, variant = 'default' }: MarkdownProps) => (
+const variantClass = {
+  chat: 'chat-markdown',
+  process: 'chat-markdown chat-markdown-process',
+  reader: 'reader-markdown',
+}
+
+export const Markdown = ({
+  text,
+  variant = 'default',
+  rehypePlugins = [],
+  components,
+  skipHtml,
+}: MarkdownProps) => (
   <div
     className={
       variant !== 'default'
-        ? `chat-markdown${variant === 'process' ? ' chat-markdown-process' : ''}`
+        ? variantClass[variant]
         : [
             'prose prose-sm max-w-none break-words',
             'prose-headings:font-semibold',
@@ -128,15 +148,19 @@ export const Markdown = ({ text, variant = 'default' }: MarkdownProps) => (
   >
     <ReactMarkdown
       remarkPlugins={
-        variant === 'chat' ? [remarkGfm, remarkMath, markMermaidFences] : [remarkGfm, remarkMath]
+        variant === 'chat' || variant === 'reader'
+          ? [remarkGfm, remarkMath, markMermaidFences]
+          : [remarkGfm, remarkMath]
       }
-      rehypePlugins={[rehypeKatex]}
+      rehypePlugins={[rehypeKatex, ...rehypePlugins]}
+      skipHtml={skipHtml}
       components={{
         ...(variant !== 'default' ? { pre: ChatCodeBlock, table: ChatTable } : {}),
         // Open links in a new tab (the transcript is the app; don't navigate away).
         a: ({ node: _node, ...props }) => (
           <a {...props} target="_blank" rel="noopener noreferrer" />
         ),
+        ...components,
       }}
     >
       {normalizeMath(text)}

@@ -1,0 +1,182 @@
+/* Rendered documents in file tabs. Ported from gamma-reader's reader prose and
+   highlight.js palette, mapped onto Baton's ui tokens. Code blocks, tables, and
+   Mermaid reuse the chat block chrome (.chat-code-block / .chat-table / .chat-mermaid). */
+
+.reader-markdown-page {
+  /* A flex child with auto margins sizes to its content; keep it within the tab. */
+  width: 100%;
+  max-width: 74ch;
+  margin: 0 auto;
+  padding: 32px 36px 80px;
+}
+.reader-markdown {
+  --prose-gap: 14px;
+  --prose-heading-gap: 30px;
+  font-size: 15px;
+  line-height: 1.85;
+  color: var(--color-ui-text);
+  overflow-wrap: anywhere;
+}
+.reader-markdown > :first-child {
+  margin-top: 0;
+}
+.reader-markdown > :last-child {
+  margin-bottom: 0;
+}
+.reader-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: var(--prose-heading-gap) 0 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-ui-heading);
+  text-wrap: balance;
+}
+.reader-markdown h1 {
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+.reader-markdown h2 {
+  font-size: 19px;
+}
+.reader-markdown :is(h3, h4, h5, h6) {
+  font-size: 16px;
+}
+.reader-markdown :is(p, ul, ol, blockquote) {
+  margin: var(--prose-gap) 0;
+}
+.reader-markdown p {
+  text-wrap: pretty;
+}
+.reader-markdown :is(ul, ol) {
+  padding-left: 1.5em;
+}
+.reader-markdown ul {
+  list-style: disc;
+}
+.reader-markdown ol {
+  list-style: decimal;
+}
+.reader-markdown li {
+  margin: 4px 0;
+  padding-left: 2px;
+}
+.reader-markdown li > :is(p, ul, ol) {
+  margin: 4px 0;
+}
+/* GFM marks a whole list when any item is a task; only task items drop the bullet. */
+.reader-markdown .task-list-item {
+  list-style: none;
+}
+.reader-markdown input[type="checkbox"] {
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.reader-markdown strong {
+  font-weight: 600;
+}
+.reader-markdown a {
+  color: var(--color-ui-accent);
+  text-decoration: underline;
+}
+.reader-markdown blockquote {
+  margin-inline: 0;
+  padding: 4px 14px;
+  border-radius: 6px;
+  background: var(--color-ui-panel);
+  color: var(--color-ui-muted);
+}
+.reader-markdown hr {
+  margin: var(--prose-heading-gap) 0;
+  border: 0;
+  border-top: 1px solid var(--color-ui-border);
+}
+.reader-markdown :is(code, pre) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.reader-markdown :not(pre) > code {
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--color-ui-panel);
+  font-size: 0.9em;
+}
+.reader-markdown pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre;
+  overflow-wrap: normal;
+  tab-size: 2;
+}
+.reader-markdown pre code {
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+}
+.reader-markdown .katex-display {
+  margin: var(--prose-gap) 0;
+  padding: 6px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.reader-markdown .chat-mermaid-canvas > img {
+  display: block;
+  max-width: none;
+  margin: 0 auto;
+}
+.reader-image-placeholder {
+  color: var(--color-ui-muted);
+  font-size: 0.9em;
+}
+
+/* highlight.js tokens (light palette from gamma-reader). */
+.reader-markdown :is(.hljs-comment, .hljs-quote) {
+  color: oklch(0.46 0.02 250);
+  font-style: italic;
+}
+.reader-markdown
+  :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-formula) {
+  color: oklch(0.43 0.15 325);
+}
+.reader-markdown
+  :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-template-tag) {
+  color: oklch(0.4 0.08 155);
+}
+.reader-markdown
+  :is(.hljs-number, .hljs-built_in, .hljs-type, .hljs-attr, .hljs-symbol, .hljs-bullet) {
+  color: oklch(0.43 0.11 65);
+}
+.reader-markdown
+  :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
+  color: oklch(0.44 0.12 255);
+}
+.reader-markdown :is(.hljs-variable, .hljs-template-variable, .hljs-params, .hljs-property) {
+  color: oklch(0.4 0.1 205);
+}
+.reader-markdown :is(.hljs-meta, .hljs-operator, .hljs-punctuation) {
+  color: oklch(0.42 0.035 285);
+}
+.reader-markdown .hljs-deletion {
+  color: oklch(0.48 0.16 25);
+}
+.reader-markdown .hljs-emphasis {
+  font-style: italic;
+}
+.reader-markdown .hljs-strong {
+  font-weight: 600;
+}
+.reader-markdown .hljs-link {
+  text-decoration: underline;
+}
+
+@media (max-width: 799px) {
+  .reader-markdown-page {
+    padding: 24px 18px 60px;
+  }
+  .reader-markdown {
+    font-size: 14px;
+  }
+  .reader-markdown h1 {
+    font-size: 24px;
+  }
+}
