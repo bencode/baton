@@ -3,11 +3,12 @@ import type { Components } from 'react-markdown'
 import { useNavigate } from 'react-router-dom'
 import rehypeHighlight from 'rehype-highlight'
 import type { PluggableList } from 'unified'
+import { useApi } from '../../app/api-context'
 import { fileRoutePath, type Route } from '../../app/route'
 import { Markdown } from '../../components/markdown'
 import { highlightLanguages } from './highlight-languages'
 import { readingSurfaceProps, useReadingPreferences } from './reading-preferences'
-import { classifyLink } from './relative-link'
+import { classifyLink, resolveRelativePath } from './relative-link'
 
 type FileRoute = Extract<Route, { kind: 'file' }>
 
@@ -26,11 +27,12 @@ const isPlainClick = (event: MouseEvent): boolean =>
   event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 
 // A rendered Markdown file. Relative links open the target in the same worker and
-// branch; web links open a new browser tab; anything else is plain text. Images
-// are placeholders and raw HTML is dropped, so the document never fetches from or
-// runs anything on other origins.
+// branch, and relative images load from there; web links open a new browser tab;
+// anything else is plain text. Remote images stay placeholders and raw HTML is
+// dropped, so the document never fetches from or runs anything on other origins.
 export const MarkdownReader = ({ route, content }: { route: FileRoute; content: string }) => {
   const navigate = useNavigate()
+  const api = useApi()
   const [preferences] = useReadingPreferences()
   const components: Components = {
     a: ({ node: _node, href = '', children, ...props }) => {
@@ -63,11 +65,26 @@ export const MarkdownReader = ({ route, content }: { route: FileRoute; content: 
         </a>
       )
     },
-    img: ({ alt, src }) => (
-      <span className="reader-image-placeholder" title={typeof src === 'string' ? src : undefined}>
-        [图片{alt ? `: ${alt}` : ''}]
-      </span>
-    ),
+    img: ({ alt, src }) => {
+      const path = typeof src === 'string' ? resolveRelativePath(route.path, src) : null
+      if (path !== null)
+        return (
+          <img
+            className="reader-image"
+            src={api.files.rawUrl({ workerId: route.workerId, branch: route.branch }, path)}
+            alt={alt ?? ''}
+            loading="lazy"
+          />
+        )
+      return (
+        <span
+          className="reader-image-placeholder"
+          title={typeof src === 'string' ? src : undefined}
+        >
+          [图片{alt ? `: ${alt}` : ''}]
+        </span>
+      )
+    },
   }
   return (
     <div {...readingSurfaceProps(preferences)}>

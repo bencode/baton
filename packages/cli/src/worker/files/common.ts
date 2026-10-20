@@ -56,3 +56,37 @@ export const decodeText = (bytes: Buffer): string | null => {
     throw error
   }
 }
+
+const hasBytes = (bytes: Buffer, signature: readonly number[], offset = 0): boolean =>
+  signature.every((byte, index) => bytes[offset + index] === byte)
+const hasText = (bytes: Buffer, text: string, offset = 0): boolean =>
+  bytes.subarray(offset, offset + text.length).toString('latin1') === text
+
+const SVG_START = /^\s*(?:<\?xml[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*(?:<!DOCTYPE[^>]*>\s*)?<svg[\s>]/i
+
+// The file signature each image type must carry; an extension alone is not trusted.
+const IMAGE_SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
+  'image/png': bytes => hasBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  'image/jpeg': bytes => hasBytes(bytes, [0xff, 0xd8, 0xff]),
+  'image/gif': bytes => hasText(bytes, 'GIF8'),
+  'image/webp': bytes => hasText(bytes, 'RIFF') && hasText(bytes, 'WEBP', 8),
+  'image/avif': bytes =>
+    hasText(bytes, 'ftyp', 4) && bytes.subarray(8, 32).toString('latin1').includes('avif'),
+  'image/bmp': bytes => hasText(bytes, 'BM'),
+  'image/x-icon': bytes => hasBytes(bytes, [0x00, 0x00, 0x01, 0x00]),
+  'image/svg+xml': bytes => {
+    const text = decodeText(bytes)
+    return text !== null && SVG_START.test(text.slice(0, 4096))
+  },
+}
+
+// The `raw` reply for an image whose bytes match its type.
+export const imagePayload = (
+  path: string,
+  mediaType: string,
+  bytes: Buffer,
+): { mediaType: string; base64: string } => {
+  if (!IMAGE_SIGNATURES[mediaType]?.(bytes))
+    throw new FileError('unsupported', `not a valid ${mediaType} image: ${path}`)
+  return { mediaType, base64: bytes.toString('base64') }
+}

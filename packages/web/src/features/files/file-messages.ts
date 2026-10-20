@@ -7,6 +7,7 @@ const MESSAGES: Record<FileErrorCode, string> = {
   branch_not_found: '分支不存在',
   file_not_found: '文件不存在',
   forbidden_path: '受保护的文件，不提供读取',
+  unsupported: '文件内容与类型不符，或格式不支持预览',
   invalid_request: '无效的文件地址',
   unavailable: '执行环境读取失败',
 }

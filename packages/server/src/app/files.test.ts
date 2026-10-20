@@ -156,4 +156,33 @@ describe('server HTTP — project files', () => {
     assert.equal(res.status, 502)
     assert.equal(((await res.json()) as { code: string }).code, 'unavailable')
   })
+
+  test('raw sends image bytes with headers that keep them inert', async () => {
+    const { app, seeded, filesPath, nextQuery, report } = await setup()
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+    const received = nextQuery()
+    const response = app.request(filesPath('raw?branch=main&path=img%2Flogo.png'))
+    const command = await received
+    assert.deepEqual(command.query, { op: 'raw', branch: 'main', path: 'img/logo.png' })
+    await report(seeded.workerToken, {
+      requestId: command.requestId,
+      ok: true,
+      data: { mediaType: 'image/png', base64: png.toString('base64') },
+    })
+    const res = await response
+    assert.equal(res.status, 200)
+    assert.equal(res.headers.get('content-type'), 'image/png')
+    assert.equal(res.headers.get('x-content-type-options'), 'nosniff')
+    assert.match(res.headers.get('content-security-policy') ?? '', /sandbox/)
+    assert.deepEqual(Buffer.from(await res.arrayBuffer()), png)
+
+    const second = nextQuery()
+    const rejected = app.request(filesPath('raw?branch=main&path=page.html'))
+    await report(seeded.workerToken, {
+      requestId: (await second).requestId,
+      ok: true,
+      data: { mediaType: 'text/html', base64: Buffer.from('<script>').toString('base64') },
+    })
+    assert.equal((await rejected).status, 502)
+  })
 })

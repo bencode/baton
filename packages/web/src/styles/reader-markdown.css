@@ -176,6 +176,14 @@
   max-width: none;
   margin: 0 auto;
 }
+.reader-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: min(72vh, 900px);
+  margin: 24px auto;
+  object-fit: contain;
+}
 .reader-image-placeholder {
   color: var(--color-ui-muted);
   font-size: 0.9em;
@@ -254,7 +262,14 @@
     grid-column: prose;
   }
   .reader-markdown
-    > :is(.chat-code-block, .chat-table, .chat-mermaid, .katex-display, :has(> .katex-display)) {
+    > :is(
+      .chat-code-block,
+      .chat-table,
+      .chat-mermaid,
+      .katex-display,
+      :has(> .katex-display),
+      p:has(> .reader-image:only-child)
+    ) {
     grid-column: prose-start / wide-end;
   }
 }

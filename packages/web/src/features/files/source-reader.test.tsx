@@ -1,8 +1,14 @@
 import { cleanup, render } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeAll, expect, test, vi } from 'vitest'
 import { SourceReader } from './source-reader'
 
 afterEach(cleanup)
+
+// jsdom lays nothing out; CodeMirror still measures text ranges when it gets the chance.
+beforeAll(() => {
+  Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList
+  Range.prototype.getBoundingClientRect ??= () => new DOMRect()
+})
 
 const content = () => document.querySelector('.cm-content')
 

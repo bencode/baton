@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, test } from 'vitest'
+import { createApi } from '../../api'
+import { ApiContext } from '../../app/api-context'
 import { MarkdownReader } from './markdown-reader'
 import { ReadingAppearance } from './reading-appearance'
 import { defaultReadingPreferences, parseReadingPreferences } from './reading-preferences'
@@ -30,10 +32,12 @@ test('the appearance popover restyles open documents and remembers the choice', 
     path: 'README.md',
   } as const
   const { container } = render(
-    <MemoryRouter>
-      <ReadingAppearance />
-      <MarkdownReader route={route} content="# Title" />
-    </MemoryRouter>,
+    <ApiContext.Provider value={createApi()}>
+      <MemoryRouter>
+        <ReadingAppearance />
+        <MarkdownReader route={route} content="# Title" />
+      </MemoryRouter>
+    </ApiContext.Provider>,
   )
   const surface = () => container.querySelector('.reader-surface')
   fireEvent.click(screen.getByRole('button', { name: '阅读外观' }))

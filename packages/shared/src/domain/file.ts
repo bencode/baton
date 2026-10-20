@@ -9,6 +9,26 @@ export const FILE_DIRECTORY_MAX_ENTRIES = 2000
 export const FILE_SEARCH_MAX_RESULTS = 500
 export const FILE_SEARCH_DEADLINE_MS = 5_000
 export const FILE_SEARCH_QUERY_MAX_LENGTH = 200
+export const FILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
+// Images the reader shows, by extension. Bytes travel only for these types, and
+// the Worker checks each file's signature before sending it.
+export const IMAGE_MEDIA_TYPES: Readonly<Record<string, string>> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  bmp: 'image/bmp',
+  ico: 'image/x-icon',
+  svg: 'image/svg+xml',
+}
+
+export const imageMediaType = (path: string): string | null => {
+  const extension = /\.([a-z\d]+)$/i.exec(path)?.[1]?.toLowerCase()
+  return (extension && IMAGE_MEDIA_TYPES[extension]) || null
+}
 
 // A local branch of the Worker's repository; files are addressed as worker +
 // branch + repository-relative path. Git checks a branch out in at most one
@@ -34,18 +54,22 @@ export type FileView =
   | (FileMeta & { kind: 'text'; content: string })
   | (FileMeta & { kind: 'binary' })
   | (FileMeta & { kind: 'too_large'; limit: number })
+  // Image metadata only; the bytes come from the `raw` query.
+  | (FileMeta & { kind: 'image'; mediaType: string })
 
 export type FileQuery =
   | { op: 'branches' }
   | { op: 'list'; branch: string; path: string }
   | { op: 'search'; branch: string; query: string }
   | { op: 'view'; branch: string; path: string }
+  | { op: 'raw'; branch: string; path: string }
 
 export type FileQueryData = {
   branches: FileBranch[]
   list: FileDirectory
   search: FileSearchResult
   view: FileView
+  raw: { mediaType: string; base64: string }
 }
 
 export type FileErrorCode =
@@ -53,6 +77,7 @@ export type FileErrorCode =
   | 'forbidden_path'
   | 'branch_not_found'
   | 'file_not_found'
+  | 'unsupported'
   | 'unavailable'
   | 'worker_offline'
   | 'worker_timeout'
@@ -63,11 +88,12 @@ export type FileReply<Op extends FileQuery['op'] = FileQuery['op']> =
 
 export type FileQueryResult = { requestId: string } & FileReply
 
-export const FILE_ERROR_STATUS: Record<FileErrorCode, 400 | 403 | 404 | 409 | 502 | 504> = {
+export const FILE_ERROR_STATUS: Record<FileErrorCode, 400 | 403 | 404 | 409 | 415 | 502 | 504> = {
   invalid_request: 400,
   forbidden_path: 403,
   branch_not_found: 404,
   file_not_found: 404,
+  unsupported: 415,
   worker_offline: 409,
   unavailable: 502,
   worker_timeout: 504,
