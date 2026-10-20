@@ -30,6 +30,9 @@ const SearchResults = ({
     return (
       <TreeMessage depth={depth} danger>
         {fileErrorMessage(results.error)}
+        <button type="button" className="ml-2 underline" onClick={results.reload}>
+          重试
+        </button>
       </TreeMessage>
     )
   if (!results.data) return <TreeMessage depth={depth}>搜索中…</TreeMessage>
