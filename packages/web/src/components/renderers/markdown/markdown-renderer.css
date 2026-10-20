@@ -1,11 +1,11 @@
-/* Rendered documents in file tabs. Ported from gamma-reader's reader prose,
+/* Rendered Markdown documents (MarkdownRenderer). Ported from gamma-reader's reader prose,
    wide layout, reading themes, and highlight.js palettes, mapped onto Baton's ui
    tokens. Code blocks, tables, and Mermaid reuse the chat block chrome
    (.chat-code-block / .chat-table / .chat-mermaid). */
 
 /* The reading surface: themes override the ui tokens for the document only. */
 .reader-surface {
-  /* Syntax palette shared by highlighted Markdown fences and the source reader. */
+  /* Syntax palette for highlighted code fences. */
   --syntax-comment: oklch(0.46 0.02 250);
   --syntax-keyword: oklch(0.43 0.15 325);
   --syntax-string: oklch(0.4 0.08 155);

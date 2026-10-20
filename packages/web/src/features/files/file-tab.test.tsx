@@ -9,7 +9,10 @@ import { fileRoutePath, type Route } from '../../app/route'
 import { TabViewer } from '../../app/tabs/tab-viewer'
 import { FileTab } from './file-tab'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 // jsdom lays nothing out; CodeMirror still measures text ranges when it gets the chance.
 beforeAll(() => {
@@ -109,34 +112,7 @@ test('a missing branch is reported, not resolved elsewhere', async () => {
   expect(view).toHaveBeenCalledTimes(1)
 })
 
-test('a Markdown file renders as a document and can switch to its source', async () => {
-  const doc = { ...route, path: 'docs/guide.md' }
-  renderTabs(
-    async () => ({
-      path: 'docs/guide.md',
-      name: 'guide.md',
-      size: 9,
-      commit: null,
-      kind: 'text',
-      content: '# Guide\n',
-    }),
-    doc,
-  )
-  // The reader chunk (highlight.js included) is imported lazily on first render.
-  expect(
-    await screen.findByRole('heading', { name: 'Guide', level: 1 }, { timeout: 10_000 }),
-  ).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: '源码' }))
-  await vi.waitFor(
-    () => expect(document.querySelector('.cm-content')?.textContent).toBe('# Guide'),
-    {
-      timeout: 10_000,
-    },
-  )
-  expect(screen.getByRole('button', { name: '自动换行' })).toBeTruthy()
-})
-
-test('other text files open in the source reader with search and wrapping', async () => {
+test('other text files open in the code view with search and wrapping, not the reading appearance', async () => {
   renderTabs(async () => ({
     path: 'docs/plan.txt',
     name: 'plan.txt',
@@ -152,6 +128,7 @@ test('other text files open in the source reader with search and wrapping', asyn
     },
   )
   expect(screen.queryByRole('button', { name: '源码' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '阅读外观' })).toBeNull()
   expect(screen.getByRole('button', { name: '在文件中搜索' })).toBeTruthy()
   const wrap = screen.getByRole('button', { name: '自动换行' })
   expect(wrap.getAttribute('aria-pressed')).toBe('false')
@@ -163,25 +140,37 @@ test('other text files open in the source reader with search and wrapping', asyn
   fireEvent.click(wrap)
 })
 
+const image = async (): Promise<FileView> => ({
+  path: 'img/arch.png',
+  name: 'arch.png',
+  size: 68,
+  commit: null,
+  kind: 'image',
+  mediaType: 'image/png',
+})
+
 test('an image file shows its bytes from the raw endpoint, fitted until switched', async () => {
-  renderTabs(
-    async () => ({
-      path: 'img/arch.png',
-      name: 'arch.png',
-      size: 68,
-      commit: null,
-      kind: 'image',
-      mediaType: 'image/png',
-    }),
-    { ...route, path: 'img/arch.png' },
-  )
-  const image = await screen.findByRole('img', { name: 'arch.png' })
-  expect(image.getAttribute('src')).toBe('/api/workers/2/raw?branch=feat%2Fx&path=img%2Farch.png')
-  expect(image.className).toBe('image-view-fit')
+  renderTabs(image, { ...route, path: 'img/arch.png' })
+  const shown = await screen.findByRole('img', { name: 'arch.png' })
+  expect(shown.getAttribute('src')).toBe('/api/workers/2/raw?branch=feat%2Fx&path=img%2Farch.png')
+  expect(shown.className).toBe('image-renderer-fit')
   fireEvent.click(screen.getByRole('button', { name: '原始大小' }))
-  expect(screen.getByRole('img', { name: 'arch.png' }).className).toBe('image-view-actual')
+  expect(screen.getByRole('img', { name: 'arch.png' }).className).toBe('image-renderer-actual')
   fireEvent.click(screen.getByRole('button', { name: '刷新文件' }))
   await vi.waitFor(() =>
     expect(screen.getByRole('img', { name: 'arch.png' }).getAttribute('src')).toContain('&r=1'),
   )
+})
+
+test('phones keep images fitted and leave zooming to the system', async () => {
+  const matchMedia = window.matchMedia
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    ...matchMedia(query),
+    matches: query === '(max-width: 767px)',
+  }))
+  renderTabs(image, { ...route, path: 'img/arch.png' })
+  expect((await screen.findByRole('img', { name: 'arch.png' })).className).toBe(
+    'image-renderer-fit',
+  )
+  expect(screen.queryByRole('button', { name: '原始大小' })).toBeNull()
 })

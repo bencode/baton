@@ -1,28 +1,23 @@
-import { type CSSProperties, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
+import {
+  defaultMarkdownAppearance,
+  MARKDOWN_FONT_SIZE,
+  MARKDOWN_THEMES,
+  MARKDOWN_WIDTHS,
+  type MarkdownAppearance,
+} from '../../components/renderers/markdown/markdown-appearance'
 
-// How documents and source views look: one setting for every file tab, kept in
-// this browser. Values outside the allowed set fall back to the defaults.
-export type ReadingTheme = 'light' | 'paper' | 'dark'
-export type ReadingWidth = 'focused' | 'full'
-export type ReadingPreferences = {
-  fontSize: number
-  width: ReadingWidth
-  theme: ReadingTheme
-  // Source views wrap long lines instead of scrolling sideways.
-  wrap: boolean
-}
+// How file tabs read: the Markdown appearance, and whether code views wrap long
+// lines instead of scrolling sideways. One setting for every tab, kept in this
+// browser. Values outside the allowed set fall back to the defaults.
+export type ReadingPreferences = MarkdownAppearance & { wrap: boolean }
 
-export const READING_FONT_SIZE = { min: 12, max: 20 }
 export const defaultReadingPreferences: ReadingPreferences = {
-  fontSize: 16,
-  width: 'focused',
-  theme: 'light',
+  ...defaultMarkdownAppearance,
   wrap: false,
 }
 
 const STORAGE_KEY = 'baton.reader.preferences'
-const THEMES: readonly ReadingTheme[] = ['light', 'paper', 'dark']
-const WIDTHS: readonly ReadingWidth[] = ['focused', 'full']
 
 export const parseReadingPreferences = (raw: string | null): ReadingPreferences => {
   if (raw === null) return defaultReadingPreferences
@@ -43,12 +38,12 @@ export const parseReadingPreferences = (raw: string | null): ReadingPreferences 
     fontSize:
       typeof fontSize === 'number' &&
       Number.isInteger(fontSize) &&
-      fontSize >= READING_FONT_SIZE.min &&
-      fontSize <= READING_FONT_SIZE.max
+      fontSize >= MARKDOWN_FONT_SIZE.min &&
+      fontSize <= MARKDOWN_FONT_SIZE.max
         ? fontSize
         : defaultReadingPreferences.fontSize,
-    width: WIDTHS.find(option => option === width) ?? defaultReadingPreferences.width,
-    theme: THEMES.find(option => option === theme) ?? defaultReadingPreferences.theme,
+    width: MARKDOWN_WIDTHS.find(option => option === width) ?? defaultReadingPreferences.width,
+    theme: MARKDOWN_THEMES.find(option => option === theme) ?? defaultReadingPreferences.theme,
     wrap: typeof wrap === 'boolean' ? wrap : defaultReadingPreferences.wrap,
   }
 }
@@ -90,11 +85,3 @@ export const useReadingPreferences = (): [
   ReadingPreferences,
   (next: ReadingPreferences) => void,
 ] => [useSyncExternalStore(subscribe, snapshot), save]
-
-// Attributes of the element that carries the reading theme, width, and text size.
-export const readingSurfaceProps = (preferences: ReadingPreferences) => ({
-  className: 'reader-surface',
-  'data-reading-theme': preferences.theme,
-  'data-reading-width': preferences.width,
-  style: { '--reader-font-size': `${preferences.fontSize}px` } as CSSProperties,
-})

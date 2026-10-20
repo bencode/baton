@@ -1,16 +1,21 @@
 import type { MouseEvent } from 'react'
 import type { Components } from 'react-markdown'
-import { useNavigate } from 'react-router-dom'
 import rehypeHighlight from 'rehype-highlight'
 import type { PluggableList } from 'unified'
-import { useApi } from '../../app/api-context'
-import { fileRoutePath, type Route } from '../../app/route'
-import { Markdown } from '../../components/markdown'
+import { Markdown } from '../../markdown'
 import { highlightLanguages } from './highlight-languages'
-import { readingSurfaceProps, useReadingPreferences } from './reading-preferences'
-import { classifyLink, resolveRelativePath } from './relative-link'
+import { appearanceSurfaceProps, type MarkdownAppearance } from './markdown-appearance'
 
-type FileRoute = Extract<Route, { kind: 'file' }>
+// How one link in the document behaves, decided by the caller:
+//   anchor   — '#…', stays on the page
+//   external — opens in a new browser tab
+//   internal — shown with `href`; a plain click calls `open`, modified clicks are the browser's
+//   inert    — text only
+export type MarkdownLink =
+  | { kind: 'anchor' }
+  | { kind: 'external' }
+  | { kind: 'internal'; href: string; open(): void }
+  | { kind: 'inert' }
 
 const highlight: PluggableList = [
   [
@@ -26,17 +31,23 @@ const highlight: PluggableList = [
 const isPlainClick = (event: MouseEvent): boolean =>
   event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 
-// A rendered Markdown file. Relative links open the target in the same worker and
-// branch, and relative images load from there; web links open a new browser tab;
-// anything else is plain text. Remote images stay placeholders and raw HTML is
-// dropped, so the document never fetches from or runs anything on other origins.
-export const MarkdownReader = ({ route, content }: { route: FileRoute; content: string }) => {
-  const navigate = useNavigate()
-  const api = useApi()
-  const [preferences] = useReadingPreferences()
+// A Markdown document for reading, with highlighted code, math, and diagrams. The
+// caller decides what each link does and which images may load (`image` returns a
+// URL, or null for a placeholder). Raw HTML is dropped, so the document runs nothing.
+export const MarkdownRenderer = ({
+  content,
+  appearance,
+  link,
+  image,
+}: {
+  content: string
+  appearance: MarkdownAppearance
+  link(href: string): MarkdownLink
+  image(src: string): string | null
+}) => {
   const components: Components = {
     a: ({ node: _node, href = '', children, ...props }) => {
-      const target = classifyLink(route.path, href)
+      const target = link(href)
       if (target.kind === 'anchor')
         return (
           <a {...props} href={href}>
@@ -50,15 +61,14 @@ export const MarkdownReader = ({ route, content }: { route: FileRoute; content: 
           </a>
         )
       if (target.kind === 'inert') return <span title={href}>{children}</span>
-      const path = fileRoutePath({ ...route, path: target.path })
       return (
         <a
           {...props}
-          href={path}
+          href={target.href}
           onClick={event => {
             if (!isPlainClick(event)) return
             event.preventDefault()
-            navigate(path)
+            target.open()
           }}
         >
           {children}
@@ -66,16 +76,9 @@ export const MarkdownReader = ({ route, content }: { route: FileRoute; content: 
       )
     },
     img: ({ alt, src }) => {
-      const path = typeof src === 'string' ? resolveRelativePath(route.path, src) : null
-      if (path !== null)
-        return (
-          <img
-            className="reader-image"
-            src={api.files.rawUrl({ workerId: route.workerId, branch: route.branch }, path)}
-            alt={alt ?? ''}
-            loading="lazy"
-          />
-        )
+      const url = typeof src === 'string' ? image(src) : null
+      if (url !== null)
+        return <img className="reader-image" src={url} alt={alt ?? ''} loading="lazy" />
       return (
         <span
           className="reader-image-placeholder"
@@ -87,7 +90,7 @@ export const MarkdownReader = ({ route, content }: { route: FileRoute; content: 
     },
   }
   return (
-    <div {...readingSurfaceProps(preferences)}>
+    <div {...appearanceSurfaceProps(appearance)}>
       <div className="reader-markdown-page">
         <Markdown
           text={content}

@@ -1,27 +1,32 @@
 import { useId, useState } from 'react'
-import { CheckIcon, TypeIcon } from '../../components/icons'
-import { Popover } from '../../components/popover'
+import { CheckIcon, TypeIcon } from '../../icons'
+import { Popover } from '../../popover'
 import {
-  READING_FONT_SIZE,
-  type ReadingTheme,
-  type ReadingWidth,
-  useReadingPreferences,
-} from './reading-preferences'
+  MARKDOWN_FONT_SIZE,
+  type MarkdownAppearance,
+  type MarkdownTheme,
+  type MarkdownWidth,
+} from './markdown-appearance'
 
-const WIDTHS: { value: ReadingWidth; label: string }[] = [
+const WIDTHS: { value: MarkdownWidth; label: string }[] = [
   { value: 'focused', label: '专注' },
   { value: 'full', label: '全宽' },
 ]
-const THEMES: { value: ReadingTheme; label: string }[] = [
+const THEMES: { value: MarkdownTheme; label: string }[] = [
   { value: 'light', label: '浅色' },
   { value: 'paper', label: '纸张' },
   { value: 'dark', label: '深色' },
 ]
 
-// The 「阅读外观」 button and popover: text size, page width, and theme for every
-// rendered document.
-export const ReadingAppearance = () => {
-  const [preferences, setPreferences] = useReadingPreferences()
+// The 「阅读外观」 button and popover for a Markdown document: text size, page
+// width, and theme.
+export const AppearanceControl = ({
+  value,
+  onChange,
+}: {
+  value: MarkdownAppearance
+  onChange(next: MarkdownAppearance): void
+}) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const sizeId = useId()
   return (
@@ -50,20 +55,18 @@ export const ReadingAppearance = () => {
           <div className="reading-appearance-setting">
             <div className="reading-appearance-header">
               <label htmlFor={sizeId}>字号</label>
-              <output htmlFor={sizeId}>{preferences.fontSize} px</output>
+              <output htmlFor={sizeId}>{value.fontSize} px</output>
             </div>
             <div className="reading-appearance-range">
               <span aria-hidden>A</span>
               <input
                 id={sizeId}
                 type="range"
-                min={READING_FONT_SIZE.min}
-                max={READING_FONT_SIZE.max}
+                min={MARKDOWN_FONT_SIZE.min}
+                max={MARKDOWN_FONT_SIZE.max}
                 step={1}
-                value={preferences.fontSize}
-                onChange={event =>
-                  setPreferences({ ...preferences, fontSize: Number(event.target.value) })
-                }
+                value={value.fontSize}
+                onChange={event => onChange({ ...value, fontSize: Number(event.target.value) })}
               />
               <span aria-hidden className="reading-appearance-large">
                 A
@@ -77,8 +80,8 @@ export const ReadingAppearance = () => {
                 <button
                   key={option.value}
                   type="button"
-                  aria-pressed={preferences.width === option.value}
-                  onClick={() => setPreferences({ ...preferences, width: option.value })}
+                  aria-pressed={value.width === option.value}
+                  onClick={() => onChange({ ...value, width: option.value })}
                 >
                   {option.label}
                 </button>
@@ -92,12 +95,12 @@ export const ReadingAppearance = () => {
                 <button
                   key={option.value}
                   type="button"
-                  aria-pressed={preferences.theme === option.value}
-                  onClick={() => setPreferences({ ...preferences, theme: option.value })}
+                  aria-pressed={value.theme === option.value}
+                  onClick={() => onChange({ ...value, theme: option.value })}
                 >
                   <span className="reading-appearance-swatch" data-reading-theme={option.value}>
                     Aa
-                    {preferences.theme === option.value && <CheckIcon />}
+                    {value.theme === option.value && <CheckIcon />}
                   </span>
                   {option.label}
                 </button>
