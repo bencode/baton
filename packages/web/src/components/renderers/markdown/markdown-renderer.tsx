@@ -1,4 +1,11 @@
-import { type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  type MouseEvent,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import type { Components } from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import rehypeSlug from 'rehype-slug'
@@ -109,6 +116,8 @@ export const MarkdownRenderer = ({
   const [width, setWidth] = useState(0)
   const layout = width >= EMBEDDED_OUTLINE_MIN_WIDTH ? 'embedded' : 'overlay'
   const visible = open && headings.length > 0
+  // Callers may pass a new function on every render.
+  const reportAvailable = useEffectEvent(onAvailableChange)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: headings are read again whenever the content renders
   useLayoutEffect(() => {
@@ -117,8 +126,8 @@ export const MarkdownRenderer = ({
     elements.current = headingElements(article.current)
     setHeadings(elements.current.map(readHeading))
     setActiveId(currentHeading(elements.current, view))
-    onAvailableChange(elements.current.length > 0)
-  }, [content, onAvailableChange])
+    reportAvailable(elements.current.length > 0)
+  }, [content])
 
   useLayoutEffect(() => {
     const element = root.current
