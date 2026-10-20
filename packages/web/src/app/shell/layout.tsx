@@ -30,6 +30,7 @@ export const DesktopSplit = ({
     const targetWidth = desktopWidth.current
     const frame = requestAnimationFrame(() => {
       resourcePanel.current?.resize(hidden ? '0px' : `${targetWidth}px`)
+      restoring.current = false
     })
     return () => cancelAnimationFrame(frame)
   }, [hidden, resourcePanel])
@@ -49,17 +50,18 @@ export const DesktopSplit = ({
         id="resources"
         panelRef={resourcePanel}
         onResize={size => {
-          if (hidden || window.matchMedia('(max-width: 767px)').matches || size.inPixels < 240)
+          if (
+            hidden ||
+            restoring.current ||
+            window.matchMedia('(max-width: 767px)').matches ||
+            size.inPixels < 220
+          )
             return
-          if (restoring.current) {
-            if (Math.abs(size.inPixels - desktopWidth.current) < 1) restoring.current = false
-            return
-          }
           desktopWidth.current = size.inPixels
         }}
         defaultSize={hidden ? '0px' : '288px'}
-        minSize={hidden ? '0px' : '240px'}
-        maxSize={hidden ? '0px' : '400px'}
+        minSize={hidden ? '0px' : '220px'}
+        maxSize={hidden ? '0px' : '100%'}
         groupResizeBehavior="preserve-pixel-size"
       >
         <div
@@ -70,7 +72,9 @@ export const DesktopSplit = ({
           {left}
         </div>
       </Panel>
-      {!hidden && <Separator className="wb-separator" />}
+      {!hidden && (
+        <Separator className="wb-separator" aria-label="调整导航宽度" title="拖动调整导航宽度" />
+      )}
       <Panel id="detail" minSize={isMobile ? '0px' : '320px'}>
         {detail}
       </Panel>
