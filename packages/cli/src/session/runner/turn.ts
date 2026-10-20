@@ -1,13 +1,14 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { type ClaimedExecution, labelAttachments } from '@baton/shared'
+import { type AgentKind, type ClaimedExecution, labelAttachments } from '@baton/shared'
 import { HttpError } from '../../client/request.ts'
 import type { AttemptClient } from '../../client.ts'
 import type { SessionConfig } from '../../project-config.ts'
 import { augmentPrompt, type FetchImpl, materializeAttachments } from './attachments.ts'
 import { type CodexInput, startCodexEvents } from './codex.ts'
+import { startPiEvents } from './pi.ts'
 import { type QueryFn, startQuery } from './query.ts'
-import { streamAgentEvents, streamClaudeSdkEvents } from './stream.ts'
+import { streamAgentEvents, streamClaudeSdkEvents, type TurnResult } from './stream.ts'
 
 export class UnsettledExecution extends Error {}
 
@@ -138,27 +139,30 @@ export const runTurn = async (
     const built = await buildPrompt(config, execution, fetchImpl)
     if (abort.signal.aborted) throw new Error('interrupted before SDK start')
     const { planMode, model, effort } = execution.message.payload
-    return config.agentKind === 'codex'
-      ? streamAgentEvents(
+    const turn = { planMode, model, effort }
+    const run: Record<AgentKind, () => Promise<TurnResult | null>> = {
+      'claude-code': () =>
+        streamClaudeSdkEvents(
+          startQuery(config, built.text, resuming, queryFn, abort, log, { envOverlay, ...turn }),
+          output,
+        ),
+      codex: () =>
+        streamAgentEvents(
           startCodexEvents(config, built.input, worker, {
             envOverlay,
-            planMode,
-            model,
-            effort,
+            ...turn,
             signal: abort.signal,
             log,
           }),
           output,
-        )
-      : streamClaudeSdkEvents(
-          startQuery(config, built.text, resuming, queryFn, abort, log, {
-            envOverlay,
-            planMode,
-            model,
-            effort,
-          }),
+        ),
+      pi: () =>
+        streamAgentEvents(
+          startPiEvents(config, built.input, { ...turn, signal: abort.signal, log }),
           output,
-        )
+        ),
+    }
+    return run[config.agentKind]()
   }
   const consuming = consume().then(
     value => ({ kind: 'result' as const, value }),

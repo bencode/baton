@@ -31,9 +31,9 @@ export const isAgentConversationResumable = (
   config: SessionConfig,
   transcriptPath: (agentSessionId: string) => string | null = findTranscriptPath,
 ): boolean =>
-  config.agentKind === 'codex'
-    ? !config.agentSessionId.startsWith('pending:')
-    : transcriptPath(config.agentSessionId) !== null
+  config.agentKind === 'claude-code'
+    ? transcriptPath(config.agentSessionId) !== null
+    : !config.agentSessionId.startsWith('pending:')
 
 export const shouldReap = (
   lastActivity: number,

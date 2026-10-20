@@ -1,3 +1,4 @@
+import { AGENT_KINDS, isAgentKind } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { fmtWorkerCreation, fmtWorkerTemplate, renderList, renderOne } from '../../output.ts'
 import { clientFor, common, resolveProjectId } from '../../util.ts'
@@ -25,12 +26,11 @@ export const workerCreateCommand = defineCommand({
     ...common,
     template: { type: 'string', required: true, description: 'mini-local' },
     name: { type: 'string', required: true, description: 'worker name' },
-    agentKind: { type: 'string', default: 'claude-code', description: 'claude-code or codex' },
+    agentKind: { type: 'string', default: 'claude-code', description: AGENT_KINDS.join(', ') },
   },
   run: async ({ args }) => {
     if (args.template !== 'mini-local') throw new Error('template must be mini-local')
-    if (args.agentKind !== 'claude-code' && args.agentKind !== 'codex')
-      throw new Error('invalid agentKind')
+    if (!isAgentKind(args.agentKind)) throw new Error('invalid agentKind')
     const name = args.name.trim()
     if (!name) throw new Error('worker name required')
     const creation = await clientFor(args).workerCreations.create(

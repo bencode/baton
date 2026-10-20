@@ -120,8 +120,9 @@ export const RegisterWorkerGuide = ({ projectId }: { projectId: Id }) => {
         <CommandBlock command="baton worker run" />
       </Step>
       <p className="text-xs leading-5 text-ui-muted">
-        连接后可在执行环境页查看。默认使用 Claude Code；注册 Codex 环境时可使用 CLI 的{' '}
-        <code>--agentKind codex</code> 参数。目标机器需已配置所选 Agent。
+        连接后可在执行环境页查看。默认使用 Claude Code；注册 Codex 或 Pi 环境时可使用 CLI 的{' '}
+        <code>--agentKind codex</code> 或 <code>--agentKind pi</code> 参数。目标机器需已配置所选
+        Agent。
       </p>
     </div>
   )

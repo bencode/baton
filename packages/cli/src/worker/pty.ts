@@ -1,7 +1,9 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { createRequire as createModuleRequire } from 'node:module'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import type { AgentKind } from '@baton/shared'
 
 // Hard ceiling on concurrent interactive terminals per worker — the backpressure
 // against runaway ptys (the server-side idle-reaper recycles abandoned ones).
@@ -39,6 +41,20 @@ export const codexPtyCommand = (
       }
 }
 
+// pi's `--session-id` opens the project's session with that id or creates it, so
+// one form covers both fresh and resumed sessions. The package exports only its
+// SDK entry (dist/index.js); the CLI bundle sits beside it at dist/bundle/cli.js.
+export const piPtyCommand = (
+  agentSessionId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): PtyCommand => {
+  const args = ['--session-id', agentSessionId]
+  const override = env.BATON_PI_BIN?.trim()
+  if (override) return { file: override, args }
+  const entry = fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'))
+  return { file: process.execPath, args: [join(dirname(entry), 'bundle', 'cli.js'), ...args] }
+}
+
 // Does claude already have a transcript for this session id? (~/.claude/projects/
 // <project>/<agentSessionId>.jsonl — one level down, like the bash `find`.)
 export const hasSessionJsonl = (agentSessionId: string): boolean => {
@@ -48,6 +64,15 @@ export const hasSessionJsonl = (agentSessionId: string): boolean => {
     if (existsSync(join(root, dir, `${agentSessionId}.jsonl`))) return true
   return false
 }
+
+// The agent TUI for a session. Thunks keep the lookup lazy: only the selected
+// kind resolves its binary or scans for a transcript.
+export const ptyCommand = (kind: AgentKind, agentSessionId: string): PtyCommand =>
+  ({
+    'claude-code': () => claudePtyCommand(agentSessionId, hasSessionJsonl(agentSessionId)),
+    codex: () => codexPtyCommand(agentSessionId),
+    pi: () => piPtyCommand(agentSessionId),
+  })[kind]()
 
 // The worker's outbound terminal-bridge URL. http(s)://server → ws(s):// so the
 // pty WS rides the same host the worker already talks to (no inbound port).

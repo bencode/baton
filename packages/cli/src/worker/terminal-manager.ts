@@ -3,14 +3,7 @@ import type { Id } from '@baton/shared'
 import { type IPty, spawn } from 'node-pty'
 import { WebSocket } from 'ws'
 import { type WorkerConfig, workerEnv } from '../project-config.ts'
-import {
-  claudePtyCommand,
-  codexPtyCommand,
-  hasSessionJsonl,
-  isPositiveDim,
-  MAX_TERMINALS,
-  serverTerminalWsUrl,
-} from './pty.ts'
+import { isPositiveDim, MAX_TERMINALS, ptyCommand, serverTerminalWsUrl } from './pty.ts'
 
 export type TerminalManager = {
   open(sessionId: Id, agentSessionId: string, cwd: string): void
@@ -50,10 +43,7 @@ export const createTerminalManager = (deps: {
       return
     }
 
-    const command =
-      cfg.agentKind === 'codex'
-        ? codexPtyCommand(agentSessionId)
-        : claudePtyCommand(agentSessionId, hasSessionJsonl(agentSessionId))
+    const command = ptyCommand(cfg.agentKind, agentSessionId)
     const term = spawn(command.file, command.args, {
       name: 'xterm-color',
       cols: 80,

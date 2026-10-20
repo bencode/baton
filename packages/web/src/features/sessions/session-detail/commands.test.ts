@@ -4,6 +4,7 @@ import { matchCommands, parseModelArgs, parseSlash, resolveCommand } from './com
 
 const CLAUDE: AgentKind = 'claude-code'
 const CODEX: AgentKind = 'codex'
+const PI: AgentKind = 'pi'
 
 describe('parseSlash', () => {
   test('splits name + args, lowercases name; null for non-slash', () => {
@@ -37,6 +38,7 @@ describe('matchCommands', () => {
   test('"/model" suggests only the session agent\'s models — the two never cross', () => {
     const claude = matchCommands('/model ', CLAUDE).map(c => c.args)
     const codex = matchCommands('/model ', CODEX).map(c => c.args)
+    const pi = matchCommands('/model ', PI).map(c => c.args)
     expect(claude).toContain('opus max')
     expect(claude).toContain('fable')
     expect(codex).toContain('gpt-6-astra')
@@ -45,6 +47,8 @@ describe('matchCommands', () => {
     // The whole point: a codex session is never offered a claude model, or vice versa.
     expect(claude.some(a => a?.startsWith('gpt-'))).toBe(false)
     expect(codex.some(a => claude.includes(a))).toBe(false)
+    expect(pi).toContain('deepseek/deepseek-v4-pro')
+    expect(pi.some(a => claude.includes(a) || codex.includes(a))).toBe(false)
   })
 
   test('"/model <prefix>" filters; exact match / free-form hide the menu', () => {

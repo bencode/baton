@@ -1,6 +1,7 @@
 import type { WorkerView } from '@baton/shared'
 import { useState } from 'react'
 import { TrashIcon } from '../../components/icons'
+import { agentKindLabel } from '../../utils/agent-kind'
 
 type WorkerRowProps = {
   worker: WorkerView
@@ -35,7 +36,7 @@ export const WorkerRow = ({ worker, sessionCount, onDelete }: WorkerRowProps) =>
             {worker.name}
           </p>
           <p className="mg-resource-meta">
-            {worker.agentKind === 'codex' ? 'Codex' : 'Claude Code'} · {worker.hostname}
+            {agentKindLabel[worker.agentKind]} · {worker.hostname}
           </p>
           <p className="mg-resource-meta">
             W-{worker.id} · {worker.connected ? '在线' : '离线'}

@@ -5,7 +5,7 @@ export const workerTemplates = (bus: ProvisionerBus, token?: string): WorkerTemp
   {
     id: 'mini-local',
     name: 'mini 开发环境',
-    agentKinds: ['claude-code', 'codex'],
+    agentKinds: ['claude-code', 'codex', 'pi'],
     available: !!token && bus.has('mini'),
   },
 ]

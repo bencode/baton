@@ -2,6 +2,7 @@ import type { Id, SessionView } from '@baton/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { Modal } from '../../components/modal'
+import { agentKindLabel } from '../../utils/agent-kind'
 import { useWorkers } from '../workers/use-workers'
 import { createSessionOnWorker, readLastWorker } from './session-create'
 
@@ -90,7 +91,7 @@ export const NewSessionDialog = ({
                   {worker.name}
                 </span>
                 <span className="block truncate text-xs text-ui-muted" title={worker.hostname}>
-                  {worker.agentKind === 'codex' ? 'Codex' : 'Claude Code'} · {worker.hostname}
+                  {agentKindLabel[worker.agentKind]} · {worker.hostname}
                 </span>
               </span>
               <span className="shrink-0 text-xs text-ui-muted">

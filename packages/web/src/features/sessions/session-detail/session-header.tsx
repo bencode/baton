@@ -2,6 +2,7 @@ import type { Id, Session } from '@baton/shared'
 import { useState } from 'react'
 import { InfoIcon } from '../../../components/icons'
 import { useIsMobile } from '../../../hooks/use-media-query'
+import { agentKindLabel } from '../../../utils/agent-kind'
 import { LoopsControl } from '../../loops/loops-control'
 import type { StreamState } from '../use-session-stream'
 import { MobileSessionActions, SessionDiagnostics, ShareButton } from './session-header-actions'
@@ -118,9 +119,7 @@ export const SessionHeader = ({
         </div>
         <div className="chat-mobile-bar">
           <div className="chat-mobile-status">
-            <span className="chat-mobile-agent">
-              {session.agentKind === 'codex' ? 'Codex' : 'Claude Code'}
-            </span>
+            <span className="chat-mobile-agent">{agentKindLabel[session.agentKind]}</span>
             <span
               aria-hidden="true"
               className={`chat-mobile-status-dot ${streamStatus === 'open' && connected && busy ? 'bg-ui-accent' : 'bg-ui-border'}`}
@@ -162,7 +161,7 @@ export const SessionHeader = ({
         <div className="flex min-w-0 items-center gap-2">
           <SessionName name={session.name} onRename={onRename} />
           <span className="text-xs md:text-[11px] text-ui-muted">
-            {session.agentKind === 'codex' ? 'Codex' : 'Claude Code'}
+            {agentKindLabel[session.agentKind]}
           </span>
         </div>
         <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1 text-xs">

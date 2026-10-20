@@ -1,6 +1,7 @@
 import type { SessionView } from '@baton/shared'
 import { useState } from 'react'
 import { ChatIcon, ClockIcon, TrashIcon } from '../../components/icons'
+import { agentKindLabel } from '../../utils/agent-kind'
 import { relativeTime } from './relative-time'
 
 type SessionRowProps = {
@@ -86,7 +87,7 @@ export const SessionRow = ({ session, active, onOpen, onDelete }: SessionRowProp
                 className="truncate"
                 title={`${session.worker.name} · ${session.worker.hostname}`}
               >
-                {session.agentKind === 'codex' ? 'Codex' : 'Claude Code'} · {session.worker.name}
+                {agentKindLabel[session.agentKind]} · {session.worker.name}
               </span>
               <span className="ml-auto shrink-0 tabular-nums">
                 {relativeTime(session.lastActiveAt)}

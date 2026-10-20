@@ -1,4 +1,4 @@
-import type { AgentKind, Id } from '@baton/shared'
+import { AGENT_KINDS, type AgentKind, type Id, isAgentKind } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { CommandBus } from '../command-bus.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
@@ -13,7 +13,7 @@ import { type AppEnv, intParam, workerWithView } from '../views.ts'
 const parseAgentKind = (value: unknown): AgentKind | null =>
   value === undefined || value === null || value === ''
     ? 'claude-code'
-    : value === 'claude-code' || value === 'codex'
+    : isAgentKind(value)
       ? value
       : null
 
@@ -44,7 +44,8 @@ export const registerWorkerRoutes = (
     const denied = await assertProjectAccess(c, store, body.projectId)
     if (denied) return denied
     const agentKind = parseAgentKind(body.agentKind)
-    if (!agentKind) return c.json({ error: 'agentKind must be claude-code or codex' }, 400)
+    if (!agentKind)
+      return c.json({ error: `agentKind must be one of ${AGENT_KINDS.join(', ')}` }, 400)
     const out = await store.workers.register({
       projectId: body.projectId,
       agentKind,

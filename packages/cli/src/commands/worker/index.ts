@@ -1,5 +1,5 @@
 import { hostname as osHostname } from 'node:os'
-import type { AgentKind, Id } from '@baton/shared'
+import { AGENT_KINDS, type AgentKind, type Id, isAgentKind } from '@baton/shared'
 import { defineCommand } from 'citty'
 import { type ApiClient, createClient, type WorkerRegisterOutput } from '../../client.ts'
 import { resolveBaseUrlOrNull } from '../../config.ts'
@@ -45,8 +45,8 @@ export type WorkerRegisterRunInput = {
 
 const parseAgentKind = (value: unknown): AgentKind => {
   const raw = typeof value === 'string' && value.trim() ? value.trim() : 'claude-code'
-  if (raw === 'claude-code' || raw === 'codex') return raw
-  throw new Error(`invalid agent kind "${raw}" (expected claude-code or codex)`)
+  if (isAgentKind(raw)) return raw
+  throw new Error(`invalid agent kind "${raw}" (expected ${AGENT_KINDS.join(', ')})`)
 }
 
 // Pure handler: idempotent register + persist worker section into .baton.json.
@@ -102,7 +102,7 @@ export const worker = defineCommand({
         },
         agentKind: {
           type: 'string',
-          description: 'agent engine for new sessions: claude-code or codex',
+          description: `agent engine for new sessions: ${AGENT_KINDS.join(', ')}`,
         },
         ...common,
       },

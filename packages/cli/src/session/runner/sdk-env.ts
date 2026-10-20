@@ -33,6 +33,11 @@ export const additionalDirs = (required: string[] = []): string[] | undefined =>
   return dirs.length > 0 ? [...new Set(dirs)] : undefined
 }
 
+// Agents without a native plan permission mode (codex, pi) get this prompt prefix
+// on top of their read-only enforcement.
+export const PLAN_MODE_PREFIX =
+  'Plan mode: inspect and propose a plan only. Do not edit files or run mutating commands.\n\n'
+
 const truthy = (value: string | undefined): boolean | undefined => {
   if (value === undefined) return undefined
   const normalized = value.trim().toLowerCase()
