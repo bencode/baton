@@ -16,6 +16,8 @@ export type Loop = {
   name?: string
   message: string
   intervalSec: number
+  clearAfterSec?: number
+  nextClearAt?: number
   enabled: boolean
   nextRunAt: number
   lastRunAt?: number

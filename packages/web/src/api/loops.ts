@@ -5,12 +5,14 @@ export type LoopInput = {
   name?: string
   message: string
   intervalSec: number
+  clearAfterSec?: number | null
   enabled?: boolean
 }
 export type LoopPatch = {
   name?: string | null
   message?: string
   intervalSec?: number
+  clearAfterSec?: number | null
   enabled?: boolean
 }
 

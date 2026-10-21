@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type {
   AttemptResult,
   ClaimInput,
@@ -14,6 +13,7 @@ import type { Prisma, PrismaClient } from '@prisma/client'
 import { TURN_LIVENESS_TTL_MS } from '../../busy.ts'
 import { toAttempt, toPendingInput, toSession, toSessionEvent, toTurn } from '../mappers.ts'
 import { ExecutionConflict, type Mutation, type Store } from '../types.ts'
+import { resetContext } from './session-context.ts'
 import { appendSessionEvent, lockSession } from './session-events.ts'
 
 const openTurn = (tx: Prisma.TransactionClient, sessionId: number) =>
@@ -52,22 +52,6 @@ const ownedAttempt = async (
 const requireRunning = (row: { status: string; leaseUntil: Date }): void => {
   if (row.status !== 'running' || row.leaseUntil.getTime() <= Date.now())
     throw new ExecutionConflict('attempt is no longer running')
-}
-
-const resetContext = async (tx: Prisma.TransactionClient, sessionId: number) => {
-  const session = await tx.session.findUniqueOrThrow({ where: { id: sessionId } })
-  if (!session.contextResetRequested) return []
-  const id = randomUUID()
-  await tx.session.update({
-    where: { id: sessionId },
-    data: {
-      contextResetRequested: false,
-      ...(session.agentSessionId
-        ? { agentSessionId: session.agentKind === 'codex' ? `pending:${id}` : id }
-        : {}),
-    },
-  })
-  return [await appendSessionEvent(tx, sessionId, 'system', { action: 'context_cleared' })]
 }
 
 const requestStop = async (

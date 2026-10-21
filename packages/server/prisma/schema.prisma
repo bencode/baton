@@ -359,17 +359,19 @@ model SessionTurnAttempt {
 // skipped (lastStatus='skipped_offline'), not queued — nextRunAt advances from
 // now so missed beats don't pile up. Cascades away with its Session.
 model Loop {
-  id          Int       @id @default(autoincrement())
-  sessionId   Int
-  name        String? // optional human label for the rail/config list
-  message     String // sent verbatim to the session each beat
-  intervalSec Int // beat period in seconds (UI enters minutes/hours/days)
-  enabled     Boolean   @default(true)
-  nextRunAt   DateTime // next scheduled fire; created as now + intervalSec
-  lastRunAt   DateTime? // last actual fire (null until first beat)
-  lastStatus  String? /// 'ok' | 'skipped_offline'
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            Int       @id @default(autoincrement())
+  sessionId     Int
+  name          String? // optional human label for the rail/config list
+  message       String // sent verbatim to the session each beat
+  intervalSec   Int // beat period in seconds (UI enters minutes/hours/days)
+  clearAfterSec Int?
+  nextClearAt   DateTime?
+  enabled       Boolean   @default(true)
+  nextRunAt     DateTime // next scheduled fire; created as now + intervalSec
+  lastRunAt     DateTime? // last actual fire (null until first beat)
+  lastStatus    String? /// 'ok' | 'skipped_offline'
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 

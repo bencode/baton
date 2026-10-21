@@ -223,6 +223,8 @@ export const toLoop = (r: DbLoop): Loop => ({
   name: r.name ?? undefined,
   message: r.message,
   intervalSec: r.intervalSec,
+  clearAfterSec: r.clearAfterSec ?? undefined,
+  nextClearAt: r.nextClearAt?.getTime() ?? undefined,
   enabled: r.enabled,
   nextRunAt: r.nextRunAt.getTime(),
   lastRunAt: r.lastRunAt?.getTime() ?? undefined,

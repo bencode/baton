@@ -29,15 +29,16 @@ const session = {
 } as Session
 
 // Minimal fakes covering exactly what runDueLoops + deliverMessage touch.
-const makeDeps = (opts: { connected: boolean }) => {
+const makeDeps = (opts: { connected: boolean; clearAfterSec?: number; terminalOpen?: boolean }) => {
   const updates: { id: number; patch: LoopPatch }[] = []
   const appended: SessionEvent[] = []
   const submitted: EnqueueInput[] = []
+  const clearAttempts: (number | undefined)[] = []
   const started: WorkerCommand[] = []
   const published: { projectId: number; signal: unknown }[] = []
   const store = {
     loops: {
-      due: async () => [loop],
+      due: async () => [{ ...loop, clearAfterSec: opts.clearAfterSec }],
       update: async (id: number, patch: LoopPatch) => {
         updates.push({ id, patch })
         return { ...loop, ...patch } as Loop
@@ -45,8 +46,13 @@ const makeDeps = (opts: { connected: boolean }) => {
     },
     sessions: { get: async () => session },
     inputs: {
-      submit: async (sessionId: number, input: EnqueueInput) => {
+      submit: async (
+        sessionId: number,
+        input: EnqueueInput,
+        options?: { tryClearContextAt: number },
+      ) => {
         submitted.push(input)
+        clearAttempts.push(options?.tryClearContextAt)
         const event: SessionEvent = {
           id: 99,
           sessionId,
@@ -72,12 +78,13 @@ const makeDeps = (opts: { connected: boolean }) => {
     store,
     commands,
     runtime,
+    terminal: { isOpen: () => opts.terminalOpen ?? false },
     bus: { publish: () => {} } as unknown as EventBus,
     projects: {
       publish: (projectId: number, signal: unknown) => published.push({ projectId, signal }),
     } as unknown as ProjectBus,
   }
-  return { deps, updates, appended, submitted, started, published }
+  return { deps, updates, appended, submitted, started, published, clearAttempts }
 }
 
 test('nextRunAfter advances one full interval from now', () => {
@@ -105,4 +112,20 @@ test('a due loop with an offline worker is skipped — nothing persisted, schedu
   // The beat still signals the project stream so an open loops panel refreshes
   // its row (deliverMessage published nothing on the offline path).
   assert.deepEqual(published, [{ projectId: 3, signal: { resource: 'loops' } }])
+})
+
+test('clear checks are opt-in and skipped for terminals and offline workers', async () => {
+  const configured = makeDeps({ connected: true, clearAfterSec: 7_200 })
+  await runDueLoops(configured.deps, 123_000)
+  assert.deepEqual(configured.clearAttempts, [123_000])
+  const normal = makeDeps({ connected: true })
+  await runDueLoops(normal.deps, 123_000)
+  assert.deepEqual(normal.clearAttempts, [undefined])
+  const terminal = makeDeps({ connected: true, clearAfterSec: 7_200, terminalOpen: true })
+  await runDueLoops(terminal.deps, 123_000)
+  assert.deepEqual(terminal.clearAttempts, [undefined])
+  assert.equal(terminal.submitted.length, 1)
+  const offline = makeDeps({ connected: false, clearAfterSec: 7_200 })
+  await runDueLoops(offline.deps, 123_000)
+  assert.deepEqual(offline.clearAttempts, [])
 })

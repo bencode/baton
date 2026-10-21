@@ -3,7 +3,7 @@ import type { CommandBus } from './command-bus.ts'
 import type { EventBus } from './event-bus.ts'
 import type { ProjectBus } from './project-bus.ts'
 import type { SessionRuntime } from './session-runtime.ts'
-import type { EnqueueInput, Store } from './store/types.ts'
+import type { EnqueueInput, InputSubmitOptions, Store } from './store/types.ts'
 
 export type DeliverDeps = {
   store: Store
@@ -21,11 +21,12 @@ export const deliverMessage = async (
   session: Session,
   input: DeliverInput,
   deps: DeliverDeps,
+  options?: InputSubmitOptions,
 ): Promise<{ delivered: false } | { delivered: true; result: SubmitInputResult }> => {
   const { store, bus, commands, runtime, projects } = deps
   const active = runtime.isActive(session.id)
   if (!active && !commands.has(session.workerId)) return { delivered: false }
-  const mutation = await store.inputs.submit(session.id, input)
+  const mutation = await store.inputs.submit(session.id, input, options)
   projects.publish(session.projectId, { resource: 'sessions' })
   mutation.events.forEach(event => {
     bus.publish(session.id, event)
