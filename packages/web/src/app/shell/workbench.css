@@ -526,7 +526,12 @@
   }
   .wb-tab-strip {
     height: 44px;
-    padding-right: 4px;
+    padding: 0 4px 0 0;
+  }
+  /* Drawer toggle folded in from the compact header (see Shell). */
+  .wb-tab-strip > button:first-child {
+    width: 44px;
+    height: 44px;
   }
   .wb-page-tab[data-active="true"] {
     background: oklch(97% 0.015 255 / 0.8);

@@ -12,7 +12,7 @@ import { useIsMobile } from '../hooks/use-media-query'
 import { ApiContext } from './api-context'
 import { LeftPanel } from './left-panel'
 import { parseRoute, projectViewPath, sessionPath } from './route'
-import { CompactHeader } from './shell/app-header'
+import { CompactHeader, NavMenuButton } from './shell/app-header'
 import { DetailPane } from './shell/detail-pane'
 import { DesktopSplit, MobileMain } from './shell/layout'
 import { useShellRouting } from './shell/use-shell-routing'
@@ -64,16 +64,23 @@ export const Shell = () => {
       close={close}
     />
   )
+  const openMenu = () => (isMobile ? setDrawerOpen(true) : setDesktopCollapsed(false))
+  // Phones fold the project header into the tab strip to leave room for reading;
+  // with no tabs open the strip is gone, so the header keeps the drawer reachable.
+  const mergeHeader = isMobile && tabs.length > 0
   const detail = (
     <DetailPane
       header={
-        isMobile || desktopCollapsed ? (
+        !mergeHeader && (isMobile || desktopCollapsed) ? (
           <CompactHeader
             projectId={routeProjectId}
             menuButtonRef={menuButton}
-            onOpenMenu={() => (isMobile ? setDrawerOpen(true) : setDesktopCollapsed(false))}
+            onOpenMenu={openMenu}
           />
         ) : null
+      }
+      tabsLeading={
+        mergeHeader ? <NavMenuButton menuButtonRef={menuButton} onOpenMenu={openMenu} /> : null
       }
       tabs={tabs}
       onNewSession={startSession}

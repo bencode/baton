@@ -37,28 +37,34 @@ export const SidebarHeader = ({
   </div>
 )
 
-export const CompactHeader = ({
-  projectId,
-  menuButtonRef,
-  onOpenMenu,
-}: {
-  projectId: Id | null
+type MenuButtonProps = {
   menuButtonRef: Ref<HTMLButtonElement>
   onOpenMenu(): void
+}
+
+export const NavMenuButton = ({ menuButtonRef, onOpenMenu }: MenuButtonProps) => (
+  <button
+    ref={menuButtonRef}
+    type="button"
+    onClick={onOpenMenu}
+    className="ui-icon-button"
+    aria-label="打开导航"
+    title="打开导航"
+  >
+    <PanelIcon />
+  </button>
+)
+
+export const CompactHeader = ({
+  projectId,
+  ...menu
+}: MenuButtonProps & {
+  projectId: Id | null
 }) => {
   const { data: project } = useProject(projectId)
   return (
     <header className="wb-compact-header">
-      <button
-        ref={menuButtonRef}
-        type="button"
-        onClick={onOpenMenu}
-        className="ui-icon-button"
-        aria-label="打开导航"
-        title="打开导航"
-      >
-        <PanelIcon />
-      </button>
+      <NavMenuButton {...menu} />
       <span className="min-w-0 truncate">
         {project?.id === projectId ? project.name : '选择项目'}
       </span>
