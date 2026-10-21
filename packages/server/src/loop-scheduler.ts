@@ -1,6 +1,7 @@
 import { type DeliverDeps, deliverMessage } from './session-send.ts'
+import type { TerminalBridge } from './terminal-bridge.ts'
 
-export type LoopSchedulerDeps = DeliverDeps
+export type LoopSchedulerDeps = DeliverDeps & { terminal: Pick<TerminalBridge, 'isOpen'> }
 
 // Next beat from `now` (epoch ms): always one full interval out. A loop that fell
 // behind (server asleep, worker offline for a while) realigns to now instead of
@@ -19,7 +20,16 @@ export const runDueLoops = async (deps: LoopSchedulerDeps, now: number): Promise
     // Session cascade-deleted between the due() snapshot and here → the loop row
     // is gone too; nothing to advance.
     if (!session) continue
-    const sent = await deliverMessage(session, { text: loop.message, loopId: loop.id }, deps)
+    const options =
+      loop.clearAfterSec !== undefined && !deps.terminal.isOpen(session.id)
+        ? { tryClearContextAt: now }
+        : undefined
+    const sent = await deliverMessage(
+      session,
+      { text: loop.message, loopId: loop.id },
+      deps,
+      options,
+    )
     await store.loops.update(loop.id, {
       lastRunAt: now,
       lastStatus: sent.delivered ? 'ok' : 'skipped_offline',

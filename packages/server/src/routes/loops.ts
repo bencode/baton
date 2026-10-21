@@ -16,12 +16,15 @@ const MAX_INTERVAL_SEC = 90 * 86_400
 // Validate a raw interval — required on create, optional on patch. Floors to whole
 // seconds; rejects non-numbers, sub-floor, and absurd values that would overflow
 // the next-run timestamp. Returns the clean value or a client-facing error string.
-const checkInterval = (v: unknown): { value: number } | { error: string } => {
+const checkInterval = (
+  v: unknown,
+  field = 'intervalSec',
+): { value: number } | { error: string } => {
   if (typeof v !== 'number' || !Number.isFinite(v))
-    return { error: `intervalSec must be a number ≥ ${MIN_INTERVAL_SEC}` }
+    return { error: `${field} must be a number ≥ ${MIN_INTERVAL_SEC}` }
   const n = Math.floor(v)
-  if (n < MIN_INTERVAL_SEC) return { error: `intervalSec must be a number ≥ ${MIN_INTERVAL_SEC}` }
-  if (n > MAX_INTERVAL_SEC) return { error: `intervalSec must be ≤ ${MAX_INTERVAL_SEC} (90d)` }
+  if (n < MIN_INTERVAL_SEC) return { error: `${field} must be a number ≥ ${MIN_INTERVAL_SEC}` }
+  if (n > MAX_INTERVAL_SEC) return { error: `${field} must be ≤ ${MAX_INTERVAL_SEC} (90d)` }
   return { value: n }
 }
 
@@ -48,19 +51,26 @@ export const registerLoopRoutes = (app: Hono<AppEnv>, store: Store, projects: Pr
       message?: unknown
       intervalSec?: unknown
       enabled?: unknown
+      clearAfterSec?: unknown
     }
     const message = typeof body.message === 'string' ? body.message.trim() : ''
     if (message.length === 0) return c.json({ error: 'message required' }, 400)
     const iv = checkInterval(body.intervalSec)
     if ('error' in iv) return c.json({ error: iv.error }, 400)
+    const clear =
+      body.clearAfterSec == null ? undefined : checkInterval(body.clearAfterSec, 'clearAfterSec')
+    if (clear && 'error' in clear) return c.json({ error: clear.error }, 400)
+    const now = Date.now()
     const loop = await store.loops.create({
       sessionId,
       name: cleanName(body.name),
       message,
       intervalSec: iv.value,
+      clearAfterSec: clear?.value,
+      nextClearAt: clear ? nextRunAfter(now, clear.value) : undefined,
       enabled: typeof body.enabled === 'boolean' ? body.enabled : true,
       // First beat is one interval out — creating a loop never fires immediately.
-      nextRunAt: nextRunAfter(Date.now(), iv.value),
+      nextRunAt: nextRunAfter(now, iv.value),
     })
     bump(session.projectId)
     return c.json(loop, 201)
@@ -92,8 +102,19 @@ export const registerLoopRoutes = (app: Hono<AppEnv>, store: Store, projects: Pr
       message?: unknown
       intervalSec?: unknown
       enabled?: unknown
+      clearAfterSec?: unknown
     }
     const patch: LoopPatch = {}
+    if (body.clearAfterSec === null) {
+      patch.clearAfterSec = null
+      patch.nextClearAt = null
+    } else if (body.clearAfterSec !== undefined) {
+      const clear = checkInterval(body.clearAfterSec, 'clearAfterSec')
+      if ('error' in clear) return c.json({ error: clear.error }, 400)
+      patch.clearAfterSec = clear.value
+      if (clear.value !== loop.clearAfterSec)
+        patch.nextClearAt = nextRunAfter(Date.now(), clear.value)
+    }
     if (typeof body.name === 'string') patch.name = body.name.trim() || null
     else if (body.name === null) patch.name = null
     if (typeof body.message === 'string') {

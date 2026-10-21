@@ -131,6 +131,8 @@ export type LoopCreate = {
   name?: string
   message: string
   intervalSec: number
+  clearAfterSec?: number
+  nextClearAt?: number
   enabled?: boolean
   nextRunAt: number
 }
@@ -138,6 +140,8 @@ export type LoopPatch = Partial<{
   name: string | null
   message: string
   intervalSec: number
+  clearAfterSec: number | null
+  nextClearAt: number | null
   enabled: boolean
   nextRunAt: number
   lastRunAt: number
@@ -167,6 +171,8 @@ export type WorkerCreationPatch = Partial<
 // Persistence port: fully async, leaving room to swap to a networked DB later. First impl: PrismaStore.
 export type Mutation<T> = { value: T; events: SessionEvent[] }
 export type EnqueueInput = SubmitInput & { loopId?: Id }
+
+export type InputSubmitOptions = { tryClearContextAt: number }
 export type Store = {
   workerCreations: {
     create(input: CreateWorkerInput & { projectId: Id }): Promise<WorkerCreation>
@@ -177,7 +183,11 @@ export type Store = {
   }
   inputs: {
     list(sessionId: Id): Promise<SessionQueueSnapshot>
-    submit(sessionId: Id, input: EnqueueInput): Promise<Mutation<SubmitInputResult>>
+    submit(
+      sessionId: Id,
+      input: EnqueueInput,
+      options?: InputSubmitOptions,
+    ): Promise<Mutation<SubmitInputResult>>
     cancel(sessionId: Id, inputId: Id): Promise<Mutation<CancelInputResult>>
   }
   turns: {

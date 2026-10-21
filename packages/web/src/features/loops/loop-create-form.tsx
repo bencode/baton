@@ -3,6 +3,12 @@ import { useId, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { SelectControl } from '../../components/select-control'
 import { useAutosize } from '../../hooks/use-autosize'
+import {
+  ContextClearInput,
+  contextClearDraft,
+  contextClearError,
+  contextClearSeconds,
+} from './context-clear-input'
 import { type IntervalUnit, intervalError, toSeconds } from './format'
 
 const intervalErrorText = (error: string | null): string | null => {
@@ -19,20 +25,29 @@ export const LoopCreateForm = ({ sessionId }: { sessionId: Id }) => {
   const [message, setMessage] = useState('')
   const [value, setValue] = useState('30')
   const [unit, setUnit] = useState<IntervalUnit>('min')
+  const [clear, setClear] = useState(() => contextClearDraft())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useAutosize(textareaRef, message, 160)
 
   const intervalSec = toSeconds(Number(value), unit)
   const intervalMessage = intervalErrorText(intervalError(intervalSec))
-  const canCreate = message.trim().length > 0 && intervalMessage === null && !busy
+  const canCreate =
+    message.trim().length > 0 &&
+    intervalMessage === null &&
+    contextClearError(clear) === null &&
+    !busy
 
   const create = async () => {
     if (!canCreate) return
     setBusy(true)
     setError(null)
     try {
-      await api.loops.create(sessionId, { message: message.trim(), intervalSec })
+      await api.loops.create(sessionId, {
+        message: message.trim(),
+        intervalSec,
+        ...(clear.enabled ? { clearAfterSec: contextClearSeconds(clear) } : {}),
+      })
       setMessage('')
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Could not create task')
@@ -55,8 +70,6 @@ export const LoopCreateForm = ({ sessionId }: { sessionId: Id }) => {
       <textarea
         ref={textareaRef}
         id={messageId}
-        // biome-ignore lint/a11y/noAutofocus: the form opens after an explicit click
-        autoFocus
         rows={3}
         required
         value={message}
@@ -64,7 +77,7 @@ export const LoopCreateForm = ({ sessionId }: { sessionId: Id }) => {
         placeholder="What should the agent do on each run?"
         className="ui-textarea mt-2 max-h-40 min-h-24 w-full resize-none overflow-y-auto px-3 py-2"
       />
-      <div className="mt-4 grid grid-cols-1 items-end gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="mt-4">
         <label className="flex min-w-0 flex-col gap-2 text-xs font-medium text-ui-text">
           Run every
           <span className="flex min-w-0">
@@ -92,6 +105,16 @@ export const LoopCreateForm = ({ sessionId }: { sessionId: Id }) => {
             </SelectControl>
           </span>
         </label>
+      </div>
+      {intervalMessage && (
+        <p id={intervalErrorId} className="mt-1.5 text-xs text-ui-warning">
+          {intervalMessage}
+        </p>
+      )}
+      <div className="mt-4">
+        <ContextClearInput value={clear} onChange={setClear} disabled={busy} />
+      </div>
+      <div className="mt-4 flex justify-end">
         <button
           type="submit"
           disabled={!canCreate}
@@ -100,11 +123,6 @@ export const LoopCreateForm = ({ sessionId }: { sessionId: Id }) => {
           {busy ? 'Creating…' : 'Create task'}
         </button>
       </div>
-      {intervalMessage && (
-        <p id={intervalErrorId} className="mt-1.5 text-xs text-ui-warning">
-          {intervalMessage}
-        </p>
-      )}
       {error && (
         <p role="alert" className="mt-1.5 text-xs text-ui-danger">
           {error}

@@ -60,7 +60,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     // through the same path an interactive send takes. BATON_LOOP_TICK_MS overrides
     // the 30s default (tests). Unref'd; stopped with the lifecycle.
     const loopScheduler = startLoopScheduler(
-      { store: opts.store, bus, commands, runtime, projects },
+      { store: opts.store, bus, commands, runtime, projects, terminal },
       Number(process.env.BATON_LOOP_TICK_MS) || undefined,
     )
     // Recycle interactive terminals nobody is viewing (frees pty slots).

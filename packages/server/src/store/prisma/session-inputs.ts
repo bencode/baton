@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { toPendingInput } from '../mappers.ts'
 import type { Store } from '../types.ts'
+import { clearLoopContextIfDue } from './session-context.ts'
 import { appendSessionEvent, lockSession } from './session-events.ts'
 
 export const queueSnapshot = async (tx: Prisma.TransactionClient, sessionId: number) => {
@@ -14,9 +15,13 @@ export const queueSnapshot = async (tx: Prisma.TransactionClient, sessionId: num
 
 export const prismaSessionInputs = (prisma: PrismaClient): Store['inputs'] => ({
   list: sessionId => prisma.$transaction(tx => queueSnapshot(tx, sessionId)),
-  submit: (sessionId, input) =>
+  submit: (sessionId, input, options) =>
     prisma.$transaction(async tx => {
       const session = await lockSession(tx, sessionId)
+      const cleared =
+        options && input.loopId !== undefined
+          ? await clearLoopContextIfDue(tx, sessionId, input.loopId, options.tryClearContextAt)
+          : []
       const replaced =
         input.loopId === undefined
           ? null
@@ -57,7 +62,7 @@ export const prismaSessionInputs = (prisma: PrismaClient): Store['inputs'] => ({
           queue: await queueSnapshot(tx, sessionId),
           sinceSequence: event.sequence,
         },
-        events: [event],
+        events: [...cleared, event],
       }
     }),
   cancel: (sessionId, inputId) =>
