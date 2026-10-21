@@ -1,6 +1,6 @@
 import {
   FILE_DIRECTORY_MAX_ENTRIES,
-  FILE_IMAGE_MAX_BYTES,
+  FILE_RAW_MAX_BYTES,
   FILE_SEARCH_MAX_RESULTS,
   FILE_TEXT_MAX_BYTES,
   type FileDirectory,
@@ -10,14 +10,15 @@ import {
   imageMediaType,
   isExcludedDirectoryName,
   isSensitiveFilePath,
+  rawMediaType,
 } from '@baton/shared'
 import {
   byKindThenName,
   checkedPath,
   decodeText,
   FileError,
-  imagePayload,
   notFound,
+  rawPayload,
   searchNeedle,
 } from './common.ts'
 import { runGit } from './git.ts'
@@ -135,8 +136,8 @@ export const viewCommitFile = async (
   const meta = { path: rel, name: rel.split('/').at(-1) ?? rel, commit }
   const mediaType = imageMediaType(rel)
   if (mediaType)
-    return entry.size > FILE_IMAGE_MAX_BYTES
-      ? { ...meta, size: entry.size, kind: 'too_large', limit: FILE_IMAGE_MAX_BYTES }
+    return entry.size > FILE_RAW_MAX_BYTES
+      ? { ...meta, size: entry.size, kind: 'too_large', limit: FILE_RAW_MAX_BYTES }
       : { ...meta, size: entry.size, kind: 'image', mediaType }
   if (entry.size > FILE_TEXT_MAX_BYTES)
     return { ...meta, size: entry.size, kind: 'too_large', limit: FILE_TEXT_MAX_BYTES }
@@ -147,18 +148,19 @@ export const viewCommitFile = async (
     : { ...meta, size: bytes.length, kind: 'text', content }
 }
 
-// Image bytes only, checked against the type their extension claims.
+// Raw bytes of an image, stylesheet, or font, checked against the type their
+// extension claims.
 export const readRawCommitFile = async (
   repo: string,
   commit: string,
   path: string,
 ): Promise<{ mediaType: string; base64: string }> => {
   const rel = checkedPath(path, false)
-  const mediaType = imageMediaType(rel)
-  if (!mediaType) throw new FileError('unsupported', `not an image: ${rel}`)
+  const mediaType = rawMediaType(rel)
+  if (!mediaType) throw new FileError('unsupported', `not served raw: ${rel}`)
   const entry = await regularEntry(repo, commit, rel)
-  if (entry.size > FILE_IMAGE_MAX_BYTES)
-    throw new FileError('unsupported', `image too large: ${rel}`)
-  const bytes = await runGit(repo, ['cat-file', 'blob', entry.oid], FILE_IMAGE_MAX_BYTES + 1)
-  return imagePayload(rel, mediaType, bytes)
+  if (entry.size > FILE_RAW_MAX_BYTES)
+    throw new FileError('unsupported', `too large to serve raw: ${rel}`)
+  const bytes = await runGit(repo, ['cat-file', 'blob', entry.oid], FILE_RAW_MAX_BYTES + 1)
+  return rawPayload(rel, mediaType, bytes)
 }

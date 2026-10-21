@@ -1,0 +1,8 @@
+// The previewed page fills the tab on the white a page assumes.
+.frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: oklch(1 0 0);
+}

@@ -78,7 +78,7 @@ test('relative links and images stay in the same worker and branch', async () =>
   const { container } = renderGuide()
   await documentShown()
   expect([...container.querySelectorAll('img')].map(image => image.getAttribute('src'))).toEqual([
-    '/api/workers/2/raw?branch=feat%2Fx&path=docs%2Flogo.png',
+    '/api/workers/2/raw/feat:x/docs/logo.png',
   ])
   expect(screen.getByText('[图片: pixel]')).toBeTruthy()
   expect(screen.getByText('[图片: out]')).toBeTruthy()

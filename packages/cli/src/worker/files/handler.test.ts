@@ -39,6 +39,9 @@ const PNG = Buffer.from(
   'base64',
 )
 const SVG = '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
+// What an HTML preview links to: a stylesheet and a font (WOFF2 header only).
+const CSS = 'body { background: url(arch.png); }'
+const WOFF2 = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(12)])
 
 describe('worker files — read-only queries on a real repository', () => {
   let tmp: string
@@ -70,6 +73,7 @@ describe('worker files — read-only queries on a real repository', () => {
     write(join(archive, '.env'), 'SECRET=1')
     write(join(archive, 'node_modules/pkg/index.js'), 'module.exports = 1')
     write(join(archive, 'img/pic.png'), PNG)
+    write(join(archive, 'img/pic.css'), CSS)
     write(join(archive, 'big.txt'), '')
     truncateSync(join(archive, 'big.txt'), 5 * 1024 * 1024 + 1)
     symlinkSync('src/app.ts', join(archive, 'link'))
@@ -86,6 +90,11 @@ describe('worker files — read-only queries on a real repository', () => {
     write(join(repo, 'img/arch.png'), PNG)
     write(join(repo, 'img/fake.png'), 'not really a png')
     write(join(repo, 'img/logo.svg'), SVG)
+    write(join(repo, 'img/page.css'), CSS)
+    write(join(repo, 'img/bad.css'), Buffer.from([0xff, 0xfe, 0x00]))
+    write(join(repo, 'img/inter.woff2'), WOFF2)
+    write(join(repo, 'img/fake.woff2'), 'not really a font')
+    write(join(repo, 'img/app.js'), 'document.title = "ran"')
     write(join(repo, 'big.txt'), '')
     truncateSync(join(repo, 'big.txt'), 5 * 1024 * 1024 + 1)
     write(join(tmp, 'outside.txt'), 'outside')
@@ -236,6 +245,22 @@ describe('worker files — read-only queries on a real repository', () => {
       mediaType: 'image/png',
       base64: PNG.toString('base64'),
     })
+  })
+
+  test('raw also sends the stylesheets and fonts a page links to, but never scripts', async () => {
+    const raw = (branch: string, path: string) => query({ op: 'raw', branch, path })
+    assert.deepEqual(data(await raw('main', 'img/page.css'), 'raw'), {
+      mediaType: 'text/css',
+      base64: Buffer.from(CSS).toString('base64'),
+    })
+    assert.deepEqual(data(await raw('main', 'img/inter.woff2'), 'raw'), {
+      mediaType: 'font/woff2',
+      base64: WOFF2.toString('base64'),
+    })
+    assert.equal(failure(await raw('main', 'img/bad.css')), 'unsupported')
+    assert.equal(failure(await raw('main', 'img/fake.woff2')), 'unsupported')
+    assert.equal(failure(await raw('main', 'img/app.js')), 'unsupported')
+    assert.equal(data(await raw('archive', 'img/pic.css'), 'raw').mediaType, 'text/css')
   })
 
   test('reads leave every worktree HEAD, branch, and status unchanged', () => {
