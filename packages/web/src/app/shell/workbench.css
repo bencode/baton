@@ -525,7 +525,7 @@
     padding: 0 4px 0 0;
   }
   /* Drawer toggle folded in from the compact header (see Shell). */
-  .wb-tab-strip > button:first-child {
+  .wb-tab-menu {
     width: 44px;
     height: 44px;
   }

@@ -42,12 +42,16 @@ type MenuButtonProps = {
   onOpenMenu(): void
 }
 
-export const NavMenuButton = ({ menuButtonRef, onOpenMenu }: MenuButtonProps) => (
+export const NavMenuButton = ({
+  menuButtonRef,
+  onOpenMenu,
+  className = 'ui-icon-button',
+}: MenuButtonProps & { className?: string }) => (
   <button
     ref={menuButtonRef}
     type="button"
     onClick={onOpenMenu}
-    className="ui-icon-button"
+    className={className}
     aria-label="打开导航"
     title="打开导航"
   >

@@ -80,7 +80,13 @@ export const Shell = () => {
         ) : null
       }
       tabsLeading={
-        mergeHeader ? <NavMenuButton menuButtonRef={menuButton} onOpenMenu={openMenu} /> : null
+        mergeHeader ? (
+          <NavMenuButton
+            menuButtonRef={menuButton}
+            onOpenMenu={openMenu}
+            className="ui-icon-button wb-tab-menu"
+          />
+        ) : null
       }
       tabs={tabs}
       onNewSession={startSession}
