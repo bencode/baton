@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import {
-  FILE_IMAGE_MAX_BYTES,
+  FILE_RAW_MAX_BYTES,
   FILE_TEXT_MAX_BYTES,
   type FileQuery,
   type FileReply,
   type Id,
-  IMAGE_MEDIA_TYPES,
   isFileErrorCode,
+  RAW_MEDIA_TYPES,
 } from '@baton/shared'
 import type { CommandBus } from './command-bus.ts'
 
@@ -58,12 +58,12 @@ const checkedReply = (op: FileQuery['op'], result: Record<string, unknown>): Fil
   if (
     op === 'raw' &&
     !(
-      Object.values(IMAGE_MEDIA_TYPES).includes(String(data.mediaType)) &&
+      Object.values(RAW_MEDIA_TYPES).includes(String(data.mediaType)) &&
       typeof data.base64 === 'string' &&
-      Buffer.byteLength(data.base64, 'base64') <= FILE_IMAGE_MAX_BYTES
+      Buffer.byteLength(data.base64, 'base64') <= FILE_RAW_MAX_BYTES
     )
   )
-    return unavailable('worker sent an invalid image')
+    return unavailable('worker sent invalid raw bytes')
   return { ok: true, data } as FileReply
 }
 

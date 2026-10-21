@@ -3,7 +3,7 @@ import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import {
   FILE_DIRECTORY_MAX_ENTRIES,
-  FILE_IMAGE_MAX_BYTES,
+  FILE_RAW_MAX_BYTES,
   FILE_SEARCH_DEADLINE_MS,
   FILE_SEARCH_MAX_RESULTS,
   FILE_TEXT_MAX_BYTES,
@@ -14,14 +14,15 @@ import {
   imageMediaType,
   isExcludedDirectoryName,
   isSensitiveFilePath,
+  rawMediaType,
 } from '@baton/shared'
 import {
   byKindThenName,
   checkedPath,
   decodeText,
   FileError,
-  imagePayload,
   notFound,
+  rawPayload,
   searchNeedle,
 } from './common.ts'
 
@@ -178,8 +179,8 @@ export const viewFile = async (root: string, path: string): Promise<FileView> =>
   if (mediaType) {
     const info = await stat(file.real)
     if (!info.isFile()) throw notFound(file.path)
-    return info.size > FILE_IMAGE_MAX_BYTES
-      ? { ...meta, size: info.size, kind: 'too_large', limit: FILE_IMAGE_MAX_BYTES }
+    return info.size > FILE_RAW_MAX_BYTES
+      ? { ...meta, size: info.size, kind: 'too_large', limit: FILE_RAW_MAX_BYTES }
       : { ...meta, size: info.size, kind: 'image', mediaType }
   }
   const read = await readWithin(file, FILE_TEXT_MAX_BYTES)
@@ -191,15 +192,16 @@ export const viewFile = async (root: string, path: string): Promise<FileView> =>
     : { ...meta, size: read.bytes.length, kind: 'text', content }
 }
 
-// Image bytes only, checked against the type their extension claims.
+// Raw bytes of an image, stylesheet, or font, checked against the type their
+// extension claims.
 export const readRawFile = async (
   root: string,
   path: string,
 ): Promise<{ mediaType: string; base64: string }> => {
   const file = await resolveInside(root, path, false)
-  const mediaType = imageMediaType(file.path)
-  if (!mediaType) throw new FileError('unsupported', `not an image: ${file.path}`)
-  const read = await readWithin(file, FILE_IMAGE_MAX_BYTES)
-  if ('oversize' in read) throw new FileError('unsupported', `image too large: ${file.path}`)
-  return imagePayload(file.path, mediaType, read.bytes)
+  const mediaType = rawMediaType(file.path)
+  if (!mediaType) throw new FileError('unsupported', `not served raw: ${file.path}`)
+  const read = await readWithin(file, FILE_RAW_MAX_BYTES)
+  if ('oversize' in read) throw new FileError('unsupported', `too large to serve raw: ${file.path}`)
+  return rawPayload(file.path, mediaType, read.bytes)
 }

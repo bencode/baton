@@ -9,7 +9,9 @@ export const FILE_DIRECTORY_MAX_ENTRIES = 2000
 export const FILE_SEARCH_MAX_RESULTS = 500
 export const FILE_SEARCH_DEADLINE_MS = 5_000
 export const FILE_SEARCH_QUERY_MAX_LENGTH = 200
-export const FILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+// Bytes sent as-is through the `raw` query: images, and the stylesheets and fonts
+// an HTML preview loads.
+export const FILE_RAW_MAX_BYTES = 5 * 1024 * 1024
 
 // Images the reader shows, by extension. Bytes travel only for these types, and
 // the Worker checks each file's signature before sending it.
@@ -25,10 +27,35 @@ export const IMAGE_MEDIA_TYPES: Readonly<Record<string, string>> = {
   svg: 'image/svg+xml',
 }
 
-export const imageMediaType = (path: string): string | null => {
-  const extension = /\.([a-z\d]+)$/i.exec(path)?.[1]?.toLowerCase()
-  return (extension && IMAGE_MEDIA_TYPES[extension]) || null
+// Everything the `raw` query serves: images, plus what a previewed HTML page
+// links to. Scripts are not served; previews never run them.
+export const RAW_MEDIA_TYPES: Readonly<Record<string, string>> = {
+  ...IMAGE_MEDIA_TYPES,
+  css: 'text/css',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  ttf: 'font/ttf',
+  otf: 'font/otf',
 }
+
+const mediaTypeIn =
+  (types: Readonly<Record<string, string>>) =>
+  (path: string): string | null => {
+    const extension = /\.([a-z\d]+)$/i.exec(path)?.[1]?.toLowerCase()
+    return (extension && types[extension]) || null
+  }
+
+export const imageMediaType = mediaTypeIn(IMAGE_MEDIA_TYPES)
+export const rawMediaType = mediaTypeIn(RAW_MEDIA_TYPES)
+
+// A branch as one URL path segment, so relative URLs inside a previewed page
+// resolve under it. Git forbids ':' in branch names, which makes it a safe
+// stand-in for '/'; '%2F' is avoided because proxies treat it inconsistently.
+export const branchPathSegment = (branch: string): string =>
+  branch.split('/').map(encodeURIComponent).join(':')
+
+// The branch named by a decoded path segment.
+export const branchFromPathSegment = (segment: string): string => segment.replaceAll(':', '/')
 
 // A local branch of the Worker's repository; files are addressed as worker +
 // branch + repository-relative path. Git checks a branch out in at most one

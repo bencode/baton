@@ -1,4 +1,5 @@
 import {
+  branchFromPathSegment,
   FILE_ERROR_STATUS,
   FILE_SEARCH_QUERY_MAX_LENGTH,
   type FileErrorCode,
@@ -33,20 +34,20 @@ const fail = (c: Ctx, code: FileErrorCode, message: string): Response =>
 const respond = (c: Ctx, reply: FileReply): Response =>
   reply.ok ? c.json(reply.data) : fail(c, reply.code, reply.message)
 
-// Image bytes go out as the response body, never sniffed as another type; the
-// sandbox CSP keeps an SVG opened directly from running scripts.
-const IMAGE_HEADERS = {
+// Raw bytes go out as the response body, never sniffed as another type; the
+// sandbox CSP keeps an SVG or stylesheet opened directly from running scripts.
+const RAW_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Cache-Control': 'private, no-store',
   'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
 }
 
-const sendImage = (c: Ctx, reply: FileReply): Response => {
+const sendRaw = (c: Ctx, reply: FileReply): Response => {
   if (!reply.ok) return fail(c, reply.code, reply.message)
   const { mediaType, base64 } = reply.data as FileQueryData['raw']
   return c.body(new Uint8Array(Buffer.from(base64, 'base64')), 200, {
-    ...IMAGE_HEADERS,
-    'Content-Type': mediaType,
+    ...RAW_HEADERS,
+    'Content-Type': mediaType.startsWith('text/') ? `${mediaType}; charset=utf-8` : mediaType,
   })
 }
 
@@ -111,15 +112,17 @@ export const registerFileRoutes = (app: Hono<AppEnv>, store: Store, files: FileR
     }),
   )
 
-  app.get(`${base}/raw`, c =>
+  // Path-addressed, so URLs relative to a file resolve to its neighbours: a
+  // previewed page's stylesheets and images, and the url()s inside those sheets.
+  app.get(`${base}/raw/:branch/:path{.+}`, c =>
     forward(
       c,
       () => {
-        const branch = branchParam(c)
-        const path = normalizeFilePath(c.req.query('path') ?? '')
-        return branch && path !== null ? { op: 'raw', branch, path } : null
+        const branch = branchFromPathSegment(c.req.param('branch'))
+        const path = normalizeFilePath(c.req.param('path'))
+        return isBranchName(branch) && path !== null ? { op: 'raw', branch, path } : null
       },
-      sendImage,
+      sendRaw,
     ),
   )
 

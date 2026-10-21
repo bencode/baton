@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { imageMediaType, isBranchName, isSensitiveFilePath, normalizeFilePath } from './file.ts'
+import {
+  branchFromPathSegment,
+  branchPathSegment,
+  imageMediaType,
+  isBranchName,
+  isSensitiveFilePath,
+  normalizeFilePath,
+  rawMediaType,
+} from './file.ts'
 
 test('normalizeFilePath accepts root-relative paths and rejects escapes', () => {
   assert.equal(normalizeFilePath('docs/计划 #1 100%.md'), 'docs/计划 #1 100%.md')
@@ -47,4 +55,25 @@ test('imageMediaType recognises image extensions case-insensitively', () => {
   assert.equal(imageMediaType('photo.jpeg'), 'image/jpeg')
   for (const path of ['notes.md', 'png', 'archive.png.txt', 'Makefile'])
     assert.equal(imageMediaType(path), null, path)
+})
+
+test('raw serves images plus the stylesheets and fonts a page links to, never scripts', () => {
+  assert.equal(rawMediaType('docs/arch.png'), 'image/png')
+  assert.equal(rawMediaType('site/report.CSS'), 'text/css')
+  assert.equal(rawMediaType('fonts/inter.woff2'), 'font/woff2')
+  assert.equal(imageMediaType('site/report.css'), null)
+  for (const path of ['app.js', 'page.html', 'data.json'])
+    assert.equal(rawMediaType(path), null, path)
+})
+
+test('a branch fits one URL path segment and comes back unchanged', () => {
+  const cases: [branch: string, segment: string][] = [
+    ['main', 'main'],
+    ['feat/x', 'feat:x'],
+    ['修复/预览 页', '%E4%BF%AE%E5%A4%8D:%E9%A2%84%E8%A7%88%20%E9%A1%B5'],
+  ]
+  for (const [branch, segment] of cases) {
+    assert.equal(branchPathSegment(branch), segment)
+    assert.equal(branchFromPathSegment(decodeURIComponent(segment)), branch)
+  }
 })

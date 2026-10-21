@@ -10,8 +10,13 @@ import { ReaderLoading, type TextFileView, useCodeView } from './code-file'
 import { FilePage, type FileShell } from './file-page'
 import { useReadingPreferences } from './reading-preferences'
 import { classifyLink, resolveRelativePath } from './relative-link'
+import { ViewModeToggle } from './view-mode'
 
 type Mode = 'rendered' | 'source'
+const MODES: readonly { value: Mode; label: string }[] = [
+  { value: 'rendered', label: '渲染' },
+  { value: 'source', label: '源码' },
+]
 
 // Markdown plugins load with the first rendered document.
 const MarkdownRenderer = lazy(() =>
@@ -63,20 +68,7 @@ export const MarkdownFile = ({ shell, view }: { shell: FileShell; view: TextFile
       ) : (
         code.tools
       )}
-      {!mobile && (
-        <fieldset className="files-mode" aria-label="显示方式">
-          {(['rendered', 'source'] as const).map(value => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={mode === value}
-              onClick={() => setMode(value)}
-            >
-              {value === 'rendered' ? '渲染' : '源码'}
-            </button>
-          ))}
-        </fieldset>
-      )}
+      {!mobile && <ViewModeToggle value={mode} options={MODES} onChange={setMode} />}
     </>
   )
   return (

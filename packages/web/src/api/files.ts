@@ -1,4 +1,5 @@
 import {
+  branchPathSegment,
   type FileBranch,
   type FileDirectory,
   type FileErrorCode,
@@ -30,8 +31,11 @@ export type FilesApi = {
   list(scope: FileScope, path: string, signal?: AbortSignal): Promise<FileDirectory>
   search(scope: FileScope, query: string, signal?: AbortSignal): Promise<FileSearchResult>
   view(scope: FileScope, path: string, signal?: AbortSignal): Promise<FileView>
-  // Address of an image's bytes, for <img src> (same origin, so the session cookie
-  // rides along). A new revision makes the browser fetch it again.
+  // Where a branch's raw files are addressed by path, ending in '/': URLs relative
+  // to a file under it reach that file's neighbours.
+  rawRoot(scope: FileScope): string
+  // Address of a file's bytes, for <img src> and the like (same origin, so the
+  // session cookie rides along). A new revision makes the browser fetch it again.
   rawUrl(scope: FileScope, path: string, revision?: number): string
 }
 
@@ -61,6 +65,8 @@ const get = async <T>(url: string, signal?: AbortSignal): Promise<T> => {
 export const filesApi = (u: Url): FilesApi => {
   const at = (workerId: Id, op: string, params: Record<string, string>) =>
     u(`/workers/${workerId}/${op}?${new URLSearchParams(params)}`)
+  const rawRoot = ({ workerId, branch }: FileScope) =>
+    u(`/workers/${workerId}/raw/${branchPathSegment(branch)}/`)
   return {
     branches: (workerId, signal) => get(u(`/workers/${workerId}/branches`), signal),
     list: ({ workerId, branch }, path, signal) =>
@@ -69,7 +75,8 @@ export const filesApi = (u: Url): FilesApi => {
       get(at(workerId, 'search', { branch, q: query }), signal),
     view: ({ workerId, branch }, path, signal) =>
       get(at(workerId, 'view', { branch, path }), signal),
-    rawUrl: ({ workerId, branch }, path, revision) =>
-      at(workerId, 'raw', { branch, path, ...(revision ? { r: String(revision) } : {}) }),
+    rawRoot,
+    rawUrl: (scope, path, revision) =>
+      `${rawRoot(scope)}${path.split('/').map(encodeURIComponent).join('/')}${revision ? `?r=${revision}` : ''}`,
   }
 }

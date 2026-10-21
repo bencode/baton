@@ -9,6 +9,16 @@ import { fileRoutePath, type Route } from '../../app/route'
 import { TabViewer } from '../../app/tabs/tab-viewer'
 import { FileTab } from './file-tab'
 
+// Mermaid draws a fixed diagram; the Mermaid component's own tests cover drawing.
+vi.mock('mermaid', () => ({
+  default: {
+    initialize: vi.fn(),
+    render: async () => ({
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>',
+    }),
+  },
+}))
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -30,7 +40,8 @@ const route: Extract<Route, { kind: 'file' }> = {
 const otherPath = '/proj/1/session/9'
 
 const renderTabs = (view: () => Promise<FileView>, file = route) => {
-  const api = { files: { view: vi.fn(view), rawUrl: createApi().files.rawUrl } } as unknown as Api
+  const { rawRoot, rawUrl } = createApi().files
+  const api = { files: { view: vi.fn(view), rawRoot, rawUrl } } as unknown as Api
   const filePath = fileRoutePath(file)
   const tabs = [
     { id: filePath, title: 'plan', lastActiveAt: 0 },
@@ -152,7 +163,7 @@ const image = async (): Promise<FileView> => ({
 test('an image file shows its bytes from the raw endpoint, fitted until switched', async () => {
   renderTabs(image, { ...route, path: 'img/arch.png' })
   const shown = await screen.findByRole('img', { name: 'arch.png' })
-  expect(shown.getAttribute('src')).toBe('/api/workers/2/raw?branch=feat%2Fx&path=img%2Farch.png')
+  expect(shown.getAttribute('src')).toBe('/api/workers/2/raw/feat:x/img/arch.png')
   expect(shown.closest('[data-size]')?.getAttribute('data-size')).toBe('fit')
   fireEvent.click(screen.getByRole('button', { name: '原始大小' }))
   expect(
@@ -160,7 +171,7 @@ test('an image file shows its bytes from the raw endpoint, fitted until switched
   ).toBe('actual')
   fireEvent.click(screen.getByRole('button', { name: '刷新文件' }))
   await vi.waitFor(() =>
-    expect(screen.getByRole('img', { name: 'arch.png' }).getAttribute('src')).toContain('&r=1'),
+    expect(screen.getByRole('img', { name: 'arch.png' }).getAttribute('src')).toContain('?r=1'),
   )
 })
 
@@ -174,4 +185,38 @@ test('phones keep images fitted and leave zooming to the system', async () => {
   const shown = await screen.findByRole('img', { name: 'arch.png' })
   expect(shown.closest('[data-size]')?.getAttribute('data-size')).toBe('fit')
   expect(screen.queryByRole('button', { name: '原始大小' })).toBeNull()
+})
+
+const text = (path: string, content: string) => async (): Promise<FileView> => ({
+  path,
+  name: path.split('/').at(-1) ?? path,
+  size: content.length,
+  commit: null,
+  kind: 'text',
+  content,
+})
+
+test('an HTML file previews without scripts, its files resolved on the same branch', async () => {
+  renderTabs(text('site/report.html', '<h1>Report</h1><script>x()</script>'), {
+    ...route,
+    path: 'site/report.html',
+  })
+  const frame = await screen.findByTitle('report.html', {}, { timeout: 10_000 })
+  expect(frame.getAttribute('sandbox')).toBe('allow-same-origin')
+  expect(frame.getAttribute('srcdoc')).toContain(
+    '<base href="/api/workers/2/raw/feat:x/site/" target="_blank">',
+  )
+  fireEvent.click(screen.getByRole('button', { name: '源码' }))
+  await vi.waitFor(
+    () => expect(document.querySelector('.cm-content')?.textContent).toContain('<h1>Report</h1>'),
+    { timeout: 10_000 },
+  )
+  expect(screen.queryByTitle('report.html')).toBeNull()
+})
+
+test('a Mermaid file is drawn, with its source folded beneath', async () => {
+  renderTabs(text('docs/flow.mmd', 'flowchart LR\nA --> B'), { ...route, path: 'docs/flow.mmd' })
+  expect(await screen.findByRole('img', { name: 'Mermaid 图表' }, { timeout: 10_000 })).toBeTruthy()
+  expect(screen.getByText('查看源码')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '源码' })).toBeNull()
 })
