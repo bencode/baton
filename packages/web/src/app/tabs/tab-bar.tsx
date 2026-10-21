@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import {
   ChatIcon,
   CloseIcon,
@@ -14,6 +14,7 @@ import { ProjectTabLabel } from './project-tab-label'
 import type { Tab } from './tabs-model'
 
 type TabBarProps = {
+  leading?: ReactNode
   tabs: Tab[]
   activeId: string
   onSelect(id: string): void
@@ -42,6 +43,7 @@ const tabLabel = (tab: Tab) => {
 }
 
 export const TabBar = ({
+  leading,
   tabs,
   activeId,
   onSelect,
@@ -88,6 +90,7 @@ export const TabBar = ({
   if (!tabs.length) return null
   return (
     <nav className="wb-tab-strip" aria-label="已打开的页面">
+      {leading}
       <div ref={scrollArea} className="wb-open-tabs">
         {tabs.map(tab => {
           const active = tab.id === activeId

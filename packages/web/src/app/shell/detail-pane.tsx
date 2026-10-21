@@ -13,6 +13,7 @@ import { ProjectView } from './project-view'
 
 type DetailPaneProps = {
   header: ReactNode
+  tabsLeading: ReactNode
   tabs: Tab[]
   activeId: string
   open(path: string, title: string): void
@@ -86,6 +87,7 @@ export const DetailPane = (props: DetailPaneProps) => (
   <main className="wb-detail">
     {props.header}
     <TabBar
+      leading={props.tabsLeading}
       tabs={props.tabs}
       activeId={props.activeId}
       onSelect={id => props.open(id, props.tabs.find(tab => tab.id === id)?.title ?? id)}

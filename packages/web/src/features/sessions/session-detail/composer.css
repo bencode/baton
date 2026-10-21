@@ -629,18 +629,25 @@
 }
 @media (max-width: 767px) {
   .composer-area {
-    padding: 8px 12px max(10px, env(safe-area-inset-bottom));
+    padding: 6px 8px max(6px, env(safe-area-inset-bottom));
   }
   .composer-input-row {
-    padding: 12px 12px 0;
+    padding: 10px 12px 0;
   }
   .composer-input-row textarea {
-    min-height: 44px;
+    min-height: 26px;
     font-size: 16px;
   }
   .composer-toolbar {
-    padding: 4px 6px 6px;
-    row-gap: 2px;
+    padding: 0 4px;
+    row-gap: 0;
+  }
+  /* The session header already carries the same resume button. */
+  .composer-footer:has(> .composer-footer-action) {
+    display: none;
+  }
+  .composer-footer {
+    margin-top: 6px;
   }
   .composer-options {
     flex: 1 1 auto;

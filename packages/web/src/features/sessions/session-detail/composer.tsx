@@ -139,7 +139,7 @@ export const Composer = ({
               aria-controls={slash.open ? menuId : undefined}
               aria-activedescendant={slash.open ? `${menuId}-${slash.activeIndex}` : undefined}
               placeholder="输入消息 · / 命令 · Shift+Enter 换行"
-              rows={2}
+              rows={1}
               onChange={event => {
                 draft.setText(event.target.value)
                 slash.reset()

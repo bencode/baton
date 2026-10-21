@@ -243,15 +243,22 @@
   font-size: 14px;
 }
 @media (max-width: 767px) {
+  .chat-markdown {
+    line-height: 1.65;
+  }
+  .chat-markdown p {
+    margin: 6px 0;
+  }
   .chat-markdown h1 {
     font-size: 20px;
+    margin: 22px 0 8px;
   }
   .chat-markdown h2 {
     font-size: 18px;
-    margin-top: 26px;
+    margin: 20px 0 8px;
   }
   .chat-markdown h3 {
-    margin-top: 22px;
+    margin-top: 18px;
   }
   .chat-markdown-process h1 {
     font-size: 17px;

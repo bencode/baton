@@ -337,10 +337,10 @@
 
 @media (max-width: 767px) {
   .chat-scroll {
-    padding: 16px 16px 24px;
+    padding: 12px 14px 16px;
   }
   .chat-transcript > * + * {
-    margin-top: 16px;
+    margin-top: 12px;
   }
   .chat-transcript > .chat-turn-info {
     margin-top: 8px;
@@ -351,8 +351,8 @@
     padding: 10px 12px;
   }
   .chat-session-header {
-    min-height: 48px;
-    padding: 0 12px;
+    min-height: 44px;
+    padding: 0 4px 0 14px;
   }
   .chat-mobile-title {
     display: flex;
@@ -363,8 +363,8 @@
   .chat-mobile-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 47px;
+    gap: 4px;
+    min-height: 43px;
   }
   .chat-mobile-status {
     display: flex;
