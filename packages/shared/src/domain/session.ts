@@ -22,11 +22,18 @@ export type AgentKind = (typeof AGENT_KINDS)[number]
 export const isAgentKind = (v: unknown): v is AgentKind =>
   typeof v === 'string' && (AGENT_KINDS as readonly string[]).includes(v)
 
-// Effort levels exposed by Baton. Codex and pi accept them directly; Claude maps
-// 'minimal' to 'low'. Additional SDK levels require explicit integration here.
-export type AgentEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+// Effort levels exposed by Baton, in each SDK's own names — no cross-agent
+// mapping. Codex supports all of them; Claude and pi stop at 'max', and a level
+// an agent doesn't support falls back to its SDK default.
+export type AgentEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 
-const EFFORTS: AgentEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+const EFFORTS: AgentEffort[] = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+
+export const AGENT_EFFORTS: Record<AgentKind, AgentEffort[]> = {
+  'claude-code': ['low', 'medium', 'high', 'xhigh', 'max'],
+  codex: EFFORTS,
+  pi: ['low', 'medium', 'high', 'xhigh', 'max'],
+}
 
 export const isAgentEffort = (v: unknown): v is AgentEffort =>
   typeof v === 'string' && (EFFORTS as string[]).includes(v)

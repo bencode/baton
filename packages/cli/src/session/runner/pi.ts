@@ -215,7 +215,9 @@ export async function* startPiEvents(
   const pi = await import('@earendil-works/pi-coding-agent')
   const modelRuntime = await pi.ModelRuntime.create()
   const model = opts.model ? resolveModel(modelRuntime, opts.model) : undefined
-  const thinkingLevel = isAgentEffort(opts.effort) ? opts.effort : undefined
+  // pi has no 'ultra'; leave it to pi's default like any unsupported level.
+  const effort = isAgentEffort(opts.effort) ? opts.effort : undefined
+  const thinkingLevel = effort === 'ultra' ? undefined : effort
   const agentDir = pi.getAgentDir()
   const resourceLoader = new pi.DefaultResourceLoader({
     cwd: config.cwd,

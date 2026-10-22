@@ -52,15 +52,15 @@ test('settings show only confirmed values and failed requests unlock for manual 
     ...session,
     planMode: true,
     model: 'gateway/custom',
-    effort: 'minimal',
+    effort: 'max',
   })
-  await act(() => hook.result.current.setModel(' gateway/custom ', 'minimal'))
+  await act(() => hook.result.current.setModel(' gateway/custom ', 'max'))
   expect(hook.result.current.settings.model).toBeNull()
   expect(hook.result.current.error).toBe('保存失败')
   expect(hook.result.current.saving).toBeNull()
-  await act(() => hook.result.current.setModel(' gateway/custom ', 'minimal'))
-  expect(model).toHaveBeenLastCalledWith(1, 'gateway/custom', 'minimal')
-  expect(hook.result.current.settings.effort).toBe('minimal')
+  await act(() => hook.result.current.setModel(' gateway/custom ', 'max'))
+  expect(model).toHaveBeenLastCalledWith(1, 'gateway/custom', 'max')
+  expect(hook.result.current.settings.effort).toBe('max')
   hook.rerender({ value: { ...session, planMode: true, model: 'external', effort: 'high' } })
   expect(hook.result.current.settings.model).toBe('external')
 })
