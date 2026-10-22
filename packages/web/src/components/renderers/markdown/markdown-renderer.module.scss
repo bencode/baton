@@ -293,11 +293,6 @@
     max-width: none;
     grid-template-columns: [wide-start prose-start] minmax(0, 1fr) [prose-end wide-end];
   }
-  .page > :global(.reader-markdown) {
-    display: contents;
-    --prose-gap: 17px;
-    --prose-heading-gap: 36px;
-  }
   :where(.page) :global(.reader-markdown) {
     > * {
       min-width: 0;
@@ -313,5 +308,10 @@
       ) {
       grid-column: prose-start / wide-end;
     }
+  }
+  .page > :global(.reader-markdown) {
+    display: contents;
+    --prose-gap: 17px;
+    --prose-heading-gap: 36px;
   }
 }

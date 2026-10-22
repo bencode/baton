@@ -80,24 +80,6 @@
   }
 }
 
-.themes {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-
-  button {
-    display: grid;
-    gap: 6px;
-    justify-items: center;
-    font-size: 12px;
-    color: var(--color-ui-muted);
-  }
-  button[aria-pressed="true"] .swatch {
-    border-color: var(--color-ui-accent);
-    box-shadow: 0 0 0 1px var(--color-ui-accent);
-  }
-}
-
 .swatch {
   position: relative;
   display: grid;
@@ -127,5 +109,23 @@
   &[data-reading-theme="dark"] {
     background: oklch(0.2 0.008 260);
     color: oklch(0.9 0.005 80);
+  }
+}
+
+.themes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+
+  button {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+    font-size: 12px;
+    color: var(--color-ui-muted);
+  }
+  button[aria-pressed="true"] .swatch {
+    border-color: var(--color-ui-accent);
+    box-shadow: 0 0 0 1px var(--color-ui-accent);
   }
 }

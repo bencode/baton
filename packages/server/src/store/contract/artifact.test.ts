@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, test } from 'node:test'
-import { newCtx, type ContractCtx } from './helpers.ts'
+import { type ContractCtx, newCtx } from './helpers.ts'
 
 describe('Store artifacts', () => {
   let ctx: ContractCtx

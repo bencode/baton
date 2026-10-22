@@ -5,8 +5,8 @@ import type { Artifact, Id } from '@baton/shared'
 import type { Context, Hono } from 'hono'
 import { nanoid } from 'nanoid'
 import {
-  ArtifactTooLargeError,
   type ArtifactFileStore,
+  ArtifactTooLargeError,
   MAX_ARTIFACT_BYTES,
   sanitizeArtifactFilename,
 } from '../artifacts.ts'

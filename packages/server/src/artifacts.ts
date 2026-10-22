@@ -73,7 +73,8 @@ export const createArtifactFileStore = (
       const path = pathOf(projectId, storageId)
       await mkdir(dir, { recursive: true })
       try {
-        if (body) await pipeline(Readable.fromWeb(body), byteLimiter(maxBytes), createWriteStream(path))
+        if (body)
+          await pipeline(Readable.fromWeb(body), byteLimiter(maxBytes), createWriteStream(path))
         else await writeFile(path, new Uint8Array())
         return { storageId, size: (await stat(path)).size }
       } catch (error) {
