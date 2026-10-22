@@ -47,7 +47,8 @@ LABEL="dev.fmap.baton-worker-$NAME"
 
 [ -e "$PLIST" ] && die "plist already exists: $PLIST (teardown first — see SKILL.md)"
 
-# 1) auth token — env first, else borrow the baton host worker's (site-wide).
+# 1) auth token — env first, else borrow the baton host worker's. A worker token
+#    only reaches its own workspace; other workspaces need BATON_TOKEN.
 TOKEN="${BATON_TOKEN:-}"
 if [ -z "$TOKEN" ] && [ -f "$HOME/work/baton/.baton.json" ]; then
   TOKEN=$(jq -r '.worker.apiToken // empty' "$HOME/work/baton/.baton.json")

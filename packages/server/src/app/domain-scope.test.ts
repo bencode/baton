@@ -6,7 +6,8 @@ import { postJson } from './test-helpers.ts'
 
 // Domain isolation: a non-admin user only sees the workspaces they're bound to;
 // everything under an unbound workspace is 404 (not 403 — no existence leak).
-// Admins and dev (empty user table) bypass scope; worker tokens are exempt.
+// Admins and dev (empty user table) bypass scope; a worker token sees only its
+// own project's workspace.
 describe('server HTTP — domain scope (workspace isolation)', () => {
   let ctx: TestStore
   beforeEach(async () => {
@@ -162,8 +163,9 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     assert.equal((await reg(b.project.id, as(alice.token), 'mid-x')).status, 404)
     // No auth → 401 (register is no longer exempt from the cookie gate).
     assert.equal((await reg(a.project.id, {}, 'mid-anon')).status, 401)
-    // A worker token re-registering is allowed (domain-scope exempts worker principals).
+    // A worker token may register within its own workspace, not into another one.
     assert.equal((await reg(a.project.id, as(a.workerToken), 'mid-worker')).status, 201)
+    assert.equal((await reg(b.project.id, as(a.workerToken), 'mid-worker-x')).status, 404)
   })
 
   test('admin bypasses scope; bind/unbind flips visibility', async () => {
@@ -228,16 +230,33 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     assert.ok(o.sessions.every(s => !s.attached && !s.busy))
   })
 
-  test('worker token is exempt from user scope', async () => {
+  test('worker token reaches its own workspace only', async () => {
     const app = createApp(ctx.store)
     const a = await seedWorkspace('wsW')
+    const b = await seedWorkspace('wsOther')
+    // A sibling project in the worker's workspace (same-workspace delegation).
+    const sibling = await ctx.store.projects.create({ workspaceId: a.ws.id, name: 'wsW-sibling' })
     // Auth ON via an unbound non-admin user — must not lock the worker out.
     await seedUser('alice', false)
+    const get = (path: string) => app.request(path, { headers: as(a.workerToken) })
+
     // The daemon reads its own session's transcript via the cookie-gated GET.
-    const r = await app.request(`/sessions/${a.session.id}/events`, {
-      headers: { authorization: `Bearer ${a.workerToken}` },
+    assert.equal((await get(`/sessions/${a.session.id}/events`)).status, 200)
+    assert.equal((await get(`/projects/${sibling.id}`)).status, 200)
+    assert.deepEqual(
+      ((await (await get('/workspaces')).json()) as Array<{ id: number }>).map(w => w.id),
+      [a.ws.id],
+    )
+    // Another workspace is invisible and untouchable.
+    assert.equal((await get(`/sessions/${b.session.id}/events`)).status, 404)
+    assert.equal((await get(`/projects/${b.project.id}`)).status, 404)
+    assert.equal((await get(`/tasks/${b.task.id}`)).status, 404)
+    const remove = await app.request(`/workspaces/${b.ws.id}`, {
+      method: 'DELETE',
+      headers: as(a.workerToken),
     })
-    assert.equal(r.status, 200)
+    assert.equal(remove.status, 404)
+    assert.ok(await ctx.store.workspaces.get(b.ws.id))
   })
 
   test('empty user table leaves the API open (dev bypass intact)', async () => {
