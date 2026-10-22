@@ -38,6 +38,7 @@ export const prismaSessionInputs = (prisma: PrismaClient): Store['inputs'] => ({
           images: JSON.stringify(input.images ?? []),
           attachments: JSON.stringify(input.attachments ?? []),
           replyExpected: input.replyExpected ?? false,
+          senderUserId: input.senderUserId,
           planMode: session.planMode,
           model: session.model,
           effort: session.effort,

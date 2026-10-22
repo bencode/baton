@@ -170,9 +170,25 @@ export type WorkerCreationPatch = Partial<
 
 // Persistence port: fully async, leaving room to swap to a networked DB later. First impl: PrismaStore.
 export type Mutation<T> = { value: T; events: SessionEvent[] }
-export type EnqueueInput = SubmitInput & { loopId?: Id }
+export type EnqueueInput = SubmitInput & { loopId?: Id; senderUserId?: Id }
 
 export type InputSubmitOptions = { tryClearContextAt: number }
+
+// A turn-ending event joined with what a push notification needs to describe it.
+export type FinishedTurn = {
+  eventId: Id
+  type: 'turn_complete' | 'turn_error'
+  retrying: boolean
+  errorMessage?: string
+  startedAt: number
+  finishedAt: number | null
+  session: { id: Id; name: string; projectId: Id }
+  projectName: string
+  planMode: boolean
+  senderUserIds: Id[]
+  replyText: string | null
+}
+export type PushSubscriptionRecord = { userId: Id; endpoint: string; p256dh: string; auth: string }
 export type Store = {
   workerCreations: {
     create(input: CreateWorkerInput & { projectId: Id }): Promise<WorkerCreation>
@@ -360,6 +376,16 @@ export type Store = {
     workspaceIds(userId: Id): Promise<Id[]>
     bindWorkspace(userId: Id, workspaceId: Id): Promise<void>
     unbindWorkspace(userId: Id, workspaceId: Id): Promise<void>
+  }
+  push: {
+    // Last SessionEvent id the notifier has handled; null before its first run.
+    cursor(): Promise<Id | null>
+    setCursor(eventId: Id): Promise<void>
+    latestEventId(): Promise<Id>
+    finishedTurnsAfter(eventId: Id, limit: number): Promise<FinishedTurn[]>
+    subscribe(userId: Id, sub: Omit<PushSubscriptionRecord, 'userId'>): Promise<void>
+    unsubscribe(endpoint: string): Promise<void>
+    subscriptionsFor(userIds: Id[]): Promise<PushSubscriptionRecord[]>
   }
   getRequirementWithTasks(id: Id): Promise<RequirementWithTasks | null>
   close(): Promise<void>

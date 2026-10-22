@@ -7,6 +7,9 @@ import { createCommandBus } from './command-bus.ts'
 import { createEventBus } from './event-bus.ts'
 import { startLoopScheduler } from './loop-scheduler.ts'
 import { createProjectBus } from './project-bus.ts'
+import { vapidConfig } from './push-config.ts'
+import { startPushNotifier } from './push-notifier.ts'
+import { createPushSender } from './push-sender.ts'
 import { createServiceRuntime, startServicePrune } from './service-runtime.ts'
 import { createSessionRuntime } from './session-runtime.ts'
 import type { Store } from './store/types.ts'
@@ -39,6 +42,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     // mutate. `injectWs` is captured during createApp (@hono/node-ws needs the http
     // server, only known after serve) and called post-serve.
     const terminal = createTerminalBridge()
+    const vapid = vapidConfig()
     let injectWs: ((server: ReturnType<typeof serve>) => void) | undefined
     const app = createApp(opts.store, {
       bus,
@@ -52,6 +56,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
         injectWs = inject
       },
       services,
+      pushPublicKey: vapid?.publicKey ?? null,
     })
     // Close turns whose worker went silent past the TTL (the "stuck thinking"
     // safety net), started + stopped with the server lifecycle like the prune.
@@ -65,6 +70,10 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     )
     // Recycle interactive terminals nobody is viewing (frees pty slots).
     const terminalReaper = startTerminalReaper({ bridge: terminal, store: opts.store, projects })
+    // Web Push for finished turns; only when VAPID keys are configured.
+    const pushNotifier = vapid
+      ? startPushNotifier({ store: opts.store, send: createPushSender(vapid) })
+      : null
     const httpServer = serve({ fetch: app.fetch, port: opts.port }, info => {
       resolve({
         port: info.port,
@@ -76,6 +85,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
             busySweep.stop()
             loopScheduler.stop()
             terminalReaper.stop()
+            pushNotifier?.stop()
             servicePrune.stop()
             return opts.store.close()
           }),

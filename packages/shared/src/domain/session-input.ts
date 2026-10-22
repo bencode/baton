@@ -41,4 +41,6 @@ export type UserMessagePayload = Omit<SubmitInput, 'replyExpected'> & {
   effort?: AgentEffort
   inputIds: Id[]
   replyInputId?: Id
+  // Users to notify when the turn ends (Web Push); absent when nobody is.
+  senderUserIds?: Id[]
 }

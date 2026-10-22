@@ -29,7 +29,8 @@ model User {
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  workspaces UserWorkspace[]
+  workspaces        UserWorkspace[]
+  pushSubscriptions PushSubscription[]
 
   @@index([apiToken])
 }
@@ -310,6 +311,9 @@ model SessionPendingInput {
   model         String?
   effort        String?
   replyExpected Boolean  @default(false)
+  // Who sent it, for push notifications. Null for loops, worker tokens and
+  // chat bridges (replyExpected inputs are answered in the chat instead).
+  senderUserId  Int?
   createdAt     DateTime @default(now())
   session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -423,4 +427,24 @@ model ChannelMessage {
 
   @@unique([channelId, seq])
   @@index([channelId])
+}
+
+// One browser/device push endpoint (Web Push). Re-subscribing the same endpoint
+// upserts; push services answer 404/410 for dead ones, which are then removed.
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Single row (id = 1): the last SessionEvent the push notifier has processed.
+model PushCursor {
+  id          Int @id
+  lastEventId Int
 }

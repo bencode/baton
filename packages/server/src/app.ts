@@ -10,6 +10,7 @@ import { createEventBus, type EventBus } from './event-bus.ts'
 import { createFileRequests, type FileRequests } from './file-requests.ts'
 import { cookieAuth } from './middleware/cookie-auth.ts'
 import { createProjectBus, type ProjectBus } from './project-bus.ts'
+import { vapidConfig } from './push-config.ts'
 import { createRelayBus, type RelayBus } from './relay-bus.ts'
 import { registerAdminRoutes } from './routes/admin.ts'
 import { registerArtifactPublicRoutes, registerArtifactRoutes } from './routes/artifacts.ts'
@@ -19,6 +20,7 @@ import { registerFileRoutes } from './routes/files.ts'
 import { registerLoopRoutes } from './routes/loops.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
 import { registerProvisionerRoutes } from './routes/provisioner.ts'
+import { registerPushRoutes } from './routes/push.ts'
 import { registerRelayRoutes } from './routes/relay.ts'
 import { registerRequirementRoutes } from './routes/requirements.ts'
 import { registerServiceRoutes } from './routes/services.ts'
@@ -72,6 +74,8 @@ type AppOptions = {
   // Pending read-only file queries awaiting their worker's reply (runtime-only).
   files?: FileRequests
   artifactFiles?: ArtifactFileStore
+  // VAPID public key served to browsers; null disables push in the web app.
+  pushPublicKey?: string | null
 }
 
 export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> => {
@@ -92,6 +96,7 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
     artifactFiles = createArtifactFileStore(defaultArtifactDir()),
     provisionerBus = createProvisionerBus(),
     provisionerToken = process.env.BATON_PROVISIONER_TOKEN,
+    pushPublicKey = vapidConfig()?.publicKey ?? null,
   } = options
   const app = new Hono<AppEnv>()
   const provisioning = { store, bus: provisionerBus, commands, projects }
@@ -142,6 +147,7 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
   )
   registerSessionAttachmentRoutes(app, store, attachments)
   registerLoopRoutes(app, store, projects)
+  registerPushRoutes(app, store, pushPublicKey)
   // Interactive-terminal WS bridge (browser viewer ↔ server ↔ worker pty). The
   // worker endpoint is worker-bearer (isExempt from the cookie gate); the browser
   // endpoint is cookie-gated + scope-guarded.

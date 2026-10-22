@@ -4,6 +4,7 @@ import { prismaArtifacts } from './prisma/artifacts.ts'
 import { prismaChannels } from './prisma/channels.ts'
 import { prismaLoops } from './prisma/loops.ts'
 import { prismaProjects } from './prisma/projects.ts'
+import { prismaPush } from './prisma/push.ts'
 import { prismaRequirements } from './prisma/requirements.ts'
 import { prismaSessionInputs } from './prisma/session-inputs.ts'
 import { prismaSessionTurns } from './prisma/session-turns.ts'
@@ -34,6 +35,7 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
   turns: prismaSessionTurns(prisma),
   workers: prismaWorkers(prisma),
   users: prismaUsers(prisma),
+  push: prismaPush(prisma),
   getRequirementWithTasks: async id => {
     const r = await prisma.requirement.findUnique({ where: { id }, include: { tasks: true } })
     if (!r) return null

@@ -38,13 +38,16 @@ export const registerSessionQueue: RegisterSessionGroup = (app, ctx) => {
     if (!text && !images.length && !attachments.length)
       return c.json({ error: 'text, images, or attachments required' }, 400)
     if (images.some(v => v.length > 8_000_000)) return c.json({ error: 'image too large' }, 413)
+    const replyExpected = body.replyExpected === true
     const sent = await deliverMessage(
       session,
       {
         text,
         images,
         attachments,
-        replyExpected: body.replyExpected === true,
+        replyExpected,
+        // Chat bridges get their answer in the chat, so they are not push recipients.
+        senderUserId: replyExpected ? undefined : c.get('userId'),
       },
       ctx,
     )
