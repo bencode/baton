@@ -3,7 +3,7 @@
 # runtime stage carries node_modules + sources and runs `tsx src/index.ts`.
 FROM node:26-slim AS builder
 WORKDIR /app
-RUN npm install -g pnpm@12.14.0
+RUN npm install -g pnpm@10.33.0
 
 # Workspace manifests first → install layer caches across source-only changes.
 # All package.json are needed so pnpm can validate the frozen lockfile; the
