@@ -22,12 +22,11 @@ export const registerWorkspaceRoutes = (
     if (!body.name) return c.json({ error: 'name required' }, 400)
     return c.json(await store.workspaces.create({ name: body.name }), 201)
   })
-  // Scope: admins/dev see all; a bound user sees only their workspaces.
+  // Scope: admins/dev see all; a bound user or a worker sees only its workspaces.
   app.get('/workspaces', async c => {
     const ids = await accessibleWorkspaceIds(c, store)
-    if (ids === null) return c.json(await store.workspaces.list())
-    const userId = c.get('userId')
-    return c.json(userId == null ? [] : await store.workspaces.listForUser(userId))
+    const all = await store.workspaces.list()
+    return c.json(ids === null ? all : all.filter(w => ids.has(w.id)))
   })
   app.get('/workspaces/:id', async c => {
     const id = intParam(c.req.param('id'))

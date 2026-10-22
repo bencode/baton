@@ -15,8 +15,8 @@ import type { AppEnv } from '../views.ts'
 type Ctx = Context<AppEnv>
 
 // The set of workspace ids the current request may touch — or `null` when
-// unrestricted (dev open table, worker daemon, or an admin user). Memoized per
-// request so repeated checks cost one binding query.
+// unrestricted (dev open table or an admin user). Memoized per request so
+// repeated checks cost one binding query.
 export const accessibleWorkspaceIds = async (c: Ctx, store: Store): Promise<Set<Id> | null> => {
   const cached = c.get('scopeWsIds')
   if (cached !== undefined) return cached
@@ -27,7 +27,14 @@ export const accessibleWorkspaceIds = async (c: Ctx, store: Store): Promise<Set<
 
 const computeScope = async (c: Ctx, store: Store): Promise<Set<Id> | null> => {
   if ((await store.users.count()) === 0) return null // dev: no users → API open
-  if (c.get('workerId') != null) return null // worker daemon principal → exempt
+  const workerId = c.get('workerId')
+  // A worker token — and every agent that inherits it — reaches only its own
+  // project's workspace; crossing workspaces takes a user token.
+  if (workerId != null) {
+    const worker = await store.workers.get(workerId)
+    const project = worker ? await store.projects.get(worker.projectId) : null
+    return new Set(project ? [project.workspaceId] : [])
+  }
   const userId = c.get('userId')
   const user = userId != null ? await store.users.get(userId) : null
   if (!user) return new Set() // authenticated but not a user identity → sees nothing

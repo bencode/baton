@@ -23,11 +23,11 @@ Workers wear a **global W-N handle** (unlike R-N/T-N, which restart per
 project): W-7 means the same worker from anywhere, so a number alone is a
 complete address.
 
-**Your token reaches everything.** The worker token authenticates site-wide —
-`workspace ls`, `project ls --workspace N`, `worker ls --project N` all work
-from any session. Do NOT assume cross-project reads are forbidden; if a
-command fails, report the actual error instead of inventing a permission
-model.
+**Your worker token reaches your own workspace.** `project ls --workspace <yours>`,
+`worker ls --project N` and `session create --worker W-N` work for every project
+in the workspace your session belongs to. Other workspaces answer 404 to a
+worker token; crossing them needs the user's personal token (`BATON_TOKEN`).
+If a command fails, report the actual error instead of guessing.
 
 ## Flows
 
@@ -36,7 +36,8 @@ model.
   ;; Default scope = the CURRENT WORKSPACE (not the whole site): resolve your
   ;; own project's workspace, then sweep its projects. Only go site-wide
   ;; (workspace ls → every workspace) when the user explicitly says
-  ;; "所有/全部 workspace" / "all workspaces".
+  ;; "所有/全部 workspace" / "all workspaces" — and only with BATON_TOKEN set;
+  ;; a worker token lists just its own workspace.
   (def my-project (or (some-> (System/getenv "BATON_PROJECT_ID") parse-long)
                      (-> (slurp ".baton.json") :project)))
   (def wid (-> (baton project get <my-project> --json) :workspaceId))
@@ -78,7 +79,7 @@ model.
   command, not this skill.
 - Prefer the project's strong worker for complex tasks (e.g. `daily-pro` runs
   a stronger model); when unsure, `worker ls` and ask the user.
-- Boundary note: there is no permission boundary today — cross-workspace
-  dispatch flows freely. When workspaces become permission boundaries,
-  cross-workspace delegation will need an explicit grant while same-workspace
-  stays free. Until then, just mention the destination when crossing.
+- Boundary: workspaces are the permission boundary. Same-workspace delegation
+  is free; cross-workspace delegation only works when the user has provided
+  `BATON_TOKEN` (their personal token). Without it, say the target is in
+  another workspace and ask the user to dispatch it or provide the token.

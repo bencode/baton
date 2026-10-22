@@ -42,7 +42,9 @@ bash "${CLAUDE_SKILL_DIR}/scripts/provision-worker.sh" \
 What it does (idempotent; refuses if the plist already exists):
 
 1. Resolves an auth token — `BATON_TOKEN` env, else the host's
-   `~/work/baton/.baton.json` worker token (site-wide).
+   `~/work/baton/.baton.json` worker token. A worker token only reaches its
+   own workspace, so provisioning into **another workspace needs `BATON_TOKEN`**
+   (the user's personal token).
 2. Resolves the project — `--project <id>`, or creates one with `--new-project`.
 3. Clones the repo to `--dir` (or reuses an existing checkout / local path).
 4. Registers the worker with its **own `XDG_DATA_HOME`**
