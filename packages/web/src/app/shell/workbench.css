@@ -485,12 +485,12 @@
   .wb-mobile-drawer {
     position: fixed;
     top: 8px;
-    bottom: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
     left: 8px;
     margin: 0;
     width: min(304px, calc(100vw - 40px));
     max-width: none;
-    height: calc(100dvh - 16px);
+    height: calc(100dvh - 8px - max(8px, env(safe-area-inset-bottom)));
     max-height: none;
     border: 0;
     padding: 0;
