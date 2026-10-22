@@ -173,7 +173,7 @@
 }
 @media (max-width: 767px) {
   .mg-page {
-    padding: 20px;
+    padding: 20px 20px max(20px, env(safe-area-inset-bottom));
   }
   .mg-page-header {
     flex-direction: column;

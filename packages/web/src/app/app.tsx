@@ -6,6 +6,7 @@ import { LoginPage } from '../features/auth/login-page'
 import { RequireAuth } from '../features/auth/require-auth'
 import { ChannelPage } from '../features/channels/channel-page'
 import { DingtalkHelpPage } from '../features/help/dingtalk-help-page'
+import { InstallBanner } from '../features/install/install-banner'
 import { NewSessionDialog } from '../features/sessions/new-session-dialog'
 import { SessionPage } from '../features/sessions/session-page'
 import { useIsMobile } from '../hooks/use-media-query'
@@ -137,6 +138,7 @@ export const Shell = () => {
           onCloseDrawer={() => setDrawerOpen(false)}
         />
       )}
+      {isMobile && <InstallBanner />}
     </div>
   )
 }

@@ -1,9 +1,11 @@
 import { type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
-import { LogoutIcon, MoreIcon, ServiceIcon, SettingsIcon } from '../../components/icons'
+import { LogoutIcon, MoreIcon, PlusIcon, ServiceIcon, SettingsIcon } from '../../components/icons'
 import { Popover } from '../../components/popover'
 import { useAsync } from '../../hooks/use-async'
+import { InstallGuide } from '../install/install-guide'
+import { useInstall } from '../install/install-state'
 import { AccountSettings } from './account-settings'
 
 export const UserMenu = ({ context }: { context: ReactNode }) => {
@@ -16,6 +18,8 @@ export const UserMenu = ({ context }: { context: ReactNode }) => {
   const label = user?.username ?? (local ? '本地模式' : '设置')
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const { mode: installMode, install } = useInstall()
+  const [installGuideOpen, setInstallGuideOpen] = useState(false)
   const logout = async () => {
     try {
       await api.auth.logout()
@@ -69,6 +73,20 @@ export const UserMenu = ({ context }: { context: ReactNode }) => {
               </button>
             </p>
           )}
+          {(installMode === 'prompt' || installMode === 'ios') && (
+            <button
+              type="button"
+              className="ui-menu-item"
+              onClick={() => {
+                setAnchor(null)
+                if (installMode === 'prompt') void install()
+                else setInstallGuideOpen(true)
+              }}
+            >
+              <PlusIcon />
+              安装到主屏幕
+            </button>
+          )}
           {user && (
             <>
               <div className="ui-menu-caption">个人配置{user.isAdmin ? ' · 管理员' : ''}</div>
@@ -112,6 +130,7 @@ export const UserMenu = ({ context }: { context: ReactNode }) => {
         </div>
       </Popover>
       {settingsOpen && <AccountSettings onClose={() => setSettingsOpen(false)} />}
+      {installGuideOpen && <InstallGuide onClose={() => setInstallGuideOpen(false)} />}
     </>
   )
 }
