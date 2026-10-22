@@ -101,7 +101,10 @@ export const ToolBlock = ({
   const [choice, setChoice] = useState<boolean | null>(null)
   const id = useId()
   const failed = isError || status === 'failed'
-  const open = choice ?? (live && status === 'in_progress' && !failed)
+  // Stay open for the whole live group, not just while in progress: folding
+  // each call the moment it finishes made the stream jump on every step. The
+  // group itself collapses once the turn ends.
+  const open = choice ?? live
   const summary = smartSummary(name, input)
   return (
     <div className={bare ? 'chat-tool' : 'chat-tool chat-tool-standalone'}>
