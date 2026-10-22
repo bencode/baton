@@ -3,6 +3,7 @@ import { artifact } from './commands/artifact.ts'
 import { channel } from './commands/channel.ts'
 import { init } from './commands/init.ts'
 import { loop } from './commands/loop.ts'
+import { notify } from './commands/notify.ts'
 import { project } from './commands/project.ts'
 import { provisioner } from './commands/provisioner.ts'
 import { relay } from './commands/relay.ts'
@@ -27,6 +28,7 @@ const main = defineCommand({
     service,
     artifact,
     loop,
+    notify,
     relay,
     channel,
     workspace,

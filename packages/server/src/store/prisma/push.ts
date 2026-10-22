@@ -75,6 +75,18 @@ export const prismaPush = (prisma: PrismaClient): Store['push'] => {
     unsubscribe: async endpoint => {
       await prisma.pushSubscription.deleteMany({ where: { endpoint } })
     },
+    // Unbounded on purpose: a loop can add any number of sender-less messages
+    // after the human who set it up last spoke.
+    latestSenders: async sessionId => {
+      const message = await prisma.sessionEvent.findFirst({
+        where: { sessionId, type: 'user_message', payload: { contains: '"senderUserIds"' } },
+        orderBy: { id: 'desc' },
+        select: { payload: true },
+      })
+      return message
+        ? ((JSON.parse(message.payload) as UserMessagePayload).senderUserIds ?? [])
+        : []
+    },
     subscriptionsFor: async userIds =>
       prisma.pushSubscription.findMany({
         where: { userId: { in: userIds } },
