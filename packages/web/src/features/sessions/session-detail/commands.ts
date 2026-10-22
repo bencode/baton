@@ -24,15 +24,7 @@ export type SlashCommand = {
 // are hints, not a whitelist: any name/effort typed out still passes through.
 const MODEL_SUGGESTIONS: Record<AgentKind, string[]> = {
   'claude-code': ['opus', 'opus xhigh', 'opus max', 'sonnet', 'sonnet high', 'haiku', 'fable'],
-  codex: [
-    'gpt-6-astra',
-    'gpt-6-astra xhigh',
-    'gpt-5.6-sol',
-    'gpt-5.6-sol xhigh',
-    'gpt-5.6-terra',
-    'gpt-5.6-terra medium',
-    'gpt-5.6-luna low',
-  ],
+  codex: ['gpt-6.1-sol', 'gpt-6.1-sol ultra', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'],
   // pi addresses models as provider/model.
   pi: [
     'deepseek/deepseek-v4-pro',

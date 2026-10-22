@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
+import { isAgentEffort } from '@baton/shared'
 import type { ApprovalMode, ModelReasoningEffort, SandboxMode } from '@openai/codex-sdk'
 
 // Environment for the SDK's claude subprocess. When the SDK `env` option is
@@ -63,24 +64,12 @@ export const codexApprovalPolicy = (): ApprovalMode => {
   return 'never'
 }
 
-// Claude has no 'minimal'; use its lowest effort for that shared session setting.
-export const claudeEffort = (raw: string | undefined): EffortLevel | undefined => {
-  if (raw === 'minimal') return 'low'
-  if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh' || raw === 'max')
-    return raw
-  return undefined
-}
+// Forward only levels Claude supports; anything else is the SDK default.
+export const claudeEffort = (raw: string | undefined): EffortLevel | undefined =>
+  raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh' || raw === 'max'
+    ? raw
+    : undefined
 
 // Only forward effort levels exposed by Baton.
-export const codexEffort = (raw: string | undefined): ModelReasoningEffort | undefined => {
-  if (
-    raw === 'minimal' ||
-    raw === 'low' ||
-    raw === 'medium' ||
-    raw === 'high' ||
-    raw === 'xhigh' ||
-    raw === 'max'
-  )
-    return raw
-  return undefined
-}
+export const codexEffort = (raw: string | undefined): ModelReasoningEffort | undefined =>
+  isAgentEffort(raw) ? raw : undefined

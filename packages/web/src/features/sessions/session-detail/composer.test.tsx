@@ -192,12 +192,12 @@ test('busy and unknown states use honest labels; Escape closes commands before s
   expect(screen.getByText('等待状态同步…')).toBeTruthy()
 })
 
-test('model failure keeps the form and custom ID; effort includes minimal and preserves the model', async () => {
+test('model failure keeps the form and custom ID; effort offers only the agent levels and preserves the model', async () => {
   const { setModel } = setup()
   setModel
     .mockRejectedValueOnce(new Error('网关暂时不可用'))
     .mockResolvedValueOnce({ ...current, model: 'gateway/custom' })
-    .mockResolvedValueOnce({ ...current, model: 'gateway/custom', effort: 'minimal' })
+    .mockResolvedValueOnce({ ...current, model: 'gateway/custom', effort: 'ultra' })
   fireEvent.click(screen.getByRole('button', { name: '选择模型：默认模型' }))
   const dialog = screen.getByRole('dialog', { name: '模型设置' })
   fireEvent.change(within(dialog).getByLabelText('自定义模型 ID'), {
@@ -211,10 +211,11 @@ test('model failure keeps the form and custom ID; effort includes minimal and pr
   await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: '应用' })))
   expect(screen.queryByRole('dialog')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '思考强度：默认' }))
+  expect(screen.queryByRole('menuitemradio', { name: '最低 · minimal' })).toBeNull()
   await act(async () =>
-    fireEvent.click(screen.getByRole('menuitemradio', { name: '最低 · minimal' })),
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '极限 · ultra' })),
   )
-  expect(setModel).toHaveBeenLastCalledWith(1, 'gateway/custom', 'minimal')
+  expect(setModel).toHaveBeenLastCalledWith(1, 'gateway/custom', 'ultra')
 })
 
 test('drafts stay isolated across Activity tabs and a hidden submission still finishes', async () => {

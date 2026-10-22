@@ -42,8 +42,7 @@ describe('matchCommands', () => {
     expect(claude).toContain('opus max')
     expect(claude).toContain('fable')
     expect(codex).toContain('gpt-6-astra')
-    expect(codex).toContain('gpt-6-astra xhigh')
-    expect(codex).toContain('gpt-5.6-sol xhigh')
+    expect(codex).toContain('gpt-6.1-sol ultra')
     // The whole point: a codex session is never offered a claude model, or vice versa.
     expect(claude.some(a => a?.startsWith('gpt-'))).toBe(false)
     expect(codex.some(a => claude.includes(a))).toBe(false)
@@ -67,7 +66,7 @@ describe('parseModelArgs', () => {
   test('"<name> [effort]": lone token is always the model, never an effort', () => {
     expect(parseModelArgs('opus')).toEqual({ model: 'opus', effort: null })
     expect(parseModelArgs('opus max')).toEqual({ model: 'opus', effort: 'max' })
-    expect(parseModelArgs('gpt-5.6-sol xhigh')).toEqual({ model: 'gpt-5.6-sol', effort: 'xhigh' })
+    expect(parseModelArgs('gpt-6-sol xhigh')).toEqual({ model: 'gpt-6-sol', effort: 'xhigh' })
     expect(parseModelArgs('gpt-6-astra max')).toEqual({ model: 'gpt-6-astra', effort: 'max' })
     expect(parseModelArgs('fable')).toEqual({ model: 'fable', effort: null })
     // Free-form: a model that isn't in any preset list still parses.

@@ -1,4 +1,4 @@
-import type { AgentEffort, AgentKind } from '@baton/shared'
+import { AGENT_EFFORTS, type AgentEffort, type AgentKind } from '@baton/shared'
 import { useId, useState } from 'react'
 import { CheckIcon, ChevronDownIcon } from '../../../components/icons'
 import { Popover } from '../../../components/popover'
@@ -7,12 +7,12 @@ import { EffortIcon, ExecuteIcon, PlanIcon } from './icons'
 import type { ComposerControls } from './use-composer-controls'
 
 const effortNames: Record<AgentEffort, string> = {
-  minimal: '最低',
   low: '低',
   medium: '中',
   high: '高',
   xhigh: '很高',
   max: '最高',
+  ultra: '极限',
 }
 
 const ModelForm = ({
@@ -226,7 +226,7 @@ export const ComposerOptions = ({
           {popup.kind === 'effort' && (
             <>
               <h2>思考强度</h2>
-              {([null, 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const).map(value => (
+              {[null, ...AGENT_EFFORTS[agentKind]].map(value => (
                 <button
                   key={value ?? 'default'}
                   type="button"

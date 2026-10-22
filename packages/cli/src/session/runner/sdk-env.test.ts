@@ -78,16 +78,16 @@ describe('effort narrowing', () => {
     }
   })
 
-  test('minimal maps to low for Claude and passes through for Codex', () => {
-    assert.equal(claudeEffort('minimal'), 'low')
-    assert.equal(codexEffort('minimal'), 'minimal')
+  test('ultra is Codex-only: Claude leaves it to the SDK default', () => {
+    assert.equal(claudeEffort('ultra'), undefined)
+    assert.equal(codexEffort('ultra'), 'ultra')
   })
 
   test('unset or unrecognized → undefined (the SDK default), never a throw', () => {
     assert.equal(claudeEffort(undefined), undefined)
     assert.equal(codexEffort(undefined), undefined)
     // These SDK levels are not exposed by Baton's shared effort type.
-    assert.equal(codexEffort('ultra'), undefined)
+    assert.equal(codexEffort('minimal'), undefined)
     assert.equal(codexEffort('persistent'), undefined)
     assert.equal(claudeEffort('higgh'), undefined)
   })
