@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Codex } from '@openai/codex-sdk'
-import { buildTitlePrompt, TITLE_TIMEOUT_MS, titleOutcome, type TitleOutcome } from './title.ts'
+import { buildTitlePrompt, TITLE_TIMEOUT_MS, type TitleOutcome, titleOutcome } from './title.ts'
 
 type CodexTitleClient = {
   startThread(options: {

@@ -173,7 +173,7 @@ test('sessions.uploadAttachment POSTs the file as raw body with filename query',
   const init = fetchMock.mock.calls[0]?.[1]
   expect(init?.method).toBe('POST')
   expect(init?.body).toBe(file)
-  expect((init?.headers as Record<string, string>)['content-type']).toBe('text/plain')
+  expect((init?.headers as Record<string, string> | undefined)?.['content-type']).toBe('text/plain')
 })
 
 test('worker creation endpoints use cookies, the confirmed payload, and request deadlines', async () => {

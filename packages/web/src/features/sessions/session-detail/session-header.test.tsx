@@ -203,24 +203,27 @@ test.each([
   [{ agentSessionId: 'pending:thread' }, false, false],
   [{ agentSessionId: 'thread' }, true, true],
   [{ agentSessionId: 'thread' }, false, true],
-] as const)('mobile terminal preserves pending and active process guards: %s %s', (overrides, active, available) => {
-  usePhoneViewport()
-  const onOpenTerminal = vi.fn()
-  renderHeader(session(null, { agentKind: 'codex', ...overrides }), { active, onOpenTerminal })
-  const more = screen.getByRole('button', { name: '更多会话操作' })
-  openMobileActions()
-  expect(screen.queryByRole('button', { name: '分享会话' })).toBeNull()
-  const terminal = screen.queryByRole('button', { name: '终端' })
-  if (active || !available) {
-    expect(terminal).toBeNull()
-    return
-  }
-  expect(terminal).toBeTruthy()
-  fireEvent.click(terminal as HTMLButtonElement)
-  expect(onOpenTerminal).toHaveBeenCalledOnce()
-  expect(screen.queryByRole('dialog')).toBeNull()
-  return waitFor(() => expect(document.activeElement).toBe(more))
-})
+] as const)(
+  'mobile terminal preserves pending and active process guards: %s %s',
+  (overrides, active, available) => {
+    usePhoneViewport()
+    const onOpenTerminal = vi.fn()
+    renderHeader(session(null, { agentKind: 'codex', ...overrides }), { active, onOpenTerminal })
+    const more = screen.getByRole('button', { name: '更多会话操作' })
+    openMobileActions()
+    expect(screen.queryByRole('button', { name: '分享会话' })).toBeNull()
+    const terminal = screen.queryByRole('button', { name: '终端' })
+    if (active || !available) {
+      expect(terminal).toBeNull()
+      return
+    }
+    expect(terminal).toBeTruthy()
+    fireEvent.click(terminal as HTMLButtonElement)
+    expect(onOpenTerminal).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    return waitFor(() => expect(document.activeElement).toBe(more))
+  },
+)
 
 test('mobile rename saves trimmed input, ignores unchanged names and cancels safely', async () => {
   usePhoneViewport()

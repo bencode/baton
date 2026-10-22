@@ -29,7 +29,7 @@ describe('artifactsClient', () => {
       assert.equal(init?.method, 'POST')
       assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer worker-token')
       assert.equal(new Headers(init?.headers).get('content-type'), 'text/plain')
-      assert.equal(await (init?.body as Blob).text(), 'hello')
+      assert.equal(await (init?.body as Blob | undefined)?.text(), 'hello')
       return Response.json(expected)
     }
 

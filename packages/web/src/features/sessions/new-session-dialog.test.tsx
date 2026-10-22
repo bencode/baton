@@ -81,20 +81,20 @@ test('offline remembered worker never silently switches to another environment',
   expect((screen.getByText('创建会话') as HTMLButtonElement).disabled).toBe(true)
 })
 
-test.each([
-  { connected: false },
-  { projectId: 99 },
-])('preflight rejection %j creates nothing and can be retried', async invalid => {
-  const f = fixture()
-  f.workers.get.mockResolvedValueOnce({ ...worker, ...invalid })
-  render(f.view())
-  await chooseWorker()
-  fireEvent.click(screen.getByText('创建会话'))
-  expect((await screen.findByRole('alert')).textContent).toContain('不可用')
-  expect(f.sessions.create).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByText('创建会话'))
-  await waitFor(() => expect(f.onCreated).toHaveBeenCalledWith(session))
-})
+test.each([{ connected: false }, { projectId: 99 }])(
+  'preflight rejection %j creates nothing and can be retried',
+  async invalid => {
+    const f = fixture()
+    f.workers.get.mockResolvedValueOnce({ ...worker, ...invalid })
+    render(f.view())
+    await chooseWorker()
+    fireEvent.click(screen.getByText('创建会话'))
+    expect((await screen.findByRole('alert')).textContent).toContain('不可用')
+    expect(f.sessions.create).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('创建会话'))
+    await waitFor(() => expect(f.onCreated).toHaveBeenCalledWith(session))
+  },
+)
 
 test('POST failure releases the selected worker for another attempt', async () => {
   const f = fixture()

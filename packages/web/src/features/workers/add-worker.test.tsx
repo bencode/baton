@@ -110,24 +110,23 @@ test('template submits a trimmed name and selected agent without minting credent
   expect(mintToken).not.toHaveBeenCalled()
 })
 
-test.each([
-  'loading',
-  'unavailable',
-  'error',
-] as const)('%s templates disable creation while direct registration remains available', state => {
-  const setup = readySetup()
-  if (state === 'loading') setup.templates = { data: null, loading: true, error: null }
-  if (state === 'unavailable' && setup.templates.data) setup.templates.data[0]!.available = false
-  if (state === 'error') setup.templates.error = new Error('Network unavailable')
-  renderDialog(setup)
-  fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'app' } })
-  expect((screen.getByRole('button', { name: '创建执行环境' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  )
-  fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
-  expect(screen.getByText('baton worker run')).toBeTruthy()
-  expect(setup.create).not.toHaveBeenCalled()
-})
+test.each(['loading', 'unavailable', 'error'] as const)(
+  '%s templates disable creation while direct registration remains available',
+  state => {
+    const setup = readySetup()
+    if (state === 'loading') setup.templates = { data: null, loading: true, error: null }
+    if (state === 'unavailable' && setup.templates.data) setup.templates.data[0]!.available = false
+    if (state === 'error') setup.templates.error = new Error('Network unavailable')
+    renderDialog(setup)
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'app' } })
+    expect(
+      (screen.getByRole('button', { name: '创建执行环境' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
+    expect(screen.getByText('baton worker run')).toBeTruthy()
+    expect(setup.create).not.toHaveBeenCalled()
+  },
+)
 
 test.each([
   [new ApiError('conflict', 409), /名称已被占用/],
@@ -167,24 +166,24 @@ test('failed details preserve resource information and refill only on explicit a
   })
 })
 
-test.each([
-  'offline',
-  'deleted',
-] as const)('successful history stays successful when the worker is %s', async state => {
-  vi.spyOn(console, 'error').mockImplementation(() => undefined)
-  const setup = readySetup()
-  setup.creations.data = [{ ...creation, status: 'succeeded', error: null }]
-  const get = vi.fn(async () => {
-    if (state === 'deleted') throw new ApiError('missing', 404)
-    return { id: 8, projectId: 42, connected: false } as WorkerView
-  })
-  renderDialog(setup, { kind: 'creation', creationId: 5 }, get)
-  await screen.findByText(state === 'deleted' ? /执行环境已删除/ : /执行环境已离线/)
-  expect(screen.getByText('已创建')).toBeTruthy()
-  expect((screen.getByRole('button', { name: '开始会话' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  )
-})
+test.each(['offline', 'deleted'] as const)(
+  'successful history stays successful when the worker is %s',
+  async state => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const setup = readySetup()
+    setup.creations.data = [{ ...creation, status: 'succeeded', error: null }]
+    const get = vi.fn(async () => {
+      if (state === 'deleted') throw new ApiError('missing', 404)
+      return { id: 8, projectId: 42, connected: false } as WorkerView
+    })
+    renderDialog(setup, { kind: 'creation', creationId: 5 }, get)
+    await screen.findByText(state === 'deleted' ? /执行环境已删除/ : /执行环境已离线/)
+    expect(screen.getByText('已创建')).toBeTruthy()
+    expect((screen.getByRole('button', { name: '开始会话' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+  },
+)
 
 test('only a currently connected worker allows starting a conversation', async () => {
   const setup = readySetup()

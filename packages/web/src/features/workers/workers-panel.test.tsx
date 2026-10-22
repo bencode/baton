@@ -128,22 +128,23 @@ test('sidebar does not display creation tasks regardless of their status', async
   ])
 })
 
-test.each([
-  409, 503,
-])('HTTP %s releases the form and leaves the next operation possible', async status => {
-  vi.spyOn(console, 'error').mockImplementation(() => undefined)
-  const f = fixture()
-  f.workerCreations.create.mockRejectedValueOnce(new ApiError('failed', status))
-  render(f.tree(42))
-  await submit()
-  await screen.findByRole('alert')
-  expect((screen.getByLabelText('名称') as HTMLInputElement).value).toBe('app')
-  expect((screen.getByRole('button', { name: '创建执行环境' }) as HTMLButtonElement).disabled).toBe(
-    false,
-  )
-  fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
-  expect(screen.getByText('baton worker run')).toBeTruthy()
-})
+test.each([409, 503])(
+  'HTTP %s releases the form and leaves the next operation possible',
+  async status => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const f = fixture()
+    f.workerCreations.create.mockRejectedValueOnce(new ApiError('failed', status))
+    render(f.tree(42))
+    await submit()
+    await screen.findByRole('alert')
+    expect((screen.getByLabelText('名称') as HTMLInputElement).value).toBe('app')
+    expect(
+      (screen.getByRole('button', { name: '创建执行环境' }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
+    expect(screen.getByText('baton worker run')).toBeTruthy()
+  },
+)
 
 test('start checks current connection again; offline workers never create a session', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
