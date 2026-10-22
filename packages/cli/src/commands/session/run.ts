@@ -80,6 +80,8 @@ export const sessionRunCommand = defineCommand({
     const sessionId = Number(args.session)
     if (!Number.isInteger(sessionId) || sessionId <= 0)
       throw new Error(`invalid session id: ${args.session}`)
+    // Agents inherit this process's env; `baton notify` reads it to know its session.
+    process.env.BATON_SESSION_ID = String(sessionId)
     // Bearer-mode client: the child authenticates reads with the worker token.
     const client = createClient(server, { bearer: workerToken })
     const s = await client.sessions.get(sessionId)

@@ -111,6 +111,7 @@ describe('runPushPass', () => {
             removed.push(endpoint)
           },
           subscriptionsFor: async () => [sub('live'), sub('gone')],
+          latestSenders: async () => [],
         },
       },
       send: async (s, message) => {

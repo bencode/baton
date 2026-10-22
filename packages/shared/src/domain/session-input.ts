@@ -44,3 +44,11 @@ export type UserMessagePayload = Omit<SubmitInput, 'replyExpected'> & {
   // Users to notify when the turn ends (Web Push); absent when nobody is.
   senderUserIds?: Id[]
 }
+
+// `baton notify`: an agent pushes one line to the session's latest human sender.
+export const NOTIFY_MAX_CHARS = 200
+export type NotifyResult =
+  | { status: 'sent'; devices: number }
+  | { status: 'throttled'; retryAfterSec: number }
+  // Nobody has messaged this session, or they have not enabled notifications.
+  | { status: 'no_recipient' }

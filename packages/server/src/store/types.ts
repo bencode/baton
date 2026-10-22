@@ -386,6 +386,8 @@ export type Store = {
     subscribe(userId: Id, sub: Omit<PushSubscriptionRecord, 'userId'>): Promise<void>
     unsubscribe(endpoint: string): Promise<void>
     subscriptionsFor(userIds: Id[]): Promise<PushSubscriptionRecord[]>
+    // Senders of the session's latest human message; [] when it never had one.
+    latestSenders(sessionId: Id): Promise<Id[]>
   }
   getRequirementWithTasks(id: Id): Promise<RequirementWithTasks | null>
   close(): Promise<void>

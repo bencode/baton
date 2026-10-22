@@ -11,6 +11,8 @@ import { createFileRequests, type FileRequests } from './file-requests.ts'
 import { cookieAuth } from './middleware/cookie-auth.ts'
 import { createProjectBus, type ProjectBus } from './project-bus.ts'
 import { vapidConfig } from './push-config.ts'
+import type { SendPush } from './push-notifier.ts'
+import { createPushSender } from './push-sender.ts'
 import { createRelayBus, type RelayBus } from './relay-bus.ts'
 import { registerAdminRoutes } from './routes/admin.ts'
 import { registerArtifactPublicRoutes, registerArtifactRoutes } from './routes/artifacts.ts'
@@ -76,6 +78,13 @@ type AppOptions = {
   artifactFiles?: ArtifactFileStore
   // VAPID public key served to browsers; null disables push in the web app.
   pushPublicKey?: string | null
+  // Sends Web Push; null when VAPID keys are not configured.
+  sendPush?: SendPush | null
+}
+
+const defaultPushSender = (): SendPush | null => {
+  const vapid = vapidConfig()
+  return vapid ? createPushSender(vapid) : null
 }
 
 export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> => {
@@ -97,6 +106,7 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
     provisionerBus = createProvisionerBus(),
     provisionerToken = process.env.BATON_PROVISIONER_TOKEN,
     pushPublicKey = vapidConfig()?.publicKey ?? null,
+    sendPush = defaultPushSender(),
   } = options
   const app = new Hono<AppEnv>()
   const provisioning = { store, bus: provisionerBus, commands, projects }
@@ -147,7 +157,7 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
   )
   registerSessionAttachmentRoutes(app, store, attachments)
   registerLoopRoutes(app, store, projects)
-  registerPushRoutes(app, store, pushPublicKey)
+  registerPushRoutes(app, store, pushPublicKey, sendPush)
   // Interactive-terminal WS bridge (browser viewer ↔ server ↔ worker pty). The
   // worker endpoint is worker-bearer (isExempt from the cookie gate); the browser
   // endpoint is cookie-gated + scope-guarded.

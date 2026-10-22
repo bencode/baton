@@ -3,6 +3,7 @@ import type {
   Attachment,
   ExecutionState,
   Id,
+  NotifyResult,
   Session,
   SessionEvent,
   SessionMode,
@@ -63,6 +64,8 @@ export type SessionsClient = {
     input: { filename: string; contentType: string; body: Blob },
   ): Promise<Attachment>
   destroy(id: Id): Promise<void>
+  // Push one line to the session's latest human sender (worker-bearer).
+  notify(id: Id, text: string): Promise<NotifyResult>
 }
 
 export const sessionsClient = (baseUrl: string): SessionsClient => {
@@ -133,5 +136,6 @@ export const sessionsClient = (baseUrl: string): SessionsClient => {
     destroy: async id => {
       await request(u(`/sessions/${id}`), { method: 'DELETE' })
     },
+    notify: (id, text) => request(u(`/sessions/${id}/notify`), { method: 'POST', body: { text } }),
   }
 }

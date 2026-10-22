@@ -43,6 +43,8 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     // server, only known after serve) and called post-serve.
     const terminal = createTerminalBridge()
     const vapid = vapidConfig()
+    // One sender shared by the turn-end notifier and `baton notify`.
+    const sendPush = vapid ? createPushSender(vapid) : null
     let injectWs: ((server: ReturnType<typeof serve>) => void) | undefined
     const app = createApp(opts.store, {
       bus,
@@ -57,6 +59,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
       },
       services,
       pushPublicKey: vapid?.publicKey ?? null,
+      sendPush,
     })
     // Close turns whose worker went silent past the TTL (the "stuck thinking"
     // safety net), started + stopped with the server lifecycle like the prune.
@@ -71,9 +74,7 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
     // Recycle interactive terminals nobody is viewing (frees pty slots).
     const terminalReaper = startTerminalReaper({ bridge: terminal, store: opts.store, projects })
     // Web Push for finished turns; only when VAPID keys are configured.
-    const pushNotifier = vapid
-      ? startPushNotifier({ store: opts.store, send: createPushSender(vapid) })
-      : null
+    const pushNotifier = sendPush ? startPushNotifier({ store: opts.store, send: sendPush }) : null
     const httpServer = serve({ fetch: app.fetch, port: opts.port }, info => {
       resolve({
         port: info.port,
