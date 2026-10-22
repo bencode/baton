@@ -3,7 +3,7 @@
 # http://backend:3280). Mirror of Dockerfile.bridge (DingTalk).
 FROM node:26-slim AS builder
 WORKDIR /app
-RUN npm install -g pnpm@12.14.0
+RUN npm install -g pnpm@10.33.0
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/

@@ -3,7 +3,7 @@
 #   docker compose --profile build run --rm web-build
 FROM node:26-slim
 WORKDIR /app
-RUN npm install -g pnpm@12.14.0
+RUN npm install -g pnpm@10.33.0
 
 # All package.json so pnpm can validate the frozen lockfile; --filter installs web only.
 # tsconfig.base.json is extended by every package's tsconfig (vite reads it).
