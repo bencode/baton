@@ -5,6 +5,7 @@ import { type ChannelsApi, channelsApi } from './channels'
 import { type FilesApi, filesApi } from './files'
 import { type LoopsApi, loopsApi } from './loops'
 import { type ProjectsApi, projectsApi } from './projects'
+import { type PushApi, pushApi } from './push'
 import { API_BASE, request, type Url, urlFor } from './request'
 import { type RequirementsApi, requirementsApi } from './requirements'
 import { type ServicesApi, servicesApi } from './services'
@@ -42,6 +43,7 @@ export type Api = {
   workers: WorkersApi
   files: FilesApi
   admin: AdminApi
+  push: PushApi
   // SSE URL for a session's transcript (EventSource sends the cookie same-origin).
   // Live-only — history comes from sessions.listEvents (one fetch), so the stream
   // never replays the whole transcript.
@@ -65,6 +67,7 @@ export const createApi = (base: string = API_BASE): Api => {
     workers: workersApi(u),
     files: filesApi(u),
     admin: adminApi(u),
+    push: pushApi(u),
     sessionStreamUrl: id => u(`/sessions/${id}/stream?live=1`),
   }
 }

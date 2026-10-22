@@ -216,13 +216,16 @@ const claim = async (
         where: { sessionId },
         orderBy: { id: 'asc' },
       })
-    ).map(toPendingInput)
+    ).map(r => ({ ...toPendingInput(r), senderUserId: r.senderUserId }))
     const first = rows[0]
     if (!first) return { value: { kind: 'idle' }, events: [] }
     const end = rows.findIndex(
       r => r.planMode !== first.planMode || r.model !== first.model || r.effort !== first.effort,
     )
     const batch = end < 0 ? rows : rows.slice(0, end)
+    const senderUserIds = [
+      ...new Set(batch.flatMap(r => (r.senderUserId == null ? [] : [r.senderUserId]))),
+    ]
     const payload: UserMessagePayload = {
       text: batch
         .map(r => r.text.trim())
@@ -235,6 +238,7 @@ const claim = async (
       ...(first.effort ? { effort: first.effort } : {}),
       inputIds: batch.map(r => r.id),
       replyInputId: batch.findLast(r => r.replyExpected)?.id,
+      ...(senderUserIds.length ? { senderUserIds } : {}),
     }
     const message = await appendSessionEvent(tx, sessionId, 'user_message', payload)
     events.push(message)

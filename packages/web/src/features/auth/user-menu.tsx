@@ -1,11 +1,19 @@
 import { type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../app/api-context'
-import { LogoutIcon, MoreIcon, PlusIcon, ServiceIcon, SettingsIcon } from '../../components/icons'
+import {
+  ChatIcon,
+  LogoutIcon,
+  MoreIcon,
+  PlusIcon,
+  ServiceIcon,
+  SettingsIcon,
+} from '../../components/icons'
 import { Popover } from '../../components/popover'
 import { useAsync } from '../../hooks/use-async'
 import { InstallGuide } from '../install/install-guide'
 import { useInstall } from '../install/install-state'
+import { usePush } from '../push/use-push'
 import { AccountSettings } from './account-settings'
 
 export const UserMenu = ({ context }: { context: ReactNode }) => {
@@ -20,6 +28,7 @@ export const UserMenu = ({ context }: { context: ReactNode }) => {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { mode: installMode, install } = useInstall()
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
+  const push = usePush()
   const logout = async () => {
     try {
       await api.auth.logout()
@@ -101,6 +110,25 @@ export const UserMenu = ({ context }: { context: ReactNode }) => {
                 >
                   <ServiceIcon />
                   运行大屏
+                </button>
+              )}
+              {(push.state === 'off' || push.state === 'on') && (
+                <button
+                  type="button"
+                  className="ui-menu-item"
+                  onClick={() => {
+                    setAnchor(null)
+                    void (push.state === 'off' ? push.enable() : push.disable())
+                  }}
+                >
+                  <ChatIcon />
+                  {push.state === 'off' ? '开启通知' : '关闭通知'}
+                </button>
+              )}
+              {push.state === 'denied' && (
+                <button type="button" className="ui-menu-item" disabled>
+                  <ChatIcon />
+                  通知已被系统禁止
                 </button>
               )}
               <button
