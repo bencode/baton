@@ -317,8 +317,8 @@ model SessionPendingInput {
   createdAt     DateTime @default(now())
   session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
-  @@index([sessionId, id])
   @@unique([sessionId, loopId])
+  @@index([sessionId, id])
 }
 
 model SessionTurn {
@@ -361,21 +361,23 @@ model SessionTurnAttempt {
 // (auto-resume spins the worker up). Recurring only; `enabled` pauses it without
 // deleting. Best-effort: if the worker is offline at fire time the beat is
 // skipped (lastStatus='skipped_offline'), not queued — nextRunAt advances from
-// now so missed beats don't pile up. Cascades away with its Session.
+// now so missed beats don't pile up. `clearEveryRuns` optionally clears the
+// session context before the run that follows n delivered runs (counted in
+// `runsSinceClear`, reset by any context clear). Cascades away with its Session.
 model Loop {
-  id            Int       @id @default(autoincrement())
-  sessionId     Int
-  name          String? // optional human label for the rail/config list
-  message       String // sent verbatim to the session each beat
-  intervalSec   Int // beat period in seconds (UI enters minutes/hours/days)
-  clearAfterSec Int?
-  nextClearAt   DateTime?
-  enabled       Boolean   @default(true)
-  nextRunAt     DateTime // next scheduled fire; created as now + intervalSec
-  lastRunAt     DateTime? // last actual fire (null until first beat)
-  lastStatus    String? /// 'ok' | 'skipped_offline'
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             Int       @id @default(autoincrement())
+  sessionId      Int
+  name           String? // optional human label for the rail/config list
+  message        String // sent verbatim to the session each beat
+  intervalSec    Int // beat period in seconds (UI enters minutes/hours/days)
+  clearEveryRuns Int? // null keeps context; n clears before the run after n delivered runs
+  runsSinceClear Int       @default(0) // delivered runs in the session's current context
+  enabled        Boolean   @default(true)
+  nextRunAt      DateTime // next scheduled fire; created as now + intervalSec
+  lastRunAt      DateTime? // last actual fire (null until first beat)
+  lastStatus     String? /// 'ok' | 'skipped_offline'
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 

@@ -292,14 +292,15 @@ test('mobile scheduled tasks replace the actions panel and remain usable', async
   fireEvent.click(screen.getByRole('button', { name: '定时任务' }))
   expect(screen.queryByRole('dialog', { name: '会话操作' })).toBeNull()
   expect(screen.getByRole('dialog', { name: '定时任务' })).toBeTruthy()
-  const message = await screen.findByLabelText(/Message/)
+  const message = await screen.findByLabelText(/消息/)
   fireEvent.mouseDown(message)
   fireEvent.change(message, { target: { value: 'Check the task list' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+  fireEvent.click(screen.getByRole('button', { name: '创建任务' }))
   await waitFor(() =>
     expect(create).toHaveBeenCalledExactlyOnceWith(1, {
       message: 'Check the task list',
       intervalSec: 1800,
+      clearEveryRuns: null,
     }),
   )
   expect(screen.getByRole('dialog', { name: '定时任务' })).toBeTruthy()

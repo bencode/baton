@@ -8,6 +8,9 @@ import type { Id } from './ids.ts'
 // Timestamps are epoch-ms on the wire (mapped from Prisma DateTime). `lastStatus`
 // records how the most recent beat went: 'ok' when delivered, 'skipped_offline'
 // when the worker wasn't connected (the beat is skipped, not queued).
+// `clearEveryRuns` (absent = keep context) clears the session context before the
+// run that follows that many delivered runs; `runsSinceClear` is the count so far,
+// reset whenever the session context is cleared.
 export type LoopStatus = 'ok' | 'skipped_offline'
 
 export type Loop = {
@@ -16,8 +19,8 @@ export type Loop = {
   name?: string
   message: string
   intervalSec: number
-  clearAfterSec?: number
-  nextClearAt?: number
+  clearEveryRuns?: number
+  runsSinceClear: number
   enabled: boolean
   nextRunAt: number
   lastRunAt?: number

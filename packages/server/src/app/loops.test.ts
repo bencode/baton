@@ -75,60 +75,55 @@ describe('server HTTP — loops', () => {
     assert.deepEqual(await ctx.store.loops.listBySession(session.id), [])
   })
 
-  test('clear configuration has its own clock; saving, pausing and resuming preserve it', async () => {
+  test('clear count survives edits, pausing and resuming; turning it off resets the count', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
-    const before = Date.now()
     const response = await postJson(app, `/sessions/${session.id}/loops`, {
       message: 'collect',
       intervalSec: 60,
-      clearAfterSec: 7_200,
+      clearEveryRuns: 4,
     })
     assert.equal(response.status, 201)
     const initial = (await response.json()) as Loop
-    assert.equal(initial.clearAfterSec, 7_200)
-    assert.ok(initial.nextClearAt !== undefined && initial.nextClearAt >= before + 7_200_000)
-    assert.ok(initial.nextClearAt <= Date.now() + 7_200_000)
-    const patch = (body: Record<string, unknown>) =>
-      app.request(`/loops/${initial.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-    for (const body of [{ clearAfterSec: 7_200 }, { enabled: false }, { enabled: true }]) {
-      const saved = (await (await patch(body)).json()) as Loop
-      assert.equal(saved.nextClearAt, initial.nextClearAt)
-    }
-    const beforeChange = await ctx.store.loops.get(initial.id)
-    const changed = (await (await patch({ clearAfterSec: 3_600 })).json()) as Loop
-    assert.equal(changed.nextRunAt, beforeChange?.nextRunAt)
-    assert.ok(changed.nextClearAt !== undefined && changed.nextClearAt < initial.nextClearAt)
-    const disabled = (await (await patch({ clearAfterSec: null })).json()) as Loop
-    assert.equal(disabled.clearAfterSec, undefined)
-    assert.equal(disabled.nextClearAt, undefined)
-    const restarted = (await (await patch({ clearAfterSec: 7_200 })).json()) as Loop
-    assert.equal(restarted.clearAfterSec, 7_200)
-    assert.ok(restarted.nextClearAt !== undefined && restarted.nextClearAt >= initial.nextClearAt)
+    assert.equal(initial.clearEveryRuns, 4)
+    assert.equal(initial.runsSinceClear, 0)
+    await ctx.store.loops.update(initial.id, { runsSinceClear: 3 })
+    const patch = async (body: Record<string, unknown>) =>
+      (await (
+        await app.request(`/loops/${initial.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      ).json()) as Loop
+    for (const body of [
+      { clearEveryRuns: 2 },
+      { enabled: false },
+      { enabled: true },
+      { intervalSec: 120, message: 'collect more' },
+    ])
+      assert.equal((await patch(body)).runsSinceClear, 3)
+    const off = await patch({ clearEveryRuns: null })
+    assert.equal(off.clearEveryRuns, undefined)
+    assert.equal(off.runsSinceClear, 0)
   })
 
-  test('clear is opt-in, validates durations and does not accept a client deadline', async () => {
+  test('clear is opt-in and only accepts a whole run count from 1 to 1000', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
     const response = await postJson(app, `/sessions/${session.id}/loops`, {
       message: 'collect',
       intervalSec: 60,
-      nextClearAt: 1,
     })
     const loop = (await response.json()) as Loop
-    assert.equal(loop.clearAfterSec, undefined)
-    assert.equal(loop.nextClearAt, undefined)
-    for (const clearAfterSec of [29, 91 * 86_400, '2h', true]) {
+    assert.equal(loop.clearEveryRuns, undefined)
+    for (const clearEveryRuns of [0, 1.5, 1001, '2', true]) {
       assert.equal(
         (
           await postJson(app, `/sessions/${session.id}/loops`, {
             message: 'collect',
             intervalSec: 60,
-            clearAfterSec,
+            clearEveryRuns,
           })
         ).status,
         400,
@@ -136,16 +131,10 @@ describe('server HTTP — loops', () => {
       const patch = await app.request(`/loops/${loop.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ clearAfterSec }),
+        body: JSON.stringify({ clearEveryRuns }),
       })
       assert.equal(patch.status, 400)
     }
-    const ignored = await app.request(`/loops/${loop.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ nextClearAt: 1 }),
-    })
-    assert.equal(((await ignored.json()) as Loop).nextClearAt, undefined)
   })
 
   test('intervalSec above the 90d ceiling is rejected', async () => {

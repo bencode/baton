@@ -1,82 +1,98 @@
 import { useId } from 'react'
-import { SelectControl } from '../../components/select-control'
-import { type IntervalUnit, intervalError, toSeconds } from './format'
+import { formatInterval } from './format'
 
-export type ContextClearDraft = { enabled: boolean; value: string; unit: IntervalUnit }
+export type ContextClearMode = 'keep' | 'fresh' | 'every'
+export type ContextClearDraft = { mode: ContextClearMode; runs: string }
 
-export const contextClearDraft = (seconds?: number): ContextClearDraft => {
-  const duration = seconds ?? 7_200
-  const unit =
-    (['day', 'hour', 'min', 'sec'] as const).find(
-      candidate => duration % toSeconds(1, candidate) === 0,
-    ) ?? 'sec'
-  const divisor = toSeconds(1, unit)
-  return { enabled: seconds !== undefined, value: String(duration / divisor), unit }
+const MAX_RUNS = 1000 // matches the server ceiling
+
+export const contextClearDraft = (clearEveryRuns?: number): ContextClearDraft => {
+  if (clearEveryRuns === undefined) return { mode: 'keep', runs: '4' }
+  if (clearEveryRuns === 1) return { mode: 'fresh', runs: '4' }
+  return { mode: 'every', runs: String(clearEveryRuns) }
 }
 
-export const contextClearSeconds = (draft: ContextClearDraft): number | null =>
-  draft.enabled ? toSeconds(Number(draft.value), draft.unit) : null
-
-export const contextClearError = (draft: ContextClearDraft): string | null => {
-  if (!draft.enabled) return null
-  if (!draft.value.trim() || !Number.isInteger(Number(draft.value))) return '请输入整数周期。'
-  const error = intervalError(toSeconds(Number(draft.value), draft.unit))
-  if (error === 'max 90d') return '清理周期不能超过 90 天。'
-  return error ? '清理周期至少为 30 秒。' : null
+const everyRuns = (runs: string): number | null => {
+  const n = Number(runs)
+  return runs.trim() && Number.isInteger(n) && n >= 1 && n <= MAX_RUNS ? n : null
 }
+
+export const contextClearRuns = (draft: ContextClearDraft): number | null => {
+  if (draft.mode === 'keep') return null
+  if (draft.mode === 'fresh') return 1
+  return everyRuns(draft.runs)
+}
+
+export const contextClearError = (draft: ContextClearDraft): string | null =>
+  draft.mode === 'every' && everyRuns(draft.runs) === null
+    ? `请输入 1–${MAX_RUNS} 的整数次数。`
+    : null
 
 type ContextClearInputProps = {
   value: ContextClearDraft
   onChange(value: ContextClearDraft): void
+  // Run interval in seconds (null while invalid) — drives the "≈ duration" hint.
+  intervalSec: number | null
   disabled?: boolean
 }
 
-export const ContextClearInput = ({ value, onChange, disabled }: ContextClearInputProps) => {
+export const ContextClearInput = ({
+  value,
+  onChange,
+  intervalSec,
+  disabled,
+}: ContextClearInputProps) => {
   const id = useId()
   const error = contextClearError(value)
+  const runs = everyRuns(value.runs)
+  const radio = (mode: ContextClearMode) => ({
+    type: 'radio' as const,
+    name: `${id}-mode`,
+    checked: value.mode === mode,
+    onChange: () => onChange({ ...value, mode }),
+    className: 'accent-ui-accent',
+  })
+
   return (
-    <fieldset disabled={disabled} className="min-w-0 space-y-2">
-      <label className="flex items-center gap-2 text-xs font-medium text-ui-text">
-        <input
-          type="checkbox"
-          checked={value.enabled}
-          onChange={event => onChange({ ...value, enabled: event.target.checked })}
-          className="accent-ui-accent"
-        />
-        自动清理上下文
-      </label>
-      {value.enabled && (
-        <div className="flex min-w-0 max-w-64">
+    <fieldset
+      disabled={disabled}
+      aria-describedby={`${id}-help${error ? ` ${id}-error` : ''}`}
+      className="min-w-0 space-y-2"
+    >
+      <legend className="text-xs font-medium text-ui-text">上下文</legend>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ui-text">
+        <label className="flex items-center gap-1.5">
+          <input {...radio('keep')} />
+          保留
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input {...radio('fresh')} />
+          每次执行前清空
+        </label>
+        <span className="flex items-center gap-1.5">
+          <label className="flex items-center gap-1.5">
+            <input {...radio('every')} />每
+          </label>
           <input
             type="number"
             min={1}
+            max={MAX_RUNS}
             step={1}
-            required
-            aria-label="清理周期数值"
+            aria-label="清空间隔次数"
             aria-invalid={error !== null}
-            aria-describedby={`${id}-help${error ? ` ${id}-error` : ''}`}
-            value={value.value}
-            onChange={event => onChange({ ...value, value: event.target.value })}
-            className="ui-input min-w-0 w-0 flex-1 rounded-r-none border-r-0"
+            value={value.runs}
+            onChange={event => onChange({ mode: 'every', runs: event.target.value })}
+            className="ui-input h-7 w-16 px-2"
           />
-          <SelectControl
-            aria-label="清理周期单位"
-            value={value.unit}
-            onChange={event => onChange({ ...value, unit: event.target.value as IntervalUnit })}
-            className="w-28 shrink-0 rounded-l-none"
-          >
-            <option value="sec">秒</option>
-            <option value="min">分钟</option>
-            <option value="hour">小时</option>
-            <option value="day">天</option>
-          </SelectControl>
-        </div>
-      )}
-      {value.enabled && (
-        <p id={`${id}-help`} className="text-xs leading-5 text-ui-muted">
-          按此任务的周期，在定时触发且会话空闲时清理。影响整个会话，历史消息和文件保留。
-        </p>
-      )}
+          次清空
+          {value.mode === 'every' && runs !== null && intervalSec !== null && (
+            <span className="text-ui-muted">· 约 {formatInterval(runs * intervalSec)}</span>
+          )}
+        </span>
+      </div>
+      <p id={`${id}-help`} className="text-xs leading-5 text-ui-muted">
+        清空影响整个会话，历史消息和文件保留；会话忙时顺延到下一次空闲执行。
+      </p>
       {error && (
         <p id={`${id}-error`} className="text-xs text-ui-warning">
           {error}

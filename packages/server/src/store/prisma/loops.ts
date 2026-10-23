@@ -11,8 +11,7 @@ export const prismaLoops = (prisma: PrismaClient): Store['loops'] => ({
           name: input.name,
           message: input.message,
           intervalSec: input.intervalSec,
-          clearAfterSec: input.clearAfterSec,
-          nextClearAt: input.nextClearAt === undefined ? undefined : new Date(input.nextClearAt),
+          clearEveryRuns: input.clearEveryRuns,
           enabled: input.enabled ?? true,
           nextRunAt: new Date(input.nextRunAt),
         },
@@ -41,11 +40,8 @@ export const prismaLoops = (prisma: PrismaClient): Store['loops'] => ({
           name: patch.name,
           message: patch.message,
           intervalSec: patch.intervalSec,
-          clearAfterSec: patch.clearAfterSec,
-          nextClearAt:
-            patch.nextClearAt === undefined || patch.nextClearAt === null
-              ? patch.nextClearAt
-              : new Date(patch.nextClearAt),
+          clearEveryRuns: patch.clearEveryRuns,
+          runsSinceClear: patch.runsSinceClear,
           enabled: patch.enabled,
           nextRunAt: patch.nextRunAt !== undefined ? new Date(patch.nextRunAt) : undefined,
           lastRunAt: patch.lastRunAt !== undefined ? new Date(patch.lastRunAt) : undefined,
