@@ -6,13 +6,14 @@ import type { EventBus } from './event-bus.ts'
 import { type LoopSchedulerDeps, nextRunAfter, runDueLoops } from './loop-scheduler.ts'
 import type { ProjectBus } from './project-bus.ts'
 import type { SessionRuntime } from './session-runtime.ts'
-import type { EnqueueInput, LoopPatch, Store } from './store/types.ts'
+import type { EnqueueInput, InputSubmitOptions, LoopPatch, Store } from './store/types.ts'
 
 const loop: Loop = {
   id: 1,
   sessionId: 7,
   message: 'continue the plan',
   intervalSec: 60,
+  runsSinceClear: 0,
   enabled: true,
   nextRunAt: 0,
   createdAt: 0,
@@ -29,16 +30,20 @@ const session = {
 } as Session
 
 // Minimal fakes covering exactly what runDueLoops + deliverMessage touch.
-const makeDeps = (opts: { connected: boolean; clearAfterSec?: number; terminalOpen?: boolean }) => {
+const makeDeps = (opts: {
+  connected: boolean
+  clearEveryRuns?: number
+  terminalOpen?: boolean
+}) => {
   const updates: { id: number; patch: LoopPatch }[] = []
   const appended: SessionEvent[] = []
   const submitted: EnqueueInput[] = []
-  const clearAttempts: (number | undefined)[] = []
+  const clearAttempts: (boolean | undefined)[] = []
   const started: WorkerCommand[] = []
   const published: { projectId: number; signal: unknown }[] = []
   const store = {
     loops: {
-      due: async () => [{ ...loop, clearAfterSec: opts.clearAfterSec }],
+      due: async () => [{ ...loop, clearEveryRuns: opts.clearEveryRuns }],
       update: async (id: number, patch: LoopPatch) => {
         updates.push({ id, patch })
         return { ...loop, ...patch } as Loop
@@ -46,13 +51,9 @@ const makeDeps = (opts: { connected: boolean; clearAfterSec?: number; terminalOp
     },
     sessions: { get: async () => session },
     inputs: {
-      submit: async (
-        sessionId: number,
-        input: EnqueueInput,
-        options?: { tryClearContextAt: number },
-      ) => {
+      submit: async (sessionId: number, input: EnqueueInput, options?: InputSubmitOptions) => {
         submitted.push(input)
-        clearAttempts.push(options?.tryClearContextAt)
+        clearAttempts.push(options?.allowContextClear)
         const event: SessionEvent = {
           id: 99,
           sessionId,
@@ -115,17 +116,17 @@ test('a due loop with an offline worker is skipped — nothing persisted, schedu
 })
 
 test('clear checks are opt-in and skipped for terminals and offline workers', async () => {
-  const configured = makeDeps({ connected: true, clearAfterSec: 7_200 })
+  const configured = makeDeps({ connected: true, clearEveryRuns: 4 })
   await runDueLoops(configured.deps, 123_000)
-  assert.deepEqual(configured.clearAttempts, [123_000])
+  assert.deepEqual(configured.clearAttempts, [true])
   const normal = makeDeps({ connected: true })
   await runDueLoops(normal.deps, 123_000)
   assert.deepEqual(normal.clearAttempts, [undefined])
-  const terminal = makeDeps({ connected: true, clearAfterSec: 7_200, terminalOpen: true })
+  const terminal = makeDeps({ connected: true, clearEveryRuns: 4, terminalOpen: true })
   await runDueLoops(terminal.deps, 123_000)
-  assert.deepEqual(terminal.clearAttempts, [undefined])
+  assert.deepEqual(terminal.clearAttempts, [false])
   assert.equal(terminal.submitted.length, 1)
-  const offline = makeDeps({ connected: false, clearAfterSec: 7_200 })
+  const offline = makeDeps({ connected: false, clearEveryRuns: 4 })
   await runDueLoops(offline.deps, 123_000)
   assert.deepEqual(offline.clearAttempts, [])
 })

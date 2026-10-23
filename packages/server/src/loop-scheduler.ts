@@ -20,9 +20,10 @@ export const runDueLoops = async (deps: LoopSchedulerDeps, now: number): Promise
     // Session cascade-deleted between the due() snapshot and here → the loop row
     // is gone too; nothing to advance.
     if (!session) continue
+    // An attached terminal shares the agent conversation — never swap it underneath.
     const options =
-      loop.clearAfterSec !== undefined && !deps.terminal.isOpen(session.id)
-        ? { tryClearContextAt: now }
+      loop.clearEveryRuns !== undefined
+        ? { allowContextClear: !deps.terminal.isOpen(session.id) }
         : undefined
     const sent = await deliverMessage(
       session,

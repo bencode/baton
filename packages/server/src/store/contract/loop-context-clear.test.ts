@@ -30,21 +30,23 @@ describe('Loop context clearing', () => {
     await ctx.cleanup()
   })
 
-  const createLoop = (deadline = now) =>
-    ctx.store.loops.create({
-      sessionId,
-      message: 'collect',
-      intervalSec: 60,
-      nextRunAt: now,
-      clearAfterSec: 60,
-      nextClearAt: deadline,
-    })
-  const send = (loop: Loop, at = now) =>
+  const createLoop = (clearEveryRuns = 1, runsSinceClear = 0) =>
+    ctx.store.loops
+      .create({ sessionId, message: 'collect', intervalSec: 60, nextRunAt: now, clearEveryRuns })
+      .then(loop => (runsSinceClear ? ctx.store.loops.update(loop.id, { runsSinceClear }) : loop))
+  const send = (loop: Loop, allowContextClear = true) =>
     ctx.store.inputs.submit(
       sessionId,
       { text: loop.message, loopId: loop.id },
-      { tryClearContextAt: at },
+      { allowContextClear },
     )
+  // Delivered but never run: drop the queued beat so the session is idle again.
+  const sendAndDrop = async (loop: Loop) => {
+    const sent = await send(loop)
+    await ctx.store.inputs.cancel(sessionId, sent.value.input.id)
+    return sent
+  }
+  const runs = async (loop: Loop) => (await ctx.store.loops.get(loop.id))?.runsSinceClear
   const claim = async () => {
     const result = await ctx.store.turns.claim(sessionId, {
       claimId: randomUUID(),
@@ -54,18 +56,24 @@ describe('Loop context clearing', () => {
     return result.value as ClaimedExecution
   }
 
-  test('deadline boundary resets before enqueue; claim uses the new provider conversation', async () => {
-    const loop = await createLoop()
-    const early = await send(loop, now - 1)
+  test('clears before the run after n delivered runs; claim uses the new provider conversation', async () => {
+    const loop = await createLoop(2)
+    for (const expected of [1, 2]) {
+      const sent = await sendAndDrop(loop)
+      assert.deepEqual(
+        sent.events.map(e => e.type),
+        ['queue_changed'],
+      )
+      assert.equal(await runs(loop), expected)
+    }
     assert.equal((await ctx.store.sessions.get(sessionId))?.agentSessionId, 'original')
-    await ctx.store.inputs.cancel(sessionId, early.value.input.id)
     const sent = await send(loop)
     assert.deepEqual(
       sent.events.map(e => e.type),
       ['system', 'queue_changed'],
     )
     assert.deepEqual(sent.events[0]?.payload, { action: 'context_cleared' })
-    assert.equal((await ctx.store.loops.get(loop.id))?.nextClearAt, now + 60_000)
+    assert.equal(await runs(loop), 1)
     const current = await ctx.store.sessions.get(sessionId)
     assert.notEqual(current?.agentSessionId, 'original')
     assert.equal(current?.cwd, '/tmp/collect')
@@ -75,40 +83,40 @@ describe('Loop context clearing', () => {
     )
   })
 
-  test('pending inputs defer clearing without losing manual messages or advancing the clock', async () => {
-    const loop = await createLoop()
+  test('pending inputs defer clearing; replacing a pending beat does not count', async () => {
+    const loop = await createLoop(1, 1)
     const manual = await ctx.store.inputs.submit(sessionId, { text: 'manual instruction' })
-    const sent = await send(loop)
+    const first = await send(loop)
     assert.deepEqual(
-      sent.events.map(e => e.type),
+      first.events.map(e => e.type),
       ['queue_changed'],
     )
-    assert.equal((await ctx.store.sessions.get(sessionId))?.agentSessionId, 'original')
-    assert.equal((await ctx.store.loops.get(loop.id))?.nextClearAt, now)
+    assert.equal(await runs(loop), 2)
+    const replacing = await send(loop)
     assert.deepEqual(
-      sent.value.queue.items.map(i => i.id),
-      [manual.value.input.id, sent.value.input.id],
+      replacing.events.map(e => e.type),
+      ['queue_changed'],
+    )
+    assert.equal(await runs(loop), 2)
+    assert.equal((await ctx.store.sessions.get(sessionId))?.agentSessionId, 'original')
+    assert.deepEqual(
+      replacing.value.queue.items.map(i => i.id),
+      [manual.value.input.id, replacing.value.input.id],
     )
   })
 
   test('running and recovering turns defer clearing; the next idle beat clears', async () => {
-    const loop = await createLoop()
+    const loop = await createLoop(1, 1)
     await ctx.store.inputs.submit(sessionId, { text: 'work' })
     const active = await claim()
-    const pending = await send(loop)
-    assert.deepEqual(
-      pending.events.map(e => e.type),
-      ['queue_changed'],
-    )
+    await sendAndDrop(loop)
     assert.equal((await ctx.store.turns.state(sessionId)).attempt?.status, 'running')
-    await ctx.store.inputs.cancel(sessionId, pending.value.input.id)
     await ctx.store.turns.expire(sessionId, active.attempt.leaseUntil + 1)
     await ctx.store.turns.stopped(sessionId, active.attempt.id, 'runner')
     assert.equal((await ctx.store.turns.state(sessionId)).turn?.status, 'recovering')
-    const queued = await send(loop)
-    assert.equal((await ctx.store.loops.get(loop.id))?.nextClearAt, now)
+    await sendAndDrop(loop)
     assert.equal((await ctx.store.sessions.get(sessionId))?.agentSessionId, 'original')
-    await ctx.store.inputs.cancel(sessionId, queued.value.input.id)
+    assert.equal(await runs(loop), 3)
     const recovered = await claim()
     await ctx.store.turns.finish(sessionId, recovered.attempt.id, {
       runnerToken: 'runner',
@@ -117,20 +125,37 @@ describe('Loop context clearing', () => {
     assert.equal((await send(loop)).events[0]?.type, 'system')
   })
 
-  test('manual clear and another loop leave this loop clock independent', async () => {
-    const first = await createLoop()
-    const second = await createLoop(now + 1_000)
-    await ctx.store.turns.control(sessionId, 'context_clear')
-    const manualId = (await ctx.store.sessions.get(sessionId))?.agentSessionId
-    assert.equal((await ctx.store.loops.get(first.id))?.nextClearAt, now)
-    assert.equal((await ctx.store.loops.get(second.id))?.nextClearAt, now + 1_000)
-    await send(first)
-    assert.notEqual((await ctx.store.sessions.get(sessionId))?.agentSessionId, manualId)
-    assert.equal((await ctx.store.loops.get(second.id))?.nextClearAt, now + 1_000)
+  test('an attached terminal or a disabled loop never clears', async () => {
+    const loop = await createLoop(1, 1)
+    assert.deepEqual(
+      (await send(loop, false)).events.map(e => e.type),
+      ['queue_changed'],
+    )
+    const paused = await ctx.store.loops.update(loop.id, { enabled: false })
+    await ctx.store.inputs.cancel(sessionId, (await ctx.store.inputs.list(sessionId)).items[0]!.id)
+    assert.deepEqual(
+      (await send(paused)).events.map(e => e.type),
+      ['queue_changed'],
+    )
+    assert.equal(await runs(loop), 2)
+    assert.equal((await ctx.store.sessions.get(sessionId))?.agentSessionId, 'original')
   })
 
-  test('failed enqueue rolls back both clear and clock; disabled loops do not clear', async () => {
-    const loop = await createLoop()
+  test('any context clear restarts every loop count on the session', async () => {
+    const first = await createLoop(1, 1)
+    const second = await createLoop(5, 3)
+    await ctx.store.turns.control(sessionId, 'context_clear')
+    assert.equal(await runs(first), 0)
+    assert.equal(await runs(second), 0)
+    await ctx.store.loops.update(first.id, { runsSinceClear: 1 })
+    await ctx.store.loops.update(second.id, { runsSinceClear: 3 })
+    assert.equal((await sendAndDrop(first)).events[0]?.type, 'system')
+    assert.equal(await runs(first), 1)
+    assert.equal(await runs(second), 0)
+  })
+
+  test('failed enqueue rolls back both clear and count', async () => {
+    const loop = await createLoop(1, 1)
     // Invalid JSON data makes enqueue fail after the context reset has been attempted.
     const circular: Record<string, unknown> = {}
     circular.self = circular
@@ -142,18 +167,13 @@ describe('Loop context clearing', () => {
           loopId: loop.id,
           images: [circular as unknown as string],
         },
-        { tryClearContextAt: now },
+        { allowContextClear: true },
       ),
     )
     assert.equal((await ctx.store.sessions.get(sessionId))?.agentSessionId, 'original')
-    assert.equal((await ctx.store.loops.get(loop.id))?.nextClearAt, now)
+    assert.equal(await runs(loop), 1)
     assert.equal((await ctx.store.inputs.list(sessionId)).items.length, 0)
     assert.equal((await ctx.store.sessions.listEvents(sessionId)).length, 0)
-    await ctx.store.loops.update(loop.id, { enabled: false })
-    assert.deepEqual(
-      (await send(loop)).events.map(e => e.type),
-      ['queue_changed'],
-    )
   })
 
   for (const agentKind of ['claude-code', 'codex', 'pi'] satisfies AgentKind[]) {
@@ -170,7 +190,7 @@ describe('Loop context clearing', () => {
         })
         sessionId = session.id
       }
-      const loop = await createLoop()
+      const loop = await createLoop(1, 1)
       if (agentKind === 'codex') {
         assert.deepEqual(
           (await send(loop)).events.map(e => e.type),
@@ -191,7 +211,7 @@ describe('Loop context clearing', () => {
       const active = await claim()
       await ctx.store.turns.control(sessionId, 'context_clear')
       const before = current?.agentSessionId
-      const sent = await send(loop, now + 60_000)
+      const sent = await send(loop)
       assert.deepEqual(
         sent.events.map(e => e.type),
         ['queue_changed'],

@@ -131,8 +131,7 @@ export type LoopCreate = {
   name?: string
   message: string
   intervalSec: number
-  clearAfterSec?: number
-  nextClearAt?: number
+  clearEveryRuns?: number
   enabled?: boolean
   nextRunAt: number
 }
@@ -140,8 +139,8 @@ export type LoopPatch = Partial<{
   name: string | null
   message: string
   intervalSec: number
-  clearAfterSec: number | null
-  nextClearAt: number | null
+  clearEveryRuns: number | null
+  runsSinceClear: number
   enabled: boolean
   nextRunAt: number
   lastRunAt: number
@@ -172,7 +171,7 @@ export type WorkerCreationPatch = Partial<
 export type Mutation<T> = { value: T; events: SessionEvent[] }
 export type EnqueueInput = SubmitInput & { loopId?: Id; senderUserId?: Id }
 
-export type InputSubmitOptions = { tryClearContextAt: number }
+export type InputSubmitOptions = { allowContextClear: boolean }
 
 // A turn-ending event joined with what a push notification needs to describe it.
 export type FinishedTurn = {

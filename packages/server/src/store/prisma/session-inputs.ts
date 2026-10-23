@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { toPendingInput } from '../mappers.ts'
 import type { Store } from '../types.ts'
-import { clearLoopContextIfDue } from './session-context.ts'
+import { advanceLoopRun } from './session-context.ts'
 import { appendSessionEvent, lockSession } from './session-events.ts'
 
 export const queueSnapshot = async (tx: Prisma.TransactionClient, sessionId: number) => {
@@ -18,16 +18,19 @@ export const prismaSessionInputs = (prisma: PrismaClient): Store['inputs'] => ({
   submit: (sessionId, input, options) =>
     prisma.$transaction(async tx => {
       const session = await lockSession(tx, sessionId)
-      const cleared =
-        options && input.loopId !== undefined
-          ? await clearLoopContextIfDue(tx, sessionId, input.loopId, options.tryClearContextAt)
-          : []
       const replaced =
         input.loopId === undefined
           ? null
           : await tx.sessionPendingInput.findUnique({
               where: { sessionId_loopId: { sessionId, loopId: input.loopId } },
               select: { id: true },
+            })
+      const cleared =
+        input.loopId === undefined
+          ? []
+          : await advanceLoopRun(tx, sessionId, input.loopId, {
+              allowClear: options?.allowContextClear ?? false,
+              replaced: replaced !== null,
             })
       if (replaced) await tx.sessionPendingInput.delete({ where: { id: replaced.id } })
       const row = await tx.sessionPendingInput.create({

@@ -12,6 +12,7 @@ const loop: Loop = {
   sessionId: 3,
   message: 'Check the task list',
   intervalSec: 600,
+  runsSinceClear: 0,
   enabled: true,
   nextRunAt: 1_000,
   lastRunAt: 500,
@@ -37,17 +38,18 @@ const renderPanel = (loops: Loop[] = []) => {
 
 test('creates a multiline scheduled task only from the explicit button', async () => {
   const { create } = renderPanel()
-  const message = await screen.findByLabelText(/Message/)
+  const message = await screen.findByLabelText(/消息/)
   fireEvent.change(message, { target: { value: '  first line\nsecond line  ' } })
 
   fireEvent.keyDown(message, { key: 'Enter' })
   expect(create).not.toHaveBeenCalled()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+  fireEvent.click(screen.getByRole('button', { name: '创建任务' }))
   await waitFor(() =>
     expect(create).toHaveBeenCalledWith(3, {
       message: 'first line\nsecond line',
       intervalSec: 1_800,
+      clearEveryRuns: null,
     }),
   )
   expect((message as HTMLTextAreaElement).value).toBe('')
@@ -55,10 +57,10 @@ test('creates a multiline scheduled task only from the explicit button', async (
 
 test('rejects fractional interval values through native form validation', async () => {
   const { create } = renderPanel()
-  fireEvent.change(await screen.findByLabelText(/Message/), { target: { value: 'Check status' } })
-  fireEvent.change(screen.getByLabelText('interval value'), { target: { value: '1.5' } })
+  fireEvent.change(await screen.findByLabelText(/消息/), { target: { value: 'Check status' } })
+  fireEvent.change(screen.getByLabelText('间隔数值'), { target: { value: '1.5' } })
 
-  fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+  fireEvent.click(screen.getByRole('button', { name: '创建任务' }))
 
   expect(create).not.toHaveBeenCalled()
 })
@@ -67,72 +69,76 @@ test('requires inline confirmation before deleting and surfaces a failed removal
   const { remove } = renderPanel([loop])
   remove.mockRejectedValueOnce(new Error('cannot delete task'))
 
-  fireEvent.click(await screen.findByLabelText('delete scheduled task'))
+  fireEvent.click(await screen.findByLabelText('删除定时任务'))
   expect(remove).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+  fireEvent.click(screen.getByRole('button', { name: '确认删除' }))
 
   expect(remove).toHaveBeenCalledWith(7)
   expect((await screen.findByRole('alert')).textContent).toContain('cannot delete task')
 })
 
-test('clear configuration is opt-in and starts at two hours when enabled', async () => {
+test('context defaults to kept; fresh-each-run creates with a count of one', async () => {
   const { create } = renderPanel()
-  fireEvent.change(await screen.findByLabelText(/Message/), {
+  fireEvent.change(await screen.findByLabelText(/消息/), {
     target: { value: 'Collect messages' },
   })
-  const toggle = screen.getByRole('checkbox', { name: '自动清理上下文' }) as HTMLInputElement
-  expect(toggle.checked).toBe(false)
-  fireEvent.click(toggle)
-  expect((screen.getByLabelText('清理周期数值') as HTMLInputElement).value).toBe('2')
-  fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+  const form = within(screen.getByRole('form', { name: '新建定时任务' }))
+  expect((form.getByRole('radio', { name: '保留' }) as HTMLInputElement).checked).toBe(true)
+  fireEvent.click(form.getByRole('radio', { name: '每次执行前清空' }))
+  fireEvent.click(form.getByRole('button', { name: '创建任务' }))
   await waitFor(() =>
     expect(create).toHaveBeenCalledWith(3, {
       message: 'Collect messages',
       intervalSec: 1_800,
-      clearAfterSec: 7_200,
+      clearEveryRuns: 1,
     }),
   )
 })
 
-test('existing task clear settings can be changed, cancelled and disabled', async () => {
-  const { update } = renderPanel([{ ...loop, clearAfterSec: 7_200, nextClearAt: 9_000 }])
-  expect(await screen.findByText('上下文清理：每 2h')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: '设置清理' }))
-  let editor = within(screen.getByRole('form', { name: '任务 7 的上下文清理' }))
-  fireEvent.change(editor.getByLabelText('清理周期数值'), { target: { value: '4' } })
+test('editing prefills the task and saves message, interval and clear count together', async () => {
+  const { update } = renderPanel([{ ...loop, clearEveryRuns: 4, runsSinceClear: 2 }])
+  expect(await screen.findByText('上下文：每 4 次清空')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '编辑' }))
+  let editor = within(screen.getByRole('form', { name: '编辑任务 7' }))
+  expect((editor.getByLabelText(/消息/) as HTMLTextAreaElement).value).toBe('Check the task list')
+  expect((editor.getByLabelText('间隔数值') as HTMLInputElement).value).toBe('10')
+  expect((editor.getByLabelText('间隔单位') as HTMLSelectElement).value).toBe('min')
+  expect((editor.getByLabelText('清空间隔次数') as HTMLInputElement).value).toBe('4')
+  expect(editor.getByText('· 约 40m')).toBeTruthy()
   fireEvent.click(editor.getByRole('button', { name: '取消' }))
   expect(update).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: '设置清理' }))
-  editor = within(screen.getByRole('form', { name: '任务 7 的上下文清理' }))
-  expect((editor.getByLabelText('清理周期数值') as HTMLInputElement).value).toBe('2')
-  fireEvent.change(editor.getByLabelText('清理周期数值'), { target: { value: '4' } })
+
+  fireEvent.click(screen.getByRole('button', { name: '编辑' }))
+  editor = within(screen.getByRole('form', { name: '编辑任务 7' }))
+  fireEvent.change(editor.getByLabelText(/消息/), { target: { value: 'Check again' } })
+  fireEvent.change(editor.getByLabelText('间隔数值'), { target: { value: '1' } })
+  fireEvent.change(editor.getByLabelText('间隔单位'), { target: { value: 'hour' } })
+  fireEvent.change(editor.getByLabelText('清空间隔次数'), { target: { value: '6' } })
   fireEvent.click(editor.getByRole('button', { name: '保存' }))
-  await waitFor(() => expect(update).toHaveBeenCalledWith(7, { clearAfterSec: 14_400 }))
   await waitFor(() =>
-    expect(screen.queryByRole('form', { name: '任务 7 的上下文清理' })).toBeNull(),
+    expect(update).toHaveBeenCalledWith(7, {
+      message: 'Check again',
+      intervalSec: 3_600,
+      clearEveryRuns: 6,
+    }),
   )
-  fireEvent.click(screen.getByRole('button', { name: '设置清理' }))
-  editor = within(screen.getByRole('form', { name: '任务 7 的上下文清理' }))
-  fireEvent.click(editor.getByRole('checkbox', { name: '自动清理上下文' }))
-  fireEvent.click(editor.getByRole('button', { name: '保存' }))
-  await waitFor(() => expect(update).toHaveBeenLastCalledWith(7, { clearAfterSec: null }))
+  await waitFor(() => expect(screen.queryByRole('form', { name: '编辑任务 7' })).toBeNull())
 })
 
-test('invalid clear durations are blocked and failed saves retain the draft', async () => {
+test('invalid clear counts are blocked and failed saves keep the editor open', async () => {
   const { update } = renderPanel([loop])
-  update.mockRejectedValueOnce(new Error('Could not save clear settings'))
-  fireEvent.click(await screen.findByRole('button', { name: '设置清理' }))
-  const editor = within(screen.getByRole('form', { name: '任务 7 的上下文清理' }))
-  fireEvent.click(editor.getByRole('checkbox', { name: '自动清理上下文' }))
-  const input = editor.getByLabelText('清理周期数值')
-  for (const value of ['', '0', '1.5', '2161']) {
+  update.mockRejectedValueOnce(new Error('Could not save task'))
+  fireEvent.click(await screen.findByRole('button', { name: '编辑' }))
+  const editor = within(screen.getByRole('form', { name: '编辑任务 7' }))
+  const input = editor.getByLabelText('清空间隔次数')
+  for (const value of ['', '0', '1.5', '1001']) {
     fireEvent.change(input, { target: { value } })
     expect((editor.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
   }
-  fireEvent.change(input, { target: { value: '4' } })
+  fireEvent.change(input, { target: { value: '3' } })
   fireEvent.click(editor.getByRole('button', { name: '保存' }))
-  expect((await screen.findByRole('alert')).textContent).toContain('Could not save clear settings')
-  expect((input as HTMLInputElement).value).toBe('4')
+  expect((await editor.findByRole('alert')).textContent).toContain('Could not save task')
+  expect((input as HTMLInputElement).value).toBe('3')
   await waitFor(() =>
     expect((editor.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(
       false,
