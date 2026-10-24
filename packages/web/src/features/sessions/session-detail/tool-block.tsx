@@ -98,20 +98,24 @@ export const ToolBlock = ({
   statusKnown = true,
   bare = false,
 }: ToolBlockProps) => {
-  const [choice, setChoice] = useState<boolean | null>(null)
+  const [open, setOpen] = useState(false)
   const id = useId()
   const failed = isError || status === 'failed'
-  // Stay open for the whole live group, not just while in progress: folding
-  // each call the moment it finishes made the stream jump on every step. The
-  // group itself collapses once the turn ends.
-  const open = choice ?? live
+  const running = live && status === 'in_progress'
+  // Collapsed by default; a call the user opened while running folds once when
+  // it finishes, and stays however the user sets it afterwards.
+  const [wasRunning, setWasRunning] = useState(running)
+  if (wasRunning !== running) {
+    setWasRunning(running)
+    if (!running) setOpen(false)
+  }
   const summary = smartSummary(name, input)
   return (
     <div className={bare ? 'chat-tool' : 'chat-tool chat-tool-standalone'}>
       <button
         type="button"
         className="chat-tool-summary ui-focus"
-        onClick={() => setChoice(!open)}
+        onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls={id}
       >
@@ -120,7 +124,7 @@ export const ToolBlock = ({
         {summary && <span className="chat-tool-preview">{summary}</span>}
         {failed ? (
           <span className="chat-status-error">失败</span>
-        ) : live && status === 'in_progress' ? (
+        ) : running ? (
           <span className={statusKnown ? 'chat-status-running' : 'chat-status-muted'}>
             {statusKnown ? '执行中' : '状态待同步'}
           </span>

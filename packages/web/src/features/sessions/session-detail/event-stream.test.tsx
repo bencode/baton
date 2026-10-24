@@ -45,27 +45,26 @@ const tool = (key: string, status: 'in_progress' | 'completed' = 'completed'): R
   resultText: status === 'completed' ? '' : undefined,
 })
 
-test('process and nested tool choices survive appends, group collapse, and turn completion', () => {
+test('tools start collapsed, fold once when a run ends, then keep the user choice', () => {
   const props = { scrollRef: createRef<HTMLDivElement>(), working: true }
+  const toolOne = () => screen.getByRole('button', { name: /Bash.*command-one/ })
   const { rerender } = render(<EventStream {...props} items={[tool('one', 'in_progress')]} />)
-  fireEvent.click(screen.getByRole('button', { name: /Bash.*command-one/ }))
-  expect(
-    screen.getByRole('button', { name: /Bash.*command-one/ }).getAttribute('aria-expanded'),
-  ).toBe('false')
+  expect(toolOne().getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(toolOne())
+  expect(toolOne().getAttribute('aria-expanded')).toBe('true')
   fireEvent.click(screen.getByRole('button', { name: /正在处理/ }))
   rerender(<EventStream {...props} items={[tool('one'), tool('two')]} />)
   expect(screen.getByRole('button', { name: /正在处理/ }).getAttribute('aria-expanded')).toBe(
     'false',
   )
   fireEvent.click(screen.getByRole('button', { name: /正在处理/ }))
-  expect(
-    screen.getByRole('button', { name: /Bash.*command-one/ }).getAttribute('aria-expanded'),
-  ).toBe('false')
-  fireEvent.click(screen.getByRole('button', { name: /Bash.*command-one/ }))
+  expect(toolOne().getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(toolOne())
   rerender(<EventStream {...props} working={false} items={[tool('one'), tool('two')]} />)
   expect(screen.getByRole('button', { name: /查看执行过程/ }).getAttribute('aria-expanded')).toBe(
     'true',
   )
+  expect(toolOne().getAttribute('aria-expanded')).toBe('true')
   expect(screen.getByText('（空输出）')).toBeTruthy()
 })
 
