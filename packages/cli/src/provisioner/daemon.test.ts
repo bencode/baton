@@ -103,6 +103,11 @@ const harness = async (creations: WorkerCreation[]) => {
     projectsRoot: join(dir, 'projects'),
     cliPath: process.execPath,
     workerEnv: {},
+    templates: {
+      'mini-glm-codeplan': { workerEnv: {} },
+      'mini-dashscope-codeplan': { workerEnv: {} },
+      'mini-codex': { workerEnv: {} },
+    },
   }
   return {
     config,

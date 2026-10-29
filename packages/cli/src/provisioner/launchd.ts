@@ -96,6 +96,7 @@ export const launchWorkerAgent = async (
   config: ProvisionerConfig,
   creation: WorkerCreation,
   repoPath: string,
+  workerEnv: Record<string, string>,
   signal?: AbortSignal,
 ): Promise<void> =>
   startAgent(
@@ -105,8 +106,8 @@ export const launchWorkerAgent = async (
       args: [config.nodePath ?? process.execPath, config.cliPath, 'worker', 'run'],
       cwd: repoPath,
       env: {
-        PATH: config.workerEnv.PATH ?? process.env.PATH ?? '/usr/bin:/bin',
-        ...config.workerEnv,
+        PATH: workerEnv.PATH ?? process.env.PATH ?? '/usr/bin:/bin',
+        ...workerEnv,
         HOME: homedir(),
         XDG_DATA_HOME: workerStatePath(config, creation),
       },

@@ -3,6 +3,12 @@ import { constants } from 'node:fs'
 import { access, readFile, stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { promisify } from 'node:util'
+import { type ConfiguredWorkerTemplateId, WORKER_TEMPLATES } from '@baton/shared'
+
+export type WorkerTemplateConfig = {
+  workerEnv: Record<string, string>
+  pi?: { provider: string; model: string }
+}
 
 export type ProvisionerConfig = {
   server: string
@@ -11,6 +17,7 @@ export type ProvisionerConfig = {
   cliPath: string
   nodePath?: string
   workerEnv: Record<string, string>
+  templates: Record<ConfiguredWorkerTemplateId, WorkerTemplateConfig>
 }
 
 const forbiddenEnv = new Set([
@@ -28,6 +35,54 @@ const absolutePath = (value: unknown, field: string): string => {
   if (typeof value !== 'string' || !isAbsolute(value) || value.includes('\0'))
     throw new Error(`${field} must be an absolute path`)
   return value
+}
+
+const environment = (value: unknown): Record<string, string> => {
+  if (!object(value)) throw new Error('workerEnv must be an object')
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      if (
+        forbiddenEnv.has(key) ||
+        !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ||
+        typeof entry !== 'string' ||
+        entry.includes('\0')
+      )
+        throw new Error(`invalid worker environment key: ${key}`)
+      return [key, entry]
+    }),
+  )
+}
+
+const templates = (value: unknown): ProvisionerConfig['templates'] => {
+  if (!object(value)) throw new Error('templates must be an object')
+  return Object.fromEntries(
+    WORKER_TEMPLATES.map(template => {
+      const raw = value[template.id]
+      if (!object(raw)) throw new Error(`template ${template.id} must be configured`)
+      const workerEnv = environment(raw.workerEnv)
+      if (template.id === 'mini-codex') {
+        if (raw.pi !== undefined) throw new Error('mini-codex does not support pi')
+        return [template.id, { workerEnv }]
+      }
+      const provider = template.id === 'mini-glm-codeplan' ? 'zai-coding-cn' : 'qwen-token-plan-cn'
+      const apiKey =
+        template.id === 'mini-glm-codeplan' ? 'ZAI_CODING_CN_API_KEY' : 'QWEN_TOKEN_PLAN_CN_API_KEY'
+      if (
+        !workerEnv.ANTHROPIC_BASE_URL ||
+        !(workerEnv.ANTHROPIC_AUTH_TOKEN || workerEnv.ANTHROPIC_API_KEY) ||
+        !workerEnv[apiKey]
+      )
+        throw new Error(`template ${template.id} requires Claude and Pi credentials`)
+      if (
+        !object(raw.pi) ||
+        raw.pi.provider !== provider ||
+        typeof raw.pi.model !== 'string' ||
+        !raw.pi.model.trim()
+      )
+        throw new Error(`template ${template.id} requires its Pi provider and model`)
+      return [template.id, { workerEnv, pi: { provider, model: raw.pi.model.trim() } }]
+    }),
+  ) as ProvisionerConfig['templates']
 }
 
 export const commandEnvironment = (config: ProvisionerConfig): NodeJS.ProcessEnv => ({
@@ -66,26 +121,14 @@ export const loadProvisionerConfig = async (path: string): Promise<ProvisionerCo
     throw new Error('server must be an HTTP(S) URL without credentials, query, or fragment')
   if (!raw.token.trim() || /[\r\n]/.test(raw.token))
     throw new Error('valid provisioner token required')
-  if (!object(raw.workerEnv)) throw new Error('workerEnv must be an object')
-  const workerEnv = Object.fromEntries(
-    Object.entries(raw.workerEnv).map(([key, value]) => {
-      if (
-        forbiddenEnv.has(key) ||
-        !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ||
-        typeof value !== 'string' ||
-        value.includes('\0')
-      )
-        throw new Error(`invalid worker environment key: ${key}`)
-      return [key, value]
-    }),
-  )
   const config: ProvisionerConfig = {
     server: server.toString().replace(/\/$/, ''),
     token: raw.token.trim(),
     projectsRoot: absolutePath(raw.projectsRoot, 'projectsRoot'),
     cliPath: absolutePath(raw.cliPath, 'cliPath'),
     nodePath: absolutePath(raw.nodePath ?? process.execPath, 'nodePath'),
-    workerEnv,
+    workerEnv: environment(raw.workerEnv),
+    templates: templates(raw.templates),
   }
   await access(config.cliPath, constants.R_OK)
   await access(config.nodePath ?? process.execPath, constants.X_OK)

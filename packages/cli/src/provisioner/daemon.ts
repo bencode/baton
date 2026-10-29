@@ -8,7 +8,11 @@ import { workerLogPath } from './launchd.ts'
 
 const taskError = (error: unknown, config: ProvisionerConfig): string => {
   const message = error instanceof Error ? error.message : 'unknown creation error'
-  return [config.token, ...Object.values(config.workerEnv)]
+  return [
+    config.token,
+    ...Object.values(config.workerEnv),
+    ...Object.values(config.templates).flatMap(template => Object.values(template.workerEnv)),
+  ]
     .filter(value => value.length > 0)
     .reduce((safe, secret) => safe.replaceAll(secret, '[redacted]'), message)
 }

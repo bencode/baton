@@ -9,6 +9,7 @@ import { workerProjectConfig } from '../project-config.ts'
 import type { ProvisionerClient } from './client.ts'
 import { commandEnvironment, type ProvisionerConfig } from './config.ts'
 import { launchWorkerAgent, workerStatePath } from './launchd.ts'
+import { workerTemplateEnvironment } from './worker-template.ts'
 
 const directory = async (path: string): Promise<void> => {
   try {
@@ -92,7 +93,8 @@ export const provisionWorker = async (
   })
   await progress('start')
   signal.throwIfAborted()
-  await launchWorkerAgent(config, creation, repoPath, signal)
+  const workerEnv = await workerTemplateEnvironment(config, creation, state)
+  await launchWorkerAgent(config, creation, repoPath, workerEnv, signal)
   await progress('connect')
   const deadline = Date.now() + 60_000
   while (Date.now() < deadline) {

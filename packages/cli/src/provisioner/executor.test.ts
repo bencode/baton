@@ -46,6 +46,27 @@ exit ${launchFails ? 1 : 0}
     projectsRoot: join(dir, 'projects'),
     cliPath: process.execPath,
     workerEnv: { PATH: `${bin}:/usr/bin:/bin`, ANTHROPIC_AUTH_TOKEN: 'agent<&secret' },
+    templates: {
+      'mini-glm-codeplan': {
+        workerEnv: {
+          PATH: `${bin}:/usr/bin:/bin`,
+          ANTHROPIC_BASE_URL: 'https://glm.example',
+          ANTHROPIC_AUTH_TOKEN: 'glm-secret',
+          ZAI_CODING_CN_API_KEY: 'glm-secret',
+        },
+        pi: { provider: 'zai-coding-cn', model: 'glm-5.3' },
+      },
+      'mini-dashscope-codeplan': {
+        workerEnv: {
+          PATH: `${bin}:/usr/bin:/bin`,
+          ANTHROPIC_BASE_URL: 'https://dashscope.example',
+          ANTHROPIC_AUTH_TOKEN: 'dashscope-secret',
+          QWEN_TOKEN_PLAN_CN_API_KEY: 'dashscope-secret',
+        },
+        pi: { provider: 'qwen-token-plan-cn', model: 'deepseek-v4.1-flash' },
+      },
+      'mini-codex': { workerEnv: { PATH: `${bin}:/usr/bin:/bin` } },
+    },
   }
   const creation: WorkerCreation = {
     id: 9,
@@ -134,6 +155,53 @@ test(
       await readFile(join(agent.EnvironmentVariables.XDG_DATA_HOME, 'baton/machine-id'), 'utf8'),
       'stable-id\n',
     )
+  },
+)
+
+test(
+  'templates isolate provider credentials and give Pi its own provider and model',
+  mac,
+  async () => {
+    for (const templateId of [
+      'mini-glm-codeplan',
+      'mini-dashscope-codeplan',
+      'mini-codex',
+    ] as const) {
+      const f = await fixture()
+      const agentKind = templateId === 'mini-codex' ? 'codex' : 'pi'
+      await provisionWorker(
+        f.config,
+        { ...f.creation, templateId, agentKind },
+        f.client,
+        new AbortController().signal,
+      )
+      const agent = JSON.parse(
+        execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', f.plist], {
+          encoding: 'utf8',
+        }),
+      )
+      const profile = f.config.templates[templateId]
+      assert.equal(
+        agent.EnvironmentVariables.ANTHROPIC_AUTH_TOKEN,
+        profile.workerEnv.ANTHROPIC_AUTH_TOKEN,
+      )
+      assert.equal(agent.EnvironmentVariables.DEEPSEEK_API_KEY, undefined)
+      if (templateId === 'mini-codex') {
+        assert.equal(agent.EnvironmentVariables.PI_CODING_AGENT_DIR, undefined)
+        assert.equal(agent.EnvironmentVariables.ZAI_CODING_CN_API_KEY, undefined)
+        assert.equal(agent.EnvironmentVariables.QWEN_TOKEN_PLAN_CN_API_KEY, undefined)
+        continue
+      }
+      const settings = join(agent.EnvironmentVariables.PI_CODING_AGENT_DIR, 'settings.json')
+      assert.deepEqual(JSON.parse(await readFile(settings, 'utf8')), {
+        defaultProvider: profile.pi?.provider,
+        defaultModel: profile.pi?.model,
+      })
+      assert.equal((await stat(settings)).mode & 0o777, 0o600)
+      const otherKey =
+        templateId === 'mini-glm-codeplan' ? 'QWEN_TOKEN_PLAN_CN_API_KEY' : 'ZAI_CODING_CN_API_KEY'
+      assert.equal(agent.EnvironmentVariables[otherKey], undefined)
+    }
   },
 )
 
@@ -245,5 +313,33 @@ test(
       JSON.stringify({ ...f.config, workerEnv: { BATON_PROVISIONER_TOKEN: 'bad' } }),
     )
     await assert.rejects(loadProvisionerConfig(configPath), /invalid worker environment key/)
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        ...f.config,
+        templates: {
+          ...f.config.templates,
+          'mini-codex': {
+            workerEnv: {},
+            pi: { provider: 'openai-codex', model: 'codex' },
+          },
+        },
+      }),
+    )
+    await assert.rejects(loadProvisionerConfig(configPath), /mini-codex does not support pi/)
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        ...f.config,
+        templates: {
+          ...f.config.templates,
+          'mini-glm-codeplan': {
+            ...f.config.templates['mini-glm-codeplan'],
+            workerEnv: {},
+          },
+        },
+      }),
+    )
+    await assert.rejects(loadProvisionerConfig(configPath), /requires Claude and Pi credentials/)
   },
 )

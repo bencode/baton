@@ -10,7 +10,7 @@ test('CLI submits a worker request and exposes template/list/detail queries', as
   const creation = {
     id: 19,
     projectId: 7,
-    templateId: 'mini-local',
+    templateId: 'mini-codex',
     name: 'my worker',
     agentKind: 'codex',
     status: 'pending',
@@ -34,9 +34,9 @@ test('CLI submits a worker request and exposes template/list/detail queries', as
         req.url?.endsWith('worker-templates')
           ? [
               {
-                id: 'mini-local',
+                id: 'mini-codex',
                 name: 'mini',
-                agentKinds: ['claude-code', 'codex'],
+                agentKinds: ['codex'],
                 available: true,
               },
             ]
@@ -70,19 +70,8 @@ test('CLI submits a worker request and exposes template/list/detail queries', as
   try {
     assert.equal((await run(['templates', '--project', '7']))[0].available, true)
     assert.equal(
-      (
-        await run([
-          'create',
-          '--project',
-          '7',
-          '--template',
-          'mini-local',
-          '--name',
-          'my worker',
-          '--agentKind',
-          'codex',
-        ])
-      ).id,
+      (await run(['create', '--project', '7', '--template', 'mini-codex', '--name', 'my worker']))
+        .id,
       19,
     )
     assert.equal((await run(['creation', 'ls', '--project', '7']))[0].id, 19)
@@ -97,7 +86,7 @@ test('CLI submits a worker request and exposes template/list/detail queries', as
       ],
     )
     assert.deepEqual(requests[1]?.body, {
-      templateId: 'mini-local',
+      templateId: 'mini-codex',
       name: 'my worker',
       agentKind: 'codex',
     })

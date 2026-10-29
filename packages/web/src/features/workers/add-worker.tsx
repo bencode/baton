@@ -91,7 +91,11 @@ export const AddWorker = ({
             <button
               type="button"
               onClick={() =>
-                onCreateAnother({ templateId: 'mini-local', name: '', agentKind: 'claude-code' })
+                onCreateAnother({
+                  templateId: 'mini-glm-codeplan',
+                  name: '',
+                  agentKind: 'claude-code',
+                })
               }
               className="w-fit underline"
             >

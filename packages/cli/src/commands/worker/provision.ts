@@ -1,4 +1,9 @@
-import { AGENT_KINDS, isAgentKind } from '@baton/shared'
+import {
+  AGENT_KINDS,
+  isAgentKind,
+  isWorkerTemplateId,
+  workerTemplateAgentKinds,
+} from '@baton/shared'
 import { defineCommand } from 'citty'
 import { fmtWorkerCreation, fmtWorkerTemplate, renderList, renderOne } from '../../output.ts'
 import { clientFor, common, resolveProjectId } from '../../util.ts'
@@ -24,21 +29,28 @@ export const workerCreateCommand = defineCommand({
   args: {
     ...projectArg,
     ...common,
-    template: { type: 'string', required: true, description: 'mini-local' },
+    template: {
+      type: 'string',
+      required: true,
+      description: 'mini-glm-codeplan | mini-dashscope-codeplan | mini-codex',
+    },
     name: { type: 'string', required: true, description: 'worker name' },
-    agentKind: { type: 'string', default: 'claude-code', description: AGENT_KINDS.join(', ') },
+    agentKind: { type: 'string', description: AGENT_KINDS.join(', ') },
   },
   run: async ({ args }) => {
-    if (args.template !== 'mini-local') throw new Error('template must be mini-local')
-    if (!isAgentKind(args.agentKind)) throw new Error('invalid agentKind')
+    if (!isWorkerTemplateId(args.template)) throw new Error('invalid worker template')
+    const agentKind = args.agentKind ?? workerTemplateAgentKinds(args.template)[0]
+    if (!isAgentKind(agentKind)) throw new Error('invalid agentKind')
+    if (!workerTemplateAgentKinds(args.template).includes(agentKind))
+      throw new Error('agentKind is not supported by this template')
     const name = args.name.trim()
     if (!name) throw new Error('worker name required')
     const creation = await clientFor(args).workerCreations.create(
       positiveId(resolveProjectId(args)),
       {
-        templateId: 'mini-local',
+        templateId: args.template,
         name,
-        agentKind: args.agentKind,
+        agentKind,
       },
     )
     console.log(renderOne(creation, fmtWorkerCreation, Boolean(args.json)))

@@ -108,6 +108,57 @@ describe('worker template creation protocol', () => {
     assert.equal((await progress(first.id, { status: 'succeeded' })).status, 409)
   })
 
+  test('offers three profiles and rejects unsupported template/agent pairs before reserving resources', async () => {
+    online()
+    const templates = (await (
+      await app.request(`/projects/${projectId}/worker-templates`)
+    ).json()) as WorkerTemplate[]
+    assert.deepEqual(templates, [
+      {
+        id: 'mini-glm-codeplan',
+        name: 'GLM Code Plan',
+        agentKinds: ['claude-code', 'pi'],
+        available: true,
+      },
+      {
+        id: 'mini-dashscope-codeplan',
+        name: 'DashScope Code Plan',
+        agentKinds: ['claude-code', 'pi'],
+        available: true,
+      },
+      { id: 'mini-codex', name: '本机 Codex', agentKinds: ['codex'], available: true },
+    ])
+    for (const [templateId, agentKind] of [
+      ['mini-glm-codeplan', 'codex'],
+      ['mini-dashscope-codeplan', 'codex'],
+      ['mini-codex', 'pi'],
+      ['mini-codex', 'claude-code'],
+      ['unknown', 'codex'],
+    ]) {
+      const response = await postJson(app, `/projects/${projectId}/worker-creations`, {
+        templateId,
+        agentKind,
+        name: 'invalid',
+      })
+      assert.equal(response.status, 400)
+    }
+    assert.deepEqual(await ctx.store.workerCreations.listByProject(projectId), [])
+    assert.deepEqual(signals, [])
+    for (const template of templates) {
+      for (const agentKind of template.agentKinds) {
+        const response = await postJson(app, `/projects/${projectId}/worker-creations`, {
+          templateId: template.id,
+          agentKind,
+          name: `${template.id}-${agentKind}`,
+        })
+        assert.equal(response.status, 202)
+        const creation = (await response.json()) as WorkerCreation
+        assert.equal(creation.templateId, template.id)
+        assert.equal(creation.agentKind, agentKind)
+      }
+    }
+  })
+
   test('registration recovers its stable identity and success requires a connected matching worker', async () => {
     online()
     const creation = await create()

@@ -29,8 +29,13 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
     return () => cancelAnimationFrame(frame)
   }, [])
   const [name, setName] = useState(initialInput?.name ?? '')
+  const [templateId, setTemplateId] = useState(initialInput?.templateId)
   const [agentKind, setAgentKind] = useState(initialInput?.agentKind ?? 'claude-code')
-  const template = setup.templates.data?.find(item => item.id === 'mini-local')
+  const templates = setup.templates.data ?? []
+  const template =
+    templates.find(item => item.id === templateId) ??
+    templates.find(item => item.agentKinds.includes(agentKind)) ??
+    templates[0]
   const agent = template?.agentKinds.includes(agentKind) ? agentKind : template?.agentKinds[0]
   const disabled =
     setup.creating ||
@@ -77,12 +82,21 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
         <SelectControl
           id={`${fieldId}-template`}
           value={template?.id ?? ''}
-          disabled
+          onChange={event => {
+            const selected = templates.find(item => item.id === event.target.value)
+            if (selected) setTemplateId(selected.id)
+          }}
+          disabled={setup.creating || templates.length === 0}
           className="w-full"
         >
-          <option value={template?.id ?? ''}>
-            {template?.name ?? (setup.templates.loading ? '加载模板…' : '暂无可用模板')}
-          </option>
+          {templates.length === 0 && (
+            <option value="">{setup.templates.loading ? '加载模板…' : '暂无可用模板'}</option>
+          )}
+          {templates.map(item => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
         </SelectControl>
       </label>
       <label className="mg-field" htmlFor={`${fieldId}-agent`}>

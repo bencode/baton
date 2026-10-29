@@ -1,4 +1,4 @@
-import type { WorkerCreation, WorkerView } from '@baton/shared'
+import { WORKER_TEMPLATES, type WorkerCreation, type WorkerView } from '@baton/shared'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { type Api, ApiError } from '../../api'
@@ -30,14 +30,11 @@ const creation: WorkerCreation = {
 }
 const readySetup = (): WorkerSetupState => ({
   templates: {
-    data: [
-      {
-        id: 'mini-local',
-        name: 'Mini local',
-        agentKinds: ['claude-code', 'codex'],
-        available: true,
-      },
-    ],
+    data: WORKER_TEMPLATES.map(template => ({
+      ...template,
+      agentKinds: [...template.agentKinds],
+      available: true,
+    })),
     loading: false,
     error: null,
   },
@@ -99,15 +96,42 @@ test('template submits a trimmed name and selected agent without minting credent
   const setup = readySetup()
   const { onCreated, mintToken } = renderDialog(setup)
   fireEvent.change(screen.getByLabelText('名称'), { target: { value: '  my-app  ' } })
-  fireEvent.change(screen.getByLabelText('Agent'), { target: { value: 'codex' } })
+  fireEvent.change(screen.getByLabelText('模板'), { target: { value: 'mini-codex' } })
+  expect((screen.getByLabelText('Agent') as HTMLSelectElement).value).toBe('codex')
+  expect(
+    Array.from((screen.getByLabelText('Agent') as HTMLSelectElement).options).map(
+      option => option.value,
+    ),
+  ).toEqual(['codex'])
   fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
   expect(setup.create).toHaveBeenCalledWith({
-    templateId: 'mini-local',
+    templateId: 'mini-codex',
     name: 'my-app',
     agentKind: 'codex',
   })
   await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(creation))
   expect(mintToken).not.toHaveBeenCalled()
+})
+
+test('GLM and DashScope allow Pi while switching to local Codex submits only Codex', async () => {
+  const setup = readySetup()
+  renderDialog(setup)
+  fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'pi-worker' } })
+  fireEvent.change(screen.getByLabelText('Agent'), { target: { value: 'pi' } })
+  fireEvent.change(screen.getByLabelText('模板'), { target: { value: 'mini-dashscope-codeplan' } })
+  fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
+  expect(setup.create).toHaveBeenLastCalledWith({
+    templateId: 'mini-dashscope-codeplan',
+    name: 'pi-worker',
+    agentKind: 'pi',
+  })
+  fireEvent.change(screen.getByLabelText('模板'), { target: { value: 'mini-codex' } })
+  fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
+  expect(setup.create).toHaveBeenLastCalledWith({
+    templateId: 'mini-codex',
+    name: 'pi-worker',
+    agentKind: 'codex',
+  })
 })
 
 test.each(['loading', 'unavailable', 'error'] as const)(

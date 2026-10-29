@@ -3,10 +3,12 @@ import {
   type CreationWorkerResult,
   type Id,
   isAgentKind,
+  isWorkerTemplateId,
   type Worker,
   type WorkerCreation,
   type WorkerCreationReport,
   type WorkerCreationStep,
+  workerTemplateAgentKinds,
 } from '@baton/shared'
 import type { CommandBus } from '../command-bus.ts'
 import type { ProjectBus } from '../project-bus.ts'
@@ -38,9 +40,11 @@ export const creationBody = (value: unknown): Record<string, unknown> => {
 export const parseCreateWorkerInput = (value: unknown): CreateWorkerInput => {
   const body = creationBody(value)
   const name = typeof body.name === 'string' ? body.name.trim() : ''
-  if (!name || body.templateId !== 'mini-local' || !isAgentKind(body.agentKind))
-    throw new WorkerCreationError(400, 'name, mini-local templateId, and valid agentKind required')
-  return { name, templateId: 'mini-local', agentKind: body.agentKind }
+  if (!name || !isWorkerTemplateId(body.templateId) || !isAgentKind(body.agentKind))
+    throw new WorkerCreationError(400, 'name, valid templateId, and agentKind required')
+  if (!workerTemplateAgentKinds(body.templateId).includes(body.agentKind))
+    throw new WorkerCreationError(400, 'agentKind is not supported by this template')
+  return { name, templateId: body.templateId, agentKind: body.agentKind }
 }
 export const parseCreationReport = (value: unknown): WorkerCreationReport => {
   const body = creationBody(value)
