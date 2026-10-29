@@ -165,4 +165,49 @@ describe('server HTTP — attachments', () => {
     const dl = await app.request(meta.url)
     assert.equal(dl.status, 404)
   })
+
+  test('messages queue the stored descriptor; foreign or unknown attachments are rejected', async () => {
+    const app = createApp(ctx.store)
+    const { session, workerToken, projectId, workerId } = await seedSession(app)
+    await postJson(
+      app,
+      `/sessions/${session.id}/status`,
+      { active: true },
+      { authorization: `Bearer ${workerToken}` },
+    )
+    const meta = (await (
+      await app.request(`/sessions/${session.id}/attachments?filename=a.png`, {
+        method: 'POST',
+        body: new Uint8Array([1, 2, 3, 4]),
+        headers: { 'content-type': 'image/png' },
+      })
+    ).json()) as Attachment
+
+    // The queued descriptor is the server's own: a rewritten url is replaced.
+    const forged = await postJson(app, `/sessions/${session.id}/messages`, {
+      attachments: [{ ...meta, url: '/workers/me/stream' }],
+    })
+    assert.equal(forged.status, 201)
+    const rebuilt = (await forged.json()) as { input: { attachments: Attachment[] } }
+    assert.deepEqual(rebuilt.input.attachments, [meta])
+
+    // Another session's upload, or an unknown id, is rejected before queueing.
+    const other = (await (await postJson(app, '/sessions', { projectId, workerId })).json()) as {
+      id: number
+    }
+    const foreign = (await (
+      await app.request(`/sessions/${other.id}/attachments?filename=b.png`, {
+        method: 'POST',
+        body: new Uint8Array([5]),
+        headers: { 'content-type': 'image/png' },
+      })
+    ).json()) as Attachment
+    for (const attachment of [foreign, { ...meta, id: 'nope' }]) {
+      const rejected = await postJson(app, `/sessions/${session.id}/messages`, {
+        text: 'x',
+        attachments: [attachment],
+      })
+      assert.equal(rejected.status, 400)
+    }
+  })
 })

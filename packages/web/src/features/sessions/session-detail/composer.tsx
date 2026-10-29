@@ -17,12 +17,15 @@ import { WorkingIndicator } from './working-indicator'
 
 type ComposerProps = {
   agentKind: AgentKind
-  session: Pick<SessionView, 'attached' | 'connected' | 'busy'>
+  session: Pick<SessionView, 'attached' | 'connected' | 'busy' | 'terminalOpen'>
   statusKnown: boolean
   draft: ComposerDraft
   attachments: DraftAttachments
   controls: ComposerControls
   queue: ReactNode
+  // Share page: send messages + attachments only — no settings, stop, resume,
+  // slash commands or shortcuts. A message itself (re)starts the session.
+  shared?: boolean
 }
 
 export const Composer = ({
@@ -33,6 +36,7 @@ export const Composer = ({
   attachments,
   controls,
   queue,
+  shared = false,
 }: ComposerProps) => {
   const input = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
@@ -41,7 +45,8 @@ export const Composer = ({
   const menuId = useId()
   const helpId = useId()
   const locked = draft.sending || controls.saving !== null || controls.pending !== null
-  const canAttach = session.attached && session.connected && !locked
+  const canAttach =
+    (shared || session.attached) && session.connected && !session.terminalOpen && !locked
   const addFiles = (files: File[]) => {
     if (canAttach) void attachments.addFiles(files)
   }
@@ -78,8 +83,9 @@ export const Composer = ({
       if (!locked) void controls.setMode(!controls.settings.planMode)
     },
     agentKind,
+    !shared,
   )
-  const resolved = resolveCommand(draft.text, agentKind)
+  const resolved = shared ? null : resolveCommand(draft.text, agentKind)
   const execute = () => {
     if (slash.open) {
       const command = slash.menu[slash.activeIndex]
@@ -138,7 +144,9 @@ export const Composer = ({
               aria-autocomplete="list"
               aria-controls={slash.open ? menuId : undefined}
               aria-activedescendant={slash.open ? `${menuId}-${slash.activeIndex}` : undefined}
-              placeholder="输入消息 · / 命令 · Shift+Enter 换行"
+              placeholder={
+                shared ? '输入消息 · Shift+Enter 换行' : '输入消息 · / 命令 · Shift+Enter 换行'
+              }
               rows={1}
               onChange={event => {
                 draft.setText(event.target.value)
@@ -153,7 +161,7 @@ export const Composer = ({
               onKeyDown={event => {
                 if (event.nativeEvent.isComposing || event.keyCode === 229) return
                 if (slash.onKeyDown(event)) return
-                if (event.key === 'Escape' && session.busy) {
+                if (event.key === 'Escape' && session.busy && !shared) {
                   event.preventDefault()
                   if (!controls.pending) void controls.abort()
                 }
@@ -186,11 +194,19 @@ export const Composer = ({
                   event.target.value = ''
                 }}
               />
-              <span className="composer-toolbar-separator" aria-hidden="true" />
-              <ComposerOptions agentKind={agentKind} controls={controls} disabled={draft.sending} />
+              {!shared && (
+                <>
+                  <span className="composer-toolbar-separator" aria-hidden="true" />
+                  <ComposerOptions
+                    agentKind={agentKind}
+                    controls={controls}
+                    disabled={draft.sending}
+                  />
+                </>
+              )}
             </div>
             <div className="composer-send-actions">
-              {session.busy && (
+              {session.busy && !shared && (
                 <button
                   type="button"
                   className="composer-stop"
@@ -233,7 +249,9 @@ export const Composer = ({
             <p>执行环境离线，连接恢复后可发送。</p>
           ) : controls.notice ? (
             <p role="status">{controls.notice}</p>
-          ) : !session.attached ? (
+          ) : session.terminalOpen ? (
+            <p>会话正在终端中使用，暂不能发送。</p>
+          ) : !session.attached && !shared ? (
             <div className="composer-footer-action">
               <span>会话未启动，恢复后可发送。</span>
               <button

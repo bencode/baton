@@ -58,3 +58,29 @@ test('cancellation feedback remains visible when the server queue is empty', () 
   )
   expect(screen.getByRole('alert').textContent).toContain('无法撤回')
 })
+
+test('without onCancel (share page) the queue is read-only', () => {
+  render(
+    <QueuedMessages
+      queued={[
+        {
+          id: 7,
+          sessionId: 1,
+          text: 'first',
+          images: [],
+          attachments: [],
+          planMode: false,
+          model: null,
+          effort: null,
+          replyExpected: false,
+          createdAt: 0,
+        },
+      ]}
+      cancelling={new Set()}
+      error={null}
+    />,
+  )
+  fireEvent.click(screen.getByText('待发送 · 1'))
+  expect(screen.getByText('first', { selector: 'p' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /撤回/ })).toBeNull()
+})

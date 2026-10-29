@@ -1,6 +1,8 @@
+import type { Id } from '@baton/shared'
 import type { MiddlewareHandler } from 'hono'
 import { getSignedCookie } from 'hono/cookie'
 import { authSecret, COOKIE_NAME } from '../auth/config.ts'
+import { hasShareGrant } from '../auth/share-grant.ts'
 import type { Store } from '../store/types.ts'
 import type { AppEnv } from '../views.ts'
 
@@ -18,15 +20,37 @@ const isExempt = (method: string, path: string): boolean =>
   (method === 'PATCH' && /^\/sessions\/[^/]+$/.test(path)) ||
   (method === 'POST' && /^\/sessions\/[^/]+\/(status|events)$/.test(path))
 
+// The only routes a share grant opens: read one session (detail / history / live
+// stream / queue / attachments) and add to it (message / attachment upload). Every
+// other route ignores the grant, so it can never reach rename, control, terminal,
+// files, or another session — even in the same project.
+const SHARE_ROUTES: [method: string, pattern: RegExp][] = [
+  ['GET', /^\/sessions\/(\d+)$/],
+  ['GET', /^\/sessions\/(\d+)\/(?:events|stream|queue)$/],
+  ['GET', /^\/sessions\/(\d+)\/attachments\/[^/]+$/],
+  ['POST', /^\/sessions\/(\d+)\/(?:messages|attachments)$/],
+]
+
+const shareRouteSessionId = (method: string, path: string): Id | null => {
+  const id = SHARE_ROUTES.filter(([m]) => m === method)
+    .map(([, pattern]) => pattern.exec(path)?.[1])
+    .find(match => match !== undefined)
+  return id === undefined ? null : Number(id)
+}
+
 // The one back-office auth gate. Enforced ONLY when at least one user exists:
 // seed a user → production locks down; an empty table (dev, fresh DB) leaves the
 // API open so the CLI / bridge / worker keep working unchanged. A valid signed
-// cookie authenticates; anything else is 401.
+// cookie authenticates; a share grant additionally (or alone) admits its session
+// on SHARE_ROUTES; anything else is 401.
 export const cookieAuth =
   (store: Store): MiddlewareHandler<AppEnv> =>
   async (c, next) => {
     if (isExempt(c.req.method, c.req.path)) return next()
     if ((await store.users.count()) === 0) return next()
+    const shareId = shareRouteSessionId(c.req.method, c.req.path)
+    if (shareId !== null && (await hasShareGrant(c, store, shareId)))
+      c.set('shareSessionId', shareId)
     const raw = await getSignedCookie(c, authSecret(), COOKIE_NAME)
     const userId = raw ? Number(raw) : Number.NaN
     if (raw && !Number.isNaN(userId)) {
@@ -51,5 +75,6 @@ export const cookieAuth =
         return next()
       }
     }
+    if (c.get('shareSessionId') !== undefined) return next()
     return c.json({ error: 'unauthorized' }, 401)
   }

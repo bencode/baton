@@ -358,8 +358,7 @@ export type Store = {
     // DELETE the row (cascade Session). Irreversible.
     destroy(id: Id): Promise<void>
   }
-  // Back-office login users. Auth is enforced iff count() > 0 (see cookie gate);
-  // `first` is the user a share-token login maps to (full access, one user in v0).
+  // Back-office login users. Auth is enforced iff count() > 0 (see cookie gate).
   users: {
     create(input: UserCreate): Promise<UserRecord>
     get(id: Id): Promise<UserRecord | null>
@@ -368,7 +367,6 @@ export type Store = {
     setApiToken(id: Id, token: string): Promise<UserRecord>
     // Self-service password change (verify-old is done at the route).
     setPassword(id: Id, passwordHash: string): Promise<UserRecord>
-    first(): Promise<UserRecord | null>
     count(): Promise<number>
     // Domain binding (membership). workspaceIds is the scope source; bind/unbind
     // are idempotent.

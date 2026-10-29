@@ -21,10 +21,6 @@ export const prismaUsers = (prisma: PrismaClient): Store['users'] => ({
     toUserRecord(await prisma.user.update({ where: { id }, data: { apiToken: token } })),
   setPassword: async (id, passwordHash) =>
     toUserRecord(await prisma.user.update({ where: { id }, data: { passwordHash } })),
-  first: async () => {
-    const r = await prisma.user.findFirst({ orderBy: { id: 'asc' } })
-    return r ? toUserRecord(r) : null
-  },
   count: () => prisma.user.count(),
   workspaceIds: async userId =>
     (await prisma.userWorkspace.findMany({ where: { userId }, select: { workspaceId: true } })).map(
