@@ -74,6 +74,18 @@ export const requireAdmin = async (c: Ctx, store: Store): Promise<Response | nul
   return user?.isAdmin ? null : c.json({ error: 'forbidden' }, 403)
 }
 
+// How the request reaches a session: through the caller's own workspace scope
+// ('member', always preferred), through a share grant for exactly this session
+// ('share' — the cookie gate only sets one on its share allowlist), or not at all.
+export const sessionAccess = async (
+  c: Ctx,
+  store: Store,
+  s: Session,
+): Promise<'member' | 'share' | null> => {
+  if (!(await assertProjectAccess(c, store, s.projectId))) return 'member'
+  return c.get('shareSessionId') === s.id ? 'share' : null
+}
+
 // Load a by-id resource and scope-check it in one step: returns the resource, or
 // a 404 Response (missing or out of scope). Each resource carries projectId.
 export const loadScopedSession = async (
@@ -83,7 +95,7 @@ export const loadScopedSession = async (
 ): Promise<Session | Response> => {
   const s = await store.sessions.get(id)
   if (!s) return c.json({ error: 'not found' }, 404)
-  return (await assertProjectAccess(c, store, s.projectId)) ?? s
+  return (await sessionAccess(c, store, s)) ? s : c.json({ error: 'not found' }, 404)
 }
 
 export const loadScopedTask = async (c: Ctx, store: Store, id: Id): Promise<Task | Response> => {

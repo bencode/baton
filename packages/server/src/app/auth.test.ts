@@ -78,7 +78,7 @@ describe('server HTTP — cookie auth gate', () => {
     )
   })
 
-  test('share-token login: 200 + cookie on a valid token, 404 on garbage', async () => {
+  test('share-token open: per-session grant (no login cookie), 404 on garbage', async () => {
     const app = createApp(ctx.store)
     const { session } = await seedSession(app)
     await ctx.store.users.create({
@@ -102,10 +102,11 @@ describe('server HTTP — cookie auth gate', () => {
     const ok = await postJson(app, `/auth/share/${full.shareToken}`, {})
     assert.equal(ok.status, 200)
     assert.equal(((await ok.json()) as { session: { id: number } }).session.id, session.id)
-    // the share login minted a session cookie → the standalone page is now authed
+    // The grant is not a login: no baton_session, /auth/me stays unauthenticated.
+    assert.match(cookieFrom(ok), new RegExp(`^baton_share_${session.id}=`))
     assert.equal(
-      (await app.request('/workspaces', { headers: { cookie: cookieFrom(ok) } })).status,
-      200,
+      (await app.request('/auth/me', { headers: { cookie: cookieFrom(ok) } })).status,
+      401,
     )
   })
 

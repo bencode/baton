@@ -35,13 +35,22 @@ const submitted: SubmitInputResult = {
   queue: { revision: 1, items: [] },
   sinceSequence: 0,
 }
-const Host = ({ session = current, known = true }: { session?: SessionView; known?: boolean }) => {
+const Host = ({
+  session = current,
+  known = true,
+  shared = false,
+}: {
+  session?: SessionView
+  known?: boolean
+  shared?: boolean
+}) => {
   const controls = useComposerControls({ session, onRefresh: vi.fn() })
   const attachments = useDraftAttachments(session.id)
   const draft = useComposerDraft({
     sessionId: session.id,
     attachments,
-    canSubmit: session.connected && session.attached && !controls.pending && !controls.saving,
+    canSubmit:
+      session.connected && (shared || session.attached) && !controls.pending && !controls.saving,
     onSubmitted: vi.fn(),
   })
   return (
@@ -53,10 +62,11 @@ const Host = ({ session = current, known = true }: { session?: SessionView; know
       attachments={attachments}
       controls={controls}
       queue={null}
+      shared={shared}
     />
   )
 }
-const setup = (session = current) => {
+const setup = (session = current, shared = false) => {
   const api = createApi()
   const send = vi.spyOn(api.sessions, 'sendMessage').mockResolvedValue(submitted)
   const setModel = vi.spyOn(api.sessions, 'setModel')
@@ -66,7 +76,7 @@ const setup = (session = current) => {
   const abort = vi.spyOn(api.sessions, 'abort').mockResolvedValue(session)
   const view = render(
     <ApiContext value={api}>
-      <Host session={session} />
+      <Host session={session} shared={shared} />
     </ApiContext>,
   )
   return { api, send, setModel, setMode, abort, view }
@@ -254,4 +264,24 @@ test('drafts stay isolated across Activity tabs and a hidden submission still fi
   expect((screen.getByRole('textbox', { name: '消息' }) as HTMLTextAreaElement).value).toBe(
     '第二个会话',
   )
+})
+
+test('share mode sends text and files only: no settings, stop, resume, commands or shortcuts', async () => {
+  const { send, setMode, abort } = setup({ ...current, busy: true, attached: false }, true)
+  expect(screen.queryByRole('button', { name: /工作模式|选择模型|思考强度/ })).toBeNull()
+  expect(screen.queryByRole('button', { name: '停止当前执行' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '恢复会话' })).toBeNull()
+  expect((screen.getByRole('button', { name: '添加附件' }) as HTMLButtonElement).disabled).toBe(
+    false,
+  )
+  const input = screen.getByRole('textbox', { name: '消息' })
+  fireEvent.keyDown(input, { key: 'Tab', shiftKey: true })
+  fireEvent.keyDown(input, { key: 'Escape' })
+  write('/plan')
+  expect(screen.queryByRole('listbox')).toBeNull()
+  // A stopped session still takes the message — the server starts it on send.
+  await act(async () => fireEvent.keyDown(input, { key: 'Enter' }))
+  expect(setMode).not.toHaveBeenCalled()
+  expect(abort).not.toHaveBeenCalled()
+  expect(send).toHaveBeenCalledWith(1, '/plan', [])
 })

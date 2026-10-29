@@ -1,5 +1,5 @@
 import type { Id } from '@baton/shared'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useApi } from '../../app/api-context'
 import { reduceEvents } from './event-render'
 import { Composer } from './session-detail/composer'
@@ -14,21 +14,33 @@ import { useDraftAttachments } from './session-detail/use-draft-attachments'
 import { useTranscriptScroll } from './session-detail/use-transcript-scroll'
 import { useSessionQueue } from './use-session-queue'
 import { useSessionStream } from './use-session-stream'
-import { useSession, useSessions } from './use-sessions'
+import { usePolledSession, useSession, useSessions } from './use-sessions'
 
-type SessionDetailProps = { sessionId: Id }
+// 'share' is the standalone /s/:token page: the caller holds a grant to this one
+// session, so nothing project-level is fetched and only reading + sending remain.
+type SessionDetailProps = { sessionId: Id; access?: 'member' | 'share' }
+
+const TURN_EVENTS = new Set(['turn_start', 'turn_complete', 'turn_error', 'turn_aborted'])
 
 // Render a Session as a chat. Looks up the session by int id; the list query
 // from `useSessions` re-polls so we can use its fresher copy when available.
-export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
+export const SessionDetail = ({ sessionId, access = 'member' }: SessionDetailProps) => {
   const api = useApi()
-  const { data, error: sessionError, refresh: refreshSession } = useSession(sessionId)
+  const shared = access === 'share'
+  const member = useSession(shared ? null : sessionId)
+  const guest = usePolledSession(shared ? sessionId : null)
+  const { data, error: sessionError, refresh: refreshSession } = shared ? guest : member
   const sessionShallow = data?.id === sessionId ? data : null
   // projectId comes from the session itself, so this body works keyed by
-  // sessionId alone — reused by both the in-app tab and the standalone /s/:token page.
-  const projectId = sessionShallow?.projectId ?? null
-  const { data: liveSessions, refresh } = useSessions(projectId)
+  // sessionId alone. The share page has no project access: it stays on the
+  // polled single session instead of the project list + stream.
+  const projectId = shared ? null : (sessionShallow?.projectId ?? null)
+  const { data: liveSessions, refresh: refreshList } = useSessions(projectId)
+  const refresh = shared ? guest.refresh : refreshList
   const session = liveSessions?.find(s => s.id === sessionId) ?? sessionShallow
+  // The share page never mounts a terminal; it keeps the transcript and says why
+  // sending is paused.
+  const showTerminal = Boolean(session?.terminalOpen) && !shared
   const {
     events,
     status,
@@ -52,6 +64,16 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
       }, -1),
     [events],
   )
+  // Without the project stream, a turn boundary is the share page's cue that
+  // busy / attached changed.
+  const turnRevision = useMemo(
+    () => events.reduce((last, e) => (TURN_EVENTS.has(e.type) ? e.sequence : last), -1),
+    [events],
+  )
+  const refreshGuest = guest.refresh
+  useEffect(() => {
+    if (shared && turnRevision >= 0) refreshGuest()
+  }, [shared, turnRevision, refreshGuest])
   const queue = useSessionQueue(session?.id ?? null, queueRevision, connectionRevision)
   const controls = useComposerControls({ session: session ?? null, onRefresh: refresh })
   const attachments = useDraftAttachments(sessionId)
@@ -59,8 +81,8 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
     sessionId,
     attachments,
     canSubmit: Boolean(
-      session?.attached &&
-        session.connected &&
+      (shared || session?.attached) &&
+        session?.connected &&
         !session.terminalOpen &&
         !controls.saving &&
         !controls.pending,
@@ -70,7 +92,7 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
 
   // Stick-to-bottom + jump-to-latest + load-earlier scroll handling (see hook).
   const { scrollRef, pinned, onScroll, jumpToBottom, markPrepend, onContentLoad } =
-    useTranscriptScroll(sessionId, items, Boolean(session && !session.terminalOpen))
+    useTranscriptScroll(sessionId, items, Boolean(session) && !showTerminal)
   // Record the reading position before fetching older events so it doesn't jump.
   const onLoadOlder = () => {
     void loadOlder(markPrepend)
@@ -107,27 +129,29 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <SessionHeader
-        session={session}
-        active={session.attached}
-        busy={session.busy}
-        connected={session.connected}
-        streamStatus={status}
-        initialEvent={initialEvent}
-        projectId={session.projectId}
-        activeLoops={session.activeLoops}
-        terminalOpen={session.terminalOpen}
-        onStop={stop}
-        onResume={() => void controls.resume()}
-        onOpenTerminal={openTerminal}
-        onCloseTerminal={closeTerminal}
-        onRename={rename}
-      />
+      {!shared && (
+        <SessionHeader
+          session={session}
+          active={session.attached}
+          busy={session.busy}
+          connected={session.connected}
+          streamStatus={status}
+          initialEvent={initialEvent}
+          projectId={session.projectId}
+          activeLoops={session.activeLoops}
+          terminalOpen={session.terminalOpen}
+          onStop={stop}
+          onResume={() => void controls.resume()}
+          onOpenTerminal={openTerminal}
+          onCloseTerminal={closeTerminal}
+          onRename={rename}
+        />
+      )}
       <ConnectionBanner streamStatus={status} connected={session.connected} />
       {/* A terminal IS the interaction surface — it fills the body; the relay
           transcript + composer (which the server rejects while a terminal is open)
           are hidden. Close via the header's "close terminal". */}
-      {session.terminalOpen ? (
+      {showTerminal ? (
         <TerminalView sessionId={session.id} />
       ) : (
         <>
@@ -153,12 +177,13 @@ export const SessionDetail = ({ sessionId }: SessionDetailProps) => {
             draft={draft}
             attachments={attachments}
             controls={controls}
+            shared={shared}
             queue={
               <QueuedMessages
                 queued={queue.items}
                 cancelling={queue.cancelling}
                 error={queue.error}
-                onCancel={inputId => void queue.cancel(inputId)}
+                onCancel={shared ? undefined : inputId => void queue.cancel(inputId)}
               />
             }
           />

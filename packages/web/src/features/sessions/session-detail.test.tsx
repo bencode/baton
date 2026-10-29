@@ -50,15 +50,15 @@ const setup = () => {
   const api = createApi()
   const get = vi.spyOn(api.sessions, 'get')
   const history = vi.spyOn(api.sessions, 'listEvents')
-  vi.spyOn(api.sessions, 'listByProject').mockResolvedValue([session])
+  const list = vi.spyOn(api.sessions, 'listByProject').mockResolvedValue([session])
   vi.spyOn(api.sessions, 'listQueue').mockResolvedValue({ revision: 0, items: [] })
-  const mount = () =>
+  const mount = (access?: 'share') =>
     render(
       <ApiContext value={api}>
-        <SessionDetail sessionId={1} />
+        <SessionDetail sessionId={1} access={access} />
       </ApiContext>,
     )
-  return { get, history, mount }
+  return { get, history, list, mount }
 }
 
 test('session metadata and history have explicit loading states before empty is confirmed', async () => {
@@ -98,4 +98,15 @@ test('failed session lookup exposes a manual retry instead of permanent loading'
   fireEvent.click(screen.getByRole('button', { name: '重试' }))
   expect(await screen.findByText('从一条消息开始')).toBeTruthy()
   expect(get).toHaveBeenCalledTimes(2)
+})
+
+test('share mode reads only its session: no project list, no header, transcript instead of terminal', async () => {
+  const { get, history, list, mount } = setup()
+  get.mockResolvedValue({ ...session, terminalOpen: true })
+  history.mockResolvedValue([])
+  mount('share')
+  expect(await screen.findByText('会话正在终端中使用，暂不能发送。')).toBeTruthy()
+  expect(screen.getByText('从一条消息开始')).toBeTruthy()
+  expect(screen.queryByText('历史会话')).toBeNull()
+  expect(list).not.toHaveBeenCalled()
 })

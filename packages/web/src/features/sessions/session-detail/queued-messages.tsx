@@ -5,7 +5,8 @@ type QueuedMessagesProps = {
   queued: PendingInput[]
   cancelling: ReadonlySet<Id>
   error: string | null
-  onCancel(inputId: Id): void
+  // Omitted on the share page: guests see the queue but can't withdraw from it.
+  onCancel?(inputId: Id): void
 }
 
 export const QueuedMessages = ({ queued, cancelling, error, onCancel }: QueuedMessagesProps) => {
@@ -32,15 +33,17 @@ export const QueuedMessages = ({ queued, cancelling, error, onCancel }: QueuedMe
                       : ''}
                   </small>
                 </div>
-                <button
-                  type="button"
-                  aria-label={`撤回待发送消息：${item.text || '附件消息'}`}
-                  className="composer-icon-button"
-                  disabled={cancelling.has(item.id)}
-                  onClick={() => onCancel(item.id)}
-                >
-                  <TrashIcon />
-                </button>
+                {onCancel && (
+                  <button
+                    type="button"
+                    aria-label={`撤回待发送消息：${item.text || '附件消息'}`}
+                    className="composer-icon-button"
+                    disabled={cancelling.has(item.id)}
+                    onClick={() => onCancel(item.id)}
+                  >
+                    <TrashIcon />
+                  </button>
+                )}
               </li>
             ))}
           </ul>

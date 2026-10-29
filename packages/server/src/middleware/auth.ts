@@ -6,11 +6,14 @@ import type { Store } from '../store/types.ts'
 // `userId` on cookie-authed back-office routes (set by the cookie gate).
 // `workerId` is set by the cookie gate when a worker-token bearer passes it —
 // it marks the request as a machine principal so domain scope exempts it.
+// `shareSessionId` is set by the cookie gate when a share-allowlisted route
+// carries a valid share grant for that session (see domain-scope sessionAccess).
 // `scopeWsIds` memoizes the accessible-workspace set for one request.
 export type AuthVars = {
   worker: Worker
   userId?: Id
   workerId?: Id
+  shareSessionId?: Id
   scopeWsIds?: Set<Id> | null
 }
 

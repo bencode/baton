@@ -7,16 +7,18 @@ import { matchCommands, type SlashCommand } from './commands'
 // the input stays focused on attachments/send; the composer renders the menu and
 // delegates keydown. onKeyDown returns true when it consumed the event (menu
 // navigation or running a command) so the caller skips its own send handling.
+// Disabled (share page) → no menu and no shortcuts; `/…` is then plain text.
 export const useSlashCommands = (
   draft: string,
   setDraft: (v: string) => void,
   onCommand: (command: SlashCommand, args: string) => void,
   onTogglePlanMode: () => void,
   agentKind: AgentKind,
+  enabled: boolean,
 ) => {
   const [index, setIndex] = useState(0)
   const [dismissed, setDismissed] = useState(false)
-  const menu = matchCommands(draft, agentKind)
+  const menu = enabled ? matchCommands(draft, agentKind) : []
   const open = menu.length > 0 && !dismissed
   const activeIndex = Math.min(index, menu.length - 1)
 
@@ -43,6 +45,7 @@ export const useSlashCommands = (
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!enabled) return false
     // Shift+Tab toggles plan mode anywhere (mirrors Claude Code). Checked before
     // the menu's plain-Tab pick so it wins even while the autocomplete is open.
     if (e.key === 'Tab' && e.shiftKey) {

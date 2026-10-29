@@ -3,6 +3,7 @@ import type { Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { authSecret, COOKIE_MAX_AGE, COOKIE_NAME, cookieSecure } from '../auth/config.ts'
 import { hashPassword, verifyPassword } from '../auth/password.ts'
+import { setShareGrant } from '../auth/share-grant.ts'
 import { issueToken } from '../store/prisma/codec.ts'
 import type { Store, UserRecord } from '../store/types.ts'
 import type { AppEnv } from '../views.ts'
@@ -35,9 +36,8 @@ const authedUserId = async (c: Context<AppEnv>, store: Store): Promise<number | 
   return null
 }
 
-// Auth endpoints — the only way to mint the session cookie. Registered before
-// the cookie gate and exempt from it. Both a password login and a share-token
-// open mint the SAME cookie; every other route then just checks "valid cookie?".
+// Auth endpoints — the only way to mint the session cookie (password login) or a
+// per-session share grant. Registered before the cookie gate and exempt from it.
 export const registerAuthRoutes = (app: Hono<AppEnv>, store: Store): void => {
   app.post('/auth/login', async c => {
     const { username, password } = await c.req
@@ -95,15 +95,13 @@ export const registerAuthRoutes = (app: Hono<AppEnv>, store: Store): void => {
     return c.json({ token })
   })
 
-  // Standalone-page auto-login: a valid share token logs the browser in as the
-  // (single, v0) seeded user — full access, so the share page is the unmodified
-  // detail page. 404 if the token matches nothing. With no users seeded (dev),
-  // auth is off anyway; we still return the session so the page can render.
+  // Standalone share page: a valid share token mints a grant for THAT session only
+  // (see auth/share-grant.ts) — no user identity, and an existing login cookie is
+  // left as is. 404 if the token matches nothing.
   app.post('/auth/share/:token', async c => {
     const session = await store.sessions.getByShareToken(c.req.param('token'))
     if (!session) return c.json({ error: 'not found' }, 404)
-    const user = await store.users.first()
-    if (user) await setSession(c, user.id)
+    await setShareGrant(c, session)
     return c.json({ session })
   })
 }

@@ -10,7 +10,7 @@ const mount = (draft: string) => {
   const onCommand = vi.fn()
   const setDraft = vi.fn()
   const hook = renderHook(() =>
-    useSlashCommands(draft, setDraft, onCommand, vi.fn(), 'claude-code'),
+    useSlashCommands(draft, setDraft, onCommand, vi.fn(), 'claude-code', true),
   )
   return { hook, onCommand, setDraft }
 }

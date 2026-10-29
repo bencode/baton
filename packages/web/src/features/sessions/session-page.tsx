@@ -6,14 +6,13 @@ import { useAsync } from '../../hooks/use-async'
 import { SessionDetail } from './session-detail'
 
 // Standalone, shell-less session view reached by a share link (/s/:token, e.g.
-// from the DingTalk bot). The token is the credential: we exchange it for a
-// session cookie (POST /auth/share/:token logs the browser in as the seeded
-// user), then render the *unmodified* SessionDetail — every operation works
-// exactly as in the back-office, just without the rail/tabs.
+// from the DingTalk bot). The token is the credential: we exchange it for a grant
+// to this one session (POST /auth/share/:token), then render SessionDetail in
+// share mode — read and talk only; management lives in the back-office.
 export const SessionPage = () => {
   const api = useApi()
   const { token = '' } = useParams()
-  const { data, loading, error } = useAsync(() => api.auth.shareLogin(token), token)
+  const { data, loading, error } = useAsync(() => api.auth.openShare(token), token)
 
   // Title strip + browser tab follow the session's auto-title once it has one;
   // until then "baton". Same rule as the back-office header — no layout split.
@@ -37,7 +36,7 @@ export const SessionPage = () => {
         </span>
       </div>
       <div className="min-h-0 min-w-0 flex-1">
-        <SessionDetail sessionId={data.session.id} />
+        <SessionDetail sessionId={data.session.id} access="share" />
       </div>
     </div>
   )

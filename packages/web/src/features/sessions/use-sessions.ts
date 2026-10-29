@@ -71,3 +71,42 @@ export const useSession = (
   )
   return { ...state, refresh }
 }
+
+// One session kept fresh without the project stream (the share page can't read
+// its project): fetch on mount / refresh() plus a slow poll. Errors keep the
+// last-known copy so a transient blip doesn't blank the page. Null → idle.
+export const usePolledSession = (
+  sessionId: Id | null,
+  pollMs = 15000,
+): { data: SessionView | null; error: Error | null; refresh(): void } => {
+  const api = useApi()
+  const [data, setData] = useState<SessionView | null>(null)
+  const [error, setError] = useState<Error | null>(null)
+  const [revision, setRevision] = useState(0)
+  const refresh = useCallback(() => setRevision(value => value + 1), [])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: revision is a refetch trigger, not read in the body
+  useEffect(() => {
+    if (sessionId === null) return
+    let alive = true
+    const tick = () => {
+      api.sessions
+        .get(sessionId)
+        .then(view => {
+          if (!alive) return
+          setData(view)
+          setError(null)
+        })
+        .catch(e => {
+          if (alive) setError(e instanceof Error ? e : new Error(String(e)))
+        })
+    }
+    tick()
+    const t = setInterval(tick, pollMs)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [api, sessionId, pollMs, revision])
+  return { data, error, refresh }
+}
