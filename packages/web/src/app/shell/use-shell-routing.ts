@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ApiError } from '../../api'
 import { useProject, useProjects } from '../../features/projects/use-projects'
 import { useSessions } from '../../features/sessions/use-sessions'
 import {
@@ -8,11 +9,12 @@ import {
   saveLastPath,
 } from '../../features/workspaces/last-location'
 import { useWorkspaces } from '../../features/workspaces/use-workspaces'
-import { activeProjectId, parseRoute, projectPath } from '../route'
+import { activeProjectId, parseRoute, projectPath, workspacePath } from '../route'
 import type { Tab } from '../tabs/tabs-model'
 
 type ShellRoutingArgs = {
   activeId: string
+  cacheScope: string
   tabs: Tab[]
   retitle: (id: string, name: string) => void
 }
@@ -24,7 +26,12 @@ type ShellRouting = { routeProjectId: number | null; workspaceId: number | null 
 // remember the last real location, and redirect the bare `/` and `/ws/:id`
 // landings to a concrete project. Lifted out of Shell so the component keeps only
 // composition + JSX; the active-tab state it reads is passed in (not owned here).
-export const useShellRouting = ({ activeId, tabs, retitle }: ShellRoutingArgs): ShellRouting => {
+export const useShellRouting = ({
+  activeId,
+  cacheScope,
+  tabs,
+  retitle,
+}: ShellRoutingArgs): ShellRouting => {
   const navigate = useNavigate()
   const route = parseRoute(activeId)
   const routeProjectId = activeProjectId(activeId)
@@ -40,22 +47,52 @@ export const useShellRouting = ({ activeId, tabs, retitle }: ShellRoutingArgs): 
     }
   }, [sessions, tabs, retitle, routeProjectId])
   const routeWorkspaceId = route.kind === 'workspace' ? route.workspaceId : null
-  const { data: project } = useProject(routeProjectId)
+  const { data: project, error: projectError } = useProject(routeProjectId)
   const { data: workspaces } = useWorkspaces()
   const { data: wsProjects } = useProjects(routeWorkspaceId)
-  const workspaceId = project?.id === routeProjectId ? project.workspaceId : routeWorkspaceId
+  const fallbackWorkspaceId = workspaces?.[0]?.id ?? null
+  const routeWorkspaceAccessible =
+    routeWorkspaceId !== null && workspaces?.some(workspace => workspace.id === routeWorkspaceId)
+  const workspaceId =
+    project?.id === routeProjectId
+      ? project.workspaceId
+      : routeWorkspaceAccessible
+        ? routeWorkspaceId
+        : fallbackWorkspaceId
 
   // Remember the last meaningful location so a later landing at `/` restores it.
   useEffect(() => {
-    if (route.kind !== 'home') saveLastPath(activeId)
-  }, [route.kind, activeId])
+    if (route.kind === 'home') return
+    if (routeProjectId !== null && project?.id !== routeProjectId) return
+    if (route.kind === 'workspace' && !routeWorkspaceAccessible) return
+    saveLastPath(cacheScope, activeId)
+  }, [activeId, cacheScope, project, route, routeProjectId, routeWorkspaceAccessible])
 
   // Home → restore the last visited path, else the first workspace.
   useEffect(() => {
     if (route.kind !== 'home' || !workspaces?.length) return
-    const target = resolveLandingPath(loadLastPath(), workspaces)
+    const target = resolveLandingPath(loadLastPath(cacheScope), workspaces)
     if (target) navigate(target, { replace: true })
-  }, [route.kind, workspaces, navigate])
+  }, [cacheScope, route.kind, workspaces, navigate])
+  // A project outside the current user's scope, or a stale workspace URL, must
+  // not strand the shell. Recover through the first accessible workspace; its
+  // project list remains available while this redirect settles.
+  useEffect(() => {
+    const staleProject = projectError instanceof ApiError && projectError.status === 404
+    const staleWorkspace =
+      route.kind === 'workspace' && workspaces !== null && !routeWorkspaceAccessible
+    if (!staleProject && !staleWorkspace) return
+    navigate(fallbackWorkspaceId === null ? '/' : workspacePath(fallbackWorkspaceId), {
+      replace: true,
+    })
+  }, [
+    fallbackWorkspaceId,
+    navigate,
+    projectError,
+    route.kind,
+    routeWorkspaceAccessible,
+    workspaces,
+  ])
   // A bare workspace → its first project.
   useEffect(() => {
     const first = wsProjects?.[0]

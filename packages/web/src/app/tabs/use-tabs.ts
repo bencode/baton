@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { emptyTabsPath, isItemRoute, parseRoute } from '../route'
 import { closeToRight, openTab, type Tab } from './tabs-model'
 
-const STORAGE_KEY = 'baton.tabs'
+const storageKey = (cacheScope: string): string => `baton.tabs.${cacheScope}`
 
 const isTab = (value: unknown): value is Tab =>
   typeof value === 'object' &&
@@ -16,9 +16,9 @@ const isTab = (value: unknown): value is Tab =>
   'lastActiveAt' in value &&
   typeof value.lastActiveAt === 'number'
 
-const loadTabs = (): Tab[] => {
+const loadTabs = (cacheScope: string): Tab[] => {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
+    const parsed: unknown = JSON.parse(localStorage.getItem(storageKey(cacheScope)) ?? '[]')
     return Array.isArray(parsed) ? parsed.filter(isTab) : []
   } catch (error) {
     console.warn('[tabs] could not restore tabs', error)
@@ -46,10 +46,10 @@ export type TabsController = {
   retitle(id: string, title: string): void
 }
 
-export const useTabs = (): TabsController => {
+export const useTabs = (cacheScope: string): TabsController => {
   const { pathname: activeId } = useLocation()
   const navigate = useNavigate()
-  const [tabs, setTabs] = useState<Tab[]>(loadTabs)
+  const [tabs, setTabs] = useState<Tab[]>(() => loadTabs(cacheScope))
   const pendingTitle = useRef<Record<string, string>>({})
   // Async resource deletion can complete after the user opens or switches tabs.
   const latest = useRef({ tabs, activeId })
@@ -57,11 +57,11 @@ export const useTabs = (): TabsController => {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs))
+      localStorage.setItem(storageKey(cacheScope), JSON.stringify(tabs))
     } catch (error) {
       console.warn('[tabs] could not persist tabs', error)
     }
-  }, [tabs])
+  }, [cacheScope, tabs])
 
   useEffect(() => {
     if (!isItemRoute(activeId)) return

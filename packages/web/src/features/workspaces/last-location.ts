@@ -4,19 +4,19 @@ import { parseRoute, workspacePath } from '../../app/route'
 // Persist the last meaningful location so a landing at `/` (fresh open, logo
 // click, closeAll) restores where the user was, instead of always jumping to
 // the first workspace. One full pathname covers workspace/project/item/session.
-const KEY = 'baton.last-path'
+const storageKey = (cacheScope: string): string => `baton.last-path.${cacheScope}`
 
-export const saveLastPath = (path: string): void => {
+export const saveLastPath = (cacheScope: string, path: string): void => {
   try {
-    localStorage.setItem(KEY, path)
+    localStorage.setItem(storageKey(cacheScope), path)
   } catch {
     /* storage unavailable (private mode, quota) — skip persistence */
   }
 }
 
-export const loadLastPath = (): string | null => {
+export const loadLastPath = (cacheScope: string): string | null => {
   try {
-    return localStorage.getItem(KEY)
+    return localStorage.getItem(storageKey(cacheScope))
   } catch {
     return null
   }

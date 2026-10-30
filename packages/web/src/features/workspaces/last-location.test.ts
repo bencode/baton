@@ -1,9 +1,20 @@
 import type { Workspace } from '@baton/shared'
-import { expect, test } from 'vitest'
-import { resolveLandingPath } from './last-location'
+import { beforeEach, expect, test } from 'vitest'
+import { loadLastPath, resolveLandingPath, saveLastPath } from './last-location'
 
 const ws = (id: number): Workspace => ({ id, name: `ws-${id}`, createdAt: 0 })
 const list = [ws(3), ws(5)]
+
+beforeEach(() => localStorage.clear())
+
+test('last locations are isolated by authenticated user', () => {
+  saveLastPath('user-1', '/proj/9')
+  saveLastPath('user-2', '/proj/12')
+
+  expect(loadLastPath('user-1')).toBe('/proj/9')
+  expect(loadLastPath('user-2')).toBe('/proj/12')
+  expect(loadLastPath('user-3')).toBeNull()
+})
 
 test('resolveLandingPath restores a real saved path, else falls back to first workspace', () => {
   // Project/session paths restore as-is (can't be validated here).

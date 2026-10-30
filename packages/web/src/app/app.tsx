@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { createApi } from '../api'
 import { OpsPage } from '../features/admin/ops-page'
+import { authCacheScope, useAuth } from '../features/auth/auth-context'
 import { LoginPage } from '../features/auth/login-page'
 import { RequireAuth } from '../features/auth/require-auth'
 import { ChannelPage } from '../features/channels/channel-page'
@@ -22,9 +23,15 @@ import { useTabs } from './tabs/use-tabs'
 const api = createApi()
 
 export const Shell = () => {
+  const cacheScope = authCacheScope(useAuth())
   const { tabs, activeId, open, close, closeOthers, closeRight, closeAll, closeMatching, retitle } =
-    useTabs()
-  const { routeProjectId, workspaceId } = useShellRouting({ activeId, tabs, retitle })
+    useTabs(cacheScope)
+  const { routeProjectId, workspaceId } = useShellRouting({
+    activeId,
+    cacheScope,
+    tabs,
+    retitle,
+  })
   const isMobile = useIsMobile()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [desktopCollapsed, setDesktopCollapsed] = useState(false)

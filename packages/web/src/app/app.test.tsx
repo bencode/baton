@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Api } from '../api'
+import { AuthContext, type AuthState } from '../features/auth/auth-context'
 import { ApiContext } from './api-context'
 import { Shell } from './app'
 import { HealthBadge } from './shell/health-badge'
@@ -11,6 +12,13 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
+const localAuth: AuthState = { authRequired: false, user: null, hasToken: false }
+
+const ShellWithAuth = () => (
+  <AuthContext.Provider value={localAuth}>
+    <Shell />
+  </AuthContext.Provider>
+)
 
 const renderBadge = (api: Api) =>
   render(
@@ -44,7 +52,7 @@ test('Shell renders the top bar, a resize separator and empty states with no dat
   const { container } = render(
     <ApiContext.Provider value={api}>
       <MemoryRouter initialEntries={['/']}>
-        <Shell />
+        <ShellWithAuth />
       </MemoryRouter>
     </ApiContext.Provider>,
   )
@@ -81,7 +89,7 @@ test('crossing the mobile breakpoint preserves the open page and its unsaved inp
   render(
     <ApiContext.Provider value={api}>
       <MemoryRouter initialEntries={['/proj/1/settings']}>
-        <Shell />
+        <ShellWithAuth />
       </MemoryRouter>
     </ApiContext.Provider>,
   )

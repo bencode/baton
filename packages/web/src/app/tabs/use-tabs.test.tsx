@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 import { useTabs } from './use-tabs'
 
 const Harness = () => {
-  const tabs = useTabs()
+  const tabs = useTabs('user-1')
   const navigate = useNavigate()
   return (
     <>
@@ -41,7 +41,7 @@ const initial = [1, 2, 3].map(id => ({
 }))
 beforeEach(() => {
   localStorage.clear()
-  localStorage.setItem('baton.tabs', JSON.stringify(initial))
+  localStorage.setItem('baton.tabs.user-1', JSON.stringify(initial))
 })
 afterEach(cleanup)
 
@@ -86,7 +86,20 @@ test('project navigation leaves persisted tabs open for later visits', () => {
   )
   fireEvent.click(screen.getByText('Start project three'))
   expect(screen.getByLabelText('Count').textContent).toBe('3')
-  expect(JSON.parse(localStorage.getItem('baton.tabs') ?? '[]')).toHaveLength(3)
+  expect(JSON.parse(localStorage.getItem('baton.tabs.user-1') ?? '[]')).toHaveLength(3)
+})
+
+test('tabs from another authenticated user are not restored', () => {
+  const OtherUserHarness = () => {
+    const tabs = useTabs('user-2')
+    return <output aria-label="Other user count">{tabs.tabs.length}</output>
+  }
+  render(
+    <MemoryRouter>
+      <OtherUserHarness />
+    </MemoryRouter>,
+  )
+  expect(screen.getByLabelText('Other user count').textContent).toBe('0')
 })
 
 test('closing other tabs pushes only one navigation entry', () => {
