@@ -127,28 +127,18 @@ test('all current errors remain visible together and replace lower-priority foot
   expect(feedback().textContent).not.toContain('执行环境离线')
 })
 
-test('the inactive composer auto-resumes before sending and keeps manual resume available', async () => {
-  const { api, send } = setup({ ...current, attached: false })
-  const calls: string[] = []
-  const resume = vi.spyOn(api.sessions, 'resume').mockImplementation(async () => {
-    calls.push('resume')
-    return { ...current, attached: false }
-  })
-  send.mockImplementation(async () => {
-    calls.push('send')
-    return submitted
-  })
+test('the inactive composer accepts drafts and keeps manual resume available', async () => {
+  const { api } = setup({ ...current, attached: false })
+  const resume = vi.spyOn(api.sessions, 'resume').mockResolvedValue({ ...current, attached: false })
   expect(feedback().textContent).toContain('会话未启动，发送消息时将自动恢复。')
   expect(screen.getByRole('button', { name: '添加附件' }).hasAttribute('disabled')).toBe(false)
   write('继续处理')
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: '发送' })))
-  expect(calls).toEqual(['resume', 'send'])
+  expect(screen.getByRole('button', { name: '发送' }).hasAttribute('disabled')).toBe(false)
 
   await act(async () =>
     fireEvent.click(within(feedback()).getByRole('button', { name: '恢复会话' })),
   )
-  expect(resume).toHaveBeenCalledTimes(2)
-  expect(resume).toHaveBeenLastCalledWith(1)
+  expect(resume).toHaveBeenCalledExactlyOnceWith(1)
   expect(within(feedback()).getByRole('status').textContent).toBe('已请求恢复会话，等待连接。')
   expect(feedback().textContent).not.toContain('会话未启动')
 })

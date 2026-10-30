@@ -108,14 +108,14 @@ test('resumes an inactive session before sending', async () => {
 
 test('resume failure retains the draft and skips sending', async () => {
   const { hook, resume, send } = setup(true)
-  resume.mockRejectedValue(new Error('恢复失败'))
+  resume.mockRejectedValue(new Error('409 terminal open'))
   act(() => hook.result.current.draft.setText('保留草稿'))
 
   await act(() => hook.result.current.draft.submit())
 
   expect(send).not.toHaveBeenCalled()
   expect(hook.result.current.draft.text).toBe('保留草稿')
-  expect(hook.result.current.draft.error).toContain('恢复失败')
+  expect(hook.result.current.draft.error).toBe('恢复会话失败，草稿已保留。409 terminal open')
 })
 
 test('failure retains text and files; manual retry clears only unchanged raw text', async () => {
