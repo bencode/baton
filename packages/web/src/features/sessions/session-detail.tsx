@@ -81,12 +81,9 @@ export const SessionDetail = ({ sessionId, access = 'member' }: SessionDetailPro
     sessionId,
     attachments,
     canSubmit: Boolean(
-      (shared || session?.attached) &&
-        session?.connected &&
-        !session.terminalOpen &&
-        !controls.saving &&
-        !controls.pending,
+      session?.connected && !session.terminalOpen && !controls.saving && !controls.pending,
     ),
+    resumeBeforeSend: !shared && session?.attached === false,
     onSubmitted: result => queue.applySnapshot(result.queue),
   })
 
