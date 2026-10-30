@@ -48,7 +48,7 @@ test('an inaccessible cached project recovers through the first accessible works
   )
 
   await waitFor(() => expect(screen.getByLabelText('Current path').textContent).toBe('/proj/23'))
-  expect(screen.getByLabelText('Workspace').textContent).toBe('9')
+  await waitFor(() => expect(screen.getByLabelText('Workspace').textContent).toBe('9'))
   await waitFor(() => expect(localStorage.getItem('baton.last-path.user-5')).toBe('/proj/23'))
   expect(api.sessions.listByProject).toHaveBeenCalledWith(999)
   expect(api.sessions.listByProject).toHaveBeenCalledWith(23)

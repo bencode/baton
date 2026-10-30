@@ -58,7 +58,7 @@ export const useShellRouting = ({
       ? project.workspaceId
       : routeWorkspaceAccessible
         ? routeWorkspaceId
-        : fallbackWorkspaceId
+        : null
 
   // Remember the last meaningful location so a later landing at `/` restores it.
   useEffect(() => {
@@ -66,7 +66,7 @@ export const useShellRouting = ({
     if (routeProjectId !== null && project?.id !== routeProjectId) return
     if (route.kind === 'workspace' && !routeWorkspaceAccessible) return
     saveLastPath(cacheScope, activeId)
-  }, [activeId, cacheScope, project, route, routeProjectId, routeWorkspaceAccessible])
+  }, [activeId, cacheScope, project?.id, route.kind, routeProjectId, routeWorkspaceAccessible])
 
   // Home → restore the last visited path, else the first workspace.
   useEffect(() => {
@@ -75,8 +75,7 @@ export const useShellRouting = ({
     if (target) navigate(target, { replace: true })
   }, [cacheScope, route.kind, workspaces, navigate])
   // A project outside the current user's scope, or a stale workspace URL, must
-  // not strand the shell. Recover through the first accessible workspace; its
-  // project list remains available while this redirect settles.
+  // not strand the shell. Recover through the first accessible workspace.
   useEffect(() => {
     const staleProject = projectError instanceof ApiError && projectError.status === 404
     const staleWorkspace =
