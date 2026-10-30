@@ -51,8 +51,15 @@ export const useComposerDraft = ({
     inFlight.current = true
     setSending(true)
     setError(null)
+    let failed = '发送失败'
     try {
-      if (resumeBeforeSend) await api.sessions.resume(sessionId)
+      // A stopped session is paused: the server would queue the message but never
+      // run it, so un-pause first. An idle-reaped session restarts on send alone.
+      if (resumeBeforeSend) {
+        failed = '恢复会话失败'
+        await api.sessions.resume(sessionId)
+        failed = '发送失败'
+      }
       const result = await api.sessions.sendMessage(
         sessionId,
         submittedText.trim(),
@@ -63,7 +70,7 @@ export const useComposerDraft = ({
       onSubmitted(result)
       return true
     } catch (cause) {
-      setError(`发送失败，草稿已保留。${cause instanceof Error ? cause.message : String(cause)}`)
+      setError(`${failed}，草稿已保留。${cause instanceof Error ? cause.message : String(cause)}`)
       return false
     } finally {
       inFlight.current = false
