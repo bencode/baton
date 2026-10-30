@@ -45,8 +45,7 @@ export const Composer = ({
   const menuId = useId()
   const helpId = useId()
   const locked = draft.sending || controls.saving !== null || controls.pending !== null
-  const canAttach =
-    (shared || session.attached) && session.connected && !session.terminalOpen && !locked
+  const canAttach = session.connected && !session.terminalOpen && !locked
   const addFiles = (files: File[]) => {
     if (canAttach) void attachments.addFiles(files)
   }
@@ -253,7 +252,7 @@ export const Composer = ({
             <p>会话正在终端中使用，暂不能发送。</p>
           ) : !session.attached && !shared ? (
             <div className="composer-footer-action">
-              <span>会话未启动，恢复后可发送。</span>
+              <span>会话未启动，发送消息时将自动恢复。</span>
               <button
                 type="button"
                 className="ui-button"

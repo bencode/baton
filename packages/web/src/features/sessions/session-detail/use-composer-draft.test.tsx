@@ -1,4 +1,4 @@
-import type { Attachment, SubmitInputResult } from '@baton/shared'
+import type { Attachment, SessionView, SubmitInputResult } from '@baton/shared'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -32,8 +32,9 @@ const result: SubmitInputResult = {
   queue: { revision: 1, items: [] },
   sinceSequence: 0,
 }
-const setup = () => {
+const setup = (resumeBeforeSend = false) => {
   const api = createApi()
+  const resume = vi.spyOn(api.sessions, 'resume')
   const send = vi.spyOn(api.sessions, 'sendMessage')
   const upload = vi.spyOn(api.sessions, 'uploadAttachment').mockResolvedValue(attachment)
   const submitted = vi.fn()
@@ -44,6 +45,7 @@ const setup = () => {
         sessionId: 2,
         attachments,
         canSubmit,
+        resumeBeforeSend,
         onSubmitted: submitted,
       })
       return { attachments, draft }
@@ -55,11 +57,11 @@ const setup = () => {
       ),
     },
   )
-  return { hook, send, submitted, upload }
+  return { hook, resume, send, submitted, upload }
 }
 
 test('one in-flight submission preserves new typing and consumes only submitted attachments', async () => {
-  const { hook, send, submitted } = setup()
+  const { hook, resume, send, submitted } = setup()
   let done!: (value: SubmitInputResult) => void
   send.mockReturnValue(
     new Promise(resolve => {
@@ -73,6 +75,7 @@ test('one in-flight submission preserves new typing and consumes only submitted 
     pending = hook.result.current.draft.submit()
     void hook.result.current.draft.submit()
   })
+  expect(resume).not.toHaveBeenCalled()
   expect(send).toHaveBeenCalledExactlyOnceWith(2, '原草稿', [attachment])
   act(() => hook.result.current.draft.setText('下一条草稿'))
   await act(() => hook.result.current.attachments.addFiles([new File(['b'], 'b.txt')]))
@@ -83,6 +86,36 @@ test('one in-flight submission preserves new typing and consumes only submitted 
   expect(hook.result.current.draft.text).toBe('下一条草稿')
   expect(hook.result.current.attachments.items).toHaveLength(1)
   expect(submitted).toHaveBeenCalledWith(result)
+})
+
+test('resumes an inactive session before sending', async () => {
+  const { hook, resume, send } = setup(true)
+  const calls: string[] = []
+  resume.mockImplementation(async () => {
+    calls.push('resume')
+    return {} as SessionView
+  })
+  send.mockImplementation(async () => {
+    calls.push('send')
+    return result
+  })
+  act(() => hook.result.current.draft.setText('继续处理'))
+
+  await act(() => hook.result.current.draft.submit())
+
+  expect(calls).toEqual(['resume', 'send'])
+})
+
+test('resume failure retains the draft and skips sending', async () => {
+  const { hook, resume, send } = setup(true)
+  resume.mockRejectedValue(new Error('恢复失败'))
+  act(() => hook.result.current.draft.setText('保留草稿'))
+
+  await act(() => hook.result.current.draft.submit())
+
+  expect(send).not.toHaveBeenCalled()
+  expect(hook.result.current.draft.text).toBe('保留草稿')
+  expect(hook.result.current.draft.error).toContain('恢复失败')
 })
 
 test('failure retains text and files; manual retry clears only unchanged raw text', async () => {

@@ -17,11 +17,13 @@ export const useComposerDraft = ({
   sessionId,
   attachments,
   canSubmit,
+  resumeBeforeSend,
   onSubmitted,
 }: {
   sessionId: Id
   attachments: DraftAttachments
   canSubmit: boolean
+  resumeBeforeSend: boolean
   onSubmitted(result: SubmitInputResult): void
 }): ComposerDraft => {
   const api = useApi()
@@ -50,6 +52,7 @@ export const useComposerDraft = ({
     setSending(true)
     setError(null)
     try {
+      if (resumeBeforeSend) await api.sessions.resume(sessionId)
       const result = await api.sessions.sendMessage(
         sessionId,
         submittedText.trim(),

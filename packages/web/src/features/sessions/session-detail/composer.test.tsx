@@ -49,8 +49,8 @@ const Host = ({
   const draft = useComposerDraft({
     sessionId: session.id,
     attachments,
-    canSubmit:
-      session.connected && (shared || session.attached) && !controls.pending && !controls.saving,
+    canSubmit: session.connected && !controls.pending && !controls.saving,
+    resumeBeforeSend: !shared && !session.attached,
     onSubmitted: vi.fn(),
   })
   return (
@@ -127,17 +127,30 @@ test('all current errors remain visible together and replace lower-priority foot
   expect(feedback().textContent).not.toContain('执行环境离线')
 })
 
-test('the inactive footer keeps resume and replaces its hint with the request acknowledgement', async () => {
+test('the inactive composer auto-resumes before sending and keeps manual resume available', async () => {
   const { api, send } = setup({ ...current, attached: false })
-  const resume = vi.spyOn(api.sessions, 'resume').mockResolvedValue({ ...current, attached: false })
-  expect(feedback().textContent).toContain('会话未启动，恢复后可发送。')
+  const calls: string[] = []
+  const resume = vi.spyOn(api.sessions, 'resume').mockImplementation(async () => {
+    calls.push('resume')
+    return { ...current, attached: false }
+  })
+  send.mockImplementation(async () => {
+    calls.push('send')
+    return submitted
+  })
+  expect(feedback().textContent).toContain('会话未启动，发送消息时将自动恢复。')
+  expect(screen.getByRole('button', { name: '添加附件' }).hasAttribute('disabled')).toBe(false)
+  write('继续处理')
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '发送' })))
+  expect(calls).toEqual(['resume', 'send'])
+
   await act(async () =>
     fireEvent.click(within(feedback()).getByRole('button', { name: '恢复会话' })),
   )
-  expect(resume).toHaveBeenCalledExactlyOnceWith(1)
+  expect(resume).toHaveBeenCalledTimes(2)
+  expect(resume).toHaveBeenLastCalledWith(1)
   expect(within(feedback()).getByRole('status').textContent).toBe('已请求恢复会话，等待连接。')
   expect(feedback().textContent).not.toContain('会话未启动')
-  expect(send).not.toHaveBeenCalled()
 })
 
 test('IME Enter and Shift+Enter do not send; Ctrl+Enter sends once and keeps focus', async () => {
