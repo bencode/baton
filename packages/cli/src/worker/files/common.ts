@@ -1,4 +1,5 @@
 import {
+  FILE_DOWNLOAD_MAX_BYTES,
   FILE_SEARCH_QUERY_MAX_LENGTH,
   type FileEntry,
   type FileErrorCode,
@@ -21,6 +22,20 @@ export class FileError extends Error {
 
 export const notFound = (path: string): FileError =>
   new FileError('file_not_found', `not found: ${path}`)
+
+// A download larger than the limit is refused from its size alone.
+export const checkDownloadSize = (path: string, size: number): void => {
+  if (size > FILE_DOWNLOAD_MAX_BYTES)
+    throw new FileError('file_too_large', `too large to download (${size} bytes): ${path}`)
+}
+
+// An opened download: its size when opened and a stream of its bytes. close()
+// releases the file descriptor or Git process, whether or not the stream was read.
+export type FileDownloadSource = {
+  size: number
+  body: ReadableStream<Uint8Array>
+  close(): void
+}
 
 // A requested repository-relative path: well-formed and not protected.
 export const checkedPath = (path: string, allowRoot: boolean): string => {

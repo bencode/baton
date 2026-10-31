@@ -22,12 +22,16 @@ vi.mock('mermaid', () => ({
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 // jsdom lays nothing out; CodeMirror still measures text ranges when it gets the chance.
 beforeAll(() => {
   Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList
   Range.prototype.getBoundingClientRect ??= () => new DOMRect()
+  // jsdom has no object URLs; tests spy on these.
+  URL.createObjectURL ??= () => ''
+  URL.revokeObjectURL ??= () => {}
 })
 
 const route: Extract<Route, { kind: 'file' }> = {
@@ -39,9 +43,15 @@ const route: Extract<Route, { kind: 'file' }> = {
 }
 const otherPath = '/proj/1/session/9'
 
-const renderTabs = (view: () => Promise<FileView>, file = route) => {
+const renderTabs = (
+  view: () => Promise<FileView>,
+  file = route,
+  download: () => Promise<Blob> = async () => new Blob(),
+) => {
   const { rawRoot, rawUrl } = createApi().files
-  const api = { files: { view: vi.fn(view), rawRoot, rawUrl } } as unknown as Api
+  const api = {
+    files: { view: vi.fn(view), rawRoot, rawUrl, download: vi.fn(download) },
+  } as unknown as Api
   const filePath = fileRoutePath(file)
   const tabs = [
     { id: filePath, title: 'plan', lastActiveAt: 0 },
@@ -60,7 +70,11 @@ const renderTabs = (view: () => Promise<FileView>, file = route) => {
     </ApiContext.Provider>
   )
   const rendered = render(ui(filePath))
-  return { view: api.files.view, show: (activeId: string) => rendered.rerender(ui(activeId)) }
+  return {
+    view: api.files.view,
+    download: api.files.download,
+    show: (activeId: string) => rendered.rerender(ui(activeId)),
+  }
 }
 
 test('a file loads once per activation and again only on refresh', async () => {
@@ -89,18 +103,68 @@ test('a file loads once per activation and again only on refresh', async () => {
   await vi.waitFor(() => expect(view).toHaveBeenCalledTimes(2))
 })
 
+const unpreviewable = (shape: Partial<FileView>) => async () =>
+  ({ path: 'docs/plan.docx', name: 'plan.docx', commit: null, ...shape }) as FileView
+
 test.each([
-  [{ kind: 'binary', size: 2048 }, '二进制文件（2.0 KiB），不提供预览。'],
+  [{ kind: 'binary', size: 2048 }, '此文件暂不支持在线预览，可下载后在本地打开。'],
   [
     { kind: 'too_large', size: 6 * 1024 * 1024, limit: 5 * 1024 * 1024 },
-    '文件大小 6.0 MiB，超过 5.0 MiB 上限，不提供预览。',
+    '文件超过现有预览上限，可下载后在本地打开。',
   ],
-] as const)('%o shows a notice instead of content', async (shape, notice) => {
-  renderTabs(
-    async () => ({ path: 'docs/plan.txt', name: 'plan.txt', commit: null, ...shape }) as FileView,
+] as const)('%o downloads its original bytes under its own name', async (shape, notice) => {
+  const saved = { href: '', name: '' }
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+    this: HTMLAnchorElement,
+  ) {
+    saved.href = this.href
+    saved.name = this.download
+  })
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:file')
+  let finish = (_blob: Blob) => {}
+  const { download } = renderTabs(
+    unpreviewable(shape),
+    route,
+    () => new Promise(resolve => (finish = resolve)),
   )
   expect(await screen.findByText(notice)).toBeTruthy()
   expect(document.querySelector('.cm-editor')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '下载文件' }))
+  const pending = screen.getByRole('button', { name: '正在下载…' })
+  expect(pending.hasAttribute('disabled')).toBe(true)
+  expect(download).toHaveBeenCalledWith(
+    { workerId: 2, branch: 'feat/x' },
+    'docs/plan.docx',
+    expect.any(AbortSignal),
+  )
+  finish(new Blob(['bytes']))
+  await screen.findByRole('button', { name: '下载文件' })
+  expect(saved).toEqual({ href: 'blob:file', name: 'plan.docx' })
+  expect(download).toHaveBeenCalledTimes(1)
+})
+
+test('a failed download is reported in place and can be retried', async () => {
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:file')
+  const failures = [new FileApiError('offline', 409, 'worker_offline'), new TypeError('network')]
+  const { download } = renderTabs(unpreviewable({ kind: 'binary', size: 10 }), route, async () => {
+    const failure = failures.shift()
+    if (failure) throw failure
+    return new Blob(['ok'])
+  })
+  fireEvent.click(await screen.findByRole('button', { name: '下载文件' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('执行环境离线')
+  fireEvent.click(screen.getByRole('button', { name: '下载文件' }))
+  await vi.waitFor(() => expect(screen.getByRole('alert').textContent).toBe('下载失败，请重试'))
+  fireEvent.click(screen.getByRole('button', { name: '下载文件' }))
+  await vi.waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+  expect(download).toHaveBeenCalledTimes(3)
+})
+
+test('a file over the download limit cannot be downloaded', async () => {
+  renderTabs(unpreviewable({ kind: 'too_large', size: 100 * 1024 * 1024 + 1, limit: 5 }))
+  expect(await screen.findByText('文件超过 100 MiB 的下载上限，请在执行环境中获取。')).toBeTruthy()
+  expect(screen.getByRole('button', { name: '下载文件' }).hasAttribute('disabled')).toBe(true)
 })
 
 test('content read from a commit names that commit', async () => {
@@ -141,6 +205,7 @@ test('other text files open in the code view with search and wrapping, not the r
   expect(screen.queryByRole('button', { name: '源码' })).toBeNull()
   expect(screen.queryByRole('button', { name: '阅读外观' })).toBeNull()
   expect(screen.getByRole('button', { name: '在文件中搜索' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '下载文件' })).toBeNull()
   const wrap = screen.getByRole('button', { name: '自动换行' })
   expect(wrap.getAttribute('aria-pressed')).toBe('false')
   fireEvent.click(wrap)

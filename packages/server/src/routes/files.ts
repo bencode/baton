@@ -1,5 +1,6 @@
 import {
   branchFromPathSegment,
+  FILE_DOWNLOAD_MAX_BYTES,
   FILE_ERROR_STATUS,
   FILE_SEARCH_QUERY_MAX_LENGTH,
   type FileErrorCode,
@@ -12,21 +13,26 @@ import {
 } from '@baton/shared'
 import type { Context, Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
+import type { FileDownloads } from '../file-downloads.ts'
 import type { FileRequests } from '../file-requests.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
 import { assertProjectAccess } from '../middleware/domain-scope.ts'
 import type { Store } from '../store/types.ts'
 import type { AppEnv } from '../views.ts'
+import { fileContentDisposition } from './attachment-download.ts'
 
 type Ctx = Context<AppEnv>
 
 // A 5 MiB text reply plus JSON escaping stays well under this.
 const RESULT_BODY_LIMIT = 8 * 1024 * 1024
+const DOWNLOAD_FAILURE_BODY_LIMIT = 8 * 1024
 
 const positiveInt = (value: string): Id | null => {
   const n = Number(value)
   return Number.isInteger(n) && n > 0 ? n : null
 }
+
+type FileFailure = Extract<FileReply, { ok: false }>
 
 const fail = (c: Ctx, code: FileErrorCode, message: string): Response =>
   c.json({ error: message, code }, FILE_ERROR_STATUS[code])
@@ -41,6 +47,21 @@ const RAW_HEADERS = {
   'Cache-Control': 'private, no-store',
   'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
 }
+
+// A download is opaque bytes saved under the file's own name, never rendered.
+const DOWNLOAD_HEADERS = {
+  'Content-Type': 'application/octet-stream',
+  'X-Content-Type-Options': 'nosniff',
+  'Cache-Control': 'private, no-store',
+  'Content-Security-Policy': "default-src 'none'; sandbox",
+}
+
+const isJson = (c: Ctx): boolean =>
+  c.req.header('content-type')?.startsWith('application/json') ?? false
+
+// A Content-Length of plain digits; anything else (absent, chunked, signed) is null.
+const declaredLength = (value: string | undefined): number | null =>
+  value !== undefined && /^\d{1,16}$/.test(value) ? Number(value) : null
 
 const sendRaw = (c: Ctx, reply: FileReply): Response => {
   if (!reply.ok) return fail(c, reply.code, reply.message)
@@ -67,7 +88,12 @@ const branchParam = (c: Ctx): string | null => {
   return isBranchName(branch) ? branch : null
 }
 
-export const registerFileRoutes = (app: Hono<AppEnv>, store: Store, files: FileRequests): void => {
+export const registerFileRoutes = (
+  app: Hono<AppEnv>,
+  store: Store,
+  files: FileRequests,
+  downloads: FileDownloads,
+): void => {
   const base = '/workers/:workerId'
 
   // Shared tail of every user-facing read: resolve the worker, validate the query,
@@ -124,6 +150,65 @@ export const registerFileRoutes = (app: Hono<AppEnv>, store: Store, files: FileR
       },
       sendRaw,
     ),
+  )
+
+  // Original bytes of any file within the download limit. Failures before the
+  // headers go out are JSON like every other read; a failure after that ends the
+  // body early, so the browser's download fails instead of saving a partial file.
+  app.get(`${base}/download`, async c => {
+    const workerId = await targetWorker(c, store)
+    if (workerId instanceof Response) return workerId
+    const branch = branchParam(c)
+    const path = normalizeFilePath(c.req.query('path') ?? '')
+    if (!branch || path === null) return fail(c, 'invalid_request', 'invalid file query')
+    const reply = await downloads.request(workerId, { branch, path }, c.req.raw.signal)
+    if (!reply.ok) return fail(c, reply.code, reply.message)
+    return c.body(reply.data.body, 200, {
+      ...DOWNLOAD_HEADERS,
+      'Content-Length': String(reply.data.size),
+      'Content-Disposition': fileContentDisposition(path.split('/').at(-1) ?? path, false),
+    })
+  })
+
+  // The worker's side of a download: the bytes (octet-stream, exact Content-Length)
+  // or why it cannot send them (small JSON). The upload is held open until every
+  // byte has been forwarded to the browser.
+  const failureLimit = bodyLimit({
+    maxSize: DOWNLOAD_FAILURE_BODY_LIMIT,
+    onError: c => c.json({ error: 'download failure report too large' }, 413),
+  })
+  app.put(
+    '/workers/me/files/downloads/:requestId',
+    workerBearerAuth(store),
+    (c, next) => (isJson(c) ? failureLimit(c, next) : next()),
+    async c => {
+      const workerId = c.get('worker').id
+      const requestId = c.req.param('requestId')
+      const unknown = () => c.json({ error: 'unknown download' }, 404)
+      if (isJson(c))
+        return downloads.reject(workerId, requestId, await c.req.json())
+          ? c.json({ ok: true })
+          : unknown()
+      const size = declaredLength(c.req.header('content-length'))
+      if (size === null || size > FILE_DOWNLOAD_MAX_BYTES) {
+        const tooLarge = size !== null
+        const failure: FileFailure = tooLarge
+          ? { ok: false, code: 'file_too_large', message: 'worker sent a file over the limit' }
+          : { ok: false, code: 'unavailable', message: 'worker sent no valid length' }
+        if (!downloads.reject(workerId, requestId, failure)) return unknown()
+        return c.json({ error: failure.message }, tooLarge ? 413 : 400)
+      }
+      // An empty upload may arrive without a body stream.
+      const body = c.req.raw.body ?? new Blob([]).stream()
+      try {
+        return (await downloads.receive(workerId, requestId, size, body, c.req.raw.signal))
+          ? c.json({ ok: true })
+          : unknown()
+      } catch (error) {
+        console.warn(`[files] download ${requestId} ended before completing`, error)
+        return c.json({ error: 'download did not complete' }, 502)
+      }
+    },
   )
 
   app.put(

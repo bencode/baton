@@ -1,6 +1,7 @@
 import { AGENT_KINDS, type AgentKind, type Id, isAgentKind } from '@baton/shared'
 import type { Hono } from 'hono'
 import type { CommandBus } from '../command-bus.ts'
+import type { FileDownloads } from '../file-downloads.ts'
 import type { FileRequests } from '../file-requests.ts'
 import { workerBearerAuth } from '../middleware/auth.ts'
 import { assertProjectAccess } from '../middleware/domain-scope.ts'
@@ -26,6 +27,7 @@ export const registerWorkerRoutes = (
   projects: ProjectBus,
   terminal: TerminalBridge,
   files: FileRequests,
+  downloads: FileDownloads,
 ): void => {
   const auth = workerBearerAuth(store)
   // Idempotent register (machineId-anchored). See store.workers.register
@@ -110,11 +112,14 @@ export const registerWorkerRoutes = (
         onClose: () => {
           // Daemon offline: its sessions flip inactive (forgetWorker), its interactive
           // terminals died with it (terminal.forgetWorker), and its presence drops —
-          // refetch both. Pending file reads fail fast unless a reconnected stream
-          // is already live.
+          // refetch both. Pending file reads and downloads fail fast unless a
+          // reconnected stream is already live.
           runtime.forgetWorker(worker.id)
           terminal.forgetWorker(worker.id)
-          if (!commands.has(worker.id)) files.forgetWorker(worker.id)
+          if (!commands.has(worker.id)) {
+            files.forgetWorker(worker.id)
+            downloads.forgetWorker(worker.id)
+          }
           projects.publish(worker.projectId, { resource: 'workers' })
           projects.publish(worker.projectId, { resource: 'sessions' })
         },

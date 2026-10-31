@@ -246,3 +246,29 @@ test('worker creation requests forward a ten-second deadline and expose abort er
   controller.abort(new DOMException('Timed out', 'TimeoutError'))
   await assertion
 })
+
+test('files.download fetches the original bytes with the session cookie', async () => {
+  const fetchMock = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([0, 255])))
+  vi.stubGlobal('fetch', fetchMock)
+  const signal = new AbortController().signal
+  const blob = await createApi().files.download(
+    { workerId: 2, branch: 'feat/x' },
+    'docs/报告.docx',
+    signal,
+  )
+  expect([...new Uint8Array(await blob.arrayBuffer())]).toEqual([0, 255])
+  expect(fetchMock).toHaveBeenCalledWith(
+    `/api/workers/2/download?${new URLSearchParams({ branch: 'feat/x', path: 'docs/报告.docx' })}`,
+    { credentials: 'same-origin', signal },
+  )
+})
+
+test('files.download rejects with the server file error code', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async () => res({ error: 'too large', code: 'file_too_large' }, 413)),
+  )
+  await expect(
+    createApi().files.download({ workerId: 2, branch: 'main' }, 'big.zip'),
+  ).rejects.toMatchObject({ status: 413, code: 'file_too_large' })
+})
