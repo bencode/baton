@@ -43,13 +43,13 @@ const TokenStep = () => {
   if (loading)
     return (
       <p role="status" className="text-xs text-ui-muted">
-        加载认证信息…
+        正在检查连接凭证…
       </p>
     )
   if (error)
     return (
       <p role="alert" className="text-xs text-ui-danger">
-        无法加载认证信息。
+        暂时无法检查连接凭证，请重试。
         <button type="button" className="underline" onClick={() => setAttempt(value => value + 1)}>
           重试
         </button>
@@ -60,7 +60,7 @@ const TokenStep = () => {
   if (!me?.user)
     return (
       <p role="alert" className="text-xs text-ui-danger">
-        无法确认登录身份，请重新登录后继续。
+        无法确认当前登录账号，请重新登录后继续。
       </p>
     )
   if (token)
@@ -68,7 +68,7 @@ const TokenStep = () => {
       <div className="mg-form">
         <CommandBlock command={`export BATON_TOKEN=${token}`} />
         <p role="status" className="text-xs text-ui-warning">
-          Token 仅显示一次，请立即复制保存。
+          请复制并保存此 Token，关闭后将无法再次查看。
         </p>
       </div>
     )
@@ -76,13 +76,13 @@ const TokenStep = () => {
     <div className="mg-form">
       {me.hasToken && (
         <p className="text-xs leading-5 text-ui-muted">
-          你已有 Token，可使用之前保存的值。重新生成将使旧 Token 失效，请同步更新使用它的
-          BATON_TOKEN 配置。
+          可以继续使用已保存的 Token。重新生成会使旧 Token 失效，使用它的机器都需要更新
+          BATON_TOKEN。
         </p>
       )}
       {mintError && (
         <p role="alert" className="text-xs text-ui-danger">
-          无法生成 Token，请稍后重试。
+          Token 生成失败，请稍后重试。
         </p>
       )}
       <button type="button" onClick={() => void mint()} disabled={busy} className="ui-button w-fit">
@@ -107,22 +107,31 @@ export const RegisterWorkerGuide = ({ projectId }: { projectId: Id }) => {
   return (
     <div className="flex flex-col gap-6">
       <p className="text-xs leading-5 text-ui-muted">
-        在目标机器的项目目录中注册并启动执行环境，连接到当前项目。
+        让当前项目使用你自己的电脑或服务器运行 Agent。连接后，即可在 Baton
+        中发送任务、查看执行结果。
       </p>
-      <Step n={1} title="安装 CLI">
+      <Step n={1} title="安装 Baton CLI">
+        <p className="text-xs leading-5 text-ui-muted">在目标机器的终端中执行：</p>
         <CommandBlock command="npm i -g @lesscap/baton-cli" />
       </Step>
-      <Step n={2} title="连接认证">
+      <Step n={2} title="配置连接凭证">
+        <p className="text-xs leading-5 text-ui-muted">
+          连接需要认证时，请在同一终端中设置个人 Token（<code>BATON_TOKEN</code>）。
+        </p>
         <TokenStep />
       </Step>
-      <Step n={3} title="注册并运行">
+      <Step n={3} title="连接当前项目并启动">
+        <p className="text-xs leading-5 text-ui-muted">进入这台机器上的项目目录，依次执行：</p>
+        <p className="text-xs leading-5 text-ui-muted">
+          默认使用 Claude Code。使用 Codex 或 Pi 时，请在第一条命令末尾添加{' '}
+          <code>--agentKind codex</code> 或 <code>--agentKind pi</code>，并提前完成所选 Agent
+          的模型与认证配置。
+        </p>
         <CommandBlock command={`baton worker register --url ${serverUrl} --project ${projectId}`} />
         <CommandBlock command="baton worker run" />
       </Step>
       <p className="text-xs leading-5 text-ui-muted">
-        连接后可在执行环境页查看。默认使用 Claude Code；注册 Codex 或 Pi 环境时可使用 CLI 的{' '}
-        <code>--agentKind codex</code> 或 <code>--agentKind pi</code> 参数。目标机器需已配置所选
-        Agent。
+        保持 baton worker run 运行，连接成功后即可在执行环境列表中开始会话。
       </p>
     </div>
   )

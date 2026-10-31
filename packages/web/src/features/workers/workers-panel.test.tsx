@@ -71,7 +71,7 @@ const fixture = (records: WorkerCreation[] = []) => {
 const submit = async () => {
   fireEvent.click(screen.getByRole('button', { name: '添加执行环境' }))
   await screen.findByRole('option', { name: 'Claude Code · Mini local' })
-  fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'app' } })
+  fireEvent.change(screen.getByLabelText('环境名称'), { target: { value: 'app' } })
   fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
 }
 
@@ -96,7 +96,7 @@ test('closing before acceptance keeps the dialog closed and allows adding anothe
   f.workerCreations.create.mockReturnValueOnce(response.promise)
   render(f.tree(42))
   await submit()
-  const submitting = screen.getByRole('button', { name: '提交中…' }) as HTMLButtonElement
+  const submitting = screen.getByRole('button', { name: '正在提交…' }) as HTMLButtonElement
   expect(submitting.disabled).toBe(true)
   fireEvent.click(submitting)
   expect(f.workerCreations.create).toHaveBeenCalledTimes(1)
@@ -137,11 +137,11 @@ test.each([409, 503])(
     render(f.tree(42))
     await submit()
     await screen.findByRole('alert')
-    expect((screen.getByLabelText('名称') as HTMLInputElement).value).toBe('app')
+    expect((screen.getByLabelText('环境名称') as HTMLInputElement).value).toBe('app')
     expect(
       (screen.getByRole('button', { name: '创建执行环境' }) as HTMLButtonElement).disabled,
     ).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
+    fireEvent.click(screen.getByRole('button', { name: '连接自己的机器' }))
     expect(screen.getByText('baton worker run')).toBeTruthy()
   },
 )

@@ -11,17 +11,17 @@ import { useApi } from '../../app/api-context'
 import type { AsyncState } from '../../hooks/use-async'
 
 const steps: { id: WorkerCreationStep; label: string }[] = [
-  { id: 'directory', label: '准备目录' },
+  { id: 'directory', label: '准备项目目录' },
   { id: 'git', label: '初始化 Git 仓库' },
-  { id: 'register', label: '注册执行环境' },
+  { id: 'register', label: '关联当前项目' },
   { id: 'start', label: '启动执行环境' },
-  { id: 'connect', label: '连接服务器' },
+  { id: 'connect', label: '连接 Baton' },
 ]
 
 export const creationStatusText = (creation: WorkerCreation): string => {
   const step = steps.find(item => item.id === creation.step)?.label
-  if (creation.status === 'pending') return '等待 mini'
-  if (creation.status === 'succeeded') return '已创建'
+  if (creation.status === 'pending') return '等待机器响应'
+  if (creation.status === 'succeeded') return '创建完成'
   if (creation.status === 'failed') return step ? `失败：${step}` : '创建失败'
   return step ?? '准备执行环境'
 }
@@ -64,11 +64,11 @@ const CreationResources = ({ creation }: { creation: WorkerCreation }) => {
   if (!creation.repoPath && creation.workerId === null) return null
   return (
     <details className="text-xs text-ui-muted">
-      <summary className="cursor-pointer">资源详情</summary>
+      <summary className="cursor-pointer">查看环境详情</summary>
       <dl className="mt-3 flex flex-col gap-2 break-all">
         {creation.repoPath && (
           <>
-            <dt>本地仓库</dt>
+            <dt>项目目录</dt>
             <dd className="font-mono">{creation.repoPath}</dd>
           </>
         )}
@@ -146,12 +146,12 @@ export const WorkerCreationProgress = ({
     worker.error instanceof ApiError && worker.error.status === 404
       ? '此执行环境已删除。'
       : worker.error
-        ? `无法检查执行环境：${worker.error.message}`
+        ? `暂时无法确认连接状态：${worker.error.message}`
         : worker.loading
           ? '检查连接状态…'
           : connected
-            ? '执行环境已连接。'
-            : '执行环境已离线，请等待重新连接后再开始会话。'
+            ? '执行环境已连接，可以开始会话。'
+            : '执行环境已离线，连接恢复后即可开始会话。'
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -165,9 +165,9 @@ export const WorkerCreationProgress = ({
         <div role="alert" className="flex flex-col gap-2 text-xs text-ui-danger break-words">
           <p>{creation.error ?? '执行环境创建失败。'}</p>
           <p>
-            已产生的资源会保留，请人工处理失败原因后再重新操作。
+            已创建的目录和执行环境会保留，请先检查错误原因，再重新创建。
             {creation.workerId !== null &&
-              ' 已注册的执行环境可能仍占用此名称，请在执行环境页处理。'}
+              ' 已注册的执行环境可能仍占用此名称，可更换名称后再创建。'}
           </p>
         </div>
       )}
@@ -178,7 +178,7 @@ export const WorkerCreationProgress = ({
             role={worker.error ? 'alert' : undefined}
             className="text-xs text-ui-muted break-words"
           >
-            创建已完成。 {workerId === null ? '此次创建没有关联的执行环境。' : workerStatus}
+            {workerId === null ? '此次创建没有关联的执行环境。' : workerStatus}
           </p>
           {startError && (
             <p role="alert" className="text-xs text-ui-danger break-words">
@@ -191,7 +191,7 @@ export const WorkerCreationProgress = ({
             disabled={!connected || starting}
             className="ui-button ui-primary w-fit"
           >
-            {starting ? '启动中…' : '开始会话'}
+            {starting ? '正在创建会话…' : '开始会话'}
           </button>
         </>
       )}
@@ -212,7 +212,7 @@ export const WorkerCreationProgress = ({
       )}
       {(creation.status === 'pending' || creation.status === 'running') && (
         <p className="text-xs text-ui-muted">
-          关闭窗口不会中断创建；已注册的执行环境可在执行环境页查看。
+          创建会在后台继续，关闭此窗口不会中断。完成后可在执行环境列表查看。
         </p>
       )}
     </div>

@@ -80,10 +80,10 @@ const renderDialog = (
 
 test('template is default; the existing guide mints a token only on demand', async () => {
   const { mintToken } = renderDialog()
-  expect(screen.getByLabelText('名称')).toBeTruthy()
-  await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('名称')))
+  expect(screen.getByLabelText('环境名称')).toBeTruthy()
+  await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('环境名称')))
   expect(mintToken).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
+  fireEvent.click(screen.getByRole('button', { name: '连接自己的机器' }))
   expect(screen.getByText('npm i -g @lesscap/baton-cli')).toBeTruthy()
   expect(screen.getByText(/baton worker register .+ --project 42$/)).toBeTruthy()
   expect(screen.getByText('baton worker run')).toBeTruthy()
@@ -105,12 +105,12 @@ test.each(configurations)(
   async (label, templateId, agentKind) => {
     const setup = readySetup()
     const { onCreated, mintToken } = renderDialog(setup)
-    const select = screen.getByRole('combobox', { name: '配置' }) as HTMLSelectElement
+    const select = screen.getByRole('combobox', { name: 'Agent 与模型服务' }) as HTMLSelectElement
     expect(Array.from(select.options, option => option.textContent)).toEqual(
       configurations.map(([name]) => name),
     )
     expect(screen.queryByLabelText('Agent')).toBeNull()
-    fireEvent.change(screen.getByLabelText('名称'), { target: { value: '  my-app  ' } })
+    fireEvent.change(screen.getByLabelText('环境名称'), { target: { value: '  my-app  ' } })
     const option = screen.getByRole('option', { name: label }) as HTMLOptionElement
     fireEvent.change(select, { target: { value: option.value } })
     fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
@@ -134,7 +134,7 @@ test('retry preserves the provider and agent before switching to Codex', async (
       agentKind: 'pi',
     },
   })
-  const select = screen.getByRole('combobox', { name: '配置' }) as HTMLSelectElement
+  const select = screen.getByRole('combobox', { name: 'Agent 与模型服务' }) as HTMLSelectElement
   expect(select.selectedOptions[0]?.textContent).toBe('Pi · DashScope')
   fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
   expect(setup.create).toHaveBeenLastCalledWith({
@@ -160,11 +160,11 @@ test.each(['loading', 'unavailable', 'error'] as const)(
     if (state === 'unavailable' && setup.templates.data) setup.templates.data[0]!.available = false
     if (state === 'error') setup.templates.error = new Error('Network unavailable')
     renderDialog(setup)
-    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'app' } })
+    fireEvent.change(screen.getByLabelText('环境名称'), { target: { value: 'app' } })
     expect(
       (screen.getByRole('button', { name: '创建执行环境' }) as HTMLButtonElement).disabled,
     ).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
+    fireEvent.click(screen.getByRole('button', { name: '连接自己的机器' }))
     expect(screen.getByText('baton worker run')).toBeTruthy()
     expect(setup.create).not.toHaveBeenCalled()
   },
@@ -172,7 +172,7 @@ test.each(['loading', 'unavailable', 'error'] as const)(
 
 test.each([
   [new ApiError('conflict', 409), /名称已被占用/],
-  [new ApiError('offline', 503), /mini 暂时不可用/],
+  [new ApiError('offline', 503), /暂时无法使用已有机器/],
   [new DOMException('timed out', 'TimeoutError'), /可能已接受/],
   [new TypeError('Failed to fetch'), /先刷新状态/],
 ] as const)('submission errors leave fields editable and expose recovery: %s', (error, message) => {
@@ -183,7 +183,7 @@ test.each([
     initialInput: { templateId: 'mini-local', name: 'previous', agentKind: 'codex' },
   })
   expect(screen.getByRole('alert').textContent).toMatch(message)
-  const input = screen.getByLabelText('名称') as HTMLInputElement
+  const input = screen.getByLabelText('环境名称') as HTMLInputElement
   expect(input.disabled).toBe(false)
   expect(input.value).toBe('previous')
   fireEvent.change(input, { target: { value: 'another' } })
@@ -220,7 +220,7 @@ test.each(['offline', 'deleted'] as const)(
     })
     renderDialog(setup, { kind: 'creation', creationId: 5 }, get)
     await screen.findByText(state === 'deleted' ? /执行环境已删除/ : /执行环境已离线/)
-    expect(screen.getByText('已创建')).toBeTruthy()
+    expect(screen.getByText('创建完成')).toBeTruthy()
     expect((screen.getByRole('button', { name: '开始会话' }) as HTMLButtonElement).disabled).toBe(
       true,
     )
@@ -269,7 +269,7 @@ test('removing the worker association disables starting an already-open success 
 test('local registration needs no personal token', async () => {
   const { me, mintToken } = renderDialog()
   me.mockResolvedValueOnce({ authRequired: false, user: null, hasToken: false })
-  fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
+  fireEvent.click(screen.getByRole('button', { name: '连接自己的机器' }))
   expect(await screen.findByText(/本地模式无需个人 Token/)).toBeTruthy()
   expect(screen.queryByRole('button', { name: '生成 Token' })).toBeNull()
   expect(mintToken).not.toHaveBeenCalled()
@@ -278,8 +278,8 @@ test('local registration needs no personal token', async () => {
 test('identity failure can be retried without pretending to be local mode', async () => {
   const { me } = renderDialog()
   me.mockRejectedValueOnce(new Error('Network unavailable'))
-  fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
-  expect((await screen.findByRole('alert')).textContent).toContain('无法加载认证信息')
+  fireEvent.click(screen.getByRole('button', { name: '连接自己的机器' }))
+  expect((await screen.findByRole('alert')).textContent).toContain('暂时无法检查连接凭证')
   expect(screen.queryByText(/本地模式无需/)).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '重试' }))
   expect(await screen.findByRole('button', { name: '生成 Token' })).toBeTruthy()
@@ -288,9 +288,9 @@ test('identity failure can be retried without pretending to be local mode', asyn
 test('token generation failure remains visible and allows a manual retry', async () => {
   const { mintToken } = renderDialog()
   mintToken.mockRejectedValueOnce(new Error('Network unavailable'))
-  fireEvent.click(screen.getByRole('button', { name: '注册已有环境' }))
+  fireEvent.click(screen.getByRole('button', { name: '连接自己的机器' }))
   fireEvent.click(await screen.findByRole('button', { name: '生成 Token' }))
-  expect((await screen.findByRole('alert')).textContent).toContain('无法生成 Token')
+  expect((await screen.findByRole('alert')).textContent).toContain('Token 生成失败')
   fireEvent.click(screen.getByRole('button', { name: '生成 Token' }))
   expect(await screen.findByText('export BATON_TOKEN=tok-abc123')).toBeTruthy()
   expect(mintToken).toHaveBeenCalledTimes(2)

@@ -63,7 +63,7 @@ export const WorkersPanel = ({
       <header className="mg-page-header">
         <div>
           <h1>执行环境</h1>
-          <p className="mg-description">执行环境（Worker）为会话提供 Agent 和运行目录。</p>
+          <p className="mg-description">选择执行环境，在对应机器上运行 Agent、处理项目任务。</p>
         </div>
         <button
           ref={addButton}
@@ -76,7 +76,7 @@ export const WorkersPanel = ({
       </header>
       {feedback}
       {workers === null ? null : workers.length === 0 ? (
-        <p className="mg-empty">暂无执行环境。点击上方“添加执行环境”，从模板创建或注册已有环境。</p>
+        <p className="mg-empty">暂无执行环境。选择“添加执行环境”，使用已有机器或连接自己的机器。</p>
       ) : (
         <div>
           {workers
