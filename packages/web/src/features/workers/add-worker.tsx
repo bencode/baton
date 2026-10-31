@@ -43,7 +43,7 @@ export const AddWorker = ({
       <div className="flex flex-col gap-6">
         {setup.creations.error && (
           <p role="alert" className="text-xs text-ui-warning break-words">
-            创建状态暂时无法刷新，当前进度可能不是最新状态。{' '}
+            暂时无法更新创建进度，请刷新后查看最新状态。{' '}
             <button type="button" onClick={setup.refresh} className="underline">
               刷新状态
             </button>
@@ -61,7 +61,7 @@ export const AddWorker = ({
                   onClick={() => setMode(value)}
                   className="ui-quiet-button"
                 >
-                  {value === 'template' ? '从模板创建' : '注册已有环境'}
+                  {value === 'template' ? '使用已有机器' : '连接自己的机器'}
                 </button>
               ))}
             </div>
@@ -84,7 +84,7 @@ export const AddWorker = ({
           />
         ) : (
           <div className="flex flex-col gap-3 text-xs text-ui-muted">
-            <p>{setup.creations.loading ? '加载创建状态…' : '无法获取此次创建状态。'}</p>
+            <p>{setup.creations.loading ? '正在获取创建进度…' : '暂时无法获取此次创建进度。'}</p>
             <button type="button" onClick={setup.refresh} className="w-fit underline">
               刷新状态
             </button>

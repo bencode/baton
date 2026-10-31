@@ -8,7 +8,7 @@ import type { WorkerSetupState } from './use-worker-setup'
 export const createErrorText = (error: Error): string => {
   if (error instanceof ApiError) {
     if (error.status === 409) return '名称已被占用，请检查已有执行环境，或换一个名称。'
-    if (error.status === 503) return 'mini 暂时不可用，请稍后重试或注册已有环境。'
+    if (error.status === 503) return '暂时无法使用已有机器，请稍后重试，或选择“连接自己的机器”。'
     if (error.status === 401) return '登录已失效，请重新登录后继续。'
     if (error.status === 404) return '此项目不可用，请选择其他项目后继续。'
   }
@@ -77,10 +77,11 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
       className="mg-form"
     >
       <p className="text-xs leading-5 text-ui-muted">
-        在 mini 上创建本地 Git 仓库和执行环境，远程仓库可稍后绑定。
+        使用已接入 Baton 的机器，选择 Agent
+        和模型服务后创建执行环境，连接后即可在当前项目中开始会话。
       </p>
       <label className="mg-field" htmlFor={`${fieldId}-name`}>
-        名称
+        环境名称
         <input
           id={`${fieldId}-name`}
           ref={nameInput}
@@ -89,11 +90,11 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           onChange={event => setName(event.target.value)}
           disabled={setup.creating}
           className="ui-input w-full"
-          placeholder="例如 my-app"
+          placeholder="例如：项目开发、代码审查"
         />
       </label>
       <label className="mg-field" htmlFor={`${fieldId}-configuration`}>
-        配置
+        Agent 与模型服务
         <SelectControl
           id={`${fieldId}-configuration`}
           value={selected?.value ?? ''}
@@ -111,20 +112,23 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           ))}
         </SelectControl>
       </label>
+      <p className="text-xs leading-5 text-ui-muted">
+        Baton 会创建本地 Git 仓库，远程仓库可稍后关联。
+      </p>
       {setup.templates.error ? (
         <p role="alert" className="text-xs text-ui-danger break-words">
           无法刷新配置。 {setup.templates.error.message}{' '}
           <button type="button" onClick={setup.refresh} className="underline">
-            刷新
+            刷新配置
           </button>
         </p>
       ) : (
         !setup.templates.loading &&
         !selected?.template.available && (
           <p className="text-xs text-ui-warning">
-            mini 暂时不可用，请稍后重试或切换到“注册已有环境”。{' '}
+            当前配置暂时不可用，请稍后刷新，或选择“连接自己的机器”。{' '}
             <button type="button" onClick={setup.refresh} className="underline">
-              刷新
+              刷新配置
             </button>
           </p>
         )
@@ -139,11 +143,11 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
       )}
       <div className="mg-form-actions">
         <button type="submit" disabled={disabled} className="ui-button ui-primary">
-          {setup.creating ? '提交中…' : '创建执行环境'}
+          {setup.creating ? '正在提交…' : '创建执行环境'}
         </button>
         {setup.creating && (
           <span className="text-xs leading-5 text-ui-muted" aria-live="polite">
-            可以关闭窗口，创建将在后台继续。
+            可以关闭此窗口，Baton 会继续创建。
           </span>
         )}
       </div>
