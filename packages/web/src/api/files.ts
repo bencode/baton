@@ -37,6 +37,8 @@ export type FilesApi = {
   // Address of a file's bytes, for <img src> and the like (same origin, so the
   // session cookie rides along). A new revision makes the browser fetch it again.
   rawUrl(scope: FileScope, path: string, revision?: number): string
+  // A file's original bytes, whole; rejects if the transfer breaks off.
+  download(scope: FileScope, path: string, signal?: AbortSignal): Promise<Blob>
 }
 
 const readError = async (
@@ -55,12 +57,15 @@ const readError = async (
   }
 }
 
-const get = async <T>(url: string, signal?: AbortSignal): Promise<T> => {
+const fetchOk = async (url: string, signal?: AbortSignal): Promise<Response> => {
   const res = await fetch(url, { credentials: 'same-origin', ...(signal ? { signal } : {}) })
-  if (res.ok) return (await res.json()) as T
+  if (res.ok) return res
   const { message, code } = await readError(res)
   throw new FileApiError(`GET ${url} → ${res.status}: ${message}`, res.status, code)
 }
+
+const get = async <T>(url: string, signal?: AbortSignal): Promise<T> =>
+  (await (await fetchOk(url, signal)).json()) as T
 
 export const filesApi = (u: Url): FilesApi => {
   const at = (workerId: Id, op: string, params: Record<string, string>) =>
@@ -78,5 +83,7 @@ export const filesApi = (u: Url): FilesApi => {
     rawRoot,
     rawUrl: (scope, path, revision) =>
       `${rawRoot(scope)}${path.split('/').map(encodeURIComponent).join('/')}${revision ? `?r=${revision}` : ''}`,
+    download: async ({ workerId, branch }, path, signal) =>
+      (await fetchOk(at(workerId, 'download', { branch, path }), signal)).blob(),
   }
 }

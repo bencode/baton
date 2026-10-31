@@ -3,6 +3,7 @@ import { EventSource } from 'eventsource'
 import type { ApiClient } from '../client.ts'
 import { PROJECT_CONFIG_NAME, type WorkerConfig } from '../project-config.ts'
 import { syncBundledArtifactSkill } from './bundled-skills.ts'
+import { sendFileDownload } from './files/download.ts'
 import { createFileQueryRunner } from './files/handler.ts'
 import { ensureExcluded } from './git-exclude.ts'
 import { createLiveness } from './liveness.ts'
@@ -47,6 +48,8 @@ export const runWorkerDaemon = async (
   })
   // Read-only Project Files queries, answered from this daemon's directory.
   const files = createFileQueryRunner(cwd)
+  // Aborted on shutdown, ending every download still streaming.
+  const downloads = new AbortController()
   const services = createServiceSupervisor({
     sendReport: report => client.services.report(report),
     cfg,
@@ -120,6 +123,10 @@ export const runWorkerDaemon = async (
         void files(cmd.query)
           .then(reply => client.files.report({ requestId: cmd.requestId, ...reply }))
           .catch(err => log(`files query failed: ${String(err)}`))
+      else if (cmd.cmd === 'files.download')
+        void sendFileDownload(cwd, cmd, client.files, downloads.signal).catch(err =>
+          log(`files download failed: ${String(err)}`),
+        )
     } catch (error) {
       log(`invalid command: ${String(error)}`)
     }
@@ -135,6 +142,7 @@ export const runWorkerDaemon = async (
     signal.addEventListener('abort', () => resolve(), { once: true })
   })
   es.close()
+  downloads.abort()
   liveness.stop()
   services.killAll()
   await supervisor.killAll()

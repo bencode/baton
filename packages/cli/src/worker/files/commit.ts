@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process'
+import { Readable } from 'node:stream'
 import {
   FILE_DIRECTORY_MAX_ENTRIES,
   FILE_RAW_MAX_BYTES,
@@ -14,8 +16,10 @@ import {
 } from '@baton/shared'
 import {
   byKindThenName,
+  checkDownloadSize,
   checkedPath,
   decodeText,
+  type FileDownloadSource,
   FileError,
   notFound,
   rawPayload,
@@ -163,4 +167,37 @@ export const readRawCommitFile = async (
     throw new FileError('unsupported', `too large to serve raw: ${rel}`)
   const bytes = await runGit(repo, ['cat-file', 'blob', entry.oid], FILE_RAW_MAX_BYTES + 1)
   return rawPayload(rel, mediaType, bytes)
+}
+
+// A regular file's committed bytes, streamed from `git cat-file` with the same
+// read-only flags and environment as runGit. The stream fails unless Git exits 0.
+export const openCommitDownload = async (
+  repo: string,
+  commit: string,
+  path: string,
+  signal: AbortSignal,
+): Promise<FileDownloadSource> => {
+  const rel = checkedPath(path, false)
+  const entry = await regularEntry(repo, commit, rel)
+  checkDownloadSize(rel, entry.size)
+  const child = spawn('git', ['--literal-pathspecs', '-C', repo, 'cat-file', 'blob', entry.oid], {
+    stdio: ['ignore', 'pipe', 'ignore'],
+    signal,
+    env: { ...process.env, LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
+  })
+  const exited = new Promise<Error | null>(resolve => {
+    child.once('error', resolve)
+    child.once('close', (code, killed) =>
+      resolve(code === 0 ? null : new Error(`git cat-file exited with ${code ?? killed}`)),
+    )
+  })
+  const body = (Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>).pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      async flush() {
+        const failure = await exited
+        if (failure) throw failure
+      },
+    }),
+  )
+  return { size: entry.size, body, close: () => child.kill() }
 }

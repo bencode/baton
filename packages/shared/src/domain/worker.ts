@@ -1,4 +1,4 @@
-import type { FileQuery } from './file.ts'
+import type { FileDownloadQuery, FileQuery } from './file.ts'
 import type { Id } from './ids.ts'
 import type { AgentKind } from './session.ts'
 
@@ -66,3 +66,6 @@ export type WorkerCommand =
   | { cmd: 'service.stop'; requestId: string; name: string }
   // Read-only Project Files query; the worker answers via PUT /workers/me/files/results.
   | { cmd: 'files.query'; requestId: string; query: FileQuery }
+  // Original bytes of one file; the worker streams them to
+  // PUT /workers/me/files/downloads/:requestId, or reports why it cannot there.
+  | { cmd: 'files.download'; requestId: string; query: FileDownloadQuery }

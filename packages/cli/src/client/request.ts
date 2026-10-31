@@ -1,5 +1,10 @@
 export type ReqInit = { method: string; body?: unknown; headers?: Record<string, string> }
-export type RawReqInit = { method: string; body?: Blob; headers?: Record<string, string> }
+export type RawReqInit = {
+  method: string
+  body?: Blob | ReadableStream<Uint8Array>
+  headers?: Record<string, string>
+  signal?: AbortSignal
+}
 
 export class HttpError extends Error {
   constructor(
@@ -42,12 +47,15 @@ export const request = async <T>(url: string, init: ReqInit): Promise<T> => {
   return (await res.json()) as T
 }
 
+// A stream body is sent as it is read (Node fetch requires `duplex: 'half'` for it).
 export const rawRequest = async <T>(url: string, init: RawReqInit): Promise<T> => {
   if (loginGate) await loginGate
   const res = await fetch(url, {
     method: init.method,
     headers: { ...authHeaders, ...(init.headers ?? {}) },
     ...(init.body !== undefined ? { body: init.body } : {}),
+    ...(init.body instanceof ReadableStream ? { duplex: 'half' } : {}),
+    ...(init.signal ? { signal: init.signal } : {}),
   })
   if (!res.ok)
     throw new HttpError(res.status, `${init.method} ${url} → ${res.status}: ${await res.text()}`)

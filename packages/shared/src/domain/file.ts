@@ -48,6 +48,14 @@ const mediaTypeIn =
 export const imageMediaType = mediaTypeIn(IMAGE_MEDIA_TYPES)
 export const rawMediaType = mediaTypeIn(RAW_MEDIA_TYPES)
 
+// A file the reader cannot preview can be downloaded as its original bytes, of
+// any type, up to this size (inclusive). Its bytes stream from the Worker through
+// the server to the browser over a dedicated upload, not the `files.query` reply.
+export const FILE_DOWNLOAD_MAX_BYTES = 100 * 1024 * 1024
+export const FILE_DOWNLOAD_TIMEOUT_MS = 300_000
+
+export type FileDownloadQuery = { branch: string; path: string }
+
 // A branch as one URL path segment, so relative URLs inside a previewed page
 // resolve under it. Git forbids ':' in branch names, which makes it a safe
 // stand-in for '/'; '%2F' is avoided because proxies treat it inconsistently.
@@ -105,6 +113,7 @@ export type FileErrorCode =
   | 'branch_not_found'
   | 'file_not_found'
   | 'unsupported'
+  | 'file_too_large'
   | 'unavailable'
   | 'worker_offline'
   | 'worker_timeout'
@@ -115,12 +124,16 @@ export type FileReply<Op extends FileQuery['op'] = FileQuery['op']> =
 
 export type FileQueryResult = { requestId: string } & FileReply
 
-export const FILE_ERROR_STATUS: Record<FileErrorCode, 400 | 403 | 404 | 409 | 415 | 502 | 504> = {
+export const FILE_ERROR_STATUS: Record<
+  FileErrorCode,
+  400 | 403 | 404 | 409 | 413 | 415 | 502 | 504
+> = {
   invalid_request: 400,
   forbidden_path: 403,
   branch_not_found: 404,
   file_not_found: 404,
   unsupported: 415,
+  file_too_large: 413,
   worker_offline: 409,
   unavailable: 502,
   worker_timeout: 504,

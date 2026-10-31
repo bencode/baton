@@ -7,6 +7,7 @@ import { type ChannelBus, createChannelBus } from './channel-bus.ts'
 import { type ChannelPresence, createChannelPresence } from './channel-presence.ts'
 import { type CommandBus, createCommandBus } from './command-bus.ts'
 import { createEventBus, type EventBus } from './event-bus.ts'
+import { createFileDownloads, type FileDownloads } from './file-downloads.ts'
 import { createFileRequests, type FileRequests } from './file-requests.ts'
 import { cookieAuth } from './middleware/cookie-auth.ts'
 import { createProjectBus, type ProjectBus } from './project-bus.ts'
@@ -75,6 +76,8 @@ type AppOptions = {
   services?: ServiceRuntime
   // Pending read-only file queries awaiting their worker's reply (runtime-only).
   files?: FileRequests
+  // Downloads streaming from a worker to a browser (runtime-only).
+  downloads?: FileDownloads
   artifactFiles?: ArtifactFileStore
   // VAPID public key served to browsers; null disables push in the web app.
   pushPublicKey?: string | null
@@ -102,6 +105,7 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
     onInjectWs,
     services = createServiceRuntime(),
     files = createFileRequests(commands),
+    downloads = createFileDownloads(commands),
     artifactFiles = createArtifactFileStore(defaultArtifactDir()),
     provisionerBus = createProvisionerBus(),
     provisionerToken = process.env.BATON_PROVISIONER_TOKEN,
@@ -140,9 +144,9 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
   registerArtifactRoutes(app, store, artifactFiles)
   registerRequirementRoutes(app, store)
   registerTaskRoutes(app, store, projects)
-  registerWorkerRoutes(app, store, commands, runtime, projects, terminal, files)
+  registerWorkerRoutes(app, store, commands, runtime, projects, terminal, files, downloads)
   registerServiceRoutes(app, store, commands, services)
-  registerFileRoutes(app, store, files)
+  registerFileRoutes(app, store, files, downloads)
   registerAdminRoutes(app, store, runtime, busyTracker, commands)
   registerSessionRoutes(
     app,

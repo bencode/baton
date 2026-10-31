@@ -1,6 +1,7 @@
 import { constants, type Dirent } from 'node:fs'
 import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
+import { Readable } from 'node:stream'
 import {
   FILE_DIRECTORY_MAX_ENTRIES,
   FILE_RAW_MAX_BYTES,
@@ -18,8 +19,10 @@ import {
 } from '@baton/shared'
 import {
   byKindThenName,
+  checkDownloadSize,
   checkedPath,
   decodeText,
+  type FileDownloadSource,
   FileError,
   notFound,
   rawPayload,
@@ -204,4 +207,30 @@ export const readRawFile = async (
   const read = await readWithin(file, FILE_RAW_MAX_BYTES)
   if ('oversize' in read) throw new FileError('unsupported', `too large to serve raw: ${file.path}`)
   return rawPayload(file.path, mediaType, read.bytes)
+}
+
+// A regular file's bytes, streamed from the descriptor opened here. The file is
+// neither copied nor locked: if it changes while streaming, the length check on
+// the way out fails the transfer.
+export const openDiskDownload = async (
+  root: string,
+  path: string,
+  signal: AbortSignal,
+): Promise<FileDownloadSource> => {
+  const file = await resolveInside(root, path, false)
+  const handle = await open(file.real, constants.O_RDONLY | constants.O_NONBLOCK)
+  try {
+    const opened = await handle.stat()
+    if (!opened.isFile()) throw notFound(file.path)
+    checkDownloadSize(file.path, opened.size)
+    const stream = handle.createReadStream({ signal })
+    return {
+      size: opened.size,
+      body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
+      close: () => stream.destroy(),
+    }
+  } catch (error) {
+    await handle.close()
+    throw error
+  }
 }
