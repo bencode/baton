@@ -92,40 +92,58 @@ test('template is default; the existing guide mints a token only on demand', asy
   expect(mintToken).toHaveBeenCalledTimes(1)
 })
 
-test('template submits a trimmed name and selected agent without minting credentials', async () => {
-  const setup = readySetup()
-  const { onCreated, mintToken } = renderDialog(setup)
-  fireEvent.change(screen.getByLabelText('名称'), { target: { value: '  my-app  ' } })
-  fireEvent.change(screen.getByLabelText('模板'), { target: { value: 'mini-codex' } })
-  expect((screen.getByLabelText('Agent') as HTMLSelectElement).value).toBe('codex')
-  expect(
-    Array.from((screen.getByLabelText('Agent') as HTMLSelectElement).options).map(
-      option => option.value,
-    ),
-  ).toEqual(['codex'])
-  fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
-  expect(setup.create).toHaveBeenCalledWith({
-    templateId: 'mini-codex',
-    name: 'my-app',
-    agentKind: 'codex',
-  })
-  await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(creation))
-  expect(mintToken).not.toHaveBeenCalled()
-})
+const configurations = [
+  ['Claude Code · 智谱 GLM', 'mini-glm-codeplan', 'claude-code'],
+  ['Claude Code · DashScope', 'mini-dashscope-codeplan', 'claude-code'],
+  ['Pi · 智谱 GLM', 'mini-glm-codeplan', 'pi'],
+  ['Pi · DashScope', 'mini-dashscope-codeplan', 'pi'],
+  ['Codex · OpenAI', 'mini-codex', 'codex'],
+] as const
 
-test('GLM and DashScope allow Pi while switching to local Codex submits only Codex', async () => {
+test.each(configurations)(
+  '%s submits its provider and agent without minting credentials',
+  async (label, templateId, agentKind) => {
+    const setup = readySetup()
+    const { onCreated, mintToken } = renderDialog(setup)
+    const select = screen.getByRole('combobox', { name: '配置' }) as HTMLSelectElement
+    expect(Array.from(select.options, option => option.textContent)).toEqual(
+      configurations.map(([name]) => name),
+    )
+    expect(screen.queryByLabelText('Agent')).toBeNull()
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: '  my-app  ' } })
+    const option = screen.getByRole('option', { name: label }) as HTMLOptionElement
+    fireEvent.change(select, { target: { value: option.value } })
+    fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
+    expect(setup.create).toHaveBeenCalledWith({
+      templateId,
+      name: 'my-app',
+      agentKind,
+    })
+    await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(creation))
+    expect(mintToken).not.toHaveBeenCalled()
+  },
+)
+
+test('retry preserves the provider and agent before switching to Codex', async () => {
   const setup = readySetup()
-  renderDialog(setup)
-  fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'pi-worker' } })
-  fireEvent.change(screen.getByLabelText('Agent'), { target: { value: 'pi' } })
-  fireEvent.change(screen.getByLabelText('模板'), { target: { value: 'mini-dashscope-codeplan' } })
+  renderDialog(setup, {
+    kind: 'add',
+    initialInput: {
+      templateId: 'mini-dashscope-codeplan',
+      name: 'pi-worker',
+      agentKind: 'pi',
+    },
+  })
+  const select = screen.getByRole('combobox', { name: '配置' }) as HTMLSelectElement
+  expect(select.selectedOptions[0]?.textContent).toBe('Pi · DashScope')
   fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
   expect(setup.create).toHaveBeenLastCalledWith({
     templateId: 'mini-dashscope-codeplan',
     name: 'pi-worker',
     agentKind: 'pi',
   })
-  fireEvent.change(screen.getByLabelText('模板'), { target: { value: 'mini-codex' } })
+  const codex = screen.getByRole('option', { name: 'Codex · OpenAI' }) as HTMLOptionElement
+  fireEvent.change(select, { target: { value: codex.value } })
   fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
   expect(setup.create).toHaveBeenLastCalledWith({
     templateId: 'mini-codex',

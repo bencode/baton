@@ -1,4 +1,4 @@
-import type { CreateWorkerInput, WorkerCreation } from '@baton/shared'
+import type { CreateWorkerInput, WorkerCreation, WorkerTemplateId } from '@baton/shared'
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError } from '../../api'
 import { SelectControl } from '../../components/select-control'
@@ -21,6 +21,12 @@ type Props = {
   onCreated(creation: WorkerCreation): void
 }
 
+const providerLabels: Partial<Record<WorkerTemplateId, string>> = {
+  'mini-glm-codeplan': '智谱 GLM',
+  'mini-dashscope-codeplan': 'DashScope',
+  'mini-codex': 'OpenAI',
+}
+
 export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) => {
   const fieldId = useId()
   const nameInput = useRef<HTMLInputElement | null>(null)
@@ -29,27 +35,36 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
     return () => cancelAnimationFrame(frame)
   }, [])
   const [name, setName] = useState(initialInput?.name ?? '')
-  const [templateId, setTemplateId] = useState(initialInput?.templateId)
-  const [agentKind, setAgentKind] = useState(initialInput?.agentKind ?? 'claude-code')
+  const [selection, setSelection] = useState(
+    initialInput ? `${initialInput.templateId}:${initialInput.agentKind}` : null,
+  )
   const templates = setup.templates.data ?? []
-  const template =
-    templates.find(item => item.id === templateId) ??
-    templates.find(item => item.agentKinds.includes(agentKind)) ??
-    templates[0]
-  const agent = template?.agentKinds.includes(agentKind) ? agentKind : template?.agentKinds[0]
+  const options = (['claude-code', 'pi', 'codex'] as const).flatMap(agentKind =>
+    templates
+      .filter(template => template.agentKinds.includes(agentKind))
+      .map(template => ({
+        value: `${template.id}:${agentKind}`,
+        label: `${agentKindLabel[agentKind]} · ${providerLabels[template.id] ?? template.name}`,
+        template,
+        agentKind,
+      })),
+  )
+  const selected =
+    options.find(option => option.value === selection) ??
+    options.find(option => option.agentKind === initialInput?.agentKind) ??
+    options[0]
   const disabled =
     setup.creating ||
     setup.templates.loading ||
     !!setup.templates.error ||
-    !template?.available ||
-    !agent ||
+    !selected?.template.available ||
     !name.trim()
   const submit = async () => {
-    if (disabled || !template || !agent) return
+    if (disabled || !selected) return
     const creation = await setup.create({
-      templateId: template.id,
+      templateId: selected.template.id,
       name: name.trim(),
-      agentKind: agent,
+      agentKind: selected.agentKind,
     })
     if (creation) onCreated(creation)
   }
@@ -77,58 +92,35 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           placeholder="例如 my-app"
         />
       </label>
-      <label className="mg-field" htmlFor={`${fieldId}-template`}>
-        模板
+      <label className="mg-field" htmlFor={`${fieldId}-configuration`}>
+        配置
         <SelectControl
-          id={`${fieldId}-template`}
-          value={template?.id ?? ''}
-          onChange={event => {
-            const selected = templates.find(item => item.id === event.target.value)
-            if (selected) setTemplateId(selected.id)
-          }}
-          disabled={setup.creating || templates.length === 0}
+          id={`${fieldId}-configuration`}
+          value={selected?.value ?? ''}
+          onChange={event => setSelection(event.target.value)}
+          disabled={setup.creating || options.length === 0}
           className="w-full"
         >
-          {templates.length === 0 && (
-            <option value="">{setup.templates.loading ? '加载模板…' : '暂无可用模板'}</option>
+          {options.length === 0 && (
+            <option value="">{setup.templates.loading ? '加载配置…' : '暂无可用配置'}</option>
           )}
-          {templates.map(item => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </SelectControl>
-      </label>
-      <label className="mg-field" htmlFor={`${fieldId}-agent`}>
-        Agent
-        <SelectControl
-          id={`${fieldId}-agent`}
-          value={agent ?? ''}
-          onChange={event => {
-            const selected = template?.agentKinds.find(kind => kind === event.target.value)
-            if (selected) setAgentKind(selected)
-          }}
-          disabled={setup.creating || !agent}
-          className="w-full"
-        >
-          {!agent && <option value="">暂无可用 Agent</option>}
-          {template?.agentKinds.map(kind => (
-            <option key={kind} value={kind}>
-              {agentKindLabel[kind]}
+          {options.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </SelectControl>
       </label>
       {setup.templates.error ? (
         <p role="alert" className="text-xs text-ui-danger break-words">
-          无法刷新模板。 {setup.templates.error.message}{' '}
+          无法刷新配置。 {setup.templates.error.message}{' '}
           <button type="button" onClick={setup.refresh} className="underline">
             刷新
           </button>
         </p>
       ) : (
         !setup.templates.loading &&
-        !template?.available && (
+        !selected?.template.available && (
           <p className="text-xs text-ui-warning">
             mini 暂时不可用，请稍后重试或切换到“注册已有环境”。{' '}
             <button type="button" onClick={setup.refresh} className="underline">
