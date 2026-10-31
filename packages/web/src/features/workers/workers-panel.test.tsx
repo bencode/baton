@@ -70,7 +70,7 @@ const fixture = (records: WorkerCreation[] = []) => {
 }
 const submit = async () => {
   fireEvent.click(screen.getByRole('button', { name: '添加执行环境' }))
-  await screen.findByRole('option', { name: 'Mini local' })
+  await screen.findByRole('option', { name: 'Claude Code · Mini local' })
   fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'app' } })
   fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
 }
