@@ -16,6 +16,7 @@
     "test": "tsx --test 'src/**/*.test.ts'",
     "db:migrate": "prisma migrate dev",
     "db:backfill-inputs": "tsx src/migrate-session-inputs.ts",
+    "db:import-sqlite": "tsx src/import-sqlite.ts",
     "db:generate": "prisma generate",
     "db:reset": "prisma migrate reset --force"
   },
@@ -23,16 +24,17 @@
     "@baton/shared": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@hono/node-ws": "^1.3.1",
-    "@libsql/client": "^0.17.3",
-    "@prisma/adapter-libsql": "^7.10.1",
+    "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "dotenv": "^18.0.8",
     "hono": "^4.13.13",
     "nanoid": "^3.3.12",
+    "pg": "^8.23.1",
     "web-push": "3.6.7"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
     "@types/web-push": "3.6.4",
     "prisma": "^7.10.1",
     "tsx": "^4.23.15",

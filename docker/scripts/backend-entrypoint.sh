@@ -1,5 +1,5 @@
 #!/bin/sh
-# Apply migrations to the SQLite db on the volume, then run the server (tsx).
+# Apply migrations to the PostgreSQL db (compose `postgres` service), then run the server (tsx).
 set -e
 cd /app/packages/server
 

@@ -1,8 +1,6 @@
-import { PrismaLibSql } from '@prisma/adapter-libsql'
+import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 
-// Build PrismaClient with the libsql driver adapter (Node-compatible, no Rust query engine).
-export const createPrisma = (url: string): PrismaClient => {
-  const adapter = new PrismaLibSql({ url })
-  return new PrismaClient({ adapter })
-}
+// Build PrismaClient with the node-postgres driver adapter (no Rust query engine).
+export const createPrisma = (url: string): PrismaClient =>
+  new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) })

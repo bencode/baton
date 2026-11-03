@@ -37,7 +37,10 @@ export const createPrismaStore = (prisma: PrismaClient): Store => ({
   users: prismaUsers(prisma),
   push: prismaPush(prisma),
   getRequirementWithTasks: async id => {
-    const r = await prisma.requirement.findUnique({ where: { id }, include: { tasks: true } })
+    const r = await prisma.requirement.findUnique({
+      where: { id },
+      include: { tasks: { orderBy: { id: 'asc' } } },
+    })
     if (!r) return null
     return { requirement: toRequirement(r), tasks: r.tasks.map(toTask) }
   },
