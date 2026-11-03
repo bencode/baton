@@ -3,9 +3,19 @@
 #   backend   — Hono via tsx; entrypoint runs `prisma migrate deploy` against postgres
 #   postgres  — PostgreSQL 18; data on the baton_pg volume (PG 18 images keep PGDATA under
 #               /var/lib/postgresql/18/docker, so the volume mounts the parent dir)
+#   pg-backup — pgBackRest weekly full + WAL archive check (continuous backup to OSS)
 #   web-build — one-shot SPA builder (profile: build); writes the dist into web-dist
 # The outer (machine i) caddy reverse-proxies baton.fmap.dev → ${CADDY_HOST_PORT}.
 # Worker + DingTalk bridge run elsewhere and connect to https://baton.fmap.dev/api.
+
+# pgBackRest stanza and repository path; the bucket and keys come from docker/pgbackrest.env,
+# the OSS endpoint and region from docker/postgres/pgbackrest.conf.
+x-pgbackrest-env: &pgbackrest-env
+  PGBACKREST_STANZA: baton
+  PGBACKREST_PG1_PATH: /var/lib/postgresql/18/docker
+  PGBACKREST_PG1_USER: baton
+  PGBACKREST_REPO1_PATH: /pgbackrest/i-baton
+
 services:
   caddy:
     image: caddy:2.10-alpine
@@ -29,20 +39,65 @@ services:
     restart: "no"
     profiles: ["build"]
 
+  # postgres:18-alpine + pgBackRest: WAL is archived to OSS continuously (async) and pg-backup
+  # takes a weekly full. OSS bucket and keys live in docker/pgbackrest.env (not in .env, which
+  # backend and bridge also load). See docker/postgres/README.md.
   postgres:
-    image: postgres:18-alpine
+    build: ./postgres
+    image: baton-postgres:18-pgbackrest
+    # The async pgBackRest process must be reaped by an init: if one exits with an error under a
+    # PID 1 postmaster, PostgreSQL treats it as a crashed backend and restarts every session.
+    init: true
+    command:
+      - postgres
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=pgbackrest archive-push %p
+      - -c
+      - archive_timeout=300s
+    stop_grace_period: 120s
+    env_file: pgbackrest.env
     environment:
+      <<: *pgbackrest-env
       POSTGRES_USER: baton
       POSTGRES_DB: baton
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in docker/.env}
     volumes:
       - baton_pg:/var/lib/postgresql
+      - pg_socket:/var/run/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U baton -d baton"]
       interval: 5s
       timeout: 3s
       retries: 10
     restart: unless-stopped
+
+  # Weekly full backup and a WAL archive check every 5 minutes; 30 days kept by time.
+  pg-backup:
+    image: baton-postgres:18-pgbackrest
+    init: true
+    user: postgres
+    restart: unless-stopped
+    env_file: pgbackrest.env
+    environment: *pgbackrest-env
+    entrypoint: [physical-backup]
+    volumes:
+      - baton_pg:/var/lib/postgresql:ro
+      - pg_socket:/var/run/postgresql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -f /tmp/physical-backup-running || { test -f /tmp/physical-backup-ok &&
+          test $$(($$(date +%s) - $$(stat -c %Y /tmp/physical-backup-ok))) -lt 900; }
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 5m
 
   backend:
     build:
@@ -88,3 +143,4 @@ volumes:
   baton_data:
   baton_pg:
   bridge_data:
+  pg_socket:
