@@ -25,3 +25,6 @@ bun.lockb
 
 # Local drafts (design notes / plans) — kept out of the repo
 docs/
+
+# pgBackRest OSS credentials for docker/ (see docker/pgbackrest.env.example)
+docker/pgbackrest.env
