@@ -2,7 +2,7 @@ import type { SessionEventType } from '@baton/shared'
 import type { Prisma } from '@prisma/client'
 import { toSessionEvent } from '../mappers.ts'
 
-// Acquire the SQLite writer before reading the state used by a transition.
+// Take the session row lock (held until the tx ends) before reading the state used by a transition.
 export const lockSession = (tx: Prisma.TransactionClient, id: number) =>
   tx.session.update({ where: { id }, data: { nextEventSequence: { increment: 0 } } })
 

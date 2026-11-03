@@ -11,8 +11,8 @@ metaphor: work handed from node to node.
 
 ```
   web UI ─┐
- DingTalk ┼──▶  server (Hono + SQLite)  ◀──SSE──  workers (baton CLI + agent)
-   Feishu ┘        baton.example.com                 sessions in the worker directory
+ DingTalk ┼──▶  server (Hono + PostgreSQL)  ◀──SSE──  workers (baton CLI + agent)
+   Feishu ┘        baton.example.com                     sessions in the worker directory
 ```
 
 ## Design notes
@@ -38,7 +38,7 @@ metaphor: work handed from node to node.
 
 | package | what |
 |---|---|
-| `packages/server` | API + state (Hono, Prisma/SQLite, SSE) |
+| `packages/server` | API + state (Hono, Prisma/PostgreSQL, SSE) |
 | `packages/web` | SPA (React, Vite, Tailwind) |
 | `packages/cli` | [`@lesscap/baton-cli`](https://www.npmjs.com/package/@lesscap/baton-cli) — worker daemon + management commands |
 | `packages/shared` | domain types shared by all of the above |
@@ -49,7 +49,11 @@ metaphor: work handed from node to node.
 ## Quick start
 
 ```bash
-# server + web (dev)
+# server + web (dev) — needs a local PostgreSQL; set DATABASE_URL and
+# BATON_TEST_DATABASE_URL in packages/server/.env (see .env.example)
+docker run -d --name baton-postgres -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_USER=baton -e POSTGRES_PASSWORD=baton -e POSTGRES_DB=baton \
+  -v baton-postgres:/var/lib/postgresql postgres:18-alpine
 pnpm install
 pnpm --filter @baton/server db:migrate
 pnpm --filter @baton/server dev        # api on :3280

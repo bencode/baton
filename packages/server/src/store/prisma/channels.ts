@@ -38,11 +38,12 @@ export const prismaChannels = (prisma: PrismaClient): Store['channels'] => ({
   },
   // Existence = authorization: the channel uuid IS the participation capability.
   exists: async id => !!(await prisma.channel.findUnique({ where: { id }, select: { id: true } })),
-  // Append with the next per-channel seq. The read-then-insert runs in a tx so
-  // concurrent senders can't collide on the (channelId, seq) unique key — the
-  // same guard as sessions.appendEvent. seq is 1-based (relay-compatible).
+  // Append with the next per-channel seq. The Channel row lock serializes the
+  // read-then-insert, so concurrent senders can't collide on the (channelId, seq)
+  // unique key. seq is 1-based (relay-compatible).
   appendMessage: async (channelId, input) =>
     prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT 1 FROM "Channel" WHERE "id" = ${channelId} FOR UPDATE`
       const top = await tx.channelMessage.findFirst({
         where: { channelId },
         orderBy: { seq: 'desc' },

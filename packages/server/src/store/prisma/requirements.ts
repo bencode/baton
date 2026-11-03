@@ -31,7 +31,9 @@ export const prismaRequirements = (prisma: PrismaClient): Store['requirements'] 
     return r ? toRequirement(r) : null
   },
   listByProject: async projectId =>
-    (await prisma.requirement.findMany({ where: { projectId } })).map(toRequirement),
+    (await prisma.requirement.findMany({ where: { projectId }, orderBy: { id: 'asc' } })).map(
+      toRequirement,
+    ),
   update: async (id, patch) =>
     toRequirement(
       await prisma.requirement.update({

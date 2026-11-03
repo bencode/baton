@@ -1,4 +1,4 @@
-// baton persistence (M1, SQLite via Prisma). Collaboration dimension only: Workspace / Project / Requirement / Task.
+// baton persistence (PostgreSQL via Prisma). Collaboration dimension only: Workspace / Project / Requirement / Task.
 // PKs are INT autoincrement; Requirement/Task carry a project-scoped human code (R-N / T-N). The
 // next number per kind lives in CodeCounter rows so Project's domain stays free of counter state.
 // Array/object fields are stored as JSON text, (de)serialized by the Store mapping layer.
@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // A back-office login user (username/password → signed session cookie). Added

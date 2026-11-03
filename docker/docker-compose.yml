@@ -1,6 +1,8 @@
 # baton back-office — self-contained docker stack (server + web).
 #   caddy     — serves the SPA + proxies /api → backend (internal :80, published)
-#   backend   — Hono via tsx; entrypoint runs `prisma migrate deploy`; SQLite on a volume
+#   backend   — Hono via tsx; entrypoint runs `prisma migrate deploy` against postgres
+#   postgres  — PostgreSQL 18; data on the baton_pg volume (PG 18 images keep PGDATA under
+#               /var/lib/postgresql/18/docker, so the volume mounts the parent dir)
 #   web-build — one-shot SPA builder (profile: build); writes the dist into web-dist
 # The outer (machine i) caddy reverse-proxies baton.fmap.dev → ${CADDY_HOST_PORT}.
 # Worker + DingTalk bridge run elsewhere and connect to https://baton.fmap.dev/api.
@@ -27,15 +29,36 @@ services:
     restart: "no"
     profiles: ["build"]
 
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: baton
+      POSTGRES_DB: baton
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in docker/.env}
+    volumes:
+      - baton_pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U baton -d baton"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build:
       context: ..
       dockerfile: docker/Dockerfile.backend
     env_file: .env
+    # DATABASE_URL here overrides any legacy value in .env. baton_data still holds
+    # artifacts/attachments (BATON_DATA_DIR).
     environment:
       - BATON_DATA_DIR=/data
+      - DATABASE_URL=postgresql://baton:${POSTGRES_PASSWORD}@postgres:5432/baton
     volumes:
       - baton_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     expose:
       - "3280"
     restart: unless-stopped
@@ -63,4 +86,5 @@ volumes:
   caddy_data:
   caddy_config:
   baton_data:
+  baton_pg:
   bridge_data:

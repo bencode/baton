@@ -33,7 +33,7 @@ export const prismaTasks = (prisma: PrismaClient): Store['tasks'] => ({
     return r ? toTask(r) : null
   },
   listByRequirement: async requirementId =>
-    (await prisma.task.findMany({ where: { requirementId } })).map(toTask),
+    (await prisma.task.findMany({ where: { requirementId }, orderBy: { id: 'asc' } })).map(toTask),
   update: async (id, patch) =>
     toTask(
       await prisma.task.update({

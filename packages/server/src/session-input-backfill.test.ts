@@ -1,27 +1,10 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { test } from 'node:test'
-import { createClient } from '@libsql/client'
-import { createPrisma } from './db/client.ts'
 import { backfillSessionInputs } from './session-input-backfill.ts'
-import { createPrismaStore } from './store/prisma-store.ts'
+import { freshStore } from './store/test-db.ts'
 
 test('offline backfill preserves history identities/highwater, pauses old inputs and is idempotent', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'baton-backfill-'))
-  const url = `file:${join(dir, 'test.db')}`
-  const setup = createClient({ url })
-  const migrations = new URL('../prisma/migrations/', import.meta.url)
-  for (const name of (await readdir(migrations))
-    .filter(name => name !== 'migration_lock.toml')
-    .sort())
-    await setup.executeMultiple(
-      await readFile(new URL(`${name}/migration.sql`, migrations), 'utf8'),
-    )
-  setup.close()
-  const prisma = createPrisma(url)
-  const store = createPrismaStore(prisma)
+  const { store, prisma, cleanup } = await freshStore()
   try {
     const workspace = await store.workspaces.create({ name: 'w' })
     const project = await store.projects.create({ workspaceId: workspace.id, name: 'p' })
@@ -155,7 +138,6 @@ test('offline backfill preserves history identities/highwater, pauses old inputs
     )
     assert.equal(replacement.value.queue.items[0]?.id, pending.items[1]?.id)
   } finally {
-    await store.close()
-    await rm(dir, { recursive: true, force: true })
+    await cleanup()
   }
 })

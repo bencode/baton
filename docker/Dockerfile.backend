@@ -1,4 +1,4 @@
-# baton server — Hono API on Node via tsx (no compiled dist), SQLite via Prisma/libsql.
+# baton server — Hono API on Node via tsx (no compiled dist), PostgreSQL via Prisma/pg.
 # Multi-stage: builder installs the workspace + generates the Prisma client; the
 # runtime stage carries node_modules + sources and runs `tsx src/index.ts`.
 FROM node:26-slim AS builder
@@ -24,7 +24,7 @@ RUN pnpm install --filter @baton/server... --frozen-lockfile --prod=false --igno
 # Sources + generate the Prisma client (no DB connection; URL just satisfies config).
 COPY packages/shared/ packages/shared/
 COPY packages/server/ packages/server/
-RUN cd packages/server && DATABASE_URL=file:/tmp/build.db pnpm exec prisma generate
+RUN cd packages/server && DATABASE_URL=postgresql://build:build@localhost:5432/build pnpm exec prisma generate
 
 # ── runtime ──────────────────────────────────────────────────────────
 FROM node:26-slim

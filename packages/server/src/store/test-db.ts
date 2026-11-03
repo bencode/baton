@@ -1,8 +1,10 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import 'dotenv/config'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createClient } from '@libsql/client'
+import type { PrismaClient } from '@prisma/client'
+import { customAlphabet } from 'nanoid'
+import pg from 'pg'
 import { createPrisma } from '../db/client.ts'
 import { createPrismaStore } from './prisma-store.ts'
 import type { Store } from './types.ts'
@@ -17,21 +19,51 @@ const loadSchemaSql = (): string => {
     .join('\n')
 }
 
-export type TestStore = { store: Store; cleanup: () => Promise<void> }
+// A PG server URL whose role may CREATE/DROP DATABASE; each test gets its own database there.
+const adminUrl = (): string => {
+  const url = process.env.BATON_TEST_DATABASE_URL
+  if (!url)
+    throw new Error(
+      'BATON_TEST_DATABASE_URL is required, e.g. postgresql://baton:baton@localhost:5432/postgres',
+    )
+  return url
+}
 
-// Each test gets a fresh temp SQLite file: create db → apply schema → build Store.
+const databaseUrl = (admin: string, name: string): string => {
+  const url = new URL(admin)
+  url.pathname = `/${name}`
+  return url.toString()
+}
+
+const withClient = async <T>(url: string, run: (client: pg.Client) => Promise<T>): Promise<T> => {
+  const client = new pg.Client({ connectionString: url })
+  await client.connect()
+  try {
+    return await run(client)
+  } finally {
+    await client.end()
+  }
+}
+
+const dbSuffix = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 12)
+
+export type TestStore = { store: Store; prisma: PrismaClient; cleanup: () => Promise<void> }
+
+// Each test gets a fresh PG database: create db → apply schema → build Store; cleanup drops it.
 export const freshStore = async (): Promise<TestStore> => {
-  const dir = mkdtempSync(join(tmpdir(), 'baton-test-'))
-  const url = `file:${join(dir, 'test.db')}`
-  const setup = createClient({ url })
-  await setup.executeMultiple(loadSchemaSql())
-  setup.close()
-  const store = createPrismaStore(createPrisma(url))
+  const admin = adminUrl()
+  const name = `baton_test_${dbSuffix()}`
+  const url = databaseUrl(admin, name)
+  await withClient(admin, client => client.query(`CREATE DATABASE "${name}"`))
+  await withClient(url, client => client.query(loadSchemaSql()))
+  const prisma = createPrisma(url)
+  const store = createPrismaStore(prisma)
   return {
     store,
+    prisma,
     cleanup: async () => {
       await store.close()
-      rmSync(dir, { recursive: true, force: true })
+      await withClient(admin, client => client.query(`DROP DATABASE "${name}" WITH (FORCE)`))
     },
   }
 }
