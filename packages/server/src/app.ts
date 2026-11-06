@@ -20,6 +20,7 @@ import { registerArtifactPublicRoutes, registerArtifactRoutes } from './routes/a
 import { registerAuthRoutes } from './routes/auth.ts'
 import { registerChannelRoutes } from './routes/channels.ts'
 import { registerFileRoutes } from './routes/files.ts'
+import { registerHostRoutes } from './routes/hosts.ts'
 import { registerLoopRoutes } from './routes/loops.ts'
 import { registerProjectRoutes } from './routes/projects.ts'
 import { registerProvisionerRoutes } from './routes/provisioner.ts'
@@ -55,7 +56,6 @@ export type { AppEnv } from './views.ts'
 //   commands       — server→worker command bus (session.start/stop/delete).
 type AppOptions = {
   provisionerBus?: ProvisionerBus
-  provisionerToken?: string
   bus?: EventBus
   runtime?: SessionRuntime
   busyTracker?: BusyTracker
@@ -108,13 +108,11 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
     downloads = createFileDownloads(commands),
     artifactFiles = createArtifactFileStore(defaultArtifactDir()),
     provisionerBus = createProvisionerBus(),
-    provisionerToken = process.env.BATON_PROVISIONER_TOKEN,
     pushPublicKey = vapidConfig()?.publicKey ?? null,
     sendPush = defaultPushSender(),
   } = options
   const app = new Hono<AppEnv>()
   const provisioning = { store, bus: provisionerBus, commands, projects }
-  const token = provisionerToken?.trim() || undefined
   const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app })
   onInjectWs?.(injectWebSocket)
   app.get('/health', c => c.json({ ok: true }))
@@ -127,9 +125,10 @@ export const createApp = (store: Store, options: AppOptions = {}): Hono<AppEnv> 
   registerRelayRoutes(app, relay)
   registerChannelRoutes(app, store, channelBus, presence, attachments)
   registerArtifactPublicRoutes(app, store, artifactFiles)
-  registerProvisionerRoutes(app, provisioning, token)
+  registerProvisionerRoutes(app, provisioning)
   app.use('*', cookieAuth(store))
-  registerWorkerCreationRoutes(app, provisioning, token)
+  registerWorkerCreationRoutes(app, provisioning)
+  registerHostRoutes(app, provisioning)
   registerWorkspaceRoutes(app, store, artifactFiles)
   registerProjectRoutes(
     app,

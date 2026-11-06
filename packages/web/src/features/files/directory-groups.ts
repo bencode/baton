@@ -7,9 +7,10 @@ export type DirectoryGroup = {
   host: ProjectWorkerView
 }
 
-// A worker of unknown directory stands alone: it cannot be shown to share one.
-const directoryKey = (worker: ProjectWorkerView): string =>
-  worker.directory ?? `worker:${worker.id}`
+// A directory is a path on a host. A worker of unknown directory stands alone: it
+// cannot be shown to share one.
+const directoryKey = ({ id, directory, hostId }: ProjectWorkerView): string =>
+  directory === null ? `worker:${id}` : `${hostId}:${directory}`
 
 export const groupByDirectory = (workers: ProjectWorkerView[]): DirectoryGroup[] => {
   const keys = [...new Set(workers.map(directoryKey))]

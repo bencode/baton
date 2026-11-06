@@ -1,6 +1,7 @@
 import {
   type CreateWorkerInput,
   type CreationWorkerResult,
+  type HostOption,
   type Id,
   isAgentKind,
   isWorkerTemplateId,
@@ -45,14 +46,17 @@ export const parseCreateWorkerInput = (value: unknown): CreateWorkerInput => {
     throw new WorkerCreationError(400, 'name, valid templateId, and agentKind required')
   if (!workerTemplateAgentKinds(body.templateId).includes(body.agentKind))
     throw new WorkerCreationError(400, 'agentKind is not supported by this template')
-  const repoPath = body.repoPath
+  const { repoPath, hostId } = body
   if (repoPath !== undefined && (typeof repoPath !== 'string' || !repoPath.trim()))
     throw new WorkerCreationError(400, 'repoPath must be a non-empty string')
+  if (hostId !== undefined && (!Number.isSafeInteger(hostId) || (hostId as number) <= 0))
+    throw new WorkerCreationError(400, 'hostId must be a positive integer')
   return {
     name,
     templateId: body.templateId,
     agentKind: body.agentKind,
     ...(repoPath === undefined ? {} : { repoPath }),
+    ...(hostId === undefined ? {} : { hostId: hostId as Id }),
   }
 }
 export const parseCreationReport = (value: unknown): WorkerCreationReport => {
@@ -77,6 +81,34 @@ export const loadWorkerCreation = async (store: Store, id: Id): Promise<WorkerCr
   if (!creation) throw new WorkerCreationError(404, 'creation not found')
   return creation
 }
+// A host only ever sees its own creations; one of them hands out a Worker token.
+export const loadHostCreation = async (
+  store: Store,
+  hostId: Id,
+  id: Id,
+): Promise<WorkerCreation> => {
+  const creation = await loadWorkerCreation(store, id)
+  if (creation.hostId !== hostId) throw new WorkerCreationError(404, 'creation not found')
+  return creation
+}
+export const projectHosts = async (
+  { store, bus }: ProvisioningDeps,
+  projectId: Id,
+): Promise<HostOption[]> => {
+  const project = await store.projects.get(projectId)
+  if (!project) throw new WorkerCreationError(404, 'project not found')
+  const hosts = await store.hosts.listByWorkspace(project.workspaceId)
+  return hosts.map(({ id, name }) => ({ id, name, online: bus.has(id) }))
+}
+const resolveHost = (hosts: HostOption[], hostId: Id | undefined): HostOption => {
+  if (hosts.length === 0) throw new WorkerCreationError(503, 'no host assigned to this workspace')
+  if (hostId === undefined && hosts.length > 1)
+    throw new WorkerCreationError(400, 'hostId required')
+  const host = hostId === undefined ? hosts[0] : hosts.find(item => item.id === hostId)
+  if (!host) throw new WorkerCreationError(400, 'host is not available to this project')
+  if (!host.online) throw new WorkerCreationError(503, `host ${host.name} is offline`)
+  return host
+}
 const save = async (
   deps: ProvisioningDeps,
   creation: WorkerCreation,
@@ -97,9 +129,7 @@ export const createWorkerCreation = async (
   projectId: Id,
   input: CreateWorkerInput,
 ): Promise<WorkerCreation> => {
-  if (!(await deps.store.projects.get(projectId)))
-    throw new WorkerCreationError(404, 'project not found')
-  if (!deps.bus.has('mini')) throw new WorkerCreationError(503, 'mini provisioner is offline')
+  const host = resolveHost(await projectHosts(deps, projectId), input.hostId)
   const [workers, creations] = await Promise.all([
     deps.store.workers.listByProject(projectId),
     deps.store.workerCreations.listByProject(projectId),
@@ -111,12 +141,16 @@ export const createWorkerCreation = async (
     throw new WorkerCreationError(409, 'worker name already in use in project')
   if (
     input.repoPath !== undefined &&
-    !reusableDirectories(creations).some(directory => directory.path === input.repoPath)
+    !reusableDirectories(creations, host.id).some(directory => directory.path === input.repoPath)
   )
     throw new WorkerCreationError(400, 'repoPath is not a directory of this project')
-  const creation = await deps.store.workerCreations.create({ ...input, projectId })
+  const creation = await deps.store.workerCreations.create({
+    ...input,
+    projectId,
+    hostId: host.id,
+  })
   deps.projects.publish(projectId, { resource: 'worker-creations' })
-  deps.bus.publish('mini', { action: 'create', creationId: creation.id })
+  deps.bus.publish(host.id, { action: 'create', creationId: creation.id })
   return creation
 }
 

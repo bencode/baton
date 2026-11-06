@@ -1,6 +1,7 @@
 import { type ArtifactsClient, artifactsClient } from './client/artifacts.ts'
 import { primeLogin } from './client/auth.ts'
 import { type FilesClient, filesClient } from './client/files.ts'
+import { type HostsClient, hostsClient } from './client/hosts.ts'
 import { type LoopsClient, loopsClient } from './client/loops.ts'
 import { type ProjectClient, projectClient } from './client/projects.ts'
 import { request, setAuthHeaders } from './client/request.ts'
@@ -27,6 +28,7 @@ export type { WorkspaceInput } from './client/workspaces.ts'
 // Public HTTP client (UI / CLI / observability tools).
 export type ApiClient = {
   workerCreations: WorkerCreationsClient
+  hosts: HostsClient
   artifacts: ArtifactsClient
   workspaces: WorkspaceClient
   projects: ProjectClient
@@ -56,6 +58,7 @@ export const createClient = (baseUrl: string, opts?: { bearer?: string }): ApiCl
 
 const clientFromBase = (baseUrl: string): ApiClient => ({
   workerCreations: workerCreationsClient(baseUrl),
+  hosts: hostsClient(baseUrl),
   artifacts: artifactsClient(baseUrl),
   workspaces: workspaceClient(baseUrl),
   projects: projectClient(baseUrl),

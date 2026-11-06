@@ -31,18 +31,20 @@ test('CLI submits a worker request and exposes template/list/detail queries', as
     res.setHeader('content-type', 'application/json')
     res.end(
       JSON.stringify(
-        req.url?.endsWith('worker-templates')
-          ? [
-              {
-                id: 'mini-codex',
-                name: 'mini',
-                agentKinds: ['codex'],
-                available: true,
-              },
-            ]
-          : req.method === 'GET' && req.url?.startsWith('/projects/')
-            ? [creation]
-            : creation,
+        req.url?.endsWith('/hosts')
+          ? [{ id: 3, name: 'mac-2', online: true }]
+          : req.url?.endsWith('worker-templates')
+            ? [
+                {
+                  id: 'mini-codex',
+                  name: 'mini',
+                  agentKinds: ['codex'],
+                  available: true,
+                },
+              ]
+            : req.method === 'GET' && req.url?.startsWith('/projects/')
+              ? [creation]
+              : creation,
       ),
     )
   })
@@ -74,12 +76,25 @@ test('CLI submits a worker request and exposes template/list/detail queries', as
         .id,
       19,
     )
+    await run([
+      'create',
+      '--project',
+      '7',
+      '--template',
+      'mini-codex',
+      '--name',
+      'placed',
+      '--host',
+      'mac-2',
+    ])
     assert.equal((await run(['creation', 'ls', '--project', '7']))[0].id, 19)
     assert.equal((await run(['creation', 'get', '19'])).id, 19)
     assert.deepEqual(
       requests.map(r => [r.method, r.path]),
       [
         ['GET', '/projects/7/worker-templates'],
+        ['POST', '/projects/7/worker-creations'],
+        ['GET', '/projects/7/hosts'],
         ['POST', '/projects/7/worker-creations'],
         ['GET', '/projects/7/worker-creations'],
         ['GET', '/worker-creations/19'],
@@ -89,6 +104,12 @@ test('CLI submits a worker request and exposes template/list/detail queries', as
       templateId: 'mini-codex',
       name: 'my worker',
       agentKind: 'codex',
+    })
+    assert.deepEqual(requests[3]?.body, {
+      templateId: 'mini-codex',
+      name: 'placed',
+      agentKind: 'codex',
+      hostId: 3,
     })
     assert.ok(requests.every(r => r.auth === 'Bearer user-token'))
   } finally {

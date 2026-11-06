@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import type {
+  AdminHost,
   CreationWorkerResult,
+  HostCredential,
+  HostOption,
   ProvisionerSignal,
   WorkerCreation,
   WorkerTemplate,
@@ -16,22 +19,29 @@ describe('worker template creation protocol', () => {
   let ctx: TestStore
   let app: ReturnType<typeof createApp>
   let projectId: number
+  let workspaceId: number
+  let hostId: number
+  let daemon: { authorization: string }
   let bus: ReturnType<typeof createProvisionerBus>
   let commands: ReturnType<typeof createCommandBus>
   let signals: ProvisionerSignal[]
   let cleanup: (() => void)[]
-  const daemon = { authorization: 'Bearer mini-secret' }
 
   beforeEach(async () => {
     ctx = await freshStore()
     const ws = await ctx.store.workspaces.create({ name: 'personal' })
     const project = await ctx.store.projects.create({ workspaceId: ws.id, name: 'project' })
     projectId = project.id
+    workspaceId = ws.id
+    const { host, token } = await ctx.store.hosts.create({ name: 'mac-1' })
+    await ctx.store.hosts.assign(host.id, ws.id)
+    hostId = host.id
+    daemon = { authorization: `Bearer ${token}` }
     bus = createProvisionerBus()
     commands = createCommandBus()
     signals = []
     cleanup = []
-    app = createApp(ctx.store, { provisionerBus: bus, provisionerToken: 'mini-secret', commands })
+    app = createApp(ctx.store, { provisionerBus: bus, commands })
   })
   afterEach(async () => {
     cleanup.forEach(stop => {
@@ -40,13 +50,14 @@ describe('worker template creation protocol', () => {
     await ctx.cleanup()
   })
   const online = () => {
-    cleanup.push(bus.subscribe('mini', signal => signals.push(signal)))
+    cleanup.push(bus.subscribe(hostId, signal => signals.push(signal)))
   }
   const create = async (name = 'new-worker') => {
     const response = await postJson(app, `/projects/${projectId}/worker-creations`, {
       templateId: 'mini-local',
       name,
       agentKind: 'codex',
+      hostId,
     })
     assert.equal(response.status, 202)
     return (await response.json()) as WorkerCreation
@@ -82,13 +93,26 @@ describe('worker template creation protocol', () => {
     disconnect()
     return worker
   }
-  const share = (project: number, name: string, repoPath: string) =>
+  const share = (project: number, name: string, repoPath: string, host?: number) =>
     postJson(app, `/projects/${project}/worker-creations`, {
       templateId: 'mini-local',
       name,
       agentKind: 'codex',
       repoPath,
+      ...(host === undefined ? {} : { hostId: host }),
     })
+  const request = (name: string, host?: number) =>
+    postJson(app, `/projects/${projectId}/worker-creations`, {
+      templateId: 'mini-local',
+      name,
+      agentKind: 'codex',
+      ...(host === undefined ? {} : { hostId: host }),
+    })
+  const secondHost = async () => {
+    const { host, token } = await ctx.store.hosts.create({ name: 'mac-2' })
+    await ctx.store.hosts.assign(host.id, workspaceId)
+    return { id: host.id, auth: { authorization: `Bearer ${token}` } }
+  }
 
   test('a new worker can share only a directory where a worker of this project lives', async () => {
     online()
@@ -102,6 +126,7 @@ describe('worker template creation protocol', () => {
     assert.equal((await share(projectId, 'lost', '/mini/elsewhere')).status, 400)
     const ws = await ctx.store.workspaces.create({ name: 'other' })
     const other = await ctx.store.projects.create({ workspaceId: ws.id, name: 'other' })
+    await ctx.store.hosts.assign(hostId, ws.id)
     assert.equal((await share(other.id, 'intruder', '/mini/project')).status, 400)
     assert.equal(
       (
@@ -138,27 +163,173 @@ describe('worker template creation protocol', () => {
       id: number
       name: string
       directory: string | null
+      hostId: number | null
     }[]
-    assert.deepEqual(list.map(({ name, directory }) => [name, directory]).sort(), [
-      ['manual', null],
-      ['provisioned', '/mini/project'],
+    assert.deepEqual(list.map(({ name, directory, hostId }) => [name, directory, hostId]).sort(), [
+      ['manual', null, null],
+      ['provisioned', '/mini/project', hostId],
     ])
     assert.ok(list.some(worker => worker.id === provisioned.id))
   })
 
-  test('offline and unconfigured templates reject requests without creating records', async () => {
-    const path = `/projects/${projectId}/worker-creations`
-    const input = { templateId: 'mini-local', name: 'worker', agentKind: 'codex' }
-    assert.equal((await postJson(app, path, input)).status, 503)
-    const disabled = createApp(ctx.store, { provisionerToken: '', provisionerBus: bus })
+  test('a request resolves to one online host of the workspace or creates nothing', async () => {
+    const templates = async () =>
+      (await (
+        await app.request(`/projects/${projectId}/worker-templates`)
+      ).json()) as WorkerTemplate[]
+    assert.equal((await request('offline')).status, 503)
+    assert.equal((await templates())[0]?.available, false)
     online()
-    assert.equal((await postJson(disabled, path, input)).status, 503)
-    assert.equal((await disabled.request('/provisioner/stream', { headers: daemon })).status, 503)
-    assert.deepEqual(await ctx.store.workerCreations.listByProject(projectId), [])
-    const templates = (await (
-      await app.request(`/projects/${projectId}/worker-templates`)
-    ).json()) as WorkerTemplate[]
-    assert.equal(templates[0]?.available, true)
+    assert.equal((await templates())[0]?.available, true)
+
+    const alone = await request('alone')
+    assert.equal(alone.status, 202)
+    assert.equal(((await alone.json()) as WorkerCreation).hostId, hostId)
+
+    const second = await secondHost()
+    assert.equal((await request('ambiguous')).status, 400)
+    assert.equal((await request('asleep', second.id)).status, 503)
+    const stray = await ctx.store.hosts.create({ name: 'unassigned' })
+    cleanup.push(bus.subscribe(stray.host.id, () => {}))
+    assert.equal((await request('stray', stray.host.id)).status, 400)
+    const chosen = await request('chosen', hostId)
+    assert.equal(chosen.status, 202)
+
+    await ctx.store.hosts.unassign(hostId, workspaceId)
+    await ctx.store.hosts.unassign(second.id, workspaceId)
+    assert.equal((await request('homeless')).status, 503)
+    assert.deepEqual(
+      (await ctx.store.workerCreations.listByProject(projectId)).map(item => item.name),
+      ['chosen', 'alone'],
+    )
+  })
+
+  test('a host sees and acts on only its own creations', async () => {
+    online()
+    const second = await secondHost()
+    cleanup.push(bus.subscribe(second.id, () => {}))
+    const mine = await create('mine')
+    const theirs = (await (await request('theirs', second.id)).json()) as WorkerCreation
+    assert.deepEqual(signals, [{ action: 'create', creationId: mine.id }])
+
+    const listed = await app.request('/provisioner/worker-creations', { headers: second.auth })
+    assert.deepEqual(
+      ((await listed.json()) as WorkerCreation[]).map(item => item.id),
+      [theirs.id],
+    )
+    const path = `/provisioner/worker-creations/${mine.id}`
+    assert.equal((await app.request(path, { headers: second.auth })).status, 404)
+    const report = { status: 'running', step: 'directory' }
+    assert.equal((await postJson(app, `${path}/progress`, report, second.auth)).status, 404)
+    await registering(mine)
+    const hostname = { hostname: 'mac-2' }
+    assert.equal((await postJson(app, `${path}/worker`, hostname, second.auth)).status, 404)
+    assert.deepEqual(await ctx.store.workers.listByProject(projectId), [])
+  })
+
+  test('each host has one stream of its own', async () => {
+    const second = await secondHost()
+    online()
+    const abort = new AbortController()
+    cleanup.push(() => abort.abort())
+    const headers = second.auth
+    const stream = await app.request('/provisioner/stream', { headers, signal: abort.signal })
+    assert.equal(stream.status, 200)
+    assert.equal((await app.request('/provisioner/stream', { headers })).status, 409)
+    assert.equal((await app.request('/provisioner/stream', { headers: daemon })).status, 409)
+    abort.abort()
+    await stream.body?.cancel()
+  })
+
+  test('replacing a token ends the open stream and frees the host', { timeout: 5000 }, async () => {
+    const stale = await app.request('/provisioner/stream', { headers: daemon })
+    assert.equal(stale.status, 200)
+    const rotated = await postJson(app, `/hosts/${hostId}/token`, {})
+    const { token } = (await rotated.json()) as HostCredential
+    await stale.text()
+    assert.equal(bus.has(hostId), false)
+    assert.equal((await app.request('/provisioner/stream', { headers: daemon })).status, 401)
+
+    const abort = new AbortController()
+    cleanup.push(() => abort.abort())
+    const headers = { authorization: `Bearer ${token}` }
+    const fresh = await app.request('/provisioner/stream', { headers, signal: abort.signal })
+    assert.equal(fresh.status, 200)
+    assert.equal((await app.request('/provisioner/stream', { headers })).status, 409)
+    abort.abort()
+    await fresh.body?.cancel()
+  })
+
+  test('a directory is shared only on the host it lives on', async () => {
+    online()
+    const second = await secondHost()
+    cleanup.push(bus.subscribe(second.id, () => {}))
+    await finish(await create('owner'))
+    assert.equal((await share(projectId, 'elsewhere', '/mini/project', second.id)).status, 400)
+    assert.equal((await share(projectId, 'beside', '/mini/project', hostId)).status, 202)
+  })
+
+  test('only an admin manages hosts, and a project sees only those it was given', async () => {
+    const admin = await ctx.store.users.create({
+      username: 'root',
+      passwordHash: 'unused',
+      isAdmin: true,
+    })
+    await ctx.store.users.setApiToken(admin.id, 'admin-token')
+    const member = await ctx.store.users.create({ username: 'member', passwordHash: 'unused' })
+    await ctx.store.users.setApiToken(member.id, 'member-token')
+    await ctx.store.users.bindWorkspace(member.id, workspaceId)
+    const asAdmin = { authorization: 'Bearer admin-token' }
+    const asMember = { authorization: 'Bearer member-token' }
+
+    assert.equal((await app.request('/hosts', { headers: asMember })).status, 403)
+    assert.equal((await postJson(app, '/hosts', { name: 'x' }, asMember)).status, 403)
+    assert.equal((await postJson(app, '/hosts', { name: 'mac-1' }, asAdmin)).status, 409)
+
+    const added = await postJson(app, '/hosts', { name: ' mac-3 ' }, asAdmin)
+    assert.equal(added.status, 201)
+    const { host, token } = (await added.json()) as HostCredential
+    assert.equal(host.name, 'mac-3')
+    const options = async () =>
+      (await (
+        await app.request(`/projects/${projectId}/hosts`, { headers: asMember })
+      ).json()) as HostOption[]
+    assert.deepEqual(await options(), [{ id: hostId, name: 'mac-1', online: false }])
+
+    const assignment = `/hosts/${host.id}/workspaces/${workspaceId}`
+    for (const _ of [1, 2])
+      assert.equal((await app.request(assignment, { method: 'PUT', headers: asAdmin })).status, 204)
+    assert.deepEqual(
+      (await options()).map(item => item.name),
+      ['mac-1', 'mac-3'],
+    )
+    const missing = `/hosts/${host.id}/workspaces/${workspaceId + 100}`
+    assert.equal((await app.request(missing, { method: 'PUT', headers: asAdmin })).status, 404)
+    const listing = await app.request('/hosts', { headers: asAdmin })
+    const hosts = (await listing.json()) as AdminHost[]
+    assert.deepEqual(hosts.find(item => item.id === host.id)?.workspaceIds, [workspaceId])
+    assert.equal(
+      hosts.some(item => 'token' in item),
+      false,
+    )
+    await app.request(assignment, { method: 'DELETE', headers: asAdmin })
+    assert.equal((await options()).length, 1)
+
+    const before = { authorization: `Bearer ${token}` }
+    assert.equal(
+      (await app.request('/provisioner/worker-creations', { headers: before })).status,
+      200,
+    )
+    const rotated = await postJson(app, `/hosts/${host.id}/token`, {}, asAdmin)
+    const after = { authorization: `Bearer ${((await rotated.json()) as HostCredential).token}` }
+    assert.equal(
+      (await app.request('/provisioner/worker-creations', { headers: before })).status,
+      401,
+    )
+    assert.equal(
+      (await app.request('/provisioner/worker-creations', { headers: after })).status,
+      200,
+    )
   })
 
   test('submission reserves a name, persists a request and does not create a worker', async () => {
@@ -268,7 +439,7 @@ describe('worker template creation protocol', () => {
       (await progress(creation.id, { status: 'failed', error: 'late error' })).status,
       409,
     )
-    const otherApp = createApp(ctx.store, { provisionerToken: 'mini-secret' })
+    const otherApp = createApp(ctx.store)
     const restored = await (await otherApp.request(`/worker-creations/${creation.id}`)).json()
     assert.deepEqual(restored, result)
     assert.equal('apiToken' in restored, false)
@@ -286,7 +457,7 @@ describe('worker template creation protocol', () => {
     assert.equal(failed.repoPath, '/mini/project')
     assert.equal(failed.workerId, registered.worker.id)
     assert.equal((await ctx.store.projects.get(projectId))?.id, projectId)
-    assert.deepEqual(await ctx.store.workerCreations.worklist(), [])
+    assert.deepEqual(await ctx.store.workerCreations.worklist(hostId), [])
     assert.equal(
       (await progress(creation.id, { status: 'failed', error: 'different error' })).status,
       409,
@@ -350,6 +521,9 @@ describe('worker template creation protocol', () => {
       (await app.request(`/worker-creations/${creation.id}`, { headers: daemon })).status,
       401,
     )
+    assert.equal((await app.request('/hosts', { headers: workerAuth })).status, 403)
+    assert.equal((await postJson(app, `/hosts/${hostId}/token`, {}, workerAuth)).status, 403)
+    assert.equal((await app.request('/hosts', { headers: daemon })).status, 401)
     assert.equal(
       (await progress(creation.id, { status: 'running', step: 'directory' })).status,
       200,
@@ -357,7 +531,7 @@ describe('worker template creation protocol', () => {
   })
 
   test('failed replay closes the stream and reconnect recovers unchanged requests', async t => {
-    const stop = bus.subscribe('mini', () => {})
+    const stop = bus.subscribe(hostId, () => {})
     const pending = await create('pending')
     const running = await create('running')
     assert.equal((await progress(running.id, { status: 'running', step: 'directory' })).status, 200)
@@ -365,12 +539,12 @@ describe('worker template creation protocol', () => {
     stop()
     const worklist = ctx.store.workerCreations.worklist
     let failNext = true
-    t.mock.method(ctx.store.workerCreations, 'worklist', async () => {
+    t.mock.method(ctx.store.workerCreations, 'worklist', async (id: number) => {
       if (failNext) {
         failNext = false
         throw new Error('temporary replay read failure')
       }
-      return worklist()
+      return worklist(id)
     })
     const abort = new AbortController()
     cleanup.push(() => abort.abort())
@@ -392,7 +566,7 @@ describe('worker template creation protocol', () => {
         }),
       ])
       assert.equal(end.done, true)
-      assert.equal(bus.has('mini'), false)
+      assert.equal(bus.has(hostId), false)
     } finally {
       clearTimeout(timeout)
       abort.abort()
@@ -438,8 +612,8 @@ describe('worker template creation protocol', () => {
     }
   })
 
-  test('SSE reconnect distinguishes creation from inspection and only admits one mini stream', async () => {
-    const stop = bus.subscribe('mini', () => {})
+  test('SSE reconnect distinguishes creation from inspection and only admits one stream', async () => {
+    const stop = bus.subscribe(hostId, () => {})
     const pending = await create('pending')
     const running = await create('running')
     assert.equal((await progress(running.id, { status: 'running', step: 'directory' })).status, 200)
@@ -465,7 +639,7 @@ describe('worker template creation protocol', () => {
     assert.equal((await app.request('/provisioner/stream', { headers: daemon })).status, 409)
     abort.abort()
     await reader.cancel()
-    assert.equal(bus.has('mini'), false)
+    assert.equal(bus.has(hostId), false)
     assert.equal((await ctx.store.workerCreations.get(running.id))?.status, 'running')
   })
 })

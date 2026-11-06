@@ -21,6 +21,7 @@ const waitFor = async (predicate: () => boolean): Promise<void> => {
 const record = (id: number, status: WorkerCreation['status'] = 'pending'): WorkerCreation => ({
   id,
   projectId: 3,
+  hostId: 1,
   name: `worker-${id}`,
   templateId: 'mini-local',
   agentKind: 'codex',

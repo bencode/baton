@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client'
 import { toRequirement, toTask } from './mappers.ts'
 import { prismaArtifacts } from './prisma/artifacts.ts'
 import { prismaChannels } from './prisma/channels.ts'
+import { prismaHosts } from './prisma/hosts.ts'
 import { prismaLoops } from './prisma/loops.ts'
 import { prismaProjects } from './prisma/projects.ts'
 import { prismaPush } from './prisma/push.ts'
@@ -21,6 +22,7 @@ import type { Store } from './types.ts'
 // lives in prisma/<name>.ts and returns its sub-shape of Store; this file
 // stitches them together and handles the cross-cutting helpers.
 export const createPrismaStore = (prisma: PrismaClient): Store => ({
+  hosts: prismaHosts(prisma),
   workerCreations: prismaWorkerCreations(prisma),
   workspaces: prismaWorkspaces(prisma),
   projects: prismaProjects(prisma),

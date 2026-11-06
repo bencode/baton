@@ -7,6 +7,7 @@ import {
   loadWorkerCreation,
   type ProvisioningDeps,
   parseCreateWorkerInput,
+  projectHosts,
   WorkerCreationError,
 } from '../worker-provisioning/service.ts'
 import { workerTemplates } from '../worker-provisioning/templates.ts'
@@ -50,16 +51,21 @@ const projectAccess = async (
   return assertProjectAccess(c, store, projectId)
 }
 
-export const registerWorkerCreationRoutes = (
-  app: Hono<AppEnv>,
-  deps: ProvisioningDeps,
-  token?: string,
-): void => {
+export const registerWorkerCreationRoutes = (app: Hono<AppEnv>, deps: ProvisioningDeps): void => {
+  app.get('/projects/:id/hosts', c =>
+    creationResponse(c, async () => {
+      const projectId = creationId(c.req.param('id'))
+      const denied = await projectAccess(c, deps.store, projectId)
+      return denied ?? c.json(await projectHosts(deps, projectId))
+    }),
+  )
   app.get('/projects/:id/worker-templates', c =>
     creationResponse(c, async () => {
       const projectId = creationId(c.req.param('id'))
       const denied = await projectAccess(c, deps.store, projectId)
-      return denied ?? c.json(workerTemplates(deps.bus, token))
+      if (denied) return denied
+      const hosts = await projectHosts(deps, projectId)
+      return c.json(workerTemplates(hosts.some(host => host.online)))
     }),
   )
   app.post('/projects/:id/worker-creations', c =>
@@ -67,7 +73,6 @@ export const registerWorkerCreationRoutes = (
       const projectId = creationId(c.req.param('id'))
       const denied = await projectAccess(c, deps.store, projectId)
       if (denied) return denied
-      if (!token) throw new WorkerCreationError(503, 'mini provisioner is not configured')
       const input = parseCreateWorkerInput(await readCreationBody(c))
       return c.json(await createWorkerCreation(deps, projectId, input), 202)
     }),

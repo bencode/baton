@@ -8,6 +8,7 @@ import { WorkersPanel } from './workers-panel'
 const creation: WorkerCreation = {
   id: 1,
   projectId: 42,
+  hostId: 1,
   machineId: 'mini',
   templateId: 'mini-local',
   name: 'app',
@@ -32,6 +33,7 @@ const deferred = <T,>() => {
 }
 const fixture = (records: WorkerCreation[] = []) => {
   const workerCreations = {
+    hosts: vi.fn(async () => [{ id: 1, name: 'mac-1', online: true }]),
     templates: vi.fn(async () => [
       {
         id: 'mini-local',

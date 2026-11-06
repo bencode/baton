@@ -7,6 +7,7 @@ import {
 import { defineCommand } from 'citty'
 import { fmtWorkerCreation, fmtWorkerTemplate, renderList, renderOne } from '../../output.ts'
 import { clientFor, common, resolveProjectId } from '../../util.ts'
+import { findHost } from '../host.ts'
 
 const projectArg = {
   project: { type: 'string' as const, description: 'project id (overrides .baton.json)' },
@@ -25,7 +26,7 @@ export const workerTemplatesCommand = defineCommand({
   },
 })
 export const workerCreateCommand = defineCommand({
-  meta: { name: 'create', description: 'request a worker from the mini template (asynchronous)' },
+  meta: { name: 'create', description: 'request a worker from a template (asynchronous)' },
   args: {
     ...projectArg,
     ...common,
@@ -40,6 +41,10 @@ export const workerCreateCommand = defineCommand({
       type: 'string',
       description: "share an existing worker's directory in this project (default: a new one)",
     },
+    host: {
+      type: 'string',
+      description: "host name or id (default: the workspace's only host)",
+    },
   },
   run: async ({ args }) => {
     if (!isWorkerTemplateId(args.template)) throw new Error('invalid worker template')
@@ -49,15 +54,18 @@ export const workerCreateCommand = defineCommand({
       throw new Error('agentKind is not supported by this template')
     const name = args.name.trim()
     if (!name) throw new Error('worker name required')
-    const creation = await clientFor(args).workerCreations.create(
-      positiveId(resolveProjectId(args)),
-      {
-        templateId: args.template,
-        name,
-        agentKind,
-        ...(args.repoPath ? { repoPath: args.repoPath } : {}),
-      },
-    )
+    const client = clientFor(args)
+    const projectId = positiveId(resolveProjectId(args))
+    const host = args.host
+      ? findHost(await client.workerCreations.hosts(projectId), args.host)
+      : null
+    const creation = await client.workerCreations.create(projectId, {
+      templateId: args.template,
+      name,
+      agentKind,
+      ...(args.repoPath ? { repoPath: args.repoPath } : {}),
+      ...(host ? { hostId: host.id } : {}),
+    })
     console.log(renderOne(creation, fmtWorkerCreation, Boolean(args.json)))
   },
 })

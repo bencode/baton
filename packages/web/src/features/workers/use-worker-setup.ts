@@ -1,4 +1,10 @@
-import type { CreateWorkerInput, Id, WorkerCreation, WorkerTemplate } from '@baton/shared'
+import type {
+  CreateWorkerInput,
+  HostOption,
+  Id,
+  WorkerCreation,
+  WorkerTemplate,
+} from '@baton/shared'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import type { AsyncState } from '../../hooks/use-async'
@@ -6,6 +12,7 @@ import { subscribeProject } from '../projects/project-stream'
 
 export type WorkerSetupState = {
   templates: AsyncState<WorkerTemplate[]>
+  hosts: HostOption[]
   creations: AsyncState<WorkerCreation[]>
   creating: boolean
   createError: Error | null
@@ -20,6 +27,7 @@ const asError = (error: unknown): Error =>
 export const useWorkerSetup = (projectId: Id): WorkerSetupState => {
   const api = useApi()
   const [templates, setTemplates] = useState(initial<WorkerTemplate[]>)
+  const [hosts, setHosts] = useState<HostOption[]>([])
   const [creations, setCreations] = useState(initial<WorkerCreation[]>)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<Error | null>(null)
@@ -35,6 +43,7 @@ export const useWorkerSetup = (projectId: Id): WorkerSetupState => {
     let templatePending = false
     let creationPending = false
     setTemplates(initial())
+    setHosts([])
     setCreations(initial())
     setCreating(false)
     setCreateError(null)
@@ -42,9 +51,14 @@ export const useWorkerSetup = (projectId: Id): WorkerSetupState => {
       templatePending = true
       const sequence = ++templateSequence
       try {
-        const data = await api.workerCreations.templates(projectId)
-        if (current.alive && sequence === templateSequence)
+        const [data, options] = await Promise.all([
+          api.workerCreations.templates(projectId),
+          api.workerCreations.hosts(projectId),
+        ])
+        if (current.alive && sequence === templateSequence) {
           setTemplates({ data, loading: false, error: null })
+          setHosts(options)
+        }
       } catch (error) {
         console.error('[worker-setup] templates failed', error)
         if (current.alive && sequence === templateSequence)
@@ -115,5 +129,5 @@ export const useWorkerSetup = (projectId: Id): WorkerSetupState => {
     [api, projectId, refresh],
   )
 
-  return { templates, creations, creating, createError, refresh, create }
+  return { templates, hosts, creations, creating, createError, refresh, create }
 }

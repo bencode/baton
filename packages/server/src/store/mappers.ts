@@ -5,6 +5,7 @@ import type {
   AttemptResult,
   Channel,
   ChannelMessage,
+  Host,
   Id,
   Loop,
   LoopStatus,
@@ -31,6 +32,7 @@ import type {
   Artifact as DbArtifact,
   Channel as DbChannel,
   ChannelMessage as DbChannelMessage,
+  Host as DbHost,
   Loop as DbLoop,
   Project as DbProject,
   Requirement as DbRequirement,
@@ -49,6 +51,12 @@ import type {
 import type { StoredArtifact, UserRecord } from './types.ts'
 
 const parseJson = <T>(s: string): T => JSON.parse(s) as T
+
+export const toHost = ({ id, name, createdAt }: DbHost): Host => ({
+  id,
+  name,
+  createdAt: createdAt.getTime(),
+})
 
 export const toWorkerCreation = (r: DbWorkerCreation): WorkerCreation => ({
   ...r,

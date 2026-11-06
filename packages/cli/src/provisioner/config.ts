@@ -17,7 +17,8 @@ export type ProvisionerConfig = {
   cliPath: string
   nodePath?: string
   workerEnv: Record<string, string>
-  templates: Record<ConfiguredWorkerTemplateId, WorkerTemplateConfig>
+  // Only the templates this host offers; a machine usually holds one provider's key.
+  templates: Partial<Record<ConfiguredWorkerTemplateId, WorkerTemplateConfig>>
 }
 
 const forbiddenEnv = new Set([
@@ -56,9 +57,9 @@ const environment = (value: unknown): Record<string, string> => {
 const templates = (value: unknown): ProvisionerConfig['templates'] => {
   if (!object(value)) throw new Error('templates must be an object')
   return Object.fromEntries(
-    WORKER_TEMPLATES.map(template => {
+    WORKER_TEMPLATES.filter(template => value[template.id] !== undefined).map(template => {
       const raw = value[template.id]
-      if (!object(raw)) throw new Error(`template ${template.id} must be configured`)
+      if (!object(raw)) throw new Error(`template ${template.id} must be an object`)
       const workerEnv = environment(raw.workerEnv)
       if (template.id === 'mini-codex') {
         if (raw.pi !== undefined) throw new Error('mini-codex does not support pi')

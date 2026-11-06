@@ -203,6 +203,7 @@ export const WorkerCreationProgress = ({
               templateId: creation.templateId,
               name: creation.name,
               agentKind: creation.agentKind,
+              hostId: creation.hostId,
             })
           }
           className="w-fit text-xs text-ui-muted underline"

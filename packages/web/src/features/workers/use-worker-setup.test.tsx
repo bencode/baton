@@ -9,6 +9,7 @@ import { useWorkerSetup } from './use-worker-setup'
 const creation: WorkerCreation = {
   id: 1,
   projectId: 42,
+  hostId: 1,
   machineId: 'mini',
   templateId: 'mini-local',
   name: 'app',
@@ -32,6 +33,7 @@ const deferred = <T,>() => {
   return { promise, resolve }
 }
 const client = () => ({
+  hosts: vi.fn(async () => []),
   templates: vi.fn(async () => []),
   listByProject: vi.fn(async () => [creation]),
   create: vi.fn(async () => creation),

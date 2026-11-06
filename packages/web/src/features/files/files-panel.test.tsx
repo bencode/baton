@@ -14,6 +14,7 @@ const worker = (
   name: string,
   connected: boolean,
   directory: string | null = null,
+  hostId: number | null = directory === null ? null : 1,
 ): ProjectWorkerView => ({
   id,
   projectId: 1,
@@ -24,6 +25,7 @@ const worker = (
   createdAt: 0,
   connected,
   directory,
+  hostId,
 })
 
 const directories: Record<string, FileDirectory> = {
@@ -123,6 +125,13 @@ test('workers sharing a directory are one node, read through an online worker', 
   expect(screen.queryByText('离线')).toBeNull()
   expect(files.branches).toHaveBeenCalledTimes(1)
   expect(files.branches).toHaveBeenCalledWith(2, expect.anything())
+})
+
+test('the same path on two hosts is two directories', async () => {
+  setup([worker(1, 'deepseek', true, '/mini/shared', 1), worker(2, 'glm', true, '/mini/shared', 2)])
+  expect(await screen.findByRole('button', { name: /^deepseek/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /^glm/ })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /deepseek、glm/ })).toBeNull()
 })
 
 test('an offline worker can be expanded but is never queried', async () => {

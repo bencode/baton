@@ -5,18 +5,18 @@ import { streamSSE } from 'hono/streaming'
 // them by key (an item appended between subscribe and load shows up in both).
 // Used by /sessions/:id/stream; the project/worker streams are live-only.
 type Replay<T> = { load: () => Promise<T[]>; keyOf: (item: T) => string | number }
-type StreamOpts<T> = { onClose?: () => void; replay?: Replay<T> }
+type StreamOpts<T> = { onClose?: () => void; replay?: Replay<T>; stop?: AbortSignal }
 
 // Shared SSE pump for a pub/sub channel. Subscribes via `subscribe(push)` first
 // (so nothing is missed during an optional replay), serializes each item as a
 // JSON SSE message, keepalives every 30s, and tears down (unsubscribe + optional
-// onClose) on disconnect.
+// onClose) on disconnect or when `stop` aborts.
 export const streamBus = <T>(
   c: Context,
   subscribe: (push: (item: T) => void) => () => void,
   opts: StreamOpts<T> = {},
 ) => {
-  const signal = c.req.raw.signal
+  const signal = opts.stop ? AbortSignal.any([c.req.raw.signal, opts.stop]) : c.req.raw.signal
   return streamSSE(c, async stream => {
     let resolve = (): void => {}
     const pending: T[] = []

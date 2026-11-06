@@ -1,13 +1,21 @@
-import type { CreateWorkerInput, Id, WorkerCreation, WorkerTemplate } from '@baton/shared'
+import type {
+  CreateWorkerInput,
+  HostOption,
+  Id,
+  WorkerCreation,
+  WorkerTemplate,
+} from '@baton/shared'
 import { request } from './request.ts'
 
 export type WorkerCreationsClient = {
+  hosts(projectId: Id): Promise<HostOption[]>
   templates(projectId: Id): Promise<WorkerTemplate[]>
   create(projectId: Id, input: CreateWorkerInput): Promise<WorkerCreation>
   listByProject(projectId: Id): Promise<WorkerCreation[]>
   get(id: Id): Promise<WorkerCreation>
 }
 export const workerCreationsClient = (baseUrl: string): WorkerCreationsClient => ({
+  hosts: projectId => request(`${baseUrl}/projects/${projectId}/hosts`, { method: 'GET' }),
   templates: projectId =>
     request(`${baseUrl}/projects/${projectId}/worker-templates`, { method: 'GET' }),
   create: (projectId, input) =>

@@ -1,4 +1,6 @@
 import type {
+  AdminHost,
+  HostCredential,
   Loop,
   Project,
   SessionView,
@@ -15,6 +17,10 @@ export const fmtWorkerTemplate = (t: WorkerTemplate): string =>
   `${t.id}  ${t.name}  [${t.available ? 'available' : 'unavailable'}]  ${t.agentKinds.join(', ')}`
 export const fmtWorkerCreation = (c: WorkerCreation): string =>
   `${c.id}  [${c.status}/${c.step ?? 'pending'}]  ${c.name}  ${c.agentKind}${c.workerId === null ? '' : `  W-${c.workerId}`}${c.error ? `  ${c.error}` : ''}`
+export const fmtHost = (h: AdminHost): string =>
+  `${h.id}  ${h.name}  [${h.online ? 'online' : 'offline'}]  workspaces: ${h.workspaceIds.join(',') || '-'}`
+export const fmtHostCredential = ({ host, token }: HostCredential): string =>
+  `${host.id}  ${host.name}\ntoken: ${token}`
 export const fmtProject = (p: Project): string => `${p.id}  ${p.name}`
 export const fmtSession = (s: SessionView): string =>
   `${s.id}  ${s.name}  ${s.attached ? '[active]' : '[inactive]'}  ${s.cwd ?? '(pending)'}`
