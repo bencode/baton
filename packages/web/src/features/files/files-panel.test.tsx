@@ -1,4 +1,4 @@
-import type { FileDirectory, FileSearchResult, WorkerView } from '@baton/shared'
+import type { FileDirectory, FileSearchResult, ProjectWorkerView } from '@baton/shared'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { Api } from '../../api'
@@ -9,7 +9,12 @@ import { FilesPanel } from './files-panel'
 
 afterEach(cleanup)
 
-const worker = (id: number, name: string, connected: boolean): WorkerView => ({
+const worker = (
+  id: number,
+  name: string,
+  connected: boolean,
+  directory: string | null = null,
+): ProjectWorkerView => ({
   id,
   projectId: 1,
   agentKind: 'claude-code',
@@ -18,6 +23,7 @@ const worker = (id: number, name: string, connected: boolean): WorkerView => ({
   hostname: `h-${id}`,
   createdAt: 0,
   connected,
+  directory,
 })
 
 const directories: Record<string, FileDirectory> = {
@@ -36,7 +42,13 @@ const directories: Record<string, FileDirectory> = {
   },
 }
 
-const setup = () => {
+const defaultWorkers = [
+  worker(1, 'offline-box', false),
+  worker(2, 'mac-mini', true),
+  worker(3, 'colima', true),
+]
+
+const setup = (workers = defaultWorkers) => {
   const files = {
     branches: vi.fn(async () => [
       { name: 'main', worktree: '/repo', commit: 'a'.repeat(40), current: true },
@@ -58,11 +70,7 @@ const setup = () => {
   }
   const api = {
     workers: {
-      listByProject: vi.fn(async () => [
-        worker(1, 'offline-box', false),
-        worker(2, 'mac-mini', true),
-        worker(3, 'colima', true),
-      ]),
+      listByProject: vi.fn(async () => workers),
     },
     files,
   } as unknown as Api
@@ -101,6 +109,20 @@ test('only the first online worker and its own branch load, one level at a time'
     'plan.md',
   )
   expect(files.view).not.toHaveBeenCalled()
+})
+
+test('workers sharing a directory are one node, read through an online worker', async () => {
+  const { files } = setup([
+    worker(1, 'deepseek', false, '/mini/shared'),
+    worker(2, 'glm', true, '/mini/shared'),
+    worker(3, 'pi', true, '/mini/other'),
+  ])
+  expect(await screen.findByText('README.md')).toBeTruthy()
+  expect(screen.getByRole('button', { name: /deepseek、glm/ }).title).toBe('/mini/shared')
+  expect(screen.getByRole('button', { name: /^pi/ })).toBeTruthy()
+  expect(screen.queryByText('离线')).toBeNull()
+  expect(files.branches).toHaveBeenCalledTimes(1)
+  expect(files.branches).toHaveBeenCalledWith(2, expect.anything())
 })
 
 test('an offline worker can be expanded but is never queried', async () => {

@@ -235,6 +235,71 @@ test(
 )
 
 test(
+  'a shared directory keeps its repository and owner while the new worker gets its own identity',
+  mac,
+  async () => {
+    const f = await fixture()
+    const signal = new AbortController().signal
+    await provisionWorker(f.config, f.creation, f.client, signal)
+    const owner = await readFile(join(f.repo, '.baton.json'), 'utf8')
+    const head = execFileSync('git', ['-C', f.repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' })
+    f.reports.length = 0
+    const creation = { ...f.creation, id: 10, machineId: 'shared-id', repoPath: f.repo }
+    await provisionWorker(f.config, creation, f.client, signal)
+    assert.deepEqual(
+      f.reports.map(report => (report.status === 'running' ? report.step : report.status)),
+      ['directory', 'git', 'register', 'start', 'connect', 'succeeded'],
+    )
+    assert.equal(await readFile(join(f.repo, '.baton.json'), 'utf8'), owner)
+    assert.equal(
+      execFileSync('git', ['-C', f.repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }),
+      head,
+    )
+    assert.equal(existsSync(join(f.config.projectsRoot, 'project-3/creation-10')), false)
+    const agent = JSON.parse(
+      execFileSync(
+        '/usr/bin/plutil',
+        [
+          '-convert',
+          'json',
+          '-o',
+          '-',
+          join(f.home, 'Library/LaunchAgents/dev.fmap.baton-worker-creation-10.plist'),
+        ],
+        { encoding: 'utf8' },
+      ),
+    )
+    const config = join(agent.EnvironmentVariables.XDG_DATA_HOME, 'worker.json')
+    assert.equal(agent.WorkingDirectory, f.repo)
+    assert.deepEqual(agent.ProgramArguments.slice(2), ['worker', 'run', '--config', config])
+    assert.equal((await stat(config)).mode & 0o777, 0o600)
+    assert.equal(JSON.parse(await readFile(config, 'utf8')).worker.apiToken, 'worker-secret')
+  },
+)
+
+test('a directory that cannot be shared fails before the worker is registered', mac, async () => {
+  const f = await fixture()
+  const signal = new AbortController().signal
+  await provisionWorker(f.config, f.creation, f.client, signal)
+  const share = (repoPath: string, id: number) =>
+    provisionWorker(f.config, { ...f.creation, id, repoPath }, f.client, signal)
+  const foreign = join(f.config.projectsRoot, 'project-4/creation-1')
+  const plain = join(f.config.projectsRoot, 'project-3/plain')
+  await mkdir(foreign, { recursive: true })
+  await mkdir(plain)
+  f.reports.length = 0
+  await assert.rejects(share(foreign, 10), /unsafe directory/)
+  await assert.rejects(share(join(f.repo, '.git'), 11), /unsafe directory/)
+  await assert.rejects(share(plain, 12), /not a Git repository/)
+  execFileSync('git', ['-C', join(f.config.projectsRoot, 'project-3'), 'init'])
+  await assert.rejects(share(plain, 13), /not the root of a Git work tree/)
+  assert.equal(
+    f.reports.some(report => report.status === 'running' && report.step === 'register'),
+    false,
+  )
+})
+
+test(
   'Git failure stops before registration and launchd failure retains the registered resources',
   mac,
   async () => {

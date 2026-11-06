@@ -1,4 +1,9 @@
-import type { CreateWorkerInput, WorkerCreation, WorkerTemplateId } from '@baton/shared'
+import {
+  type CreateWorkerInput,
+  reusableDirectories,
+  type WorkerCreation,
+  type WorkerTemplateId,
+} from '@baton/shared'
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError } from '../../api'
 import { SelectControl } from '../../components/select-control'
@@ -7,6 +12,7 @@ import type { WorkerSetupState } from './use-worker-setup'
 
 export const createErrorText = (error: Error): string => {
   if (error instanceof ApiError) {
+    if (error.status === 400) return '所选目录已不可用，请刷新后重新选择。'
     if (error.status === 409) return '名称已被占用，请检查已有执行环境，或换一个名称。'
     if (error.status === 503) return '暂时无法使用已有机器，请稍后重试，或选择“连接自己的机器”。'
     if (error.status === 401) return '登录已失效，请重新登录后继续。'
@@ -20,6 +26,8 @@ type Props = {
   initialInput?: CreateWorkerInput
   onCreated(creation: WorkerCreation): void
 }
+
+const directoryName = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
 const providerLabels: Partial<Record<WorkerTemplateId, string>> = {
   'mini-glm-codeplan': '智谱 GLM',
@@ -38,6 +46,9 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
   const [selection, setSelection] = useState(
     initialInput ? `${initialInput.templateId}:${initialInput.agentKind}` : null,
   )
+  const [directory, setDirectory] = useState('')
+  const directories = reusableDirectories(setup.creations.data ?? [])
+  const repoPath = directories.find(item => item.path === directory)?.path
   const templates = setup.templates.data ?? []
   const options = (['claude-code', 'pi', 'codex'] as const).flatMap(agentKind =>
     templates
@@ -65,6 +76,7 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
       templateId: selected.template.id,
       name: name.trim(),
       agentKind: selected.agentKind,
+      ...(repoPath ? { repoPath } : {}),
     })
     if (creation) onCreated(creation)
   }
@@ -112,8 +124,29 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           ))}
         </SelectControl>
       </label>
+      {directories.length > 0 && (
+        <label className="mg-field" htmlFor={`${fieldId}-directory`}>
+          项目目录
+          <SelectControl
+            id={`${fieldId}-directory`}
+            value={repoPath ?? ''}
+            onChange={event => setDirectory(event.target.value)}
+            disabled={setup.creating}
+            className="w-full"
+          >
+            <option value="">新建目录</option>
+            {directories.map(item => (
+              <option key={item.path} value={item.path}>
+                {directoryName(item.path)} · {item.workerNames.join('、')}
+              </option>
+            ))}
+          </SelectControl>
+        </label>
+      )}
       <p className="text-xs leading-5 text-ui-muted">
-        Baton 会创建本地 Git 仓库，远程仓库可稍后关联。
+        {repoPath
+          ? '与所选目录下的执行环境共用代码和分支，不会新建仓库。'
+          : 'Baton 会创建本地 Git 仓库，远程仓库可稍后关联。'}
       </p>
       {setup.templates.error ? (
         <p role="alert" className="text-xs text-ui-danger break-words">

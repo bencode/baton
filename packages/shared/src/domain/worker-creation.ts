@@ -24,8 +24,10 @@ export type CreateWorkerInput = {
   templateId: WorkerTemplateId
   name: string
   agentKind: AgentKind
+  // Share this project directory; omitted creates a new one.
+  repoPath?: string
 }
-export type WorkerCreation = CreateWorkerInput & {
+export type WorkerCreation = Omit<CreateWorkerInput, 'repoPath'> & {
   id: Id
   projectId: Id
   machineId: string
@@ -49,4 +51,14 @@ export type WorkerTemplate = {
   name: string
   agentKinds: AgentKind[]
   available: boolean
+}
+export type ReusableDirectory = { path: string; workerNames: string[] }
+
+// Directories of the workers still alive in a project, each with who works there.
+export const reusableDirectories = (creations: WorkerCreation[]): ReusableDirectory[] => {
+  const directories = creations.reduce((found, { status, workerId, repoPath, name }) => {
+    if (status !== 'succeeded' || workerId === null || repoPath === null) return found
+    return found.set(repoPath, [...(found.get(repoPath) ?? []), name])
+  }, new Map<string, string[]>())
+  return [...directories].map(([path, workerNames]) => ({ path, workerNames }))
 }

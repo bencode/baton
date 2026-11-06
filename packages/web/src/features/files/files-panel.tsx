@@ -3,6 +3,7 @@ import { type ReactNode, useMemo, useState } from 'react'
 import { projectViewPath } from '../../app/route'
 import { RefreshIcon } from '../../components/icons'
 import { useWorkers } from '../workers/use-workers'
+import { groupByDirectory } from './directory-groups'
 import type { TreeEnv } from './directory-node'
 import { useTreeToggles } from './tree-toggles'
 import { WorkerNode } from './worker-node'
@@ -14,8 +15,9 @@ type FilesPanelProps = {
   renderToolbar(actions: ReactNode): ReactNode
 }
 
-// Files belong to workers: the tree is Worker → checked-out branch → files, each
-// level requested only when expanded. The first online worker starts expanded.
+// Files belong to workers' directories: the tree is directory → checked-out branch
+// → files, each level requested only when expanded. Workers sharing a directory are
+// one node, and the first online one starts expanded.
 export const FilesPanel = ({ projectId, activeId, open, renderToolbar }: FilesPanelProps) => {
   const workers = useWorkers(projectId)
   const toggles = useTreeToggles()
@@ -28,7 +30,8 @@ export const FilesPanel = ({ projectId, activeId, open, renderToolbar }: FilesPa
     setRefreshKey(value => value + 1)
     workers.refresh()
   }
-  const firstOnline = workers.data?.find(worker => worker.connected)
+  const groups = groupByDirectory(workers.data ?? [])
+  const firstOnline = groups.find(group => group.host.connected)
   return (
     <section aria-label="Files" className="wb-category-panel">
       {renderToolbar(
@@ -70,12 +73,12 @@ export const FilesPanel = ({ projectId, activeId, open, renderToolbar }: FilesPa
             </button>
           </div>
         )}
-        {workers.data?.map(worker => (
+        {groups.map(group => (
           <WorkerNode
-            key={worker.id}
+            key={group.key}
             env={env}
-            worker={worker}
-            defaultOpen={worker.id === firstOnline?.id}
+            group={group}
+            defaultOpen={group.key === firstOnline?.key}
           />
         ))}
       </div>

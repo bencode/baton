@@ -78,8 +78,17 @@ export const registerProjectRoutes = (
     const id = intParam(c.req.param('id'))
     const denied = await assertProjectAccess(c, store, id)
     if (denied) return denied
-    const list = await store.workers.listByProject(id)
-    return c.json(list.map(w => workerWithView(w, commands.has(w.id))))
+    const [list, creations] = await Promise.all([
+      store.workers.listByProject(id),
+      store.workerCreations.listByProject(id),
+    ])
+    const directories = new Map(creations.map(creation => [creation.workerId, creation.repoPath]))
+    return c.json(
+      list.map(w => ({
+        ...workerWithView(w, commands.has(w.id)),
+        directory: directories.get(w.id) ?? null,
+      })),
+    )
   })
   // Project change stream: lightweight invalidation signals so the web client
   // refetches the affected query (sessions / workers / tasks) instead of
