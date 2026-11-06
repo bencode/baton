@@ -15,6 +15,7 @@ afterEach(() => {
 const creation: WorkerCreation = {
   id: 5,
   projectId: 42,
+  hostId: 1,
   machineId: 'mini',
   templateId: 'mini-local',
   name: 'app',
@@ -38,6 +39,7 @@ const readySetup = (): WorkerSetupState => ({
     loading: false,
     error: null,
   },
+  hosts: [{ id: 1, name: 'mac-1', online: true }],
   creations: { data: [creation], loading: false, error: null },
   creating: false,
   createError: null,
@@ -118,6 +120,7 @@ test.each(configurations)(
       templateId,
       name: 'my-app',
       agentKind,
+      hostId: 1,
     })
     await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith(creation))
     expect(mintToken).not.toHaveBeenCalled()
@@ -141,6 +144,7 @@ test('retry preserves the provider and agent before switching to Codex', async (
     templateId: 'mini-dashscope-codeplan',
     name: 'pi-worker',
     agentKind: 'pi',
+    hostId: 1,
   })
   const codex = screen.getByRole('option', { name: 'Codex · OpenAI' }) as HTMLOptionElement
   fireEvent.change(select, { target: { value: codex.value } })
@@ -149,6 +153,7 @@ test('retry preserves the provider and agent before switching to Codex', async (
     templateId: 'mini-codex',
     name: 'pi-worker',
     agentKind: 'codex',
+    hostId: 1,
   })
 })
 
@@ -172,7 +177,7 @@ test.each(['loading', 'unavailable', 'error'] as const)(
 
 test.each([
   [new ApiError('conflict', 409), /名称已被占用/],
-  [new ApiError('offline', 503), /暂时无法使用已有机器/],
+  [new ApiError('offline', 503), /所选机器暂时离线/],
   [new DOMException('timed out', 'TimeoutError'), /可能已接受/],
   [new TypeError('Failed to fetch'), /先刷新状态/],
 ] as const)('submission errors leave fields editable and expose recovery: %s', (error, message) => {
@@ -209,6 +214,59 @@ test('a live worker directory can be shared; otherwise a new one is created', as
   )
 })
 
+test('one host is implied; with several, the chosen one decides the directories offered', async () => {
+  const setup = readySetup()
+  setup.creations.data = [{ ...creation, status: 'succeeded', error: null }]
+  renderDialog(setup)
+  expect(screen.queryByRole('combobox', { name: '机器' })).toBeNull()
+  cleanup()
+
+  setup.hosts = [
+    { id: 1, name: 'mac-1', online: true },
+    { id: 2, name: 'mac-2', online: true },
+    { id: 3, name: 'mac-3', online: false },
+  ]
+  renderDialog(setup)
+  const host = screen.getByRole('combobox', { name: '机器' }) as HTMLSelectElement
+  expect(host.value).toBe('1')
+  expect((screen.getByRole('option', { name: 'mac-3 · 离线' }) as HTMLOptionElement).disabled).toBe(
+    true,
+  )
+  fireEvent.change(screen.getByLabelText(/项目目录/), { target: { value: '/mini/projects/app' } })
+  expect(screen.getByText(/不会新建仓库/)).toBeTruthy()
+
+  fireEvent.change(host, { target: { value: '2' } })
+  expect(screen.queryByLabelText(/项目目录/)).toBeNull()
+  expect(screen.getByText(/会创建本地 Git 仓库/)).toBeTruthy()
+  fireEvent.change(screen.getByLabelText('环境名称'), { target: { value: 'placed' } })
+  fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
+  await vi.waitFor(() =>
+    expect(setup.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'placed', hostId: 2 }),
+    ),
+  )
+  expect(setup.create).not.toHaveBeenCalledWith(
+    expect.objectContaining({ repoPath: expect.anything() }),
+  )
+})
+
+test('a retry keeps its host, and creation waits while that host is offline', () => {
+  const setup = readySetup()
+  setup.hosts = [
+    { id: 1, name: 'mac-1', online: true },
+    { id: 2, name: 'mac-2', online: false },
+  ]
+  renderDialog(setup, {
+    kind: 'add',
+    initialInput: { templateId: 'mini-codex', name: 'again', agentKind: 'codex', hostId: 2 },
+  })
+  const host = screen.getByRole('combobox', { name: '机器' }) as HTMLSelectElement
+  expect(host.value).toBe('2')
+  const submit = screen.getByRole('button', { name: '创建执行环境' }) as HTMLButtonElement
+  expect(submit.disabled).toBe(true)
+  expect(screen.getByText(/当前配置暂时不可用/)).toBeTruthy()
+})
+
 test('failed details preserve resource information and refill only on explicit action', () => {
   const { onCreateAnother } = renderDialog(readySetup(), { kind: 'creation', creationId: 5 })
   expect(screen.getByRole('alert').textContent).toContain('Connection timed out')
@@ -221,6 +279,7 @@ test('failed details preserve resource information and refill only on explicit a
     templateId: 'mini-local',
     name: 'app',
     agentKind: 'codex',
+    hostId: 1,
   })
 })
 

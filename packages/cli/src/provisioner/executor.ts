@@ -9,7 +9,7 @@ import { workerProjectConfig } from '../project-config.ts'
 import type { ProvisionerClient } from './client.ts'
 import { commandEnvironment, type ProvisionerConfig } from './config.ts'
 import { launchWorkerAgent, workerStatePath } from './launchd.ts'
-import { workerTemplateEnvironment } from './worker-template.ts'
+import { requireWorkerTemplate, workerTemplateEnvironment } from './worker-template.ts'
 
 const directory = async (path: string): Promise<void> => {
   try {
@@ -111,6 +111,7 @@ export const provisionWorker = async (
   client: ProvisionerClient,
   signal: AbortSignal,
 ): Promise<void> => {
+  requireWorkerTemplate(config, creation)
   // A pending creation only has a repoPath when it was asked to share one.
   const shared = creation.repoPath !== null
   const repoPath =

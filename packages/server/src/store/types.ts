@@ -14,6 +14,8 @@ import type {
   ExecutionState,
   FinishInput,
   HeartbeatResult,
+  Host,
+  HostCredential,
   Id,
   Loop,
   LoopStatus,
@@ -188,12 +190,23 @@ export type FinishedTurn = {
   replyText: string | null
 }
 export type PushSubscriptionRecord = { userId: Id; endpoint: string; p256dh: string; auth: string }
+export type HostRecord = Host & { workspaceIds: Id[] }
 export type Store = {
+  hosts: {
+    create(input: { name: string }): Promise<HostCredential>
+    get(id: Id): Promise<Host | null>
+    getByToken(token: string): Promise<Host | null>
+    list(): Promise<HostRecord[]>
+    listByWorkspace(workspaceId: Id): Promise<Host[]>
+    rotateToken(id: Id): Promise<HostCredential>
+    assign(hostId: Id, workspaceId: Id): Promise<void>
+    unassign(hostId: Id, workspaceId: Id): Promise<void>
+  }
   workerCreations: {
-    create(input: CreateWorkerInput & { projectId: Id }): Promise<WorkerCreation>
+    create(input: CreateWorkerInput & { projectId: Id; hostId: Id }): Promise<WorkerCreation>
     get(id: Id): Promise<WorkerCreation | null>
     listByProject(projectId: Id): Promise<WorkerCreation[]>
-    worklist(): Promise<WorkerCreation[]>
+    worklist(hostId: Id): Promise<WorkerCreation[]>
     update(id: Id, patch: WorkerCreationPatch): Promise<WorkerCreation>
   }
   inputs: {

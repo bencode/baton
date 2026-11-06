@@ -26,10 +26,13 @@ export type CreateWorkerInput = {
   agentKind: AgentKind
   // Share this project directory; omitted creates a new one.
   repoPath?: string
+  // Omitted when the project's workspace has exactly one host.
+  hostId?: Id
 }
-export type WorkerCreation = Omit<CreateWorkerInput, 'repoPath'> & {
+export type WorkerCreation = Omit<CreateWorkerInput, 'repoPath' | 'hostId'> & {
   id: Id
   projectId: Id
+  hostId: Id
   machineId: string
   status: WorkerCreationStatus
   step: WorkerCreationStep | null
@@ -54,10 +57,16 @@ export type WorkerTemplate = {
 }
 export type ReusableDirectory = { path: string; workerNames: string[] }
 
-// Directories of the workers still alive in a project, each with who works there.
-export const reusableDirectories = (creations: WorkerCreation[]): ReusableDirectory[] => {
-  const directories = creations.reduce((found, { status, workerId, repoPath, name }) => {
-    if (status !== 'succeeded' || workerId === null || repoPath === null) return found
+// Directories of the workers still alive on one host of a project, each with who
+// works there. The same path on two hosts is two directories.
+export const reusableDirectories = (
+  creations: WorkerCreation[],
+  hostId: Id,
+): ReusableDirectory[] => {
+  const directories = creations.reduce((found, creation) => {
+    const { status, workerId, repoPath, name } = creation
+    if (creation.hostId !== hostId || status !== 'succeeded' || workerId === null) return found
+    if (repoPath === null) return found
     return found.set(repoPath, [...(found.get(repoPath) ?? []), name])
   }, new Map<string, string[]>())
   return [...directories].map(([path, workerNames]) => ({ path, workerNames }))

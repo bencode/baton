@@ -28,8 +28,8 @@ export type Worker = {
 export type WorkerView = Worker & { connected: boolean }
 
 // A project's worker list also says where each worker runs, which is how workers
-// sharing a directory are found. Null for a worker registered by hand.
-export type ProjectWorkerView = WorkerView & { directory: string | null }
+// sharing a directory are found. Both are null for a worker registered by hand.
+export type ProjectWorkerView = WorkerView & { directory: string | null; hostId: Id | null }
 
 // Commands the server pushes to a Worker over its SSE command stream
 // (GET /workers/me/stream). The Worker is a persistent listener that

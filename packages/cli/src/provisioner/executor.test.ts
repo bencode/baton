@@ -71,6 +71,7 @@ exit ${launchFails ? 1 : 0}
   const creation: WorkerCreation = {
     id: 9,
     projectId: 3,
+    hostId: 1,
     name: '中文 worker / &',
     templateId: 'mini-local',
     agentKind: 'codex',
@@ -181,6 +182,7 @@ test(
         }),
       )
       const profile = f.config.templates[templateId]
+      assert.ok(profile)
       assert.equal(
         agent.EnvironmentVariables.ANTHROPIC_AUTH_TOKEN,
         profile.workerEnv.ANTHROPIC_AUTH_TOKEN,
@@ -406,5 +408,37 @@ test(
       }),
     )
     await assert.rejects(loadProvisionerConfig(configPath), /requires Claude and Pi credentials/)
+  },
+)
+
+test(
+  'a host offers only the templates it configures, and refuses others untouched',
+  mac,
+  async () => {
+    const f = await fixture()
+    const { 'mini-codex': codex } = f.config.templates
+    assert.ok(codex)
+    const configPath = join(f.dir, 'one-template.json')
+    await writeFile(
+      configPath,
+      JSON.stringify({ ...f.config, templates: { 'mini-codex': codex } }),
+      {
+        mode: 0o600,
+      },
+    )
+    const config = await loadProvisionerConfig(configPath)
+    assert.deepEqual(Object.keys(config.templates), ['mini-codex'])
+
+    const creation: WorkerCreation = {
+      ...f.creation,
+      templateId: 'mini-glm-codeplan',
+      agentKind: 'claude-code',
+    }
+    await assert.rejects(
+      provisionWorker(config, creation, f.client, new AbortController().signal),
+      /mini-glm-codeplan is not configured on this host/,
+    )
+    assert.deepEqual(f.reports, [])
+    await assert.rejects(stat(f.repo), { code: 'ENOENT' })
   },
 )

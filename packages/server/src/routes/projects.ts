@@ -82,11 +82,12 @@ export const registerProjectRoutes = (
       store.workers.listByProject(id),
       store.workerCreations.listByProject(id),
     ])
-    const directories = new Map(creations.map(creation => [creation.workerId, creation.repoPath]))
+    const byWorker = new Map(creations.map(creation => [creation.workerId, creation]))
     return c.json(
       list.map(w => ({
         ...workerWithView(w, commands.has(w.id)),
-        directory: directories.get(w.id) ?? null,
+        directory: byWorker.get(w.id)?.repoPath ?? null,
+        hostId: byWorker.get(w.id)?.hostId ?? null,
       })),
     )
   })

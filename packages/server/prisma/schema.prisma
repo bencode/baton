@@ -43,6 +43,7 @@ model Workspace {
   projects Project[]
   members  UserWorkspace[]
   channels Channel[]
+  hosts    HostWorkspace[]
 }
 
 // User ↔ Workspace membership (the domain-isolation binding). Pure membership,
@@ -253,9 +254,36 @@ model Worker {
   @@unique([projectId, name])
 }
 
+// A machine running a Provisioner. token authenticates that Provisioner, the
+// same way Worker.apiToken authenticates a worker daemon.
+model Host {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  token     String   @unique
+  createdAt DateTime @default(now())
+
+  workspaces HostWorkspace[]
+  creations  WorkerCreation[]
+}
+
+// Which hosts a workspace's projects may create Workers on. Assigned by an admin;
+// a workspace created later starts with none.
+model HostWorkspace {
+  hostId      Int
+  workspaceId Int
+  createdAt   DateTime @default(now())
+
+  host      Host      @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([hostId, workspaceId])
+  @@index([workspaceId])
+}
+
 model WorkerCreation {
   id         Int       @id @default(autoincrement())
   projectId  Int
+  hostId     Int
   templateId String
   name       String
   agentKind  String
@@ -270,9 +298,11 @@ model WorkerCreation {
   finishedAt DateTime?
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  host    Host    @relation(fields: [hostId], references: [id], onDelete: Restrict)
   worker  Worker? @relation(fields: [workerId], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt])
+  @@index([hostId, status])
   @@index([status])
 }
 

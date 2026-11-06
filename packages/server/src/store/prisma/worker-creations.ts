@@ -12,10 +12,10 @@ export const prismaWorkerCreations = (prisma: PrismaClient): Store['workerCreati
     (await prisma.workerCreation.findMany({ where: { projectId }, orderBy: { id: 'desc' } })).map(
       toWorkerCreation,
     ),
-  worklist: async () =>
+  worklist: async hostId =>
     (
       await prisma.workerCreation.findMany({
-        where: { status: { in: ['pending', 'running'] } },
+        where: { hostId, status: { in: ['pending', 'running'] } },
         orderBy: { id: 'asc' },
       })
     ).map(toWorkerCreation),

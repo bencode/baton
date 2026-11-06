@@ -9,8 +9,10 @@ import type { Store } from '../store/types.ts'
 // `shareSessionId` is set by the cookie gate when a share-allowlisted route
 // carries a valid share grant for that session (see domain-scope sessionAccess).
 // `scopeWsIds` memoizes the accessible-workspace set for one request.
+// `hostId` is set on provisioner routes (see provisionerAuth).
 export type AuthVars = {
   worker: Worker
+  hostId: Id
   userId?: Id
   workerId?: Id
   shareSessionId?: Id

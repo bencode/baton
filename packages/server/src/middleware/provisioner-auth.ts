@@ -1,15 +1,15 @@
-import { timingSafeEqual } from 'node:crypto'
 import type { MiddlewareHandler } from 'hono'
+import type { Store } from '../store/types.ts'
 import type { AppEnv } from '../views.ts'
 
+// The bearer token says which host is calling; every provisioner route acts for
+// that host alone.
 export const provisionerAuth =
-  (token?: string): MiddlewareHandler<AppEnv> =>
+  (store: Store): MiddlewareHandler<AppEnv> =>
   async (c, next) => {
-    if (!token) return c.json({ error: 'mini provisioner is not configured' }, 503)
-    const bearer = (c.req.header('authorization') ?? '').match(/^Bearer (.+)$/)?.[1] ?? ''
-    const actual = Buffer.from(bearer)
-    const expected = Buffer.from(token)
-    if (actual.length !== expected.length || !timingSafeEqual(actual, expected))
-      return c.json({ error: 'unauthorized' }, 401)
+    const bearer = (c.req.header('authorization') ?? '').match(/^Bearer (.+)$/)?.[1]
+    const host = bearer ? await store.hosts.getByToken(bearer) : null
+    if (!host) return c.json({ error: 'unauthorized' }, 401)
+    c.set('hostId', host.id)
     await next()
   }

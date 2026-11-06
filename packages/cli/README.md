@@ -69,7 +69,7 @@ runtime `services/` directory; the run result prints their path.
 
 ## Other commands
 
-`baton init | workspace | project | session` — run
+`baton init | workspace | project | host | session` — run
 `baton <command> --help` for details. The back-office management commands hit
 gated routes; set `BATON_USER` / `BATON_PASS` to log in transparently (the
 worker commands above don't need this).

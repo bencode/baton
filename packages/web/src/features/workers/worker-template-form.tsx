@@ -12,9 +12,9 @@ import type { WorkerSetupState } from './use-worker-setup'
 
 export const createErrorText = (error: Error): string => {
   if (error instanceof ApiError) {
-    if (error.status === 400) return '所选目录已不可用，请刷新后重新选择。'
+    if (error.status === 400) return '所选机器或目录已不可用，请刷新后重新选择。'
     if (error.status === 409) return '名称已被占用，请检查已有执行环境，或换一个名称。'
-    if (error.status === 503) return '暂时无法使用已有机器，请稍后重试，或选择“连接自己的机器”。'
+    if (error.status === 503) return '所选机器暂时离线，请稍后重试，或选择“连接自己的机器”。'
     if (error.status === 401) return '登录已失效，请重新登录后继续。'
     if (error.status === 404) return '此项目不可用，请选择其他项目后继续。'
   }
@@ -46,8 +46,11 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
   const [selection, setSelection] = useState(
     initialInput ? `${initialInput.templateId}:${initialInput.agentKind}` : null,
   )
+  const [hostId, setHostId] = useState(initialInput?.hostId)
   const [directory, setDirectory] = useState('')
-  const directories = reusableDirectories(setup.creations.data ?? [])
+  const hosts = setup.hosts
+  const host = hosts.find(item => item.id === hostId) ?? hosts.find(item => item.online) ?? hosts[0]
+  const directories = host ? reusableDirectories(setup.creations.data ?? [], host.id) : []
   const repoPath = directories.find(item => item.path === directory)?.path
   const templates = setup.templates.data ?? []
   const options = (['claude-code', 'pi', 'codex'] as const).flatMap(agentKind =>
@@ -64,11 +67,12 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
     options.find(option => option.value === selection) ??
     options.find(option => option.agentKind === initialInput?.agentKind) ??
     options[0]
+  const available = selected?.template.available && host?.online
   const disabled =
     setup.creating ||
     setup.templates.loading ||
     !!setup.templates.error ||
-    !selected?.template.available ||
+    !available ||
     !name.trim()
   const submit = async () => {
     if (disabled || !selected) return
@@ -77,6 +81,7 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
       name: name.trim(),
       agentKind: selected.agentKind,
       ...(repoPath ? { repoPath } : {}),
+      ...(host ? { hostId: host.id } : {}),
     })
     if (creation) onCreated(creation)
   }
@@ -105,6 +110,24 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
           placeholder="例如：项目开发、代码审查"
         />
       </label>
+      {hosts.length > 1 && (
+        <label className="mg-field" htmlFor={`${fieldId}-host`}>
+          机器
+          <SelectControl
+            id={`${fieldId}-host`}
+            value={host?.id ?? ''}
+            onChange={event => setHostId(Number(event.target.value))}
+            disabled={setup.creating}
+            className="w-full"
+          >
+            {hosts.map(item => (
+              <option key={item.id} value={item.id} disabled={!item.online}>
+                {item.online ? item.name : `${item.name} · 离线`}
+              </option>
+            ))}
+          </SelectControl>
+        </label>
+      )}
       <label className="mg-field" htmlFor={`${fieldId}-configuration`}>
         Agent 与模型服务
         <SelectControl
@@ -157,7 +180,7 @@ export const WorkerTemplateForm = ({ setup, initialInput, onCreated }: Props) =>
         </p>
       ) : (
         !setup.templates.loading &&
-        !selected?.template.available && (
+        !available && (
           <p className="text-xs text-ui-warning">
             当前配置暂时不可用，请稍后刷新，或选择“连接自己的机器”。{' '}
             <button type="button" onClick={setup.refresh} className="underline">
