@@ -1,7 +1,7 @@
 # @lesscap/baton-cli
 
 The baton CLI: register/run a **worker** on a machine and manage
-workspaces/projects/requirements/tasks/sessions against a baton server.
+workspaces/projects/sessions against a baton server.
 
 A worker is the thing that actually runs agent sessions: it listens to the
 server's command stream and, per session, runs Claude or Codex in the worker’s working directory.
@@ -69,7 +69,7 @@ runtime `services/` directory; the run result prints their path.
 
 ## Other commands
 
-`baton init | workspace | project | requirement | task | session` — run
+`baton init | workspace | project | session` — run
 `baton <command> --help` for details. The back-office management commands hit
 gated routes; set `BATON_USER` / `BATON_PASS` to log in transparently (the
 worker commands above don't need this).

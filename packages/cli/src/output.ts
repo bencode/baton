@@ -1,10 +1,7 @@
 import type {
   Loop,
   Project,
-  Requirement,
   SessionView,
-  Task,
-  TaskComment,
   WorkerCreation,
   WorkerTemplate,
   WorkerView,
@@ -19,14 +16,10 @@ export const fmtWorkerTemplate = (t: WorkerTemplate): string =>
 export const fmtWorkerCreation = (c: WorkerCreation): string =>
   `${c.id}  [${c.status}/${c.step ?? 'pending'}]  ${c.name}  ${c.agentKind}${c.workerId === null ? '' : `  W-${c.workerId}`}${c.error ? `  ${c.error}` : ''}`
 export const fmtProject = (p: Project): string => `${p.id}  ${p.name}`
-export const fmtRequirement = (r: Requirement): string => `${r.code}  [${r.status}]  ${r.title}`
-export const fmtTask = (t: Task): string => `${t.code}  [${t.status}]  ${t.title}`
-export const fmtComment = (c: TaskComment): string =>
-  `${c.workerId !== undefined ? `worker#${c.workerId}` : 'you'}  ${c.body}`
 export const fmtSession = (s: SessionView): string =>
   `${s.id}  ${s.name}  ${s.attached ? '[active]' : '[inactive]'}  ${s.cwd ?? '(pending)'}`
-// Workers wear a global W-N handle (the int id with a prefix) — unlike R-N/T-N
-// these are NOT per-project: W-7 means the same worker from anywhere.
+// Workers wear a global W-N handle (the int id with a prefix): W-7 means the
+// same worker from anywhere.
 export const fmtWorker = (w: WorkerView): string => {
   const offline = w.connected === false ? '  [offline]' : ''
   return `W-${w.id}  ${w.name}  ${w.hostname}  ${w.agentKind}${offline}`

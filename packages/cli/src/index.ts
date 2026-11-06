@@ -7,17 +7,15 @@ import { notify } from './commands/notify.ts'
 import { project } from './commands/project.ts'
 import { provisioner } from './commands/provisioner.ts'
 import { relay } from './commands/relay.ts'
-import { requirement } from './commands/requirement.ts'
 import { service } from './commands/service.ts'
 import { session } from './commands/session.ts'
-import { task } from './commands/task.ts'
 import { worker } from './commands/worker.ts'
 import { workspace } from './commands/workspace.ts'
 
 const main = defineCommand({
   meta: {
     name: 'baton',
-    description: 'baton — run a worker daemon; manage projects / requirements / tasks / sessions',
+    description: 'baton — run a worker daemon; manage projects / sessions',
   },
   // Order matters: high-level verbs first so --help shows them on top.
   subCommands: {
@@ -33,8 +31,6 @@ const main = defineCommand({
     channel,
     workspace,
     project,
-    requirement,
-    task,
   },
 })
 

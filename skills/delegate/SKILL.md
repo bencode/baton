@@ -19,9 +19,8 @@ Worker agents inherit server/project/Worker identity and authentication through
 `BATON_SERVER`, `BATON_PROJECT_ID`, `BATON_WORKER_ID`, and `BATON_WORKER_TOKEN`.
 Manual calls can fall back to `.baton.json` in cwd.
 
-Workers wear a **global W-N handle** (unlike R-N/T-N, which restart per
-project): W-7 means the same worker from anywhere, so a number alone is a
-complete address.
+Workers wear a **global W-N handle**: W-7 means the same worker from anywhere,
+so a number alone is a complete address.
 
 **Your worker token reaches your own workspace.** `project ls --workspace <yours>`,
 `worker ls --project N` and `session create --worker W-N` work for every project
@@ -56,7 +55,7 @@ If a command fails, report the actual error instead of guessing.
   ;;          | grep -q '"attached": true'; do sleep 5; done   # give up ~60s
   ;; 4. send a SELF-CONTAINED brief — the other worker has NONE of your
   ;;    conversation context. Include: goal, repo paths (its add-dirs differ
-  ;;    from yours), acceptance criteria, refs (R-N/T-N/files).
+  ;;    from yours), acceptance criteria, refs (files/issues).
   (baton session send <s.id> "<brief>" --project <s.projectId>)
   ;; 5. reply with the link, do NOT wait for completion
   (reply (str "handed to " target " — https://baton.fmap.dev/s/" (:shareToken s))))

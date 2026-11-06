@@ -2,8 +2,8 @@
 
 **An agent collaboration engine — hand work to your agents, from anywhere.**
 
-A persistent server holds the shared collaboration state: workspaces → projects
-→ requirements (`R-N`) → tasks (`T-N`). *Workers* (`W-N`) — machines running a
+A persistent server holds the shared collaboration state: workspaces → projects. *Workers*
+(`W-N`) — machines running a
 coding agent against a real repo — register themselves and pick up work as
 *sessions*, sharing the worker’s directory while keeping independent Agent conversations. Humans reach the same
 sessions from the web UI, DingTalk, or Feishu; the name is the relay-baton
@@ -19,8 +19,6 @@ metaphor: work handed from node to node.
 
 - **Collaboration dimension only** — specs, docs and code live in git; baton
   stores references, never copies content.
-- **Light GitHub sync** — issues mirror into requirements as number + title +
-  status + link; bodies and discussion stay on GitHub.
 - **Share links** — every session has an unguessable `/s/:token` page; anyone
   with the link can read and write into the conversation.
 - **Interactive terminal** — open any session in a real terminal in the browser

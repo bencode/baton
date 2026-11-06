@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 // item.mjs — work-item sensor: lint / verify / close (ported from relay.py semantics).
 //
-// One entry point for two independent tracks; the ref decides the source:
-//   #12 | 12 | https://github.com/o/r/issues/12  → GitHub issue (via gh)
-//   R-2 | T-3                                    → baton row (via baton CLI)
-// The two tracks never cross — a baton row's body is its own; GitHub issues are
-// their own. (GitHub-side labels/lifecycle follow the relay convention.)
+// A ref is #12 | 12 | https://github.com/o/r/issues/12, read through gh. Labels
+// and lifecycle follow the relay convention.
 // lint   — body has ## Goal / ## Verification / ## Refs, with one ```bash block
 //          immediately after the Verification heading (strict position: that is
 //          what makes extraction deterministic).
@@ -13,12 +10,12 @@
 //          formal definition of "done"; agents never self-report completion.
 // close  — lint → verify → only then: close the issue (completed) with the
 //          verification output + cc the creator + state:needs-verification
-//          label; or, for a baton row, result comment + set-status done.
+//          label.
 //
-// Node ≥20, stdlib only. Requires gh (authed, repo cwd) and baton on PATH.
+// Node ≥20, stdlib only. Requires gh (authed, repo cwd) on PATH.
 
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -44,12 +41,10 @@ export const lintBody = body => {
 
 export const extractVerification = body => body.match(VERIFICATION_BLOCK)?.[1]
 
-export const classifyRef = ref => {
-  if (/^[RT]-\d+$/.test(ref)) return { kind: 'baton', code: ref }
-  if (/^#?\d+$/.test(ref)) return { kind: 'issue', selector: ref.replace('#', '') }
-  if (/^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(ref))
-    return { kind: 'issue', selector: ref }
-  throw new Error(`unrecognized ref "${ref}" (want #N, an issue url, R-N or T-N)`)
+export const issueSelector = ref => {
+  if (/^#?\d+$/.test(ref)) return ref.replace('#', '')
+  if (/^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(ref)) return ref
+  throw new Error(`unrecognized ref "${ref}" (want #N or an issue url)`)
 }
 
 export const renderLint = r => {
@@ -74,25 +69,10 @@ const must = (cmd, args) => {
 }
 const gh = (...args) => must('gh', args)
 const ghTry = (...args) => run('gh', args)
-// BATON_BIN overrides for dev checkouts (e.g. "npx tsx packages/cli/src/index.ts").
-const BATON = (process.env.BATON_BIN ?? 'baton').split(' ')
-const baton = (...args) => must(BATON[0], [...BATON.slice(1), ...args])
 
 const ISSUE_FIELDS = 'number,body,author,assignees,labels,url'
 
-// Resolve a ref to { body, issue?, local? } — the spec lives in the row/issue
-// itself; the two tracks never cross (a baton row uses its own body).
-const loadItem = refStr => {
-  const ref = classifyRef(refStr)
-  if (ref.kind === 'issue') return issuePart(ref.selector)
-  const kind = ref.code.startsWith('R-') ? 'requirement' : 'task'
-  const item = JSON.parse(baton(kind, 'get', ref.code, '--json'))
-  return { body: item.body ?? '', issue: null, local: { kind, code: ref.code } }
-}
-const issuePart = selector => {
-  const issue = JSON.parse(gh('issue', 'view', selector, '--json', ISSUE_FIELDS))
-  return { body: issue.body, issue }
-}
+const loadIssue = ref => JSON.parse(gh('issue', 'view', issueSelector(ref), '--json', ISSUE_FIELDS))
 
 const runVerification = block => {
   const dir = mkdtempSync(join(tmpdir(), 'baton-verify-'))
@@ -115,77 +95,45 @@ const renderVerify = r => {
 
 // Gate shared by verify and close: returns the verify result or null (gate
 // already failed and printed why).
-const lintAndVerify = it => {
-  const lint = lintBody(it.body)
+const lintAndVerify = issue => {
+  const lint = lintBody(issue.body)
   if (!lint.ok) {
     console.error(renderLint(lint))
     return null
   }
-  const result = runVerification(extractVerification(it.body))
+  const result = runVerification(extractVerification(issue.body))
   console.log(renderVerify(result))
   return result.ok ? result : null
 }
 
-const workerId = () => {
-  const injected = process.env.BATON_WORKER_ID
-  if (injected !== undefined) {
-    const id = Number(injected)
-    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('invalid BATON_WORKER_ID')
-    return id
-  }
-  try {
-    const id = JSON.parse(readFileSync('.baton.json', 'utf8')).worker?.id
-    if (id !== undefined && (!Number.isSafeInteger(id) || id <= 0))
-      throw new Error('invalid Worker id in .baton.json')
-    return id
-  } catch (error) {
-    if (error.code === 'ENOENT') return undefined
-    throw error
-  }
-}
-
-const closeIssue = (it, output) => {
+const closeIssue = (issue, output) => {
   ghTry('label', 'create', 'state:needs-verification', '--color', '1d76db')
-  const author = it.issue.author?.login
-  const assignees = (it.issue.assignees ?? []).map(a => a.login)
+  const author = issue.author?.login
+  const assignees = (issue.assignees ?? []).map(a => a.login)
   const cc = author && !assignees.includes(author) ? `\n\ncc @${author} please verify` : ''
-  const n = String(it.issue.number)
+  const n = String(issue.number)
   const comment = `✓ Verification passed\n\n\`\`\`\n${output.trim() || '(no stdout)'}\n\`\`\`${cc}`
   gh('issue', 'close', n, '--reason', 'completed', '--comment', comment)
   ghTry('issue', 'edit', n, '--remove-label', 'state:in-progress')
   gh('issue', 'edit', n, '--add-label', 'state:needs-verification')
-  console.log(
-    `\n✓ closed: ${it.issue.url}${cc ? `\n  cc'd creator @${author} for acceptance` : ''}`,
-  )
-}
-
-const closeLocal = (it, output) => {
-  const { kind, code } = it.local
-  if (kind === 'task') {
-    const wid = workerId()
-    const body = `✓ Verification passed\n\n\`\`\`\n${output.trim() || '(no stdout)'}\n\`\`\``
-    baton('task', 'comment', 'add', code, body, ...(wid ? ['--worker', String(wid)] : []))
-  }
-  baton(kind, 'set-status', code, 'done')
-  console.log(`\n✓ ${code} → done (result comment recorded)`)
+  console.log(`\n✓ closed: ${issue.url}${cc ? `\n  cc'd creator @${author} for acceptance` : ''}`)
 }
 
 const COMMANDS = {
-  lint: refStr => {
-    const lint = lintBody(loadItem(refStr).body)
+  lint: ref => {
+    const lint = lintBody(loadIssue(ref).body)
     console.log(renderLint(lint))
     return lint.ok ? 0 : 1
   },
-  verify: refStr => (lintAndVerify(loadItem(refStr)) ? 0 : 1),
-  close: refStr => {
-    const it = loadItem(refStr)
-    const result = lintAndVerify(it)
+  verify: ref => (lintAndVerify(loadIssue(ref)) ? 0 : 1),
+  close: ref => {
+    const issue = loadIssue(ref)
+    const result = lintAndVerify(issue)
     if (!result) {
       console.error('\n✗ close aborted: the gate did not pass')
       return 1
     }
-    if (it.issue) closeIssue(it, result.stdout)
-    else closeLocal(it, result.stdout)
+    closeIssue(issue, result.stdout)
     return 0
   },
 }
@@ -194,7 +142,7 @@ const COMMANDS = {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [cmd, ref] = process.argv.slice(2)
   if (!COMMANDS[cmd] || !ref) {
-    console.error('usage: item.mjs <lint|verify|close> <#N | issue-url | R-N | T-N>')
+    console.error('usage: item.mjs <lint|verify|close> <#N | issue-url>')
     process.exit(2)
   }
   try {
