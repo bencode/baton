@@ -72,6 +72,80 @@ describe('worker template creation protocol', () => {
     return (await response.json()) as CreationWorkerResult
   }
 
+  const finish = async (creation: WorkerCreation) => {
+    await registering(creation)
+    const { worker } = await register(creation.id)
+    for (const step of ['start', 'connect'])
+      assert.equal((await progress(creation.id, { status: 'running', step })).status, 200)
+    const disconnect = commands.subscribe(worker.id, () => {})
+    assert.equal((await progress(creation.id, { status: 'succeeded' })).status, 200)
+    disconnect()
+    return worker
+  }
+  const share = (project: number, name: string, repoPath: string) =>
+    postJson(app, `/projects/${project}/worker-creations`, {
+      templateId: 'mini-local',
+      name,
+      agentKind: 'codex',
+      repoPath,
+    })
+
+  test('a new worker can share only a directory where a worker of this project lives', async () => {
+    online()
+    const owner = await create('owner')
+    assert.equal((await share(projectId, 'too-early', '/mini/project')).status, 400)
+    const worker = await finish(owner)
+
+    const accepted = await share(projectId, 'guest', '/mini/project')
+    assert.equal(accepted.status, 202)
+    assert.equal(((await accepted.json()) as WorkerCreation).repoPath, '/mini/project')
+    assert.equal((await share(projectId, 'lost', '/mini/elsewhere')).status, 400)
+    const ws = await ctx.store.workspaces.create({ name: 'other' })
+    const other = await ctx.store.projects.create({ workspaceId: ws.id, name: 'other' })
+    assert.equal((await share(other.id, 'intruder', '/mini/project')).status, 400)
+    assert.equal(
+      (
+        await postJson(app, `/projects/${projectId}/worker-creations`, {
+          templateId: 'mini-local',
+          name: 'blank',
+          agentKind: 'codex',
+          repoPath: ' ',
+        })
+      ).status,
+      400,
+    )
+    assert.deepEqual(
+      (await ctx.store.workerCreations.listByProject(projectId)).map(item => item.name),
+      ['guest', 'owner'],
+    )
+
+    await ctx.store.workers.destroy(worker.id)
+    assert.equal((await share(projectId, 'orphan', '/mini/project')).status, 400)
+  })
+
+  test('the project worker list says which directory each worker runs in', async () => {
+    online()
+    const provisioned = await finish(await create('provisioned'))
+    const manual = await ctx.store.workers.register({
+      projectId,
+      name: 'manual',
+      agentKind: 'codex',
+      machineId: 'manual-machine',
+      hostname: 'laptop',
+    })
+    assert.notEqual(manual.kind, 'name-collision')
+    const list = (await (await app.request(`/projects/${projectId}/workers`)).json()) as {
+      id: number
+      name: string
+      directory: string | null
+    }[]
+    assert.deepEqual(list.map(({ name, directory }) => [name, directory]).sort(), [
+      ['manual', null],
+      ['provisioned', '/mini/project'],
+    ])
+    assert.ok(list.some(worker => worker.id === provisioned.id))
+  })
+
   test('offline and unconfigured templates reject requests without creating records', async () => {
     const path = `/projects/${projectId}/worker-creations`
     const input = { templateId: 'mini-local', name: 'worker', agentKind: 'codex' }

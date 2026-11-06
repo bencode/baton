@@ -193,6 +193,22 @@ test.each([
   expect(setup.create).not.toHaveBeenCalled()
 })
 
+test('a live worker directory can be shared; otherwise a new one is created', async () => {
+  const setup = readySetup()
+  setup.creations.data = [{ ...creation, status: 'succeeded', error: null }]
+  renderDialog(setup)
+  fireEvent.change(screen.getByLabelText('环境名称'), { target: { value: 'guest' } })
+  expect(screen.getByText(/会创建本地 Git 仓库/)).toBeTruthy()
+  fireEvent.change(screen.getByLabelText(/项目目录/), { target: { value: '/mini/projects/app' } })
+  expect(screen.getByText(/不会新建仓库/)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '创建执行环境' }))
+  await vi.waitFor(() =>
+    expect(setup.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'guest', repoPath: '/mini/projects/app' }),
+    ),
+  )
+})
+
 test('failed details preserve resource information and refill only on explicit action', () => {
   const { onCreateAnother } = renderDialog(readySetup(), { kind: 'creation', creationId: 5 })
   expect(screen.getByRole('alert').textContent).toContain('Connection timed out')

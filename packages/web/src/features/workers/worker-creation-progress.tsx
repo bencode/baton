@@ -12,7 +12,7 @@ import type { AsyncState } from '../../hooks/use-async'
 
 const steps: { id: WorkerCreationStep; label: string }[] = [
   { id: 'directory', label: '准备项目目录' },
-  { id: 'git', label: '初始化 Git 仓库' },
+  { id: 'git', label: '准备 Git 仓库' },
   { id: 'register', label: '关联当前项目' },
   { id: 'start', label: '启动执行环境' },
   { id: 'connect', label: '连接 Baton' },

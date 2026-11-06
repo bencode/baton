@@ -1,8 +1,9 @@
-import type { FileBranch, Id, WorkerView } from '@baton/shared'
+import type { FileBranch, Id } from '@baton/shared'
 import { useEffect, useState } from 'react'
 import type { FileScope } from '../../api/files'
 import { useApi } from '../../app/api-context'
 import { BranchIcon, CloseIcon, SearchIcon, WorkerIcon } from '../../components/icons'
+import type { DirectoryGroup } from './directory-groups'
 import {
   DirectoryChildren,
   FileRow,
@@ -211,17 +212,19 @@ const BranchList = ({ env, workerId }: { env: TreeEnv; workerId: Id }) => {
   )
 }
 
-// Worker → branches → files. An offline worker is shown but never queried.
+// Directory → branches → files, read through the group's host. A group with no
+// worker online is shown but never queried.
 export const WorkerNode = ({
   env,
-  worker,
+  group,
   defaultOpen,
 }: {
   env: TreeEnv
-  worker: WorkerView
+  group: DirectoryGroup
   defaultOpen: boolean
 }) => {
-  const key = `w:${worker.id}`
+  const { host, workers } = group
+  const key = `w:${group.key}`
   const open = env.toggles.isOpen(key, defaultOpen)
   return (
     <>
@@ -230,17 +233,17 @@ export const WorkerNode = ({
         icon={<WorkerIcon />}
         label={
           <>
-            {worker.name}
-            {!worker.connected && <span className="files-tag">离线</span>}
+            {workers.map(worker => worker.name).join('、')}
+            {!host.connected && <span className="files-tag">离线</span>}
           </>
         }
-        title={worker.hostname}
+        title={host.directory ?? host.hostname}
         expanded={open}
         onClick={() => env.toggles.toggle(key)}
       />
       {open &&
-        (worker.connected ? (
-          <BranchList env={env} workerId={worker.id} />
+        (host.connected ? (
+          <BranchList env={env} workerId={host.id} />
         ) : (
           <TreeMessage depth={1}>执行环境离线</TreeMessage>
         ))}

@@ -96,6 +96,7 @@ export const launchWorkerAgent = async (
   config: ProvisionerConfig,
   creation: WorkerCreation,
   repoPath: string,
+  configPath: string | null,
   workerEnv: Record<string, string>,
   signal?: AbortSignal,
 ): Promise<void> =>
@@ -103,7 +104,13 @@ export const launchWorkerAgent = async (
     config,
     {
       label: `dev.fmap.baton-worker-creation-${creation.id}`,
-      args: [config.nodePath ?? process.execPath, config.cliPath, 'worker', 'run'],
+      args: [
+        config.nodePath ?? process.execPath,
+        config.cliPath,
+        'worker',
+        'run',
+        ...(configPath === null ? [] : ['--config', configPath]),
+      ],
       cwd: repoPath,
       env: {
         PATH: workerEnv.PATH ?? process.env.PATH ?? '/usr/bin:/bin',

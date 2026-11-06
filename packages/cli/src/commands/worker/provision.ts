@@ -36,6 +36,10 @@ export const workerCreateCommand = defineCommand({
     },
     name: { type: 'string', required: true, description: 'worker name' },
     agentKind: { type: 'string', description: AGENT_KINDS.join(', ') },
+    repoPath: {
+      type: 'string',
+      description: "share an existing worker's directory in this project (default: a new one)",
+    },
   },
   run: async ({ args }) => {
     if (!isWorkerTemplateId(args.template)) throw new Error('invalid worker template')
@@ -51,6 +55,7 @@ export const workerCreateCommand = defineCommand({
         templateId: args.template,
         name,
         agentKind,
+        ...(args.repoPath ? { repoPath: args.repoPath } : {}),
       },
     )
     console.log(renderOne(creation, fmtWorkerCreation, Boolean(args.json)))

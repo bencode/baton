@@ -4,6 +4,7 @@ import {
   type Id,
   isAgentKind,
   isWorkerTemplateId,
+  reusableDirectories,
   type Worker,
   type WorkerCreation,
   type WorkerCreationReport,
@@ -44,7 +45,15 @@ export const parseCreateWorkerInput = (value: unknown): CreateWorkerInput => {
     throw new WorkerCreationError(400, 'name, valid templateId, and agentKind required')
   if (!workerTemplateAgentKinds(body.templateId).includes(body.agentKind))
     throw new WorkerCreationError(400, 'agentKind is not supported by this template')
-  return { name, templateId: body.templateId, agentKind: body.agentKind }
+  const repoPath = body.repoPath
+  if (repoPath !== undefined && (typeof repoPath !== 'string' || !repoPath.trim()))
+    throw new WorkerCreationError(400, 'repoPath must be a non-empty string')
+  return {
+    name,
+    templateId: body.templateId,
+    agentKind: body.agentKind,
+    ...(repoPath === undefined ? {} : { repoPath }),
+  }
 }
 export const parseCreationReport = (value: unknown): WorkerCreationReport => {
   const body = creationBody(value)
@@ -100,6 +109,11 @@ export const createWorkerCreation = async (
     creations.some(c => active(c) && c.name === input.name)
   )
     throw new WorkerCreationError(409, 'worker name already in use in project')
+  if (
+    input.repoPath !== undefined &&
+    !reusableDirectories(creations).some(directory => directory.path === input.repoPath)
+  )
+    throw new WorkerCreationError(400, 'repoPath is not a directory of this project')
   const creation = await deps.store.workerCreations.create({ ...input, projectId })
   deps.projects.publish(projectId, { resource: 'worker-creations' })
   deps.bus.publish('mini', { action: 'create', creationId: creation.id })

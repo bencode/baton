@@ -1,4 +1,4 @@
-import type { Id, WorkerView } from '@baton/shared'
+import type { Id, ProjectWorkerView } from '@baton/shared'
 import { useCallback, useEffect, useState } from 'react'
 import { useApi } from '../../app/api-context'
 import { useProjectRevision } from '../projects/use-project-revision'
@@ -9,10 +9,15 @@ import { useProjectRevision } from '../projects/use-project-revision'
 export const useWorkers = (
   projectId: Id | null,
   pollMs = 15000,
-): { data: WorkerView[] | null; loading: boolean; error: Error | null; refresh(): void } => {
+): {
+  data: ProjectWorkerView[] | null
+  loading: boolean
+  error: Error | null
+  refresh(): void
+} => {
   const api = useApi()
   const rev = useProjectRevision(projectId, 'workers')
-  const [data, setData] = useState<WorkerView[] | null>(null)
+  const [data, setData] = useState<ProjectWorkerView[] | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
