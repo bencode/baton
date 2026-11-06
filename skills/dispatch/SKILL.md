@@ -112,5 +112,4 @@ gets (delegate skill's iron rule). Include, per group:
 - One-time setup if the queue label is missing:
   `gh label create dispatch:queue --color 5319e7 --description "queued for /dispatch"`.
 - Boundaries: GitHub issues are the source and the state machine
-  (github-issues skill owns execution-side conventions); baton R/T records
-  (baton skill) are a separate track — don't create R/T rows here.
+  (github-issues skill owns execution-side conventions).

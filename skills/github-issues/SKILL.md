@@ -8,17 +8,15 @@ description: >-
   asked "看看有哪些 issue / what's open", "我的盘子 / what's on my plate",
   "看下 #12 / show me issue 12", "评论一下 / comment on it", "建个 issue /
   file an issue", "这个不做了 / cancel it", "关掉 #12 / close it", "认领 /
-  take this", "转给 X / hand it to X", or any direct issue operation. The
-  GitHub track is independent of baton Requirement/Task (the baton skill) —
-  the two never cross-link.
+  take this", "转给 X / hand it to X", or any direct issue operation.
 ---
 
 # github-issues
 
-GitHub Issues are the source of truth for the GitHub collaboration track. Single-step
+GitHub Issues are the source of truth for this collaboration track. Single-step
 actions go through `gh` (repo + auth auto-detected from the git remote, **zero config**);
 the multi-step **lint → verify → close** gate goes through the bundled sensor
-`item.mjs` (shared with the baton skill). This track follows the **relay convention**:
+`scripts/item.mjs`. This track follows the **relay convention**:
 labels carry the lifecycle, and "done" is a machine-run Verification block, not a self-report.
 
 ## First-time setup (per repo)
@@ -95,10 +93,10 @@ executable, repeatable commands only — never `# manual: ...`.
 
 ## The sensor (lint / verify / close)
 
-`item.mjs` lives in the sibling baton skill; ref = `#N` / issue url.
+`item.mjs` is bundled with this skill; ref = `#N` / issue url.
 
 ```bash
-S="${CLAUDE_SKILL_DIR}/../baton/scripts/item.mjs"
+S="${CLAUDE_SKILL_DIR}/scripts/item.mjs"
 node "$S" lint   <#N>   # structure gate
 node "$S" verify <#N>   # run the Verification block ("is it done?") without closing
 node "$S" close  <#N>   # lint → verify → close (completed) + state:needs-verification + cc creator
@@ -179,8 +177,6 @@ a `--reason "not planned"` cancellation is the exception (no verify gate — see
   Closed with no lifecycle label is an anomaly.
 - Comments carry conclusions + references (commit/branch/files), not big spec or diff dumps.
 - Creating an issue is outward-facing: confirm title/body wording with the human first.
-- This track does not touch baton Requirement/Task — no mirroring, no linking. For local
-  work items use the baton skill instead.
 
 ## Appendix: sub-issues (optional)
 
