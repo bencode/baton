@@ -10,6 +10,7 @@ import { sessionRmCommand } from './session/rm.ts'
 import { sessionRunCommand } from './session/run.ts'
 import { sessionSendCommand } from './session/send.ts'
 import { sessionStopCommand } from './session/stop.ts'
+import { sessionTellCommand } from './session/tell.ts'
 import { sessionTerminalCommand } from './session/terminal.ts'
 
 export const session = defineCommand({
@@ -23,6 +24,7 @@ export const session = defineCommand({
     rename: sessionRenameCommand,
     rm: sessionRmCommand,
     send: sessionSendCommand,
+    tell: sessionTellCommand,
     ls: sessionLsCommand,
     get: sessionGetCommand,
     run: sessionRunCommand,
