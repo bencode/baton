@@ -22,6 +22,8 @@ do not try to read its events.
 
 - Make the message self-contained. The other agent knows nothing about your
   conversation, so include the goal, paths and whatever else it needs.
+- If the message contains backticks or `$`, wrap it in single quotes. Inside
+  double quotes the shell expands them.
 - After sending, end your turn. Do not poll or wait: a reply arrives as a new
   message and wakes you.
 - If the command reports a worker offline or a terminal open, tell the user. The
