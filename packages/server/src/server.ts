@@ -2,7 +2,6 @@ import { serve } from '@hono/node-server'
 import { createApp } from './app.ts'
 import { createBusy } from './busy.ts'
 import { startBusySweep } from './busy-sweep.ts'
-import { createChannelPresence, startPresencePrune } from './channel-presence.ts'
 import { createCommandBus } from './command-bus.ts'
 import { createEventBus } from './event-bus.ts'
 import { startLoopScheduler } from './loop-scheduler.ts'
@@ -19,12 +18,9 @@ import { startTerminalReaper } from './terminal-reaper.ts'
 export type Server = { port: number; stop: () => Promise<void> }
 
 // Run the Hono app on Node via @hono/node-server; stop closes the server, then the
-// Store. Channel presence is owned here (so its prune sweep is started + stopped
-// with the server lifecycle), then injected into the app.
+// Store.
 export const startServer = (opts: { store: Store; port: number }): Promise<Server> =>
   new Promise(resolve => {
-    const presence = createChannelPresence()
-    const presencePrune = startPresencePrune(presence)
     // Own the session event bus, busy tracker, and project bus here so the busy
     // sweep can share the exact instances the app mutates (else it'd sweep an
     // empty second tracker).
@@ -52,7 +48,6 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
       busyTracker: busy,
       commands,
       projects,
-      presence,
       terminal,
       onInjectWs: inject => {
         injectWs = inject
@@ -82,7 +77,6 @@ export const startServer = (opts: { store: Store; port: number }): Promise<Serve
           new Promise<void>((res, rej) => {
             httpServer.close(err => (err ? rej(err) : res()))
           }).then(() => {
-            presencePrune.stop()
             busySweep.stop()
             loopScheduler.stop()
             terminalReaper.stop()

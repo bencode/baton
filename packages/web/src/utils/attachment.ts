@@ -1,4 +1,4 @@
-// Shared attachment helpers for the composer (sessions + channels).
+// Shared attachment helpers for the composer.
 
 // Pull image files out of a paste/clipboard synchronously — getAsFile must run
 // inside the event handler.

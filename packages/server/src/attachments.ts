@@ -10,15 +10,15 @@ import type { Attachment } from '@baton/shared'
 // Transient filesystem blob store for chat attachments. Deliberately NOT in
 // Prisma: baton's model only carries references, and the server is a real-time
 // relay, not a content store. These bytes exist only long enough to ferry a
-// file across to a (possibly remote) Worker or channel peer; they're
-// cascade-cleaned when the owning session/channel is destroyed.
+// file across to a (possibly remote) Worker; they're cascade-cleaned when the
+// owning session is destroyed.
 //
 // Bytes are streamed straight to/from disk (no full-file buffering) so large
 // uploads/downloads stay cheap — size is the Agent's concern, not ours.
 //
-// `scope` is the owner key — a session id or a channel id, stringified. The
-// caller supplies `makeMeta` to stamp the scope-specific fields (sessionId vs
-// channelId + the download url) onto the descriptor the store persists.
+// `scope` is the owner key — a stringified session id. The caller supplies
+// `makeMeta` to stamp the scope-specific fields (sessionId + the download url)
+// onto the descriptor the store persists.
 // Layout: <rootDir>/<scope>/<id>/blob + <rootDir>/<scope>/<id>/meta.json
 export type AttachmentBase = {
   id: string

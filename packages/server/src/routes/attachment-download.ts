@@ -19,8 +19,8 @@ export const fileContentDisposition = (filename: string, inline: boolean): strin
 }
 
 // Stream a stored attachment back with download headers (content-type/length +
-// a UTF-8-safe content-disposition). Shared by the session + channel attachment
-// download routes; bytes stream straight from disk, never buffered.
+// a UTF-8-safe content-disposition) for the session attachment download route;
+// bytes stream straight from disk, never buffered.
 export const sendAttachment = (
   c: Context<AppEnv>,
   found: { meta: Attachment; path: string },

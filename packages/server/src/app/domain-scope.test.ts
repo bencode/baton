@@ -98,55 +98,6 @@ describe('server HTTP — domain scope (workspace isolation)', () => {
     assert.equal((await postJson(app, '/workspaces', { name: 'z' }, as(alice.token))).status, 403)
   })
 
-  test('workspace channels: member creates + lists (with token), non-member 404', async () => {
-    const app = createApp(ctx.store)
-    const a = await seedWorkspace('wsCh1')
-    const b = await seedWorkspace('wsCh2')
-    const alice = await seedUser('alice', false)
-    const root = await seedUser('root', true)
-    await ctx.store.users.bindWorkspace(alice.id, a.ws.id)
-
-    // Bound member: 201; the room belongs to ws1 (the channelId is the capability).
-    const ok = await postJson(
-      app,
-      `/workspaces/${a.ws.id}/channels`,
-      { title: 'sync' },
-      as(alice.token),
-    )
-    assert.equal(ok.status, 201)
-    const created = (await ok.json()) as { channelId: string; help: string }
-    assert.ok(created.channelId)
-    assert.equal(created.help, '/channels/help')
-    assert.equal((await ctx.store.channels.get(created.channelId))?.workspaceId, a.ws.id)
-
-    // The member lists the workspace's rooms (opened by id — no token in the view).
-    const listed = (await (
-      await app.request(`/workspaces/${a.ws.id}/channels`, { headers: as(alice.token) })
-    ).json()) as { id: string; title?: string }[]
-    assert.deepEqual(
-      listed.map(c => c.id),
-      [created.channelId],
-    )
-    assert.equal(listed[0]?.title, 'sync')
-    // A non-member can't list another workspace's rooms: 404.
-    assert.equal(
-      (await app.request(`/workspaces/${b.ws.id}/channels`, { headers: as(alice.token) })).status,
-      404,
-    )
-
-    // Non-member can't inject a channel into someone else's workspace: 404 (no leak).
-    assert.equal(
-      (await postJson(app, `/workspaces/${b.ws.id}/channels`, { title: 'x' }, as(alice.token)))
-        .status,
-      404,
-    )
-    // A non-existent workspace 404s even for an admin (existence check, no anon path).
-    assert.equal(
-      (await postJson(app, '/workspaces/999999/channels', {}, as(root.token))).status,
-      404,
-    )
-  })
-
   test('POST /workers register is gated by project access (member / non-member / worker token)', async () => {
     const app = createApp(ctx.store)
     const a = await seedWorkspace('wsReg1')

@@ -17,24 +17,6 @@ export const postJson = (
     headers: { 'content-type': 'application/json', ...headers },
   })
 
-// Open a channel and return its id (the channel uuid is the capability — no token).
-// `auth` stays as an empty headers object for call-site convenience. Channels belong
-// to a workspace, so this seeds a fresh one (unique name via a counter) first.
-export type ChannelHandle = { channelId: string; auth: Record<string, string> }
-let chanWsSeq = 0
-export const createChannel = async (
-  app: ReturnType<typeof createApp>,
-  body: Record<string, unknown> = {},
-): Promise<ChannelHandle> => {
-  const w = (await (
-    await postJson(app, '/workspaces', { name: `chan-ws-${++chanWsSeq}` })
-  ).json()) as WithId
-  const ch = (await (await postJson(app, `/workspaces/${w.id}/channels`, body)).json()) as {
-    channelId: string
-  }
-  return { channelId: ch.channelId, auth: {} }
-}
-
 // Drain an SSE reader until `n` `data:` frames are seen or `ms` elapses; returns
 // the accumulated text. Used by streaming tests over a real server.
 export const readUntil = async (

@@ -1,23 +1,21 @@
 import type { Id } from '@baton/shared'
 
-// Generic in-memory pub/sub keyed by `K` (default Id). Single-process; swap to
-// Redis behind this interface for multi-process. Backs the session event bus and
-// worker command bus (keyed by numeric Id) and the relay bus (keyed by a UUID
-// channel string).
+// Generic in-memory pub/sub keyed by Id. Single-process; swap to Redis behind
+// this interface for multi-process. Backs the session event bus and worker
+// command bus.
 type Subscriber<T> = (item: T) => void
-type Key = string | number
 
-export type PubSub<T, K extends Key = Id> = {
-  publish(key: K, item: T): void
-  subscribe(key: K, cb: Subscriber<T>): () => void
+export type PubSub<T> = {
+  publish(key: Id, item: T): void
+  subscribe(key: Id, cb: Subscriber<T>): () => void
   // Does this key have at least one live subscriber? For the command bus this
   // answers "is this worker's daemon currently streaming" — a per-worker
   // signal, unlike machineId liveness which is shared across same-machine workers.
-  has(key: K): boolean
+  has(key: Id): boolean
 }
 
-export const createPubSub = <T, K extends Key = Id>(label: string): PubSub<T, K> => {
-  const subs = new Map<K, Set<Subscriber<T>>>()
+export const createPubSub = <T>(label: string): PubSub<T> => {
+  const subs = new Map<Id, Set<Subscriber<T>>>()
   return {
     publish(key, item) {
       const set = subs.get(key)

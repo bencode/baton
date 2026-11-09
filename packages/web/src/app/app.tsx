@@ -5,7 +5,6 @@ import { OpsPage } from '../features/admin/ops-page'
 import { authCacheScope, useAuth } from '../features/auth/auth-context'
 import { LoginPage } from '../features/auth/login-page'
 import { RequireAuth } from '../features/auth/require-auth'
-import { ChannelPage } from '../features/channels/channel-page'
 import { DingtalkHelpPage } from '../features/help/dingtalk-help-page'
 import { InstallBanner } from '../features/install/install-banner'
 import { NewSessionDialog } from '../features/sessions/new-session-dialog'
@@ -158,8 +157,6 @@ export const App = () => (
   <ApiContext.Provider value={api}>
     <Routes>
       <Route path="/s/:token" element={<SessionPage />} />
-      {/* Public chat room (capability token in the URL hash); no login, like /s. */}
-      <Route path="/channel/:id" element={<ChannelPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/help/dingtalk" element={<DingtalkHelpPage />} />
       {/* Admin ops board — full-bleed (no Shell); the server 403s non-admins. */}

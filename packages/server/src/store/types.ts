@@ -2,11 +2,8 @@ import type {
   AgentEffort,
   AgentKind,
   Artifact,
-  Attachment,
   AttemptResult,
   CancelInputResult,
-  Channel,
-  ChannelMessage,
   ClaimInput,
   ClaimResult,
   Code,
@@ -19,7 +16,6 @@ import type {
   Id,
   Loop,
   LoopStatus,
-  MemberKind,
   Project,
   Requirement,
   RequirementStatus,
@@ -93,19 +89,6 @@ export type TaskPatch = Partial<{
 }>
 // Comments are append-only — created one at a time, never updated. No patch type.
 export type TaskCommentCreate = { taskId: Id; body: string; workerId?: Id }
-
-// Channels belong to a Workspace (creation/listing gated by membership); the
-// channel uuid itself is the participation capability (no token, no account).
-export type ChannelCreate = { workspaceId: Id; title?: string; description?: string }
-export type ChannelPatch = Partial<{ title: string; description: string }>
-export type ChannelMessageCreate = {
-  sender: string
-  senderKind: MemberKind
-  text: string
-  to?: string[]
-  attachments?: Attachment[]
-}
-// (No channel auth verdict type — participation is existence-only; the uuid is the capability.)
 
 export type RequirementWithTasks = { requirement: Requirement; tasks: Task[] }
 
@@ -295,23 +278,6 @@ export type Store = {
   taskComments: {
     create(input: TaskCommentCreate): Promise<TaskComment>
     listByTask(taskId: Id): Promise<TaskComment[]>
-  }
-  // N-party chat rooms. Participation auth is existence-only: the channel uuid IS
-  // the capability (`exists`), so there is no token. appendMessage assigns the next
-  // per-channel seq atomically (tx); `since` is the replay/poll source.
-  channels: {
-    create(input: ChannelCreate): Promise<Channel>
-    // A workspace's rooms, newest first (membership-gated at the route).
-    listByWorkspace(workspaceId: Id): Promise<Channel[]>
-    get(id: string): Promise<Channel | null>
-    // Update room metadata (title / description). null if the channel is gone.
-    update(id: string, patch: ChannelPatch): Promise<Channel | null>
-    // Does this channel exist? (existence = authorization for the id-only API.)
-    exists(id: string): Promise<boolean>
-    appendMessage(channelId: string, input: ChannelMessageCreate): Promise<ChannelMessage>
-    since(channelId: string, seq: number, limit?: number): Promise<ChannelMessage[]>
-    // DELETE the row. Messages cascade away with it (FK onDelete: Cascade).
-    destroy(id: string): Promise<void>
   }
   sessions: {
     create(input: SessionCreate): Promise<Session>

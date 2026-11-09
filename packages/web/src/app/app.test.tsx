@@ -84,7 +84,6 @@ test('crossing the mobile breakpoint preserves the open page and its unsaved inp
     sessions: { listByProject: vi.fn(async () => []) },
     workers: { listByProject: vi.fn(async () => []) },
     requirements: { listByProject: vi.fn(async () => []) },
-    channels: { listByWorkspace: vi.fn(async () => []) },
   } as unknown as Api
   render(
     <ApiContext.Provider value={api}>

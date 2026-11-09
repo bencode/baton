@@ -1,7 +1,7 @@
 import type { RequirementStatus, TaskStatus } from '@baton/shared'
 
 // Detail-view status label: ring-style pill — reads as
-// "tag/label", not "highlighted text". For dense rows use <StatusDot> instead.
+// "tag/label", not "highlighted text".
 // Sessions used to feed a SessionState string here in M2.5; in M2.6 they're
 // expressed as derived alive/busy booleans, so this component only takes the
 // product/task vocabulary now.
