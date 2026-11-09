@@ -17,7 +17,7 @@ const SentAttachments = ({ attachments }: { attachments: Attachment[] }) => {
             <figcaption className="chat-attachment-label">{`{${label}}`}</figcaption>
           </figure>
         ) : (
-          <FileChip key={att.id} att={att} download label={label} />
+          <FileChip key={att.id} att={att} label={label} />
         )
       })}
     </div>

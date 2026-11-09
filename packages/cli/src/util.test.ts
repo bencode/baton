@@ -4,15 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { resolveBaseUrl, resolveBaseUrlOrNull } from './config.ts'
-import { parseDuration, resolveAuth, resolveProjectId, resolveWorkerId, splitCsv } from './util.ts'
-
-describe('splitCsv', () => {
-  test('parses / trims / drops empties; undefined when absent', () => {
-    assert.deepEqual(splitCsv('a, b ,,c'), ['a', 'b', 'c'])
-    assert.equal(splitCsv(undefined), undefined)
-    assert.equal(splitCsv(''), undefined)
-  })
-})
+import { parseDuration, resolveAuth, resolveProjectId, resolveWorkerId } from './util.ts'
 
 describe('resolveAuth', () => {
   test('BATON_TOKEN wins; BATON_WORKER_TOKEN (daemon-injected) is honored too', () => {

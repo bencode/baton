@@ -1,8 +1,7 @@
 import { type RefObject, useEffect, useRef } from 'react'
 
 // Close an open overlay on outside mousedown or Escape — the shared dismiss
-// behavior behind the header menus (user / project), the channel invite popover,
-// and the loops control. No-op while `open` is false. `onClose` is held in a ref
+// behavior behind the header menus (user / project) and the loops control. No-op while `open` is false. `onClose` is held in a ref
 // so callers can pass an inline closure without re-subscribing the listeners every
 // render; the effect only re-runs when `open` flips.
 export const useDismiss = (

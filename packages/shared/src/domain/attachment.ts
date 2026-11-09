@@ -1,20 +1,17 @@
 import type { Id } from './ids.ts'
 
-// A file/image uploaded to the server so a (possibly remote) Worker or channel
-// peer can fetch it. The server keeps the bytes transiently on its filesystem;
-// baton's model only ever carries this reference. Session attachments travel
-// inside a user_message payload as `attachments` (the Worker downloads each into
-// its directory before the run); channel attachments are referenced by `url`.
-// Exactly one scope id is set — `sessionId` xor `channelId` — and `url` is the
-// authoritative download path either way.
+// A file/image uploaded to the server so a (possibly remote) Worker can fetch it.
+// The server keeps the bytes transiently on its filesystem; baton's model only
+// ever carries this reference. Attachments travel inside a user_message payload
+// as `attachments` (the Worker downloads each into its directory before the run);
+// `url` is the authoritative download path.
 export type Attachment = {
   id: string // server-generated (uuid)
-  sessionId?: Id // set for session attachments
-  channelId?: string // set for channel attachments
+  sessionId?: Id
   filename: string // sanitized original name
   contentType: string
   size: number
-  url: string // download path, e.g. /sessions/3/attachments/<id> or /channels/<id>/attachments/<id>
+  url: string // download path, e.g. /sessions/3/attachments/<id>
   createdAt: number
 }
 

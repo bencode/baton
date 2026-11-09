@@ -1,7 +1,6 @@
 import type { Id } from '@baton/shared'
 import { type AdminApi, adminApi } from './admin'
 import { type AuthApi, authApi } from './auth'
-import { type ChannelsApi, channelsApi } from './channels'
 import { type FilesApi, filesApi } from './files'
 import { type LoopsApi, loopsApi } from './loops'
 import { type ProjectsApi, projectsApi } from './projects'
@@ -33,7 +32,6 @@ export type Api = {
   auth: AuthApi
   workspaces: WorkspacesApi
   projects: ProjectsApi
-  channels: ChannelsApi
   requirements: RequirementsApi
   tasks: TasksApi
   services: ServicesApi
@@ -57,7 +55,6 @@ export const createApi = (base: string = API_BASE): Api => {
     auth: authApi(u),
     workspaces: workspacesApi(u),
     projects: projectsApi(u),
-    channels: channelsApi(u),
     requirements: requirementsApi(u),
     tasks: tasksApi(u),
     services: servicesApi(u),

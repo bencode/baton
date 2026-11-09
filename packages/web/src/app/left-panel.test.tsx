@@ -34,7 +34,6 @@ const fakeApi = (overrides: { remove?: () => Promise<undefined> } = {}) =>
     },
     workerCreations: { templates: vi.fn(async () => []), listByProject: vi.fn(async () => []) },
     workers: { listByProject: vi.fn(async () => [worker]) },
-    channels: { listByWorkspace: vi.fn(async () => []) },
     files: { branches: vi.fn(async () => []) },
   }) as unknown as Api
 
