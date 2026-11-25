@@ -31,6 +31,7 @@ const MODEL_SUGGESTIONS: Record<AgentKind, string[]> = {
     'sonnet high',
     'haiku',
     'fable',
+    'glm-5.4[1m]',
     'glm-5.3-flash[1m]',
   ],
   codex: [
@@ -45,8 +46,8 @@ const MODEL_SUGGESTIONS: Record<AgentKind, string[]> = {
   pi: [
     'deepseek/deepseek-v4-pro',
     'deepseek/deepseek-flash',
-    'zai-coding-cn/glm-5.3',
-    'zai-coding-cn/glm-5.3 high',
+    'zai-coding-cn/glm-5.4',
+    'zai-coding-cn/glm-5.4 high',
     'zai-coding-cn/glm-5.3-flash',
   ],
 }
