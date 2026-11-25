@@ -41,8 +41,8 @@ describe('matchCommands', () => {
     const pi = matchCommands('/model ', PI).map(c => c.args)
     expect(claude).toContain('opus max')
     expect(claude).toContain('fable')
-    expect(codex).toContain('gpt-6-astra')
-    expect(codex).toContain('gpt-6.1-sol ultra')
+    expect(codex).toContain('gpt-6.2-astra')
+    expect(codex).toContain('gpt-6.2-sol ultra')
     // The whole point: a codex session is never offered a claude model, or vice versa.
     expect(claude.some(a => a?.startsWith('gpt-'))).toBe(false)
     expect(codex.some(a => claude.includes(a))).toBe(false)

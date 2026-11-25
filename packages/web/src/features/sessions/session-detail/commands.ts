@@ -35,12 +35,12 @@ const MODEL_SUGGESTIONS: Record<AgentKind, string[]> = {
     'glm-5.3-flash[1m]',
   ],
   codex: [
-    'gpt-6.1-sol',
-    'gpt-6.1-sol ultra',
+    'gpt-6.2-sol',
+    'gpt-6.2-sol ultra',
+    'gpt-6.2-astra',
     'gpt-6.1-terra',
-    'gpt-6-astra',
-    'gpt-6-sol',
     'gpt-6-luna',
+    'gpt-6.1-sol',
   ],
   // pi addresses models as provider/model.
   pi: [
