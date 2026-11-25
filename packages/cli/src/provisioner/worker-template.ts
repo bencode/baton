@@ -17,6 +17,47 @@ export const requireWorkerTemplate = (
   return profile
 }
 
+// Models a coding plan already serves but pi's built-in catalog (pi-ai 1.6.0) does
+// not list yet. pi reads <agent-dir>/models.json, where a provider's `models` entry
+// adds to its built-in list (or replaces the same id); api, baseUrl and the API key
+// stay the provider's. Drop an entry once pi ships the model itself.
+const PI_EXTRA_MODELS: Record<string, Record<string, unknown>[]> = {
+  'zai-coding-cn': [
+    {
+      id: 'glm-5.4',
+      name: 'GLM-5.4',
+      reasoning: true,
+      input: ['text'],
+      contextWindow: 1_000_000,
+      maxTokens: 131_072,
+      cost: { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 0 },
+      // Same as pi's built-in glm-5.3.
+      thinkingLevelMap: {
+        off: null,
+        minimal: null,
+        low: 'low',
+        medium: null,
+        high: 'high',
+        xhigh: null,
+        max: 'max',
+      },
+      compat: {
+        supportsStore: false,
+        supportsReasoningEffort: true,
+        maxTokensField: 'max_tokens',
+        thinkingFormat: 'zai',
+        supportsStrictMode: true,
+        zaiToolStream: true,
+      },
+    },
+  ],
+}
+
+export const piModelsJson = (provider: string): string | null => {
+  const models = PI_EXTRA_MODELS[provider]
+  return models ? JSON.stringify({ providers: { [provider]: { models } } }) : null
+}
+
 export const workerTemplateEnvironment = async (
   config: ProvisionerConfig,
   creation: WorkerCreation,
@@ -36,5 +77,7 @@ export const workerTemplateEnvironment = async (
     }),
     { flag: 'wx', mode: 0o600 },
   )
+  const models = piModelsJson(profile.pi.provider)
+  if (models) await writeFile(join(agentDir, 'models.json'), models, { flag: 'wx', mode: 0o600 })
   return { ...profile.workerEnv, PI_CODING_AGENT_DIR: agentDir }
 }

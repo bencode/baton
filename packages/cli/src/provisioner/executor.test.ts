@@ -54,7 +54,7 @@ exit ${launchFails ? 1 : 0}
           ANTHROPIC_AUTH_TOKEN: 'glm-secret',
           ZAI_CODING_CN_API_KEY: 'glm-secret',
         },
-        pi: { provider: 'zai-coding-cn', model: 'glm-5.3' },
+        pi: { provider: 'zai-coding-cn', model: 'glm-5.4' },
       },
       'mini-dashscope-codeplan': {
         workerEnv: {
@@ -200,6 +200,15 @@ test(
         defaultModel: profile.pi?.model,
       })
       assert.equal((await stat(settings)).mode & 0o777, 0o600)
+      const models = join(agent.EnvironmentVariables.PI_CODING_AGENT_DIR, 'models.json')
+      if (templateId === 'mini-glm-codeplan') {
+        const declared = JSON.parse(await readFile(models, 'utf8')).providers['zai-coding-cn']
+        assert.deepEqual(
+          declared.models.map((model: { id: string }) => model.id),
+          ['glm-5.4'],
+        )
+        assert.equal((await stat(models)).mode & 0o777, 0o600)
+      } else assert.equal(existsSync(models), false)
       const otherKey =
         templateId === 'mini-glm-codeplan' ? 'QWEN_TOKEN_PLAN_CN_API_KEY' : 'ZAI_CODING_CN_API_KEY'
       assert.equal(agent.EnvironmentVariables[otherKey], undefined)
